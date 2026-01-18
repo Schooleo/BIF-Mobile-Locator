@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">BIF Locator</string>
+    <string name="press_me_button">Press Me!</string>
+    <string name="hello_world_current_count">"Hello World!\nCurrent count: "</string>
+    <string name="reset_counter">Reset Counter</string>
+</resources>
