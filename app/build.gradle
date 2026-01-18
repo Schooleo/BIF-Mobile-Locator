@@ -11,11 +11,13 @@ android {
     }
 
     defaultConfig {
+        def buildNumber = project.hasProperty('BUILD_NUMBER') ? project.getProperty('BUILD_NUMBER').toInteger() : 1
+
         applicationId "com.bif.locator"
         minSdk 29
         targetSdk 36
-        versionCode 1
-        versionName "1.0"
+        versionCode buildNumber
+        versionName "1.0.${buildNumber}"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
