@@ -36,7 +36,7 @@ This project uses [GitHub Actions](.github/workflows/android.yml) for Continuous
   2.  **Lint**: Runs static code analysis (`./gradlew lint`).
   3.  **Test**: Executes local unit tests (`./gradlew test`).
   4.  **Build**: Assembles the debug APK (`./gradlew assembleDebug`).
-- **Artifacts**: A debug APK (`app-debug.apk`) is uploaded upon successful build.
+- **Artifacts**: A debug APK (`BIF-Locator.apk`) is uploaded and distributed via Firebase.
 
 ## Setup & Installation
 
