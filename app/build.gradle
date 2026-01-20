@@ -20,6 +20,9 @@ android {
         versionName "1.0.${buildNumber}"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        ndk {
+            debugSymbolLevel 'FULL'
+        }
     }
 
     signingConfigs {
