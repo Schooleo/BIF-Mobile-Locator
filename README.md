@@ -1,6 +1,7 @@
 # BIF Mobile Locator
 
-![Android CI](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/android.yml/badge.svg)
+![Android CI](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/android-dev.yml/badge.svg)
+![Android Publish](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/android-publish.yml/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/Platform-Android-green.svg)](https://developer.android.com)
 [![Language](https://img.shields.io/badge/Language-Java-orange.svg)](https://www.java.com)
