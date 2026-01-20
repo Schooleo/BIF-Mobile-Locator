@@ -1,6 +1,6 @@
 # Privacy Policy for BIF Mobile Locator
 
-**Last updated:** January 20, 2026
+**Last updated:** January 21, 2026
 
 This Privacy Policy describes how the BIF Mobile Locator team ("we", "us", or "our") collects, uses, and discloses your information when you use our mobile application (the "Service").
 
@@ -54,5 +54,5 @@ We may update our Privacy Policy from time to time. Thus, you are advised to rev
 
 If you have any questions or suggestions about our Privacy Policy, do not hesitate to contact us at:
 
-**Email**: [Insert Your Support Email Here]
+**Email**: schooleoinbox@gmail.com
 **GitHub**: [https://github.com/Schooleo/bif-mobile-locator](https://github.com/Schooleo/bif-mobile-locator)
