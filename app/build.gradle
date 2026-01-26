@@ -1,14 +1,13 @@
 plugins {
     alias(libs.plugins.android.application)
-
+    id 'checkstyle'
     id 'com.google.gms.google-services'
+    id 'com.google.dagger.hilt.android'
 }
 
 android {
     namespace 'com.bif.locator'
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk 36
 
     defaultConfig {
         def buildNumber = project.hasProperty('BUILD_NUMBER') ? project.getProperty('BUILD_NUMBER').toInteger() : 1
@@ -20,9 +19,20 @@ android {
         versionName "1.0.${buildNumber}"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        multiDexEnabled true
         ndk {
             debugSymbolLevel 'FULL'
         }
+
+        def localProperties = new Properties()
+        def localPropertiesFile = rootProject.file('local.properties')
+        if (localPropertiesFile.exists()) {
+            localProperties.load(new FileInputStream(localPropertiesFile))
+        }
+
+        manifestPlaceholders = [
+            MAPS_API_KEY: localProperties.getProperty('MAPS_API_KEY', "")
+        ]
     }
 
     signingConfigs {
@@ -54,17 +64,31 @@ dependencies {
     implementation libs.material
     implementation libs.activity
     implementation libs.constraintlayout
+    implementation libs.play.services.maps
+    implementation libs.play.services.location
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
     testImplementation libs.mockito.core
 
+    // Hilt
+    implementation libs.hilt.android
+    annotationProcessor libs.hilt.compiler
+
+    // For instrumentation tests
+    androidTestImplementation libs.hilt.android.testing
+    androidTestAnnotationProcessor libs.hilt.compiler
+
+    // For local unit tests
+    testImplementation libs.hilt.android.testing
+    testAnnotationProcessor libs.hilt.compiler
+
     // Import the Firebase BoM
-    implementation platform('com.google.firebase:firebase-bom:34.8.0')
+    implementation platform(libs.firebase.bom)
 
     // TODO: Add the dependencies for Firebase products
     // When using the BoM, don't specify versions in Firebase dependencies
-    implementation 'com.google.firebase:firebase-analytics'
+    implementation libs.firebase.analytics
 
     // Add the dependencies for any other desired Firebase products
     // https://firebase.google.com/docs/android/setup#available-libraries
