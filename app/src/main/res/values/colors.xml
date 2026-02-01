@@ -5,4 +5,14 @@
     <color name="darkRed">#762020</color>
     <color name="darkBlue">#070C62</color>
     <color name="red">#D30404</color>
+    <color name="brand_color_1">#d9ed92</color>
+    <color name="brand_color_2">#b5e48c</color>
+    <color name="brand_color_3">#99d98c</color>
+    <color name="brand_color_4">#76c893</color>
+    <color name="brand_color_5">#52b69a</color>
+    <color name="brand_color_6">#34a0a4</color>
+    <color name="brand_color_7">#168aad</color>
+    <color name="brand_color_8">#1a759f</color>
+    <color name="brand_color_9">#1e6091</color>
+    <color name="brand_color_10">#184e77</color>
 </resources>
