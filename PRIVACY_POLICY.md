@@ -1,6 +1,6 @@
 # Privacy Policy for BIF Mobile Locator
 
-**Last updated:** January 21, 2026
+**Last updated:** February 1, 2026
 
 This Privacy Policy describes how the BIF Mobile Locator team ("we", "us", or "our") collects, uses, and discloses your information when you use our mobile application (the "Service").
 
@@ -12,8 +12,9 @@ By using the Service, you agree to the collection and use of information in acco
 
 Our application is designed to provide location-based services. We may request access to your device's location (GPS and network-based).
 
-- **How we use it**: To calculate distances and provide positioning features within the app.
-- **Storage**: Location data is processed locally on your device and is not transmitted to our servers unless explicitly stated for a specific feature.
+- **How we use it**: To calculate distances between your current position and selected points of interest, and to display your position on the map.
+- **Storage**: Location data is processed **locally** on your device within the application's secure storage. We do **not** transmit your precise location history to our servers.
+- **Background Usage**: We do **not** collect or access your location while the app is in the background. Location services are only active when you are using the app.
 
 ### B. Usage Data & Analytics
 

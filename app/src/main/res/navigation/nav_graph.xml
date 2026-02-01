@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/router"
+    app:startDestination="@id/nav_home"
+    app:defaultNavHost="true">
+
+    <fragment
+        android:id="@+id/nav_home"
+        android:name="com.bif.locator.ui.home.HomeFragment"
+        android:label="Home"
+        app:route="/home"
+        tools:layout="@layout/fragment_home" >
+
+        <action
+            android:id="@+id/action_home_to_map"
+            app:destination="@id/nav_map"
+            app:enterAnim="@anim/nav_default_enter_anim"
+            app:exitAnim="@anim/nav_default_exit_anim" />
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_map"
+        android:name="com.bif.locator.ui.map.MapFragment"
+        android:label="Map"
+        app:route="/map"
+        tools:layout="@layout/fragment_map" >
+
+        <action
+            android:id="@+id/action_map_to_home"
+            app:destination="@id/nav_home"
+            app:enterAnim="@anim/nav_default_enter_anim"
+            app:exitAnim="@anim/nav_default_exit_anim" />
+
+        <argument
+            android:name="location"
+            app:argType="string"
+            app:nullable="true" />
+
+    </fragment>
+
+</navigation>
