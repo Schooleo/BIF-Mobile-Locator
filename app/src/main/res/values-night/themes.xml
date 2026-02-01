@@ -1,8 +1,11 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Theme.BIFLocator" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/brand_color_2</item>
-        <item name="colorSecondary">@color/brand_color_5</item>
-        <item name="colorTertiary">@color/brand_color_8</item>
+        <item name="dark_mode_background">@color/dark_background</item>
+        <item name="dark_mode_text">@color/white</item>
+        <item name="dark_mode_button">@color/button_color</item>
+        <item name="dark_mode_box">@color/box_color</item>
+        <item name="dark_mode_place_marker">@color/button_color</item>
+        <item name="dark_mode_self_marker">@color/self_marked_color</item>
     </style>
 </resources>
