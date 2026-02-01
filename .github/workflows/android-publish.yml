@@ -25,6 +25,7 @@ jobs:
           distribution: "temurin"
           java-version: "21"
           cache: gradle
+
       - name: Create google-services.json
         run: echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > app/google-services.json
 
@@ -33,6 +34,9 @@ jobs:
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
+
+      - name: Create local.properties
+        run: echo "MAPS_API_KEY=${{ secrets.MAPS_API_KEY }}" > local.properties
 
       - name: Build Release Bundle
         run: ./gradlew bundleRelease -PBUILD_NUMBER=${{ github.run_number }}
