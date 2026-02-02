@@ -1,11 +1,20 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Theme.BIFLocator" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="dark_mode_background">@color/dark_background</item>
-        <item name="dark_mode_text">@color/white</item>
-        <item name="dark_mode_button">@color/button_color</item>
-        <item name="dark_mode_box">@color/box_color</item>
-        <item name="dark_mode_place_marker">@color/button_color</item>
-        <item name="dark_mode_self_marker">@color/self_marked_color</item>
+        <!-- Background -->
+        <item name="android:colorBackground">@color/dark_mode_background</item>
+
+        <!-- Main brand color -->
+        <item name="colorPrimary">@color/button_color</item>
+
+        <!-- Text on background -->
+        <item name="colorOnBackground">@color/white</item>
+
+        <!-- Surface (card / box UI) -->
+        <item name="colorSurface">@color/dark_mode_box</item>
+
+        <!-- Text on surface -->
+        <item name="colorOnSurface">@color/white</item>
+
     </style>
 </resources>
