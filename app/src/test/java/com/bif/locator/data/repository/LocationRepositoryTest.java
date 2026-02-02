@@ -7,7 +7,7 @@ public class LocationRepositoryTest {
 
     @Test
     public void constructor_canInstantiate() {
-        LocationRepository repo = new LocationRepository();
+        LocationRepository repo = new LocationRepository(null);
         assertNotNull("Repository should be instantiated", repo);
     }
 }

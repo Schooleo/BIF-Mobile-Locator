@@ -33,7 +33,8 @@ android {
         }
 
         manifestPlaceholders = [
-            MAPS_API_KEY: localProperties.getProperty('MAPS_API_KEY', "")
+            MAPS_API_KEY: localProperties.getProperty('MAPS_API_KEY', ""),
+            PLACES_API_KEY: localProperties.getProperty('PLACES_API_KEY', "")
         ]
     }
 

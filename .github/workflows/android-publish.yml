@@ -36,7 +36,9 @@ jobs:
         run: chmod +x gradlew
 
       - name: Create local.properties
-        run: echo "MAPS_API_KEY=${{ secrets.MAPS_API_KEY }}" > local.properties
+        run: |
+          echo "MAPS_API_KEY=${{ secrets.MAPS_API_KEY }}" > local.properties
+          echo "PLACES_API_KEY=${{ secrets.PLACES_API_KEY }}" >> local.properties
 
       - name: Build Release Bundle
         run: ./gradlew bundleRelease -PBUILD_NUMBER=${{ github.run_number }}
