@@ -15,4 +15,19 @@
     <color name="brand_color_8">#1a759f</color>
     <color name="brand_color_9">#1e6091</color>
     <color name="brand_color_10">#184e77</color>
+
+    <!-- General UI -->
+    <color name="button_color">#2ECC71</color>
+    <color name="link_text_color">#145A32</color>
+    <color name="self_marked_color">#2B7FFF</color>
+    <color name="place_marker_color">#FF3B3B</color>
+
+    <!-- Light mode -->
+    <color name="light_mode_box">#D9D9D9</color>
+
+
+    <!--Dark mode-->
+    <color name="dark_mode_background">#0F172B</color>
+    <color name="dark_mode_box">#314158</color>
+
 </resources>

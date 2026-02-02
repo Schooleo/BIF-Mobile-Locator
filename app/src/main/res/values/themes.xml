@@ -1,8 +1,21 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Theme.BIFLocator" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/brand_color_8</item>
-        <item name="colorSecondary">@color/brand_color_5</item>
-        <item name="colorTertiary">@color/brand_color_2</item>
+        <!-- Background -->
+        <item name="android:colorBackground">@color/white</item>
+
+        <!-- Main brand color -->
+        <item name="colorPrimary">@color/button_color</item>
+
+        <!-- Text on background -->
+        <item name="colorOnBackground">@color/black</item>
+
+        <!-- Surface (card / box UI) -->
+        <item name="colorSurface">@color/light_mode_box</item>
+
+        <!-- Text on surface -->
+        <item name="colorOnSurface">@color/black</item>
+
     </style>
+
 </resources>
