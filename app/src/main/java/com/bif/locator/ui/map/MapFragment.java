@@ -1,7 +1,5 @@
 package com.bif.locator.ui.map;
 
-import android.location.Address;
-import android.location.Geocoder;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -12,6 +10,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.Navigation;
 
 import com.bif.locator.R;
@@ -22,9 +21,6 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 
-import java.io.IOException;
-import java.util.List;
-
 import dagger.hilt.android.AndroidEntryPoint;
 
 @AndroidEntryPoint
@@ -32,10 +28,12 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
     private GoogleMap googleMap;
     private TextView startText;
+    private MapViewModel viewModel;
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        viewModel = new ViewModelProvider(this).get(MapViewModel.class);
         return inflater.inflate(R.layout.fragment_map, container, false);
     }
 
@@ -55,12 +53,28 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         // Go back home button
         Button btnGoBackHome = view.findViewById(R.id.btn_back_home);
         btnGoBackHome.setOnClickListener(v -> {
-            // Navigate back to the HomeFragment
             Navigation.findNavController(v).navigate(R.id.action_map_to_home);
+        });
+
+        // Observe ViewModel
+        viewModel.statusText.observe(getViewLifecycleOwner(), text -> startText.setText(text));
+
+        viewModel.searchResult.observe(getViewLifecycleOwner(), location -> {
+            if (location != null && googleMap != null) {
+                LatLng target = new LatLng(location.latitude, location.longitude);
+                googleMap.addMarker(new MarkerOptions()
+                        .position(target)
+                        .title("Destination")
+                        .snippet("Location found")
+                );
+                googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(target, 20f));
+                viewModel.setStatusText("Location found");
+            } else {
+                viewModel.setStatusText("Location not found");
+            }
         });
     }
 
-    // This callback runs when the Google Map is ready to be used.
     @Override
     public void onMapReady(@NonNull GoogleMap map) {
         this.googleMap = map;
@@ -69,46 +83,15 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
             MapFragmentArgs args = MapFragmentArgs.fromBundle(getArguments());
             String location = args.getLocation();
 
-            assert location != null;
-            if (!location.isEmpty()) {
-                startText.setText(String.format("Going to location %s...", location));
-
-                goToLocation(location);
+            if (location != null && !location.isEmpty()) {
+                viewModel.setStatusText(String.format("Going to location %s...", location));
+                viewModel.searchLocation(location);
             } else {
-                startText.setText(R.string.going_to_hcmus);
-
-                // Go to HCMUS - (10.7626636, 106.6823091)
-                goToLocation("10.7626636, 106.6823091");
+                // Default location: HCMUS
+                String defaultLocation = "10.7626636, 106.6823091";
+                viewModel.setStatusText(getString(R.string.going_to_hcmus)); // Assuming resource exists or use hardcoded if needed
+                viewModel.searchLocation(defaultLocation);
             }
         }
-    }
-
-    private void goToLocation(String location) {
-        new Thread(() -> {
-            Geocoder geocoder = new Geocoder(requireContext());
-            try {
-                List<Address> results = geocoder.getFromLocationName(location, 1);
-
-                if (results != null && !results.isEmpty()) {
-                    Address address = results.get(0);
-                    LatLng target = new LatLng(address.getLatitude(), address.getLongitude());
-
-                    requireActivity().runOnUiThread(() -> {
-                        startText.setText(String.format("Location found for: %s", location));
-
-                        googleMap.addMarker(new MarkerOptions()
-                                .position(target)
-                                .title(location)
-                                .snippet("You searched for this location!")
-                        );
-
-                        googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(target, 20f));
-                    });
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-                throw new RuntimeException(e);
-            }
-        }).start();
     }
 }
