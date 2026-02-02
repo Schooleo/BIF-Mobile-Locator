@@ -5,6 +5,7 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Transformations;
 import androidx.lifecycle.ViewModel;
 
+import com.bif.locator.domain.model.Location;
 import com.bif.locator.domain.repository.ILocationRepository;
 import com.bif.locator.domain.repository.IMapRepository;
 
