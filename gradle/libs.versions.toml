@@ -12,12 +12,15 @@ material = "1.13.0"
 activity = "1.12.3"
 constraintlayout = "2.2.1"
 mockito = "5.21.0"
+mockitoInline = "5.2.0"
+fragmentTesting = "1.8.9"
 navigation = "2.9.7"
 playServicesLocation = "21.3.0"
 playServicesMaps = "20.0.0"
 navigationFragmentKtx = "2.9.7"
 navigationUiKtx = "2.9.7"
 room = "2.8.4"
+coreTesting = "2.2.0"
 
 [libraries]
 firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
@@ -39,6 +42,9 @@ navigation-fragment-ktx = { group = "androidx.navigation", name = "navigation-fr
 navigation-ui-ktx = { group = "androidx.navigation", name = "navigation-ui-ktx", version.ref = "navigationUiKtx" }
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+core-testing = { module = "androidx.arch.core:core-testing", version.ref = "coreTesting" }
+mockito-inline = { module = "org.mockito:mockito-inline", version.ref = "mockitoInline" }
+fragment-testing = { module = "androidx.fragment:fragment-testing", version.ref = "fragmentTesting" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

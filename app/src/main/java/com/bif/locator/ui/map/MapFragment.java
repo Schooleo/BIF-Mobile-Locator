@@ -1,5 +1,7 @@
 package com.bif.locator.ui.map;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -7,19 +9,26 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.Navigation;
 
 import com.bif.locator.R;
+import com.bif.locator.domain.model.MapState;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+
+import javax.inject.Inject;
 
 import dagger.hilt.android.AndroidEntryPoint;
 
@@ -29,6 +38,18 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     private GoogleMap googleMap;
     private TextView startText;
     private MapViewModel viewModel;
+
+    @Inject
+    MarkerFactory markerFactory;
+
+    private final ActivityResultLauncher<String> requestPermissionLauncher =
+        registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+            if (isGranted) {
+                enableMyLocationLayer();
+            } else {
+                viewModel.setStatusText("Permission denied. Cannot show current location.");
+            }
+        });
 
     @Nullable
     @Override
@@ -61,18 +82,33 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
         viewModel.searchResult.observe(getViewLifecycleOwner(), location -> {
             if (location != null && googleMap != null) {
+                googleMap.clear();
+
                 LatLng target = new LatLng(location.latitude, location.longitude);
-                googleMap.addMarker(new MarkerOptions()
-                        .position(target)
-                        .title("Destination")
-                        .snippet("Location found")
-                );
-                googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(target, 20f));
+
+                MarkerOptions marker = MarkerFactory.createMarker(target);
+                googleMap.addMarker(marker);
+
+                googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(target, 15f));
                 viewModel.setStatusText("Location found");
             } else {
                 viewModel.setStatusText("Location not found");
             }
         });
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+
+        if (googleMap != null) {
+            CameraPosition position = googleMap.getCameraPosition();
+            viewModel.saveMapState(
+                position.target.latitude,
+                position.target.longitude,
+                position.zoom
+            );
+        }
     }
 
     @Override
@@ -86,12 +122,27 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
             if (location != null && !location.isEmpty()) {
                 viewModel.setStatusText(String.format("Going to location %s...", location));
                 viewModel.searchLocation(location);
-            } else {
-                // Default location: HCMUS
-                String defaultLocation = "10.7626636, 106.6823091";
-                viewModel.setStatusText(getString(R.string.going_to_hcmus)); // Assuming resource exists or use hardcoded if needed
-                viewModel.searchLocation(defaultLocation);
             }
+        }
+
+        MapState savedState = viewModel.getLastMapState();
+        if (savedState != null) {
+            LatLng target = new LatLng(savedState.latitude, savedState.longitude);
+            googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(target, savedState.zoomLevel));
+        } else {
+            LatLng hcmus = new LatLng(10.7626636, 106.6823091);
+            googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(hcmus, 10f));
+        }
+    }
+
+    private void enableMyLocationLayer() {
+        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            if (googleMap != null) {
+                googleMap.setMyLocationEnabled(true);
+                googleMap.getUiSettings().setMyLocationButtonEnabled(true);
+            }
+        } else {
+            requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION);
         }
     }
 }

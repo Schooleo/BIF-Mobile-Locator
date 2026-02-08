@@ -6,6 +6,7 @@ import androidx.lifecycle.Transformations;
 import androidx.lifecycle.ViewModel;
 
 import com.bif.locator.domain.model.Location;
+import com.bif.locator.domain.model.MapState;
 import com.bif.locator.domain.repository.ILocationRepository;
 import com.bif.locator.domain.repository.IMapRepository;
 
@@ -35,4 +36,15 @@ public class MapViewModel extends ViewModel {
     public void setStatusText(String text) {
         statusText.setValue(text);
     }
+
+    public void saveMapState(double lat, double lng, float zoom) {
+        MapState mapState = new MapState(lat, lng, zoom);
+        mapRepository.saveMapState(mapState);
+    }
+
+    public MapState getLastMapState() {
+        return mapRepository.getMapState();
+    }
+
+
 }
