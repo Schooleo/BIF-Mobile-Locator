@@ -23,8 +23,8 @@ public class MapRepository implements IMapRepository {
     @Override
     public void saveMapState(MapState state) {
         sharedPreferences.edit()
-                .putFloat(KEY_LAT, (float) state.latitude)
-                .putFloat(KEY_LNG, (float) state.longitude)
+                .putLong(KEY_LAT, Double.doubleToRawLongBits(state.latitude))
+                .putLong(KEY_LNG, Double.doubleToRawLongBits(state.longitude))
                 .putFloat(KEY_ZOOM, state.zoomLevel)
                 .apply();
     }
@@ -35,9 +35,10 @@ public class MapRepository implements IMapRepository {
             return null;
         }
 
-        double lat = (double) sharedPreferences.getFloat(KEY_LAT, 0); // Default to 0 or some other default
-        double lng = (double) sharedPreferences.getFloat(KEY_LNG, 0);
-        float zoom = sharedPreferences.getFloat(KEY_ZOOM, 15f); // Default zoom
-        return new MapState(lat, lng, zoom);
+        double latitude = Double.longBitsToDouble(sharedPreferences.getLong(KEY_LAT, 0));
+        double longitude = Double.longBitsToDouble(sharedPreferences.getLong(KEY_LNG, 0));
+        float zoomLevel = sharedPreferences.getFloat(KEY_ZOOM, 15f);
+
+        return new MapState(latitude, longitude, zoomLevel);
     }
 }
