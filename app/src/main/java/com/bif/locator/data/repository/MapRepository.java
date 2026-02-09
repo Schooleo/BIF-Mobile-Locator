@@ -23,17 +23,38 @@ public class MapRepository implements IMapRepository {
     @Override
     public void saveMapState(MapState state) {
         sharedPreferences.edit()
-                .putFloat(KEY_LAT, (float) state.latitude)
-                .putFloat(KEY_LNG, (float) state.longitude)
+                .putLong(KEY_LAT, Double.doubleToRawLongBits(state.latitude))
+                .putLong(KEY_LNG, Double.doubleToRawLongBits(state.longitude))
                 .putFloat(KEY_ZOOM, state.zoomLevel)
                 .apply();
     }
 
     @Override
     public MapState getMapState() {
-        float lat = sharedPreferences.getFloat(KEY_LAT, 0); // Default to 0 or some other default
-        float lng = sharedPreferences.getFloat(KEY_LNG, 0);
-        float zoom = sharedPreferences.getFloat(KEY_ZOOM, 15f); // Default zoom
-        return new MapState(lat, lng, zoom);
+        if (!sharedPreferences.contains(KEY_LAT)) {
+            return null;
+        }
+
+        double latitude;
+        double longitude;
+        try {
+            // New format: stored as long bits of a double
+            latitude = Double.longBitsToDouble(sharedPreferences.getLong(KEY_LAT, 0));
+            longitude = Double.longBitsToDouble(sharedPreferences.getLong(KEY_LNG, 0));
+        } catch (ClassCastException e) {
+            // Legacy format: stored as float; read, convert, and migrate to the new format
+            float latFloat = sharedPreferences.getFloat(KEY_LAT, 0f);
+            float lngFloat = sharedPreferences.getFloat(KEY_LNG, 0f);
+            latitude = latFloat;
+            longitude = lngFloat;
+            sharedPreferences.edit()
+                    .putLong(KEY_LAT, Double.doubleToRawLongBits(latitude))
+                    .putLong(KEY_LNG, Double.doubleToRawLongBits(longitude))
+                    .apply();
+        }
+
+        float zoomLevel = sharedPreferences.getFloat(KEY_ZOOM, 15f);
+
+        return new MapState(latitude, longitude, zoomLevel);
     }
 }
