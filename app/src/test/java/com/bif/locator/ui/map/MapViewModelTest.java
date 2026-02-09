@@ -113,4 +113,24 @@ public class MapViewModelTest {
         assertNotNull(result);
         assertEquals(expectedState, result);
     }
+
+    @Test
+    public void saveMapState_verifiesDataIntegrity() {
+        // Arrange
+        double expectedLat = 10.762622;
+        double expectedLng = 106.682311;
+        float expectedZoom = 15.5f;
+
+        // Act
+        viewModel.saveMapState(expectedLat, expectedLng, expectedZoom);
+
+        // Assert
+        ArgumentCaptor<MapState> captor = ArgumentCaptor.forClass(MapState.class);
+        verify(mapRepository).saveMapState(captor.capture());
+
+        MapState captured = captor.getValue();
+        assertEquals("Latitude mismatch", expectedLat, captured.latitude, 0.0001);
+        assertEquals("Longitude mismatch", expectedLng, captured.longitude, 0.0001);
+        assertEquals("Zoom mismatch", expectedZoom, captured.zoomLevel, 0.0001);
+    }
 }
