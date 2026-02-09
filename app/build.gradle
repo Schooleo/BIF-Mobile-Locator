@@ -80,6 +80,7 @@ dependencies {
     implementation libs.play.services.location
     implementation libs.navigation.fragment.ktx
     implementation libs.navigation.ui.ktx
+    implementation libs.navigation.runtime
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
@@ -93,6 +94,7 @@ dependencies {
 
     // For instrumentation tests
     androidTestImplementation libs.hilt.android.testing
+    androidTestImplementation libs.core.testing
     androidTestAnnotationProcessor libs.hilt.compiler
 
     // For local unit tests
