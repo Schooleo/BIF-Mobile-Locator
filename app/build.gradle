@@ -69,6 +69,10 @@ android {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
     }
+
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -113,4 +117,7 @@ dependencies {
     // Room
     implementation libs.room.runtime
     annotationProcessor libs.room.compiler
+
+    // Places SDK for searching places
+    implementation libs.places
 }
