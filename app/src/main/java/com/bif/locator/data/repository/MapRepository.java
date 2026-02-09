@@ -31,8 +31,12 @@ public class MapRepository implements IMapRepository {
 
     @Override
     public MapState getMapState() {
-        float lat = sharedPreferences.getFloat(KEY_LAT, 0); // Default to 0 or some other default
-        float lng = sharedPreferences.getFloat(KEY_LNG, 0);
+        if (!sharedPreferences.contains(KEY_LAT)) {
+            return null;
+        }
+
+        double lat = (double) sharedPreferences.getFloat(KEY_LAT, 0); // Default to 0 or some other default
+        double lng = (double) sharedPreferences.getFloat(KEY_LNG, 0);
         float zoom = sharedPreferences.getFloat(KEY_ZOOM, 15f); // Default zoom
         return new MapState(lat, lng, zoom);
     }
