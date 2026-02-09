@@ -18,10 +18,10 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_gravity="bottom"
-        android:background="@color/white"
         android:gravity="center"
         android:orientation="vertical"
         android:paddingVertical="15dp"
+        android:background="@color/white"
         app:layout_constraintBottom_toBottomOf="parent">
 
         <TextView

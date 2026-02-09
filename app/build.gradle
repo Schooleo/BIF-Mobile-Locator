@@ -84,6 +84,7 @@ dependencies {
     implementation libs.play.services.location
     implementation libs.navigation.fragment.ktx
     implementation libs.navigation.ui.ktx
+    implementation libs.google.places
     implementation libs.navigation.runtime
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit

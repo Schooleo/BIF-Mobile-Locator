@@ -16,6 +16,8 @@ import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.navigation.NavDirections;
+import androidx.navigation.Navigation;
 
 import com.bif.locator.R;
 
@@ -32,6 +34,8 @@ public class LocationFragment extends Fragment {
     private TextView tvStatus;
     private Button btnFetchLocation;
     private Button btnToggleTracking;
+    private Button btnGoBackHome;
+
 
     // Permission launcher
     private final ActivityResultLauncher<String> requestPermissionLauncher =
@@ -61,10 +65,14 @@ public class LocationFragment extends Fragment {
         tvStatus = view.findViewById(R.id.tv_status);
         btnFetchLocation = view.findViewById(R.id.btn_fetch_location);
         btnToggleTracking = view.findViewById(R.id.btn_toggle_tracking);
+        btnGoBackHome = view.findViewById(R.id.btn_back_home);
 
         // Setup button click listeners
         btnFetchLocation.setOnClickListener(v -> onFetchLocationClick());
         btnToggleTracking.setOnClickListener(v -> onToggleTrackingClick());
+
+        NavDirections locationToHome = LocationFragmentDirections.actionLocationToHome();
+        btnGoBackHome.setOnClickListener(v -> Navigation.findNavController(v).navigate(locationToHome));
 
         // Observe LiveData from ViewModel
         observeViewModel();

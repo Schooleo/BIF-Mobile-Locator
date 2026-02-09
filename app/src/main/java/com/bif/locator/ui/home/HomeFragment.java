@@ -4,10 +4,13 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 
 import com.bif.locator.ui.home.HomeFragmentDirections.ActionHomeToMap;
+
+import androidx.navigation.NavDirections;
 import androidx.navigation.Navigation;
 
 import androidx.annotation.NonNull;
@@ -28,15 +31,23 @@ public class HomeFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        ImageButton gotoMap = view.findViewById(R.id.goto_map);
+        ImageButton searchButton = view.findViewById(R.id.btn_search_map);
         EditText locationInput = view.findViewById(R.id.location_input);
 
-        gotoMap.setOnClickListener(v -> {
+        searchButton.setOnClickListener(v -> {
             String location = locationInput.getText().toString();
 
             ActionHomeToMap action = HomeFragmentDirections.actionHomeToMap(location);
 
             Navigation.findNavController(v).navigate(action);
         });
+
+        Button btnNavMap = view.findViewById(R.id.btn_nav_map);
+        ActionHomeToMap homeToMap = HomeFragmentDirections.actionHomeToMap("");
+        btnNavMap.setOnClickListener(v -> Navigation.findNavController(v).navigate(homeToMap));
+
+        Button btnNavLoc = view.findViewById(R.id.btn_nav_loc);
+        NavDirections homeToLocation = HomeFragmentDirections.actionHomeToLocation();
+        btnNavLoc.setOnClickListener(v -> Navigation.findNavController(v).navigate(homeToLocation));
     }
 }

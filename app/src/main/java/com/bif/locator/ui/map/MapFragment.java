@@ -115,6 +115,8 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     public void onMapReady(@NonNull GoogleMap map) {
         this.googleMap = map;
 
+        enableMyLocationLayer();
+
         if (getArguments() != null) {
             MapFragmentArgs args = MapFragmentArgs.fromBundle(getArguments());
             String location = args.getLocation();

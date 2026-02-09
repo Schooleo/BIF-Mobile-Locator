@@ -200,41 +200,41 @@ public class LocationRepository implements ILocationRepository {
                         FetchPlaceRequest fetchRequest = FetchPlaceRequest
                                 .newInstance(placeId, placeFields);
                         placesClient.fetchPlace(fetchRequest)
-                                .addOnSuccessListener(placeResponse -> {
-                                    com.google.android.libraries.places.api.model.Place googlePlace =
-                                            placeResponse.getPlace();
+                            .addOnSuccessListener(placeResponse -> {
+                                com.google.android.libraries.places.api.model.Place googlePlace =
+                                        placeResponse.getPlace();
 
-                                    double lat = 0, lng = 0;
-                                    if (googlePlace.getLocation() != null) {
-                                        lat = googlePlace.getLocation().latitude;
-                                        lng = googlePlace.getLocation().longitude;
-                                    }
+                                double lat = 0, lng = 0;
+                                if (googlePlace.getLocation() != null) {
+                                    lat = googlePlace.getLocation().latitude;
+                                    lng = googlePlace.getLocation().longitude;
+                                }
 
-                                    Place domainPlace = new Place(
-                                            googlePlace.getId(),
-                                            googlePlace.getDisplayName() != null ? googlePlace.getDisplayName() : "",
-                                            googlePlace.getFormattedAddress() != null ? googlePlace.getFormattedAddress() : "",
-                                            googlePlace.getRating() != null ? googlePlace.getRating() : 0.0,
-                                            lat,
-                                            lng
-                                    );
+                                Place domainPlace = new Place(
+                                        googlePlace.getId(),
+                                        googlePlace.getDisplayName() != null ? googlePlace.getDisplayName() : "",
+                                        googlePlace.getFormattedAddress() != null ? googlePlace.getFormattedAddress() : "",
+                                        googlePlace.getRating() != null ? googlePlace.getRating() : 0.0,
+                                        lat,
+                                        lng
+                                );
 
-                                    synchronized (places) {
-                                        places.add(domainPlace);
-                                        completedCount[0]++;
-                                        if (completedCount[0] >= limit) {
-                                            result.postValue(new ArrayList<>(places));
-                                            }
-                                    }
-                                })
-                                .addOnFailureListener(e -> {
-                                    synchronized (places) {
-                                        completedCount[0]++;
-                                        if (completedCount[0] >= limit) {
-                                            result.postValue(new ArrayList<>(places));
+                                synchronized (places) {
+                                    places.add(domainPlace);
+                                    completedCount[0]++;
+                                    if (completedCount[0] >= limit) {
+                                        result.postValue(new ArrayList<>(places));
                                         }
+                                }
+                            })
+                            .addOnFailureListener(e -> {
+                                synchronized (places) {
+                                    completedCount[0]++;
+                                    if (completedCount[0] >= limit) {
+                                        result.postValue(new ArrayList<>(places));
                                     }
-                                });
+                                }
+                            });
                     }
                 })
                 .addOnFailureListener(e -> {
