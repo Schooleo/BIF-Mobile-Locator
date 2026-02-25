@@ -13,6 +13,6 @@ public class Favorite {
     public String address;
     public String description;
     public String notes;
-    public double rating;
+    public int rating;
     public String imagePath;
 }
