@@ -10,4 +10,9 @@ public class Favorite {
     public String name;
     public double latitude;
     public double longitude;
+    public String address;
+    public String description;
+    public String notes;
+    public double rating;
+    public String imagePath;
 }
