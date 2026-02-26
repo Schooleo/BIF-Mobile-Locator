@@ -5,6 +5,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.graphics.Paint;
+import android.widget.Button;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -29,10 +30,22 @@ public class LoginFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        NavController navController = Navigation.findNavController(view);
+
+        // Set button text to "Sign in"
+        Button btnLogin = view.findViewById(R.id.btn_login);
+        btnLogin.setText(R.string.sign_in);
+        btnLogin.setOnClickListener(v -> {
+            // TODO: Add authentication logic here
+            // For now, just navigate to home for testing
+            navController.navigate(R.id.action_login_to_home);
+        });
+
+        // Set link text to "Register"
         TextView tvRegisterLink = view.findViewById(R.id.tv_register_link);
+        tvRegisterLink.setText(R.string.register);
         tvRegisterLink.setPaintFlags(tvRegisterLink.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
         tvRegisterLink.setOnClickListener(v -> {
-            NavController navController = Navigation.findNavController(view);
             navController.navigate(R.id.action_login_to_register);
         });
     }

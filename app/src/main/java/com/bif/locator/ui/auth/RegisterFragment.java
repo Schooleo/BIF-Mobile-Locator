@@ -5,6 +5,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.graphics.Paint;
+import android.widget.Button;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -29,10 +30,22 @@ public class RegisterFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        NavController navController = Navigation.findNavController(view);
+
+        // Set button text to "Sign up"
+        Button btnSignUp = view.findViewById(R.id.btn_signup);
+        btnSignUp.setText(R.string.sign_up);
+        btnSignUp.setOnClickListener(v -> {
+            // TODO: Add registration logic here
+            // For now, just navigate back to login
+            navController.navigate(R.id.action_register_to_login);
+        });
+
+        // Set link text to "Already have an account?"
         TextView tvSignInLink = view.findViewById(R.id.tv_signin_link);
+        tvSignInLink.setText(R.string.already_have_account);
         tvSignInLink.setPaintFlags(tvSignInLink.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
         tvSignInLink.setOnClickListener(v -> {
-            NavController navController = Navigation.findNavController(view);
             navController.navigate(R.id.action_register_to_login);
         });
     }

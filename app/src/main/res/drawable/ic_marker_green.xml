@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp"
+    android:height="48dp"
+    android:viewportWidth="32"
+    android:viewportHeight="48">
+
+    <!-- Shadow -->
+    <path
+        android:fillColor="#33000000"
+        android:pathData="M16,44 Q16,44 8,46 Q16,47 24,46 Q16,44 16,44 Z" />
+
+    <!-- Main marker shape -->
+    <path
+        android:fillColor="@color/button_color"
+        android:pathData="M16,2 C9.4,2 4,7.4 4,14 C4,23 16,40 16,40 C16,40 28,23 28,14 C28,7.4 22.6,2 16,2 Z" />
+
+    <!-- Inner white circle -->
+    <path
+        android:fillColor="@color/white"
+        android:pathData="M16,14 m-6,0
+                          a6,6 0 1,0 12,0
+                          a6,6 0 1,0 -12,0" />
+
+    <!-- Inner green dot -->
+    <path
+        android:fillColor="@color/button_color"
+        android:pathData="M16,14 m-3,0
+                          a3,3 0 1,0 6,0
+                          a3,3 0 1,0 -6,0" />
+
+</vector>

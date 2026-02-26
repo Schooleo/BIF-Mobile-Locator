@@ -20,6 +20,12 @@
     <string name="sign_up">Sign up</string>
     <string name="sign_in">Sign in</string>
     <string name="register">Register</string>
+    <string name="already_have_account">Already have an account?</string>
     <string name="email">Email</string>
     <string name="password">Password</string>
+    
+    <!-- Map Screen Strings -->
+    <string name="your_location">Your Location</string>
+    <string name="you_are_here">You are here</string>
+    <string name="selected_location">Selected Location</string>
 </resources>
