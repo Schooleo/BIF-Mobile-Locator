@@ -63,6 +63,12 @@
             app:enterAnim="@anim/nav_default_enter_anim"
             app:exitAnim="@anim/nav_default_exit_anim" />
 
+        <action
+            android:id="@+id/action_home_to_social"
+            app:destination="@id/nav_social"
+            app:enterAnim="@anim/nav_default_enter_anim"
+            app:exitAnim="@anim/nav_default_exit_anim" />
+
     </fragment>
 
     <fragment
@@ -95,6 +101,21 @@
 
         <action
             android:id="@+id/action_location_to_home"
+            app:destination="@id/nav_home"
+            app:enterAnim="@anim/nav_default_enter_anim"
+            app:exitAnim="@anim/nav_default_exit_anim" />
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_social"
+        android:name="com.bif.locator.ui.social.SocialFragment"
+        android:label="Social"
+        app:route="/social"
+        tools:layout="@layout/fragment_social">
+
+        <action
+            android:id="@+id/action_social_to_home"
             app:destination="@id/nav_home"
             app:enterAnim="@anim/nav_default_enter_anim"
             app:exitAnim="@anim/nav_default_exit_anim" />

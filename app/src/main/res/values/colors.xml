@@ -32,4 +32,17 @@
     <color name="dark_mode_box">#314158</color>
     <color name="dark_mode_auth_link_color">#2ECC71</color>
 
+    <!-- Social Screen -->
+    <color name="avatar_red">#FF6B6B</color>
+    <color name="avatar_blue">#4DABF7</color>
+    <color name="avatar_green">#51CF66</color>
+    <color name="avatar_yellow">#FFD43B</color>
+    <color name="avatar_purple">#CC5DE8</color>
+    <color name="status_online">#51CF66</color>
+    <color name="status_offline">#9E9E9E</color>
+    <color name="tab_selected">#2B7FFF</color>
+    <color name="tab_unselected">#9E9E9E</color>
+    <color name="item_background">#F5F5F5</color>
+    <color name="text_secondary">#757575</color>
+
 </resources>

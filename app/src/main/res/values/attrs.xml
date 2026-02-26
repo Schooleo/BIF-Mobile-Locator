@@ -6,4 +6,9 @@
     <attr name="colorInputText" format="color" />
     <attr name="colorHintText" format="color" />
     <attr name="colorAuthLink" format="color" />
+    
+    <!-- Semantic color attributes for social screen theming -->
+    <attr name="colorListItemBackground" format="color" />
+    <attr name="colorTextPrimary" format="color" />
+    <attr name="colorTextSecondary" format="color" />
 </resources>

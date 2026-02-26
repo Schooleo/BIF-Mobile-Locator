@@ -45,40 +45,49 @@
 
     </LinearLayout>
 
-    <Button
-        android:id="@+id/btn_nav_map"
-        style="?android:attr/buttonBarButtonStyle"
-        android:layout_width="112dp"
-        android:layout_height="52dp"
-        android:layout_weight="1"
-        android:text="@string/map"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toStartOf="@+id/btn_nav_loc"
-        app:layout_constraintStart_toStartOf="parent" />
+    <!-- Bottom Navigation Bar với 4 buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        app:layout_constraintBottom_toBottomOf="parent">
 
-    <Button
-        android:id="@+id/btn_nav_loc"
-        style="?android:attr/buttonBarButtonStyle"
-        android:layout_width="112dp"
-        android:layout_height="52dp"
-        android:layout_weight="1"
-        android:text="@string/location"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toBottomOf="@+id/home_layout"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        <Button
+            android:id="@+id/btn_nav_map"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="@string/map"
+            android:textStyle="bold" />
 
-    <Button
-        android:id="@+id/btn_nav_fav"
-        style="?android:attr/buttonBarButtonStyle"
-        android:layout_width="112dp"
-        android:layout_height="52dp"
-        android:layout_weight="1"
-        android:text="@string/favorites"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toBottomOf="@+id/btn_nav_loc"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@+id/btn_nav_loc" />
+        <Button
+            android:id="@+id/btn_nav_loc"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="@string/location"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btn_nav_fav"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="@string/favorites"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btn_nav_social"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="@string/social"
+            android:textStyle="bold" />
+
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

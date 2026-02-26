@@ -19,6 +19,11 @@
         <!-- Semantic color aliases -->
         <item name="colorHintText">@color/hint_text_color</item>
         <item name="colorAuthLink">@color/dark_mode_auth_link_color</item>
+        
+        <!-- Social screen colors -->
+        <item name="colorListItemBackground">@color/item_background</item>
+        <item name="colorTextPrimary">@color/white</item>
+        <item name="colorTextSecondary">@color/text_secondary</item>
 
     </style>
 </resources>
