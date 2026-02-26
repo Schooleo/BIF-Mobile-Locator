@@ -15,4 +15,17 @@
     <string name="map">Map</string>
     <string name="location">Location</string>
     <string name="favorites">Favorites</string>
+    <string name="go_back">Go back</string>
+    <string name="details">Details</string>
+    <string name="place_photo">Place Photo</string>
+    <string name="remove_favorite">Remove favorite</string>
+    <string name="address_icon">Address icon</string>
+    <string name="address">ADDRESS</string>
+    <string name="description_icon">Description icon</string>
+    <string name="description">DESCRIPTION</string>
+    <string name="notes_icon">Notes icon</string>
+    <string name="notes">NOTES</string>
+    <string name="search">Search</string>
+    <string name="no_favorite_places">No favorite places found</string>
+    <string name="favorite_places">Favorite places</string>
 </resources>
