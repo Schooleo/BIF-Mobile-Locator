@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<EditText xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/et_email"
+    android:layout_width="match_parent"
+    android:layout_height="48dp"
+    android:layout_marginBottom="12dp"
+    android:background="@drawable/bg_input_field"
+    android:hint="Email"
+    android:textColorHint="?attr/colorHintText"
+    android:textColor="?attr/colorInputText"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:inputType="textEmailAddress"
+    android:singleLine="true" />

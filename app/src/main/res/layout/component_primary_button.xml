@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Button xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/btn_primary"
+    android:layout_width="match_parent"
+    android:layout_height="48dp"
+    android:layout_marginBottom="16dp"
+    android:background="@drawable/bg_primary_button"
+    android:text="@string/sign_in"
+    android:textColor="@color/white"
+    android:textSize="16sp"
+    android:textStyle="bold"
+    android:stateListAnimator="@null" />
