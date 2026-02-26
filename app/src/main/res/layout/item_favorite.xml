@@ -2,6 +2,7 @@
 <com.google.android.material.card.MaterialCardView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/card_favorite"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -23,7 +24,7 @@
             android:layout_height="48dp"
             android:src="@android:drawable/ic_menu_gallery"
             android:scaleType="centerCrop"
-            android:contentDescription="Place Photo"
+            android:contentDescription="@string/place_photo"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintBaseline_toBottomOf="parent"/>
@@ -66,12 +67,14 @@
 
         <ImageButton
             android:id="@+id/btn_remove"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:src="@android:drawable/ic_delete"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:src="@drawable/ic_close"
+            app:tint="?attr/colorOnBackground"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Remove favorite"
+            android:contentDescription="@string/remove_favorite"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
+            app:layout_constraintEnd_toEndOf="parent"
+            tools:ignore="UseAppTint" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 </com.google.android.material.card.MaterialCardView>

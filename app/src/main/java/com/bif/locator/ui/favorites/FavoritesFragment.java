@@ -14,6 +14,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.TextView;
 
 import com.bif.locator.R;
@@ -32,6 +33,7 @@ public class FavoritesFragment extends Fragment
     private RecyclerView rvFavorites;
     private TextView tvEmpty;
     private EditText etSearch;
+    private ImageButton btnHome;
 
     @Nullable
     @Override
@@ -49,6 +51,7 @@ public class FavoritesFragment extends Fragment
         rvFavorites = view.findViewById(R.id.rv_favorites);
         tvEmpty = view.findViewById(R.id.tv_empty);
         etSearch = view.findViewById(R.id.et_search);
+        btnHome = view.findViewById(R.id.btn_back_home);
 
         adapter = new FavoriteAdapter(this);
         rvFavorites.setLayoutManager(new LinearLayoutManager(requireContext()));
@@ -78,6 +81,10 @@ public class FavoritesFragment extends Fragment
                 rvFavorites.setVisibility(View.VISIBLE);
                 tvEmpty.setVisibility(View.GONE);
             }
+        });
+
+        btnHome.setOnClickListener(v -> {
+            Navigation.findNavController(v).navigate(R.id.action_favorites_to_home);
         });
     }
 
