@@ -45,7 +45,6 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:text="@string/bxa_user"
         android:textSize="20sp"
         android:textColor="?attr/colorTextPrimary"
         android:textStyle="bold"/>
@@ -55,7 +54,6 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="@string/user_email"
         android:textSize="14sp"
         android:textColor="?attr/colorTextSecondary"/>
 
@@ -65,7 +63,6 @@
         android:layout_height="42dp"
         android:layout_marginTop="16dp"
         android:paddingHorizontal="32dp"
-        android:text="@string/edit_profile"
         android:textSize="14sp"
         android:textColor="?attr/colorTextPrimary"
         android:background="@drawable/bg_outline_button"

@@ -21,7 +21,6 @@
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:background="@drawable/bg_avatar"
-            android:text="A"
             android:textColor="@color/white"
             android:textSize="20sp"
             android:textStyle="bold"
@@ -50,7 +49,6 @@
             android:id="@+id/tv_friend_name"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Alice Nguyen"
             android:textColor="?attr/colorTextPrimary"
             android:textSize="16sp"
             android:textStyle="bold" />
@@ -59,7 +57,6 @@
             android:id="@+id/tv_status"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/offline"
             android:textColor="?attr/colorTextSecondary"
             android:textSize="14sp"
             android:layout_marginTop="2dp" />

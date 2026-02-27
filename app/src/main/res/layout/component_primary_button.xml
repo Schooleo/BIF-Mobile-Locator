@@ -5,7 +5,6 @@
     android:layout_height="48dp"
     android:layout_marginBottom="16dp"
     android:background="@drawable/bg_primary_button"
-    android:text="@string/sign_in"
     android:textColor="@color/white"
     android:textSize="16sp"
     android:textStyle="bold"

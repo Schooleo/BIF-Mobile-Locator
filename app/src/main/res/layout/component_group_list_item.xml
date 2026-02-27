@@ -16,7 +16,6 @@
         android:layout_width="48dp"
         android:layout_height="48dp"
         android:background="@drawable/bg_avatar"
-        android:text="F"
         android:textColor="@color/white"
         android:textSize="20sp"
         android:textStyle="bold"
@@ -34,7 +33,6 @@
             android:id="@+id/tv_group_name"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Family"
             android:textColor="?attr/colorTextPrimary"
             android:textSize="16sp"
             android:textStyle="bold" />
@@ -43,7 +41,6 @@
             android:id="@+id/tv_members"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="4 members"
             android:textColor="?attr/colorTextSecondary"
             android:textSize="14sp"
             android:layout_marginTop="2dp" />
