@@ -43,4 +43,16 @@
     <string name="add_friend">Add Friend</string>
     <string name="search_by_name_or_id">Search by name or ID</string>
     <string name="close">Close</string>
+    
+    <!-- Profile Screen Strings -->
+    <string name="my_profile">My Profile</string>
+    <string name="edit_profile">Edit Profile</string>
+    <string name="app_settings">APP SETTINGS</string>
+    <string name="dark_mode">Dark Mode</string>
+    <string name="account">ACCOUNT</string>
+    <string name="personal_information">Personal Information</string>
+    <string name="privacy_security">Privacy &amp; Security</string>
+    <string name="log_out">Log Out</string>
+    <string name="bxa_user">BXA User</string>
+    <string name="user_email">user@example.com</string>
 </resources>

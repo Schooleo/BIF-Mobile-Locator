@@ -88,6 +88,15 @@
             android:text="@string/social"
             android:textStyle="bold" />
 
+        <Button
+            android:id="@+id/btn_nav_profile"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="@string/my_profile"
+            android:textStyle="bold" />
+
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

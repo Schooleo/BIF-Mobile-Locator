@@ -53,5 +53,9 @@ public class HomeFragment extends Fragment {
         Button btnNavSocial = view.findViewById(R.id.btn_nav_social);
         NavDirections homeToSocial = HomeFragmentDirections.actionHomeToSocial();
         btnNavSocial.setOnClickListener(v -> Navigation.findNavController(v).navigate(homeToSocial));
+
+        Button btnNavProfile = view.findViewById(R.id.btn_nav_profile);
+        NavDirections homeToProfile = HomeFragmentDirections.actionHomeToProfile();
+        btnNavProfile.setOnClickListener(v -> Navigation.findNavController(v).navigate(homeToProfile));
     }
 }
