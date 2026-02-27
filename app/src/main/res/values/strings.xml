@@ -40,4 +40,7 @@
     <string name="members">%d members</string>
     <string name="delete">Delete</string>
     <string name="more_options">More options</string>
+    <string name="add_friend">Add Friend</string>
+    <string name="search_by_name_or_id">Search by name or ID</string>
+    <string name="close">Close</string>
 </resources>

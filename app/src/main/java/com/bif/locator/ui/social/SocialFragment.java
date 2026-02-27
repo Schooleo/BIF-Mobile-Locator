@@ -4,10 +4,14 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -51,7 +55,7 @@ public class SocialFragment extends Fragment {
         friendsAdapter = new FriendsAdapter(new FriendsAdapter.OnFriendActionListener() {
             @Override
             public void onAddFriendClick() {
-                Toast.makeText(requireContext(), "Add New Friend", Toast.LENGTH_SHORT).show();
+                showAddFriendDialog();
             }
 
             @Override
@@ -64,7 +68,7 @@ public class SocialFragment extends Fragment {
         groupsAdapter = new GroupsAdapter(new GroupsAdapter.OnGroupActionListener() {
             @Override
             public void onCreateGroupClick() {
-                Toast.makeText(requireContext(), "Create New Group", Toast.LENGTH_SHORT).show();
+                showCreateGroupDialog();
             }
 
             @Override
@@ -101,6 +105,70 @@ public class SocialFragment extends Fragment {
             public void onTabReselected(TabLayout.Tab tab) {
             }
         });
+    }
+
+    private void showAddFriendDialog() {
+        View dialogView = LayoutInflater.from(requireContext())
+                .inflate(R.layout.dialog_add_friend, null);
+
+        AlertDialog dialog = new AlertDialog.Builder(requireContext())
+                .setView(dialogView)
+                .create();
+
+        // Make dialog background transparent
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
+
+        ImageButton btnClose = dialogView.findViewById(R.id.btn_close);
+        EditText etSearch = dialogView.findViewById(R.id.et_search);
+        Button btnAddFriend = dialogView.findViewById(R.id.btn_add_friend);
+
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+
+        btnAddFriend.setOnClickListener(v -> {
+            String searchText = etSearch.getText().toString();
+            if (!searchText.isEmpty()) {
+                Toast.makeText(requireContext(), "Adding friend: " + searchText, Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
+            } else {
+                Toast.makeText(requireContext(), "Please enter a name or ID", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        dialog.show();
+    }
+
+    private void showCreateGroupDialog() {
+        View dialogView = LayoutInflater.from(requireContext())
+                .inflate(R.layout.dialog_create_group, null);
+
+        AlertDialog dialog = new AlertDialog.Builder(requireContext())
+                .setView(dialogView)
+                .create();
+
+        // Make dialog background transparent
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
+
+        ImageButton btnClose = dialogView.findViewById(R.id.btn_close);
+        EditText etSearch = dialogView.findViewById(R.id.et_search);
+        Button btnCreateGroup = dialogView.findViewById(R.id.btn_create_group);
+
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+
+        btnCreateGroup.setOnClickListener(v -> {
+            String searchText = etSearch.getText().toString();
+            if (!searchText.isEmpty()) {
+                Toast.makeText(requireContext(), "Creating group: " + searchText, Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
+            } else {
+                Toast.makeText(requireContext(), "Please enter a name or ID", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        dialog.show();
     }
 
     private List<Friend> getSampleFriends() {
