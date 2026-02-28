@@ -1,0 +1,26 @@
+plugins {
+    id 'com.android.library'
+}
+
+android {
+    namespace 'com.bif.app.domain'
+    compileSdk 36
+
+    defaultConfig {
+        minSdk 29
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+
+dependencies {
+    implementation libs.lifecycle.livedata.core
+    testImplementation libs.junit
+
+    // Room
+    implementation libs.room.runtime
+    annotationProcessor libs.room.compiler
+}

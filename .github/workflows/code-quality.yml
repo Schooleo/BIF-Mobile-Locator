@@ -10,6 +10,9 @@ jobs:
   lint:
     name: Lint Check
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./android
     steps:
       - uses: actions/checkout@v4
       - name: Set up JDK 21
@@ -19,7 +22,7 @@ jobs:
           java-version: "21"
           cache: gradle
       - name: Create google-services.json
-        run: echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > app/google-services.json
+        run: echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > ./app/google-services.json
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
       - name: Run Lint
@@ -28,6 +31,9 @@ jobs:
   unit_test:
     name: Unit Tests
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./android
     steps:
       - uses: actions/checkout@v4
       - name: Set up JDK 21
@@ -37,7 +43,7 @@ jobs:
           java-version: "21"
           cache: gradle
       - name: Create google-services.json
-        run: echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > app/google-services.json
+        run: echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > ./app/google-services.json
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
       - name: Run Tests
