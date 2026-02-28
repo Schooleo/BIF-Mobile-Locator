@@ -17,8 +17,8 @@ android {
 }
 
 dependencies {
-    // LiveData
     implementation libs.lifecycle.livedata.core
+    testImplementation libs.junit
 
     // Room
     implementation libs.room.runtime

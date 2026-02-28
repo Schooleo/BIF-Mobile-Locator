@@ -28,7 +28,7 @@ public class MapStateTest {
         MapState state2 = new MapState(10.0, 20.0, 15.0f);
 
         // Act & Assert
-        Assert.assertEquals("States with same values should be equal", state1, state2);
+        assertEquals("States with same values should be equal", state1, state2);
     }
 
     @Test
@@ -38,7 +38,7 @@ public class MapStateTest {
         MapState state2 = new MapState(10.1, 20.0, 15.0f);
 
         // Act & Assert
-        Assert.assertNotEquals("States with different latitude should not be equal", state1, state2);
+        assertNotEquals("States with different latitude should not be equal", state1, state2);
     }
 
     @Test
@@ -48,7 +48,7 @@ public class MapStateTest {
         MapState state2 = new MapState(10.0, 20.1, 15.0f);
 
         // Act & Assert
-        Assert.assertNotEquals("States with different longitude should not be equal", state1, state2);
+        assertNotEquals("States with different longitude should not be equal", state1, state2);
     }
 
     @Test
@@ -58,7 +58,7 @@ public class MapStateTest {
         MapState state2 = new MapState(10.0, 20.0, 16.0f);
 
         // Act & Assert
-        Assert.assertNotEquals("States with different zoom should not be equal", state1, state2);
+        assertNotEquals("States with different zoom should not be equal", state1, state2);
     }
 
     @Test
@@ -67,7 +67,7 @@ public class MapStateTest {
         MapState state = new MapState(10.0, 20.0, 15.0f);
 
         // Act & Assert
-        Assert.assertEquals("State should equal itself", state, state);
+        assertEquals("State should equal itself", state, state);
     }
 
     @Test
@@ -76,7 +76,7 @@ public class MapStateTest {
         MapState state = new MapState(10.0, 20.0, 15.0f);
 
         // Act & Assert
-        Assert.assertNotEquals("State should not equal null", null, state);
+        assertNotEquals("State should not equal null", null, state);
     }
 
     @Test
