@@ -17,6 +17,9 @@ jobs:
     name: Build & Artifact
     needs: check_quality
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./android
     steps:
       - uses: actions/checkout@v4
       - name: Set up JDK 21
@@ -27,15 +30,15 @@ jobs:
           cache: gradle
 
       - name: Create google-services.json
-        run: echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > ./android/app/google-services.json
+        run: echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > ./app/google-services.json
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Create local.properties
         run: |
-          echo "MAPS_API_KEY=${{ secrets.MAPS_API_KEY }}" > local.properties
-          echo "PLACES_API_KEY=${{ secrets.PLACES_API_KEY }}" >> local.properties
+          echo "MAPS_API_KEY=${{ secrets.MAPS_API_KEY }}" > ./local.properties
+          echo "PLACES_API_KEY=${{ secrets.PLACES_API_KEY }}" >> ./local.properties
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug -PBUILD_NUMBER=${{ github.run_number }}
@@ -47,7 +50,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: BIF-Locator
-          path: app/build/outputs/apk/debug/BIF-Locator.apk
+          path: android/app/build/outputs/apk/debug/BIF-Locator.apk
 
   deploy:
     name: Firebase Deploy
