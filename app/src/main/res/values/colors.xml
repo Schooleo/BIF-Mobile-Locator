@@ -20,14 +20,29 @@
     <color name="button_color">#2ECC71</color>
     <color name="link_text_color">#145A32</color>
     <color name="self_marked_color">#2B7FFF</color>
-    <color name="place_marker_color">#FF3B3B</color>
+    <color name="place_marker_color">#2ECC71</color>
+    <color name="hint_text_color">#9E9E9E</color>
 
     <!-- Light mode -->
     <color name="light_mode_box">#D9D9D9</color>
-
+    <color name="auth_link_color">#1DB954</color>
 
     <!--Dark mode-->
     <color name="dark_mode_background">#0F172B</color>
     <color name="dark_mode_box">#314158</color>
+    <color name="dark_mode_auth_link_color">#2ECC71</color>
+
+    <!-- Social Screen -->
+    <color name="avatar_red">#FF6B6B</color>
+    <color name="avatar_blue">#4DABF7</color>
+    <color name="avatar_green">#51CF66</color>
+    <color name="avatar_yellow">#FFD43B</color>
+    <color name="avatar_purple">#CC5DE8</color>
+    <color name="status_online">#51CF66</color>
+    <color name="status_offline">#9E9E9E</color>
+    <color name="tab_selected">#2B7FFF</color>
+    <color name="tab_unselected">#9E9E9E</color>
+    <color name="item_background">#F5F5F5</color>
+    <color name="text_secondary">#757575</color>
 
 </resources>

@@ -15,6 +15,46 @@
     <string name="map">Map</string>
     <string name="location">Location</string>
     <string name="favorites">Favorites</string>
+    
+    <!-- Auth Screen Strings -->
+    <string name="sign_up">Sign up</string>
+    <string name="sign_in">Sign in</string>
+    <string name="register">Register</string>
+    <string name="already_have_account">Already have an account?</string>
+    <string name="email">Email</string>
+    <string name="password">Password</string>
+    
+    <!-- Map Screen Strings -->
+    <string name="your_location">Your Location</string>
+    <string name="you_are_here">You are here</string>
+    <string name="selected_location">Selected Location</string>
+    
+    <!-- Social Screen Strings -->
+    <string name="social">Social</string>
+    <string name="friends">Friends</string>
+    <string name="groups">Groups</string>
+    <string name="add_new_friend">Add New Friend</string>
+    <string name="create_new_group">Create New Group</string>
+    <string name="online">Online</string>
+    <string name="offline">Offline</string>
+    <string name="members">%d members</string>
+    <string name="delete">Delete</string>
+    <string name="more_options">More options</string>
+    <string name="add_friend">Add Friend</string>
+    <string name="search_by_name_or_id">Search by name or ID</string>
+    <string name="close">Close</string>
+    
+    <!-- Profile Screen Strings -->
+    <string name="my_profile">My Profile</string>
+    <string name="edit_profile">Edit Profile</string>
+    <string name="app_settings">APP SETTINGS</string>
+    <string name="dark_mode">Dark Mode</string>
+    <string name="account">ACCOUNT</string>
+    <string name="personal_information">Personal Information</string>
+    <string name="privacy_security">Privacy &amp; Security</string>
+    <string name="log_out">Log Out</string>
+    <string name="bxa_user">BXA User</string>
+    <string name="user_email">user@example.com</string>
     <string name="go_back">Go back</string>
     <string name="details">Details</string>
     <string name="place_photo">Place Photo</string>

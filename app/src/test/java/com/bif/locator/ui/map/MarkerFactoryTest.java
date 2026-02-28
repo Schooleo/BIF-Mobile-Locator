@@ -75,4 +75,36 @@ public class MarkerFactoryTest {
         assertEquals("Selected Marker Location", result.getSnippet());
         assertEquals(mockBitmapDescriptor, result.getIcon());
     }
+
+    @Test
+    public void createCurrentLocationMarker_returnsBlueMarker() {
+        // Arrange
+        LatLng position = new LatLng(10.0, 20.0);
+
+        // Act
+        MarkerOptions result = MarkerFactory.createCurrentLocationMarker(position);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(position, result.getPosition());
+        assertEquals("Your Location", result.getTitle());
+        assertEquals("You are here", result.getSnippet());
+        assertEquals(mockBitmapDescriptor, result.getIcon());
+    }
+
+    @Test
+    public void createPlaceMarker_returnsGreenMarker() {
+        // Arrange
+        LatLng position = new LatLng(10.0, 20.0);
+        String title = "HCMUS";
+
+        // Act
+        MarkerOptions result = MarkerFactory.createPlaceMarker(position, title);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(position, result.getPosition());
+        assertEquals(title, result.getTitle());
+        assertEquals(mockBitmapDescriptor, result.getIcon());
+    }
 }

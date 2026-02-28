@@ -2,7 +2,7 @@
     <!-- Base application theme. -->
     <style name="Theme.BIFLocator" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Background -->
-        <item name="android:colorBackground">@color/dark_mode_background</item>
+        <item name="colorScreenBackground">@color/dark_mode_background</item>
 
         <!-- Main brand color -->
         <item name="colorPrimary">@color/button_color</item>
@@ -11,10 +11,19 @@
         <item name="colorOnBackground">@color/white</item>
 
         <!-- Surface (card / box UI) -->
-        <item name="colorSurface">@color/dark_mode_box</item>
+        <item name="colorSurfaceBox">@color/dark_mode_box</item>
 
         <!-- Text on surface -->
-        <item name="colorOnSurface">@color/white</item>
+        <item name="colorInputText">@color/white</item>
+
+        <!-- Semantic color aliases -->
+        <item name="colorHintText">@color/hint_text_color</item>
+        <item name="colorAuthLink">@color/dark_mode_auth_link_color</item>
+        
+        <!-- Social screen colors -->
+        <item name="colorListItemBackground">@color/item_background</item>
+        <item name="colorTextPrimary">@color/white</item>
+        <item name="colorTextSecondary">@color/text_secondary</item>
 
     </style>
 </resources>
