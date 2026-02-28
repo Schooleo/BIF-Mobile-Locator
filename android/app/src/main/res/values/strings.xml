@@ -1,0 +1,14 @@
+<resources>
+    <string name="at_home">You are currently at home\nEnter a location on the Map!</string>
+    <string name="goto_map_button">Goto Map</string>
+    <string name="location_hint">Go to a location…</string>
+    <string name="map">Map</string>
+    <string name="location">Location</string>
+    <string name="favorites">Favorites</string>
+
+    <!-- Map Screen Strings -->
+    <string name="your_location">Your Location</string>
+    <string name="you_are_here">You are here</string>
+    <string name="selected_location">Selected Location</string>
+
+</resources>

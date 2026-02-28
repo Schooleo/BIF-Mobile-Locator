@@ -10,6 +10,9 @@ jobs:
   lint:
     name: Lint Check
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./android
     steps:
       - uses: actions/checkout@v4
       - name: Set up JDK 21
@@ -28,6 +31,9 @@ jobs:
   unit_test:
     name: Unit Tests
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./android
     steps:
       - uses: actions/checkout@v4
       - name: Set up JDK 21
