@@ -2,7 +2,7 @@
     <!-- Base application theme. -->
     <style name="Theme.BIFLocator" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Background -->
-        <item name="colorScreenBackground">@color/dark_mode_background</item>
+        <item name="colorScreenBackground">@color/dark_mode_background_primary</item>
 
         <!-- Main brand color -->
         <item name="colorPrimary">@color/button_color</item>

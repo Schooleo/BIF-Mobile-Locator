@@ -99,11 +99,11 @@ dependencies {
     implementation libs.google.places
     implementation libs.navigation.runtime
     testImplementation libs.junit
-    androidTestImplementation libs.ext.junit
-    androidTestImplementation libs.espresso.core
     testImplementation libs.mockito.core
     testImplementation libs.core.testing
     testImplementation libs.mockito.inline
+    androidTestImplementation libs.ext.junit
+    androidTestImplementation libs.espresso.core
 
     // Hilt
     implementation libs.hilt.android

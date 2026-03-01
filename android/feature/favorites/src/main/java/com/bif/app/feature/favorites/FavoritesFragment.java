@@ -33,7 +33,6 @@ public class FavoritesFragment extends Fragment
     private RecyclerView rvFavorites;
     private TextView tvEmpty;
     private EditText etSearch;
-    private ImageButton btnHome;
 
     @Nullable
     @Override
@@ -51,7 +50,6 @@ public class FavoritesFragment extends Fragment
         rvFavorites = view.findViewById(R.id.rv_favorites);
         tvEmpty = view.findViewById(R.id.tv_empty);
         etSearch = view.findViewById(R.id.et_search);
-        btnHome = view.findViewById(R.id.btn_back_home);
 
         adapter = new FavoriteAdapter(this);
         rvFavorites.setLayoutManager(new LinearLayoutManager(requireContext()));
@@ -82,23 +80,25 @@ public class FavoritesFragment extends Fragment
                 tvEmpty.setVisibility(View.GONE);
             }
         });
-
-        btnHome.setOnClickListener(v -> {
-            Navigation.findNavController(v).navigate(com.bif.app.core.R.id.action_favorites_to_home);
-        });
     }
 
     @Override
     public void onFavoriteClicked(Favorite favorite) {
-        Bundle args = new Bundle();
-        args.putInt("favId", favorite.id);
-        args.putString("favName", favorite.name);
-        args.putString("favAddress", favorite.address);
-        args.putString("favDescription", favorite.description);
-        args.putString("favNotes", favorite.notes);
-        args.putInt("favRating", (int) favorite.rating);
-        Navigation.findNavController(requireView())
-                .navigate(com.bif.app.core.R.id.action_favorites_to_detail, args);
+
+        // Deep Link
+        android.net.Uri destUri = new android.net.Uri.Builder()
+                .scheme("app")
+                .authority("bif.app")
+                .path("/favorites/detail")
+                .appendQueryParameter("favId", String.valueOf(favorite.id))
+                .appendQueryParameter("favName", favorite.name != null ? favorite.name : "")
+                .appendQueryParameter("favAddress", favorite.address != null ? favorite.address : "")
+                .appendQueryParameter("favDescription", favorite.description != null ? favorite.description : "")
+                .appendQueryParameter("favNotes", favorite.notes != null ? favorite.notes : "")
+                .appendQueryParameter("favRating", String.valueOf((int) favorite.rating))
+                .build();
+
+        Navigation.findNavController(requireView()).navigate(destUri);
     }
 
     @Override

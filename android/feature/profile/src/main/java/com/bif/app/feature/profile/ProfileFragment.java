@@ -45,9 +45,6 @@ public class ProfileFragment extends Fragment {
     }
 
     private void setupHeader(View view) {
-        ImageView ivBack = view.findViewById(R.id.ivBack);
-        ivBack.setOnClickListener(v -> navController.navigateUp());
-
         // Setup avatar with initial
         TextView tvAvatar = view.findViewById(com.bif.app.core.R.id.tvAvatar);
         tvAvatar.setText("B");

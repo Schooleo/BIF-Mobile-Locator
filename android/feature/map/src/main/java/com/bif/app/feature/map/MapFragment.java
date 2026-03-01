@@ -81,12 +81,6 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
             mapFragment.getMapAsync(this);
         }
 
-        startText = view.findViewById(R.id.start_text);
-
-        // Go back home button
-        Button btnGoBackHome = view.findViewById(R.id.btn_back_home);
-        btnGoBackHome.setOnClickListener(v -> Navigation.findNavController(v).navigate(com.bif.app.core.R.id.action_map_to_home));
-
         // Observe ViewModel
         viewModel.statusText.observe(getViewLifecycleOwner(), text -> startText.setText(text));
 
