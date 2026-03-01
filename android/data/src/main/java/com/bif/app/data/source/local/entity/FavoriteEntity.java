@@ -1,6 +1,11 @@
-package com.bif.app.domain.model;
+package com.bif.app.data.source.local.entity;
 
-public class Favorite {
+import androidx.room.Entity;
+import androidx.room.PrimaryKey;
+
+@Entity(tableName = "favorites")
+public class FavoriteEntity {
+    @PrimaryKey(autoGenerate = true)
     public int id;
     public String name;
     public double latitude;
