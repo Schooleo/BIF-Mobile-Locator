@@ -1,10 +1,10 @@
 package com.bif.app.feature.auth;
 
+import android.graphics.Paint;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.graphics.Paint;
 import android.widget.Button;
 import android.widget.TextView;
 
@@ -14,7 +14,7 @@ import androidx.fragment.app.Fragment;
 import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 
-import com.bif.app.feature.auth.R;
+import com.bif.app.core.utils.UriUtils;
 
 public class LoginFragment extends Fragment {
 
@@ -38,15 +38,13 @@ public class LoginFragment extends Fragment {
         btnLogin.setOnClickListener(v -> {
             // TODO: Add authentication logic here
             // For now, just navigate to home for testing
-            navController.navigate(com.bif.app.core.R.id.action_login_to_home);
+            navController.navigate(UriUtils.buildUri());
         });
 
         // Set link text to "Register"
         TextView tvRegisterLink = view.findViewById(R.id.tv_register_link);
         tvRegisterLink.setText(R.string.register);
         tvRegisterLink.setPaintFlags(tvRegisterLink.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
-        tvRegisterLink.setOnClickListener(v -> {
-            navController.navigate(com.bif.app.core.R.id.action_login_to_register);
-        });
+        tvRegisterLink.setOnClickListener(v -> navController.navigate(UriUtils.buildUri("/register")));
     }
 }

@@ -28,7 +28,8 @@
     <color name="auth_link_color">#1DB954</color>
 
     <!--Dark mode-->
-    <color name="dark_mode_background">#0F172B</color>
+    <color name="dark_mode_background_primary">#0F172B</color>
+    <color name="dark_mode_background_secondary">#1D293D</color>
     <color name="dark_mode_box">#314158</color>
     <color name="dark_mode_auth_link_color">#2ECC71</color>
 

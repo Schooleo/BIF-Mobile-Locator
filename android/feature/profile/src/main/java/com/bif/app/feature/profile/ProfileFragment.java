@@ -16,7 +16,7 @@ import androidx.fragment.app.Fragment;
 import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 
-import com.bif.app.feature.profile.R;
+import com.bif.app.core.utils.UriUtils;
 
 import dagger.hilt.android.AndroidEntryPoint;
 
@@ -24,7 +24,6 @@ import dagger.hilt.android.AndroidEntryPoint;
 public class ProfileFragment extends Fragment {
 
     private NavController navController;
-    private SwitchCompat switchDarkMode;
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
@@ -45,9 +44,6 @@ public class ProfileFragment extends Fragment {
     }
 
     private void setupHeader(View view) {
-        ImageView ivBack = view.findViewById(R.id.ivBack);
-        ivBack.setOnClickListener(v -> navController.navigateUp());
-
         // Setup avatar with initial
         TextView tvAvatar = view.findViewById(com.bif.app.core.R.id.tvAvatar);
         tvAvatar.setText("B");
@@ -93,7 +89,7 @@ public class ProfileFragment extends Fragment {
         View menuDarkMode = view.findViewById(R.id.menuDarkMode);
         ImageView iconDarkMode = menuDarkMode.findViewById(com.bif.app.core.R.id.ivIcon);
         TextView titleDarkMode = menuDarkMode.findViewById(com.bif.app.core.R.id.tvTitle);
-        switchDarkMode = menuDarkMode.findViewById(com.bif.app.core.R.id.switchToggle);
+        SwitchCompat switchDarkMode = menuDarkMode.findViewById(com.bif.app.core.R.id.switchToggle);
 
         iconDarkMode.setImageResource(com.bif.app.core.R.drawable.ic_dark_mode);
         titleDarkMode.setText(R.string.dark_mode);
@@ -116,7 +112,7 @@ public class ProfileFragment extends Fragment {
     private void setupLogout(View view) {
         view.findViewById(R.id.btnLogout).setOnClickListener(v -> {
             // Clear user data and navigate to login
-            navController.navigate(com.bif.app.core.R.id.action_profile_to_login);
+            navController.navigate(UriUtils.buildUri(UriUtils.PathTo.LOGIN));
         });
     }
 }

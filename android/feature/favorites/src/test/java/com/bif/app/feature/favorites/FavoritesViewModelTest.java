@@ -2,6 +2,7 @@ package com.bif.app.feature.favorites;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -14,6 +15,7 @@ import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.List;
+import java.util.Objects;
 
 public class FavoritesViewModelTest {
     @Rule
@@ -68,7 +70,7 @@ public class FavoritesViewModelTest {
     @Test
     public void removeFavorite_existingItem_itemNoLongerInList() {
         // Arrange
-        Favorite toRemove = viewModel.favorites.getValue().get(0);
+        Favorite toRemove = Objects.requireNonNull(viewModel.favorites.getValue()).get(0);
 
         // Act
         viewModel.removeFavoriteItem(toRemove);
@@ -77,15 +79,14 @@ public class FavoritesViewModelTest {
         List<Favorite> updatedList = viewModel.favorites.getValue();
         assertNotNull(updatedList);
         for (Favorite fav : updatedList) {
-            assertFalse("Home is no longer in the list",
-                    "Home".equals(fav.name));
+            assertNotEquals("Home is no longer in the list", "Home", fav.name);
         }
     }
 
     @Test
     public void removeFavorite_removeAll_listBecomesEmpty() {
         // Act — xóa từng item một
-        while (!viewModel.favorites.getValue().isEmpty()) {
+        while (!Objects.requireNonNull(viewModel.favorites.getValue()).isEmpty()) {
             viewModel.removeFavoriteItem(viewModel.favorites.getValue().get(0));
         }
 
@@ -134,7 +135,7 @@ public class FavoritesViewModelTest {
     public void filterFavorites_emptyQuery_returnsAllItems() {
         // Arrange
         viewModel.filterFavorites("Home");
-        assertEquals(1, viewModel.favorites.getValue().size());
+        assertEquals(1, Objects.requireNonNull(viewModel.favorites.getValue()).size());
 
         // Act
         viewModel.filterFavorites("");

@@ -40,10 +40,13 @@ android {
 
     signingConfigs {
         debug {
-            storeFile file("debug.keystore")
-            storePassword "android"
-            keyAlias "androiddebugkey"
-            keyPassword "android"
+            def keystoreFile = file("debug.keystore")
+            if (keystoreFile.exists()) {
+                storeFile keystoreFile
+                storePassword "android"
+                keyAlias "androiddebugkey"
+                keyPassword "android"
+            }
         }
         release {
             storeFile = file("keystore.jks")
@@ -99,11 +102,11 @@ dependencies {
     implementation libs.google.places
     implementation libs.navigation.runtime
     testImplementation libs.junit
-    androidTestImplementation libs.ext.junit
-    androidTestImplementation libs.espresso.core
     testImplementation libs.mockito.core
     testImplementation libs.core.testing
     testImplementation libs.mockito.inline
+    androidTestImplementation libs.ext.junit
+    androidTestImplementation libs.espresso.core
 
     // Hilt
     implementation libs.hilt.android

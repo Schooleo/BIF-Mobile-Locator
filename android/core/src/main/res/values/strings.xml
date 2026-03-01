@@ -2,5 +2,12 @@
 <resources>
     <string name="app_name">Bring In Friends</string>
     <string name="my_profile">My Profile</string>
+
+    <!-- Nav Item Strings -->
+    <string name="nav_item_map">Map</string>
+    <string name="nav_item_favorites">Favorites</string>
+    <string name="nav_item_social">Social</string>
+    <string name="nav_item_profile">Profile</string>
+
     <string name="go_back_home">Go Back Home</string>
 </resources>

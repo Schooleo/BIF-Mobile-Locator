@@ -10,7 +10,6 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.bif.app.feature.favorites.R;
 import com.bif.app.domain.model.Favorite;
 
 import java.util.ArrayList;
