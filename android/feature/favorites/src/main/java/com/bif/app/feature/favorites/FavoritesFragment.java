@@ -1,12 +1,5 @@
 package com.bif.app.feature.favorites;
 
-import androidx.annotation.NonNull;
-import androidx.fragment.app.Fragment;
-import androidx.lifecycle.ViewModelProvider;
-import androidx.navigation.Navigation;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
-
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -14,13 +7,18 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
-import android.widget.ImageButton;
 import android.widget.TextView;
 
-import com.bif.app.feature.favorites.R;
-import com.bif.app.domain.model.Favorite;
-
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
+import androidx.navigation.Navigation;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.bif.app.core.utils.UriUtils;
+import com.bif.app.domain.model.Favorite;
 
 import dagger.hilt.android.AndroidEntryPoint;
 
@@ -32,7 +30,6 @@ public class FavoritesFragment extends Fragment
     private FavoriteAdapter adapter;
     private RecyclerView rvFavorites;
     private TextView tvEmpty;
-    private EditText etSearch;
 
     @Nullable
     @Override
@@ -49,7 +46,7 @@ public class FavoritesFragment extends Fragment
 
         rvFavorites = view.findViewById(R.id.rv_favorites);
         tvEmpty = view.findViewById(R.id.tv_empty);
-        etSearch = view.findViewById(R.id.et_search);
+        EditText etSearch = view.findViewById(R.id.et_search);
 
         adapter = new FavoriteAdapter(this);
         rvFavorites.setLayoutManager(new LinearLayoutManager(requireContext()));
@@ -84,18 +81,14 @@ public class FavoritesFragment extends Fragment
 
     @Override
     public void onFavoriteClicked(Favorite favorite) {
-
         // Deep Link
-        android.net.Uri destUri = new android.net.Uri.Builder()
-                .scheme("app")
-                .authority("bif.app")
-                .path("/favorites/detail")
+        android.net.Uri destUri = UriUtils.buildUri(UriUtils.PathTo.FAVORITES_DETAIL).buildUpon()
                 .appendQueryParameter("favId", String.valueOf(favorite.id))
                 .appendQueryParameter("favName", favorite.name != null ? favorite.name : "")
                 .appendQueryParameter("favAddress", favorite.address != null ? favorite.address : "")
                 .appendQueryParameter("favDescription", favorite.description != null ? favorite.description : "")
                 .appendQueryParameter("favNotes", favorite.notes != null ? favorite.notes : "")
-                .appendQueryParameter("favRating", String.valueOf((int) favorite.rating))
+                .appendQueryParameter("favRating", String.valueOf(favorite.rating))
                 .build();
 
         Navigation.findNavController(requireView()).navigate(destUri);

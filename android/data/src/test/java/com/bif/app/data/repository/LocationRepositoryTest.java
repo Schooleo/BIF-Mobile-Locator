@@ -1,5 +1,6 @@
 package com.bif.app.data.repository;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -39,10 +40,11 @@ public class LocationRepositoryTest {
     @Mock private ExecutorService mockExecutor;
     @Mock private Task<android.location.Location> mockLocationTask;
     private LocationRepository repository;
+    private AutoCloseable closeable;
 
     @Before
     public void setUp() {
-        MockitoAnnotations.openMocks(this);
+        closeable = MockitoAnnotations.openMocks(this);
 
         // Setup mock chain cho getCurrentLocation
         when(mockFusedClient.getCurrentLocation(anyInt(), any()))
@@ -54,6 +56,13 @@ public class LocationRepositoryTest {
 
         repository = new LocationRepository(
                 mockContext, mockFusedClient, mockPlacesClient, mockExecutor);
+    }
+
+    @After
+    public void tearDown() throws Exception {
+        if (closeable != null) {
+            closeable.close();
+        }
     }
 
     @Test
@@ -89,7 +98,8 @@ public class LocationRepositoryTest {
         when(mockAndroidLocation.getLatitude()).thenReturn(10.762622);
         when(mockAndroidLocation.getLongitude()).thenReturn(106.660172);
 
-        ArgumentCaptor<OnSuccessListener> captor =
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<OnSuccessListener<android.location.Location>> captor =
                 ArgumentCaptor.forClass(OnSuccessListener.class);
 
         // Act
@@ -107,7 +117,8 @@ public class LocationRepositoryTest {
     @Test
     public void getCurrentLocation_gpsReturnsNull_postsNull() {
         // Arrange
-        ArgumentCaptor<OnSuccessListener> captor =
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<OnSuccessListener<android.location.Location>> captor =
                 ArgumentCaptor.forClass(OnSuccessListener.class);
 
         // Act
@@ -177,8 +188,14 @@ public class LocationRepositoryTest {
                 any(com.google.android.gms.location.LocationCallback.class),
                 nullable(Looper.class)))
                 .thenReturn(mockTask);
-        // Act
-        repository.requestLocationUpdates(mockCallback);
+        
+        try (org.mockito.MockedStatic<Looper> mockedLooper = mockStatic(Looper.class)) {
+            Looper mockLooper = mock(Looper.class);
+            mockedLooper.when(Looper::getMainLooper).thenReturn(mockLooper);
+            // Act
+            repository.requestLocationUpdates(mockCallback);
+        }
+
         // Assert
         verify(mockFusedClient).requestLocationUpdates(
                 any(LocationRequest.class),

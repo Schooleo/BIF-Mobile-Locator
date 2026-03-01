@@ -2,12 +2,13 @@ package com.bif.app.feature.map;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
-import android.widget.TextView;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -16,7 +17,6 @@ import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
-import androidx.navigation.Navigation;
 
 import com.bif.app.domain.model.MapState;
 import com.google.android.gms.maps.CameraUpdateFactory;
@@ -26,18 +26,18 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.MapStyleOptions;
 import com.google.android.gms.maps.model.MarkerOptions;
-
 import com.google.android.libraries.places.api.Places;
 
 import javax.inject.Inject;
+
 import dagger.hilt.android.AndroidEntryPoint;
 
 @AndroidEntryPoint
 public class MapFragment extends Fragment implements OnMapReadyCallback {
 
     private GoogleMap googleMap;
-    private TextView startText;
     private MapViewModel viewModel;
 
     @Inject
@@ -81,9 +81,6 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
             mapFragment.getMapAsync(this);
         }
 
-        // Observe ViewModel
-        viewModel.statusText.observe(getViewLifecycleOwner(), text -> startText.setText(text));
-
         viewModel.searchResult.observe(getViewLifecycleOwner(), location -> {
             if (location != null && googleMap != null) {
                 googleMap.clear();
@@ -118,6 +115,24 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onMapReady(@NonNull GoogleMap map) {
         this.googleMap = map;
+
+        int nightModeFlags = requireContext()
+            .getResources()
+            .getConfiguration().uiMode
+                & Configuration.UI_MODE_NIGHT_MASK;
+
+        if (nightModeFlags == Configuration.UI_MODE_NIGHT_YES) {
+            try {
+                boolean success = googleMap.setMapStyle(
+                    MapStyleOptions.loadRawResourceStyle(requireContext(), R.raw.map_style_dark)
+                );
+                if (!success) {
+                    Log.e("MapFragment", "Style parsing failed.");
+                }
+            } catch (Resources.NotFoundException e) {
+                Log.e("MapFragment", "Can't find style. Error: ", e);
+            }
+        }
 
         enableMyLocationLayer();
 
