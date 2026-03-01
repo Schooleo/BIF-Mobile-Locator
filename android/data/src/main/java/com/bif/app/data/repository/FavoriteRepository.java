@@ -26,6 +26,11 @@ public class FavoriteRepository implements IFavoriteRepository {
     }
 
     @Override
+    public LiveData<List<Favorite>> searchFavorites(String query) {
+        return Transformations.map(favoriteDao.searchFavorites(query), FavoriteMapper::toDomainList);
+    }
+
+    @Override
     public LiveData<List<Favorite>> getAllFavorites() {
         return Transformations.map(favoriteDao.getAll(), FavoriteMapper::toDomainList);
     }
