@@ -13,4 +13,18 @@
         android:layout_height="match_parent"
         tools:layout="@layout/fragment_map_preview" />
 
+    <SearchView
+        android:id="@+id/map_search"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:background="@drawable/bg_searchbar"
+        android:elevation="4dp"
+        android:iconifiedByDefault="false"
+        android:queryHint="Search for places..."
+        android:outlineProvider="none"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

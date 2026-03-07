@@ -33,6 +33,10 @@ public class MapViewModel extends ViewModel {
         _searchQuery.setValue(query);
     }
 
+    public void searchForPlaces(String query) {
+        locationRepository.searchPlaces(query);
+    }
+
     public void setStatusText(String text) {
         statusText.setValue(text);
     }

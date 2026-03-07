@@ -11,34 +11,28 @@ import org.mockito.MockitoAnnotations;
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
-import android.content.Context;
-import android.os.Looper;
-
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.LiveData;
 
+import com.bif.app.data.source.GoogleMapsDataSource;
+import com.bif.app.data.source.GpsSensorDataSource;
 import com.bif.app.domain.model.Location;
-import com.bif.app.domain.model.Place;
 import com.bif.app.domain.repository.LocationCallback;
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
-import com.google.android.libraries.places.api.net.PlacesClient;
 
-import java.util.List;
-import java.util.concurrent.ExecutorService;
+import java.util.Collections;
 
 public class LocationRepositoryTest {
     @Rule
     public InstantTaskExecutorRule instantTaskExecutorRule = new InstantTaskExecutorRule();
 
-    @Mock private Context mockContext;
-    @Mock private FusedLocationProviderClient mockFusedClient;
-    @Mock private PlacesClient mockPlacesClient;
-    @Mock private ExecutorService mockExecutor;
+    @Mock private GpsSensorDataSource mockGpsSensorDataSource;
+    @Mock private GoogleMapsDataSource mockGoogleMapsDataSource;
     @Mock private Task<android.location.Location> mockLocationTask;
+
     private LocationRepository repository;
     private AutoCloseable closeable;
 
@@ -46,16 +40,15 @@ public class LocationRepositoryTest {
     public void setUp() {
         closeable = MockitoAnnotations.openMocks(this);
 
-        // Setup mock chain cho getCurrentLocation
-        when(mockFusedClient.getCurrentLocation(anyInt(), any()))
+        // Setup mock chain for getCurrentLocation
+        when(mockGpsSensorDataSource.getCurrentLocation())
                 .thenReturn(mockLocationTask);
         when(mockLocationTask.addOnSuccessListener(any()))
                 .thenReturn(mockLocationTask);
         when(mockLocationTask.addOnFailureListener(any()))
                 .thenReturn(mockLocationTask);
 
-        repository = new LocationRepository(
-                mockContext, mockFusedClient, mockPlacesClient, mockExecutor);
+        repository = new LocationRepository(mockGpsSensorDataSource, mockGoogleMapsDataSource);
     }
 
     @After
@@ -67,14 +60,11 @@ public class LocationRepositoryTest {
 
     @Test
     public void constructor_withValidDependencies_instantiatesSuccessfully() {
-        LocationRepository repo = new LocationRepository(
-                mockContext, mockFusedClient, mockPlacesClient, mockExecutor);
-        assertNotNull(repo);
+        assertNotNull(repository);
     }
 
     @Test
-    public void getCurrentLocation_validRequest_returnsLiveData()
-    {
+    public void getCurrentLocation_validRequest_returnsLiveData() {
         // Act
         LiveData<Location> result = repository.getCurrentLocation();
 
@@ -83,12 +73,12 @@ public class LocationRepositoryTest {
     }
 
     @Test
-    public void getCurrentLocation_validRequest_callsFusedClient() {
+    public void getCurrentLocation_validRequest_callsGpsDataSource() {
         // Act
         repository.getCurrentLocation();
 
         // Assert
-        verify(mockFusedClient).getCurrentLocation(anyInt(), any());
+        verify(mockGpsSensorDataSource).getCurrentLocation();
     }
 
     @Test
@@ -146,28 +136,6 @@ public class LocationRepositoryTest {
     }
 
     @Test
-    public void searchPlaces_nullQuery_returnsEmptyList() {
-        // Act
-        LiveData<List<Place>> result = repository.searchPlaces(null);
-
-        // Assert
-        assertNotNull(result);
-        assertNotNull(result.getValue());
-        assertTrue(result.getValue().isEmpty());
-    }
-
-    @Test
-    public void searchPlaces_emptyQuery_returnsEmptyList() {
-        // Act
-        LiveData<List<Place>> result = repository.searchPlaces("");
-
-        // Assert
-        assertNotNull(result);
-        assertNotNull(result.getValue());
-        assertTrue(result.getValue().isEmpty());
-    }
-
-    @Test
     public void removeLocationUpdates_noPriorRegistration_doesNotCrash() {
         // Act & Assert - no exception thrown
         LocationCallback mockCallback = mock(LocationCallback.class);
@@ -176,30 +144,65 @@ public class LocationRepositoryTest {
     }
 
     @Test
-    public void requestLocationUpdates_validCallback_callsFusedClient() {
+    public void requestLocationUpdates_validCallback_callsGpsDataSource() {
         // Arrange
         LocationCallback mockCallback = mock(LocationCallback.class);
 
-        @SuppressWarnings("unchecked")
-        Task<Void> mockTask = mock(Task.class);
-
-        when(mockFusedClient.requestLocationUpdates(
-                any(LocationRequest.class),
-                any(com.google.android.gms.location.LocationCallback.class),
-                nullable(Looper.class)))
-                .thenReturn(mockTask);
-        
-        try (org.mockito.MockedStatic<Looper> mockedLooper = mockStatic(Looper.class)) {
-            Looper mockLooper = mock(Looper.class);
-            mockedLooper.when(Looper::getMainLooper).thenReturn(mockLooper);
-            // Act
-            repository.requestLocationUpdates(mockCallback);
-        }
+        // Act
+        repository.requestLocationUpdates(mockCallback);
 
         // Assert
-        verify(mockFusedClient).requestLocationUpdates(
-                any(LocationRequest.class),
-                any(com.google.android.gms.location.LocationCallback.class),
-                nullable(Looper.class));
+        verify(mockGpsSensorDataSource).requestLocationUpdates(any(com.google.android.gms.location.LocationCallback.class));
+    }
+    
+    @Test
+    public void requestLocationUpdates_callbackInvoked_mapsCorrectly() {
+        // Arrange
+        LocationCallback mockCallback = mock(LocationCallback.class);
+        ArgumentCaptor<com.google.android.gms.location.LocationCallback> captor = 
+                ArgumentCaptor.forClass(com.google.android.gms.location.LocationCallback.class);
+
+        repository.requestLocationUpdates(mockCallback);
+        verify(mockGpsSensorDataSource).requestLocationUpdates(captor.capture());
+        
+        com.google.android.gms.location.LocationCallback internalCallback = captor.getValue();
+        
+        android.location.Location mockAndroidLoc = mock(android.location.Location.class);
+        when(mockAndroidLoc.getLatitude()).thenReturn(20.0);
+        when(mockAndroidLoc.getLongitude()).thenReturn(30.0);
+        
+        LocationResult mockResult = mock(LocationResult.class);
+        when(mockResult.getLastLocation()).thenReturn(mockAndroidLoc);
+        
+        // Act
+        internalCallback.onLocationResult(mockResult);
+        
+        // Assert
+        ArgumentCaptor<Location> domainLocationCaptor = ArgumentCaptor.forClass(Location.class);
+        verify(mockCallback).onLocationResult(domainLocationCaptor.capture());
+        
+        Location resultingLocation = domainLocationCaptor.getValue();
+        assertNotNull(resultingLocation);
+        assertEquals(20.0, resultingLocation.latitude, 0.0001);
+        assertEquals(30.0, resultingLocation.longitude, 0.0001);
+    }
+
+    @Test
+    public void removeLocationUpdates_afterRegistration_removesCorrectCallback() {
+        // Arrange
+        LocationCallback mockCallback = mock(LocationCallback.class);
+        ArgumentCaptor<com.google.android.gms.location.LocationCallback> captor = 
+                ArgumentCaptor.forClass(com.google.android.gms.location.LocationCallback.class);
+
+        repository.requestLocationUpdates(mockCallback);
+        verify(mockGpsSensorDataSource).requestLocationUpdates(captor.capture());
+        
+        com.google.android.gms.location.LocationCallback internalCallback = captor.getValue();
+        
+        // Act
+        repository.removeLocationUpdates(mockCallback);
+        
+        // Assert
+        verify(mockGpsSensorDataSource).removeLocationUpdates(internalCallback);
     }
 }
