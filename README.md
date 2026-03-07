@@ -1,20 +1,22 @@
-# BIF Mobile Locator
+# Bring In Friends
 
-![Android CI](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/android-dev.yml/badge.svg)
-![Android Publish](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/android-publish.yml/badge.svg)
+![Android CI](https://github.com/Schooleo/bif-mobile-app/actions/workflows/android-dev.yml/badge.svg)
+![Android Publish](https://github.com/Schooleo/bif-mobile-app/actions/workflows/android-publish.yml/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/Platform-Android-green.svg)](https://developer.android.com)
 [![Language](https://img.shields.io/badge/Language-Java-orange.svg)](https://www.java.com)
 [![API](https://img.shields.io/badge/API-29%2B-brightgreen.svg?style=flat)](https://android-arsenal.com/api?level=29)
 
-**BIF Mobile Locator** is a native Android application designed to provide robust location-based services. Built entirely in Java, this project demonstrates modern Android development practices including Edge-to-Edge UI.
+**Bring In Friends** is a native Android application designed to provide robust location-based services. Built entirely in Java, this project demonstrates modern Android development practices including Edge-to-Edge UI.
 
 ## Key Features
 
 - **Native Android Development**: Built using the official Android SDK for optimal performance and integration.
 - **Pure Java Implementation**: 100% Java codebase, leveraging established patterns and libraries.
-- **Modern UI**: Implements "Edge-to-Edge" display support for an immersive user experience.
-- **Counter Example**: Includes a starter counter implementation to demonstrate state management.
+- **Modular Clean Architecture**: Organized into distinct structural layers (`app`, `core`, `data`, `domain`) and feature modules (`auth`, `favorites`, `map`, `profile`, `social`) for high scalability and separation of concerns.
+- **Interactive Mapping & Places**: Real-time location tracking and place search functionality utilizing repositories and device sensors.
+- **Dependency Injection**: Powered by Dagger Hilt for robust and testable dependency management.
+- **Edge-to-Edge Modern UI**: Implements edge-to-edge display support for an immersive user experience.
 
 ## Technical Stack
 
@@ -22,7 +24,7 @@
 - **Minimum SDK**: API 29 (Android 10)
 - **Target SDK**: API 36 (Android 16)
 - **Build System**: Gradle with Version Catalogs.
-- **Namespace**: `com.bif.locator`
+- **Namespace**: `com.bif.app`
 
 ## CI/CD Pipeline
 
@@ -37,13 +39,13 @@ This project uses [GitHub Actions](.github/workflows/android.yml) for Continuous
   2.  **Lint**: Runs static code analysis (`./gradlew lint`).
   3.  **Test**: Executes local unit tests (`./gradlew test`).
   4.  **Build**: Assembles the debug APK (`./gradlew assembleDebug`).
-- **Artifacts**: A debug APK (`BIF-Locator.apk`) is uploaded and distributed via Firebase.
+- **Artifacts**: A debug APK (`BIF-Mobile-App.apk`) is uploaded and distributed via Firebase.
 
 ## Setup & Installation
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/Schooleo/bif-mobile-locator.git
+    git clone https://github.com/Schooleo/bif-mobile-app.git
     ```
 2.  **Open in Android Studio**:
     - Launch Android Studio.
