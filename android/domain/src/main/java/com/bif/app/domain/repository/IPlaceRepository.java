@@ -3,6 +3,7 @@ package com.bif.app.domain.repository;
 import androidx.lifecycle.LiveData;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
+
 import java.util.List;
 
 public interface IPlaceRepository {

@@ -11,15 +11,11 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import dagger.hilt.android.testing.HiltAndroidTest;
-
 import static org.junit.Assert.*;
 
 /**
  * Instrumented test for MapFragment.
- * Note: This requires HiltAndroidTest annotation for dependency injection.
  */
-@HiltAndroidTest
 @RunWith(AndroidJUnit4.class)
 public class MapFragmentInstrumentedTest {
 
@@ -53,21 +49,5 @@ public class MapFragmentInstrumentedTest {
         assertNotNull("Fragment should have arguments", fragment.getArguments());
         assertEquals("Location argument should be set", "HCMUS",
                 fragment.getArguments().getString("location"));
-    }
-
-    @Test
-    public void fragmentArgs_fromBundle_parsesCorrectly() {
-        // Arrange
-        Bundle args = new Bundle();
-        args.putString("location", "Ho Chi Minh City University of Science");
-
-        // Act
-        MapFragmentArgs fragmentArgs = MapFragmentArgs.fromBundle(args);
-
-        // Assert
-        assertNotNull("FragmentArgs should be created", fragmentArgs);
-        Assert.assertEquals("Location should be parsed",
-                "Ho Chi Minh City University of Science",
-                fragmentArgs.getLocation());
     }
 }

@@ -2,4 +2,9 @@
 <resources>
     <string name="viewing_map">You are currently viewing the map!</string>
     <string name="map_preview">Map Preview</string>
+    <string name="my_location">My Location</string>
+    <string name="default_place_name">Awesome Place</string>
+    <string name="default_address">123 Example Street</string>
+    <string name="default_rating">No ratings yet</string>
+    <string name="btn_place_details">View Details</string>
 </resources>

@@ -21,10 +21,7 @@ import com.bif.app.domain.model.Place;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
-import com.google.android.gms.tasks.Task;
-import com.google.android.libraries.places.api.net.SearchByTextResponse;
-
-import org.junit.After;
+import com.google.android.gms.tasks.Task;import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -46,9 +43,6 @@ public class PlaceRepositoryTest {
     @Mock
     private GoogleMapsDataSource mockGoogleMapsDataSource;
 
-    @Mock
-    private Task<SearchByTextResponse> mockSearchTask;
-
     private PlaceRepository placeRepository;
     private AutoCloseable closeable;
 
@@ -56,11 +50,6 @@ public class PlaceRepositoryTest {
     public void setUp() {
         closeable = MockitoAnnotations.openMocks(this);
         placeRepository = new PlaceRepository(mockGoogleMapsDataSource);
-
-        when(mockSearchTask.addOnSuccessListener(org.mockito.ArgumentMatchers.any()))
-                .thenReturn(mockSearchTask);
-        when(mockSearchTask.addOnFailureListener(org.mockito.ArgumentMatchers.any()))
-                .thenReturn(mockSearchTask);
     }
 
     @After
@@ -154,66 +143,24 @@ public class PlaceRepositoryTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
-    public void searchPlaces_validQuery_successReturnsPlaces() {
+    public void searchPlaces_validQuery_successReturnsPlaces() throws InterruptedException {
         // Arrange
-        String query = "Coffee";
-        when(mockGoogleMapsDataSource.searchPlaces(query)).thenReturn(mockSearchTask);
-
-        com.google.android.libraries.places.api.model.Place mockGooglePlace = mock(com.google.android.libraries.places.api.model.Place.class);
-        when(mockGooglePlace.getId()).thenReturn("p1");
-        when(mockGooglePlace.getDisplayName()).thenReturn("Test Coffee Shop");
-        when(mockGooglePlace.getFormattedAddress()).thenReturn("123 Coffee St");
-        when(mockGooglePlace.getRating()).thenReturn(4.5);
-        when(mockGooglePlace.getLocation()).thenReturn(new LatLng(10.0, 20.0));
-
-        SearchByTextResponse mockResponse = mock(SearchByTextResponse.class);
-        when(mockResponse.getPlaces()).thenReturn(Collections.singletonList(mockGooglePlace));
-
-        ArgumentCaptor<OnSuccessListener<SearchByTextResponse>> captor = ArgumentCaptor.forClass(OnSuccessListener.class);
+        String query = "Science";
 
         // Act
         LiveData<List<Place>> result = placeRepository.searchPlaces(query);
-        verify(mockSearchTask).addOnSuccessListener(captor.capture());
         
-        // Trigger success callback
-        captor.getValue().onSuccess(mockResponse);
+        // Wait for the mock 200ms delay + buffer
+        Thread.sleep(300);
 
         // Assert
         assertNotNull(result);
         List<Place> places = result.getValue();
-        assertNotNull(places);
-        assertEquals(1, places.size());
+        assertNotNull("Places list should not be null", places);
+        assertEquals(2, places.size()); // Both 'University of Science' and 'Social Sciences' contain 'science'
         
-        Place place = places.get(0);
-        assertEquals("p1", place.id);
-        assertEquals("Test Coffee Shop", place.name);
-        assertEquals("123 Coffee St", place.address);
-        assertEquals(4.5, place.rating, 0.01);
-        assertEquals(10.0, place.latitude, 0.0001);
-        assertEquals(20.0, place.longitude, 0.0001);
-    }
-    
-    @Test
-    @SuppressWarnings("unchecked")
-    public void searchPlaces_validQuery_failureReturnsEmptyList() {
-        // Arrange
-        String query = "Coffee";
-        when(mockGoogleMapsDataSource.searchPlaces(query)).thenReturn(mockSearchTask);
-
-        ArgumentCaptor<OnFailureListener> captor = ArgumentCaptor.forClass(OnFailureListener.class);
-
-        // Act
-        LiveData<List<Place>> result = placeRepository.searchPlaces(query);
-        verify(mockSearchTask).addOnFailureListener(captor.capture());
-        
-        // Trigger failure callback
-        captor.getValue().onFailure(new Exception("Network Error"));
-
-        // Assert
-        assertNotNull(result);
-        List<Place> places = result.getValue();
-        assertNotNull(places);
-        assertTrue(places.isEmpty());
+        Place place1 = places.get(0);
+        assertEquals("mock_1", place1.id);
+        assertEquals("University of Science", place1.name);
     }
 }

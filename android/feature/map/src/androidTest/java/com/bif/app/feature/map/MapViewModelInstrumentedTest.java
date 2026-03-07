@@ -6,9 +6,14 @@ import androidx.lifecycle.Observer;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
-import com.bif.app.data.repository.LocationRepository;
-import com.bif.app.data.repository.MapRepository;
+import androidx.lifecycle.MutableLiveData;
+import androidx.lifecycle.LiveData;
+import com.bif.app.domain.repository.IMapRepository;
+import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.model.Location;
+import com.bif.app.domain.model.Place;
+import java.util.List;
+import java.util.Collections;
 import com.bif.app.domain.model.MapState;
 
 import org.junit.Before;
@@ -29,30 +34,48 @@ public class MapViewModelInstrumentedTest {
     public InstantTaskExecutorRule instantTaskExecutorRule = new InstantTaskExecutorRule();
 
     private MapViewModel viewModel;
-    private MapRepository mapRepository;
+    private IMapRepository mapRepository;
+    private IPlaceRepository placeRepository;
     private Context context;
+
+    private static class FakeMapRepository implements IMapRepository {
+        private MapState state;
+        @Override
+        public void saveMapState(MapState state) { this.state = state; }
+        @Override
+        public MapState getMapState() { return state; }
+    }
+
+    private static class FakePlaceRepository implements IPlaceRepository {
+        @Override
+        public LiveData<Location> searchLocation(String query) {
+            MutableLiveData<Location> result = new MutableLiveData<>();
+            if ("Ho Chi Minh City University of Science".equals(query)) {
+                result.postValue(new Location(10.762, 106.682));
+            } else {
+                result.postValue(null);
+            }
+            return result;
+        }
+
+        @Override
+        public LiveData<List<Place>> searchPlaces(String query) {
+            return new MutableLiveData<>(Collections.emptyList());
+        }
+    }
 
     @Before
     public void setUp() {
         context = InstrumentationRegistry.getInstrumentation().getTargetContext();
 
-        // Clear any existing map state
-        context.getSharedPreferences("map_prefs", Context.MODE_PRIVATE)
-                .edit()
-                .clear()
-                .commit();
-
-        LocationRepository locationRepository = new LocationRepository(context);
-        mapRepository = new MapRepository(context);
-        viewModel = new MapViewModel(locationRepository, mapRepository);
+        placeRepository = new FakePlaceRepository();
+        mapRepository = new FakeMapRepository();
+        viewModel = new MapViewModel(mapRepository, placeRepository);
     }
 
     @After
     public void tearDown() {
-        context.getSharedPreferences("map_prefs", Context.MODE_PRIVATE)
-                .edit()
-                .clear()
-                .commit();
+        // Nothing to clean up for fakes
     }
 
     @Test
@@ -67,8 +90,8 @@ public class MapViewModelInstrumentedTest {
 
         // Create new ViewModel instance (simulating configuration change)
         MapViewModel newViewModel = new MapViewModel(
-                new LocationRepository(context),
-                mapRepository
+                mapRepository,
+                placeRepository
         );
 
         MapState retrievedState = newViewModel.getLastMapState();
@@ -110,8 +133,8 @@ public class MapViewModelInstrumentedTest {
         // Act
         viewModel.searchLocation("Ho Chi Minh City University of Science");
 
-        // Wait for geocoding to complete
-        Thread.sleep(3000);
+        // Wait for LiveData postValue to process
+        Thread.sleep(500);
 
         // Assert
         assertNotNull("Location should be found", observedLocation[0]);
