@@ -4,12 +4,13 @@ import android.Manifest;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.location.Address;
+import android.location.Geocoder;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
@@ -23,9 +24,9 @@ import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
+import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
 import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapsInitializer;
@@ -38,9 +39,11 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.libraries.places.api.Places;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
-import com.google.android.material.bottomsheet.BottomSheetDialog;
 
+import java.io.IOException;
+import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 import javax.inject.Inject;
 
@@ -54,7 +57,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     private BottomSheetBehavior<View> bottomSheetBehavior;
 
     @Inject
-    MarkerFactory markerFactory;
+    FusedLocationProviderClient fusedLocationClient;
 
     private final ActivityResultLauncher<String> requestPermissionLauncher =
         registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
@@ -116,9 +119,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         // Set up the My Location Button
         ImageButton btnMyLocation = view.findViewById(R.id.btn_my_location);
         if (btnMyLocation != null) {
-            btnMyLocation.setOnClickListener(v -> {
-                goToMyLocation();
-            });
+            btnMyLocation.setOnClickListener(v -> goToMyLocation());
         }
 
         // Set up the Hidden Bottom Sheet (Place details)
@@ -225,6 +226,13 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
             }
         }
 
+        // Set up POI Clicks
+        googleMap.setOnPoiClickListener(poi -> fetchAddressAndShowDetails(poi.latLng, poi.name));
+
+        // Set up General Map Clicks
+        googleMap.setOnMapClickListener(latLng -> fetchAddressAndShowDetails(latLng, null));
+
+        // Set up Marker Clicks
         googleMap.setOnMarkerClickListener(marker -> {
             Object tag = marker.getTag();
             if (tag instanceof com.bif.app.domain.model.Place) {
@@ -277,9 +285,6 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
             return;
         }
 
-        FusedLocationProviderClient fusedLocationClient =
-                LocationServices.getFusedLocationProviderClient(requireActivity());
-
         fusedLocationClient.getLastLocation().addOnSuccessListener(location -> {
             if (location != null) {
                 LatLng myLatLng = new LatLng(location.getLatitude(), location.getLongitude());
@@ -294,7 +299,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         TextView tvName = root.findViewById(R.id.tv_place_name);
         TextView tvAddress = root.findViewById(R.id.tv_place_address);
         TextView tvRating = root.findViewById(R.id.tv_place_rating);
-        Button btnAction = root.findViewById(R.id.btn_action);
+        ImageButton btnAddFavorite = root.findViewById(R.id.btn_add_favorite);
 
         tvName.setText(place.name);
         tvAddress.setText(place.address);
@@ -305,12 +310,101 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
             tvRating.setText(R.string.default_rating);
         }
 
-        // Set up the button click
-        btnAction.setOnClickListener(v -> {
-            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
-            viewModel.setStatusText("Opening details for " + place.name);
+        // TODO: Set up Place Images
+        // RecyclerView rvImages = root.findViewById(R.id.rv_place_images);
+        // PlaceImageAdapter imageAdapter = new PlaceImageAdapter(place.getImages());
+        // rvImages.setAdapter(imageAdapter);
+
+        // Dynamic Peek Height
+        View layoutExtendedDetails = root.findViewById(R.id.layout_extended_details);
+        View layoutContainer = root.findViewById(R.id.layout_container);
+        layoutExtendedDetails.post(() -> {
+            int dynamicPeekHeight = layoutExtendedDetails.getTop() + layoutContainer.getPaddingBottom() - layoutContainer.getPaddingTop();
+
+            bottomSheetBehavior.setPeekHeight(dynamicPeekHeight);
+            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
         });
 
-        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+        // Handle "Add to Favorites"
+        // TODO: Handle "Remove from Favorites" when place is already added
+        btnAddFavorite.setOnClickListener(v -> {
+            viewModel.addToFavorites(place);
+            viewModel.setStatusText(place.name + " added to Favorites!");
+        });
+    }
+
+    private void fetchAddressAndShowDetails(LatLng latLng, String providedName) {
+        Geocoder geocoder = new Geocoder(requireContext(), Locale.getDefault());
+
+        new Thread(() -> {
+            try {
+                List<Address> addresses = geocoder.getFromLocation(latLng.latitude, latLng.longitude, 1);
+
+                String finalName = providedName;
+                String addressText = "Unknown Address";
+
+                if (addresses != null && !addresses.isEmpty()) {
+                    Address address = addresses.get(0);
+                    addressText = address.getAddressLine(0);
+
+                    if (finalName == null || finalName.isEmpty()) {
+                        finalName = address.getFeatureName();
+
+                        if (finalName == null || finalName.equals(addressText)) {
+                            finalName = "Selected Location";
+                        }
+                    }
+                } else if (finalName == null || finalName.isEmpty()) {
+                    finalName = "Selected Location";
+                }
+
+                Location loc = new Location(latLng.latitude, latLng.longitude);
+
+                // Create the generic Place object
+                com.bif.app.domain.model.Place clickedPlace = new com.bif.app.domain.model.Place(
+                        UUID.randomUUID().toString(), // Fake ID
+                        finalName,
+                        addressText != null ? addressText : "Unknown Address",
+                        0.0, // Default rating
+                        loc
+                );
+
+                // Switch to Main Thread to update the UI
+                requireActivity().runOnUiThread(() -> {
+                    googleMap.clear();
+                    Marker marker = googleMap.addMarker(MarkerFactory.createMarker(latLng, clickedPlace.name, clickedPlace.address));
+
+                    if (marker != null) {
+                        marker.setTag(clickedPlace);
+                    }
+
+                    googleMap.animateCamera(CameraUpdateFactory.newLatLng(latLng));
+                    showPlaceBottomSheet(clickedPlace, requireView());
+                    viewModel.setStatusText("");
+                });
+
+            } catch (IOException e) {
+                Log.e("MapFragment", "Geocoding failed", e);
+
+                // Fallback if Geocoder completely fails
+                requireActivity().runOnUiThread(() -> {
+                    if (providedName != null && !providedName.isEmpty()) {
+                        com.bif.app.domain.model.Location loc = new com.bif.app.domain.model.Location(latLng.latitude, latLng.longitude);
+                        com.bif.app.domain.model.Place fallbackPlace = new com.bif.app.domain.model.Place(
+                                UUID.randomUUID().toString(), providedName, "Address unavailable", 0.0, loc);
+
+                        googleMap.clear();
+                        Marker marker = googleMap.addMarker(MarkerFactory.createMarker(latLng, fallbackPlace.name, fallbackPlace.address));
+                        if (marker != null) marker.setTag(fallbackPlace);
+
+                        googleMap.animateCamera(CameraUpdateFactory.newLatLng(latLng));
+                        showPlaceBottomSheet(fallbackPlace, requireView());
+                    } else {
+                        viewModel.setStatusText("Network error: Could not load address.");
+                        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+                    }
+                });
+            }
+        }).start();
     }
 }

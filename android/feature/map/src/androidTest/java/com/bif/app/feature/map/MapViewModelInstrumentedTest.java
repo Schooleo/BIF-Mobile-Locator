@@ -10,6 +10,8 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.LiveData;
 import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
+import com.bif.app.domain.repository.IFavoriteRepository;
+import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
 import java.util.List;
@@ -36,6 +38,7 @@ public class MapViewModelInstrumentedTest {
     private MapViewModel viewModel;
     private IMapRepository mapRepository;
     private IPlaceRepository placeRepository;
+    private IFavoriteRepository favoriteRepository;
     private Context context;
 
     private static class FakeMapRepository implements IMapRepository {
@@ -64,13 +67,29 @@ public class MapViewModelInstrumentedTest {
         }
     }
 
+    private static class FakeFavoriteRepository implements IFavoriteRepository {
+        @Override
+        public LiveData<List<Favorite>> getAllFavorites() { return new MutableLiveData<>(Collections.emptyList()); }
+        @Override
+        public LiveData<List<Favorite>> searchFavorites(String query) { return new MutableLiveData<>(Collections.emptyList()); }
+        @Override
+        public void addFavorite(Favorite favorite) {}
+        @Override
+        public void updateFavorite(Favorite favorite) {}
+        @Override
+        public void updateAllFavorites(List<Favorite> favorites) {}
+        @Override
+        public void deleteFavorite(Favorite favorite) {}
+    }
+
     @Before
     public void setUp() {
         context = InstrumentationRegistry.getInstrumentation().getTargetContext();
 
         placeRepository = new FakePlaceRepository();
         mapRepository = new FakeMapRepository();
-        viewModel = new MapViewModel(mapRepository, placeRepository);
+        favoriteRepository = new FakeFavoriteRepository();
+        viewModel = new MapViewModel(mapRepository, placeRepository, favoriteRepository);
     }
 
     @After
@@ -91,7 +110,8 @@ public class MapViewModelInstrumentedTest {
         // Create new ViewModel instance (simulating configuration change)
         MapViewModel newViewModel = new MapViewModel(
                 mapRepository,
-                placeRepository
+                placeRepository,
+                favoriteRepository
         );
 
         MapState retrievedState = newViewModel.getLastMapState();

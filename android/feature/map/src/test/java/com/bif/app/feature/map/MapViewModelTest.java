@@ -9,6 +9,7 @@ import androidx.lifecycle.Observer;
 
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
+import com.bif.app.domain.repository.IFavoriteRepository;
 import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
 
@@ -35,6 +36,9 @@ public class MapViewModelTest {
     private IMapRepository mapRepository;
 
     @Mock
+    private IFavoriteRepository favoriteRepository;
+
+    @Mock
     private Observer<Location> searchResultObserver;
 
     @Mock
@@ -47,7 +51,7 @@ public class MapViewModelTest {
         // Stub searchLocation to return a valid LiveData to prevent NullPointerException during switchMap
         Mockito.when(placeRepository.searchLocation(ArgumentMatchers.anyString())).thenReturn(new MutableLiveData<>());
         
-        viewModel = new MapViewModel(mapRepository, placeRepository);
+        viewModel = new MapViewModel(mapRepository, placeRepository, favoriteRepository);
         viewModel.searchResult.observeForever(searchResultObserver);
         viewModel.statusText.observeForever(statusTextObserver);
     }

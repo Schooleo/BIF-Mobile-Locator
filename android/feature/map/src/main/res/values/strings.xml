@@ -7,4 +7,8 @@
     <string name="default_address">123 Example Street</string>
     <string name="default_rating">No ratings yet</string>
     <string name="btn_place_details">View Details</string>
+    <string name="place_description">Place description</string>
+    <string name="favorites">Favorites</string>
+    <string name="about_header">About</string>
+    <string name="photos_header">Photos</string>
 </resources>

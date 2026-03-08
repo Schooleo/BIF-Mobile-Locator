@@ -5,9 +5,11 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Transformations;
 import androidx.lifecycle.ViewModel;
 
+import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.MapState;
+import com.bif.app.domain.repository.IFavoriteRepository;
 import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
 
@@ -21,6 +23,7 @@ public class MapViewModel extends ViewModel {
 
     private final IMapRepository mapRepository;
     private final IPlaceRepository placeRepository;
+    private final IFavoriteRepository favoriteRepository;
 
     private final MutableLiveData<String> _statusText = new MutableLiveData<>();
     public final LiveData<String> statusText = _statusText;
@@ -32,9 +35,14 @@ public class MapViewModel extends ViewModel {
     public final LiveData<List<Place>> searchResults;
 
     @Inject
-    public MapViewModel(IMapRepository mapRepository, IPlaceRepository placeRepository) {
+    public MapViewModel(
+            IMapRepository mapRepository,
+            IPlaceRepository placeRepository,
+            IFavoriteRepository favoriteRepository
+    ) {
         this.mapRepository = mapRepository;
         this.placeRepository = placeRepository;
+        this.favoriteRepository = favoriteRepository;
 
         this.searchResult = Transformations.switchMap(locationSearchQuery, placeRepository::searchLocation);
 
@@ -59,5 +67,27 @@ public class MapViewModel extends ViewModel {
 
     public MapState getLastMapState() {
         return mapRepository.getMapState();
+    }
+
+    public void addToFavorites(Place place) {
+        Favorite favorite = new Favorite();
+
+        favorite.name = place.name;
+        favorite.address = place.address;
+        favorite.rating = (int) place.rating;
+        favorite.description = "";
+        favorite.notes = "";
+        favorite.imagePath = "";
+
+        if (place.location != null) {
+            favorite.latitude = place.location.latitude;
+            favorite.longitude = place.location.longitude;
+        }
+
+        favoriteRepository.addFavorite(favorite);
+    }
+
+    public void removeFromFavorites(Favorite favorite) {
+        favoriteRepository.deleteFavorite(favorite);
     }
 }
