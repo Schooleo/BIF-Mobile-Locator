@@ -10,4 +10,10 @@
     <string name="nav_item_profile">Profile</string>
 
     <string name="go_back_home">Go Back Home</string>
+
+    <!-- Component Strings -->
+    <string name="add_new_friend">Add New Friend</string>
+    <string name="delete">Delete</string>
+    <string name="more_options">More options</string>
+    <string name="email">Email</string>
 </resources>

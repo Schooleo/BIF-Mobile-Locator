@@ -1,8 +1,8 @@
-# Privacy Policy for BIF Mobile Locator
+# Privacy Policy for Bring In Friends
 
-**Last updated:** February 1, 2026
+**Last updated:** March 7, 2026
 
-This Privacy Policy describes how the BIF Mobile Locator team ("we", "us", or "our") collects, uses, and discloses your information when you use our mobile application (the "Service").
+This Privacy Policy describes how the Bring In Friends team ("we", "us", or "our") collects, uses, and discloses your information when you use our mobile application (the "Service").
 
 By using the Service, you agree to the collection and use of information in accordance with this policy.
 
@@ -12,11 +12,18 @@ By using the Service, you agree to the collection and use of information in acco
 
 Our application is designed to provide location-based services. We may request access to your device's location (GPS and network-based).
 
-- **How we use it**: To calculate distances between your current position and selected points of interest, and to display your position on the map.
-- **Storage**: Location data is processed **locally** on your device within the application's secure storage. We do **not** transmit your precise location history to our servers.
+- **How we use it**: To calculate distances between your current position and selected points of interest, to display your position on the map, and to enable social proximity sharing with your connected friends.
+- **Storage**: Location data is processed **locally** on your device within the application's secure storage. We do **not** transmit your precise location history to our servers unprompted.
 - **Background Usage**: We do **not** collect or access your location while the app is in the background. Location services are only active when you are using the app.
 
-### B. Usage Data & Analytics
+### B. Profile and Account Data
+
+If you use our social or profile features, we may collect basic account details (e.g., username, email, and display picture).
+
+- **How we use it**: To manage your identity, authenticate your access, and display your profile safely to your connected friends.
+- **Storage**: Authentication data respects secure cloud backend limits, while profile snippets may be cached locally.
+
+### C. Usage Data & Analytics
 
 We use third-party services to monitor and analyze the use of our Service.
 
@@ -56,4 +63,4 @@ We may update our Privacy Policy from time to time. Thus, you are advised to rev
 If you have any questions or suggestions about our Privacy Policy, do not hesitate to contact us at:
 
 **Email**: schooleoinbox@gmail.com
-**GitHub**: [https://github.com/Schooleo/bif-mobile-locator](https://github.com/Schooleo/bif-mobile-locator)
+**GitHub**: [https://github.com/Schooleo/bif-mobile-app](https://github.com/Schooleo/bif-mobile-app)

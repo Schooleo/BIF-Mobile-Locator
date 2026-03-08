@@ -9,8 +9,9 @@ import androidx.lifecycle.Observer;
 
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
-import com.bif.app.domain.repository.ILocationRepository;
+import com.bif.app.domain.repository.IFavoriteRepository;
 import com.bif.app.domain.repository.IMapRepository;
+import com.bif.app.domain.repository.IPlaceRepository;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -29,10 +30,13 @@ public class MapViewModelTest {
     public InstantTaskExecutorRule instantTaskExecutorRule = new InstantTaskExecutorRule();
 
     @Mock
-    private ILocationRepository locationRepository;
+    private IPlaceRepository placeRepository;
 
     @Mock
     private IMapRepository mapRepository;
+
+    @Mock
+    private IFavoriteRepository favoriteRepository;
 
     @Mock
     private Observer<Location> searchResultObserver;
@@ -45,9 +49,9 @@ public class MapViewModelTest {
     @Before
     public void setUp() {
         // Stub searchLocation to return a valid LiveData to prevent NullPointerException during switchMap
-        Mockito.when(locationRepository.searchLocation(ArgumentMatchers.anyString())).thenReturn(new MutableLiveData<>());
+        Mockito.when(placeRepository.searchLocation(ArgumentMatchers.anyString())).thenReturn(new MutableLiveData<>());
         
-        viewModel = new MapViewModel(locationRepository, mapRepository);
+        viewModel = new MapViewModel(mapRepository, placeRepository, favoriteRepository);
         viewModel.searchResult.observeForever(searchResultObserver);
         viewModel.statusText.observeForever(statusTextObserver);
     }
@@ -61,7 +65,7 @@ public class MapViewModelTest {
         viewModel.searchLocation(query);
 
         // Assert
-        Mockito.verify(locationRepository).searchLocation(query);
+        Mockito.verify(placeRepository).searchLocation(query);
     }
 
     @Test

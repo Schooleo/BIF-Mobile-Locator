@@ -1,6 +1,6 @@
 # Android Unit Testing Guide
 
-This guide explains how to write, run, and automate tests for the BIF Mobile Locator project.
+This guide explains how to write, run, and automate tests for the Bring In Friends project.
 
 ## 1. Types of Tests
 
@@ -12,7 +12,7 @@ In Android, there are two main categories of tests:
 - **What**: Pure Java tests that run on your development machine's JVM (not on an Android device).
 - **Speed**: Very Fast.
 - **Use Case**: Testing business logic, calculations, and utility classes that don't depend on Android APIs (e.g., `Context`, `View`).
-- **Example**: `DistanceUtilsTest.java`
+- **Example**: `PlaceRepositoryTest.java`
 
 ### B. Instrumented Tests (`src/androidTest`)
 
@@ -20,6 +20,7 @@ In Android, there are two main categories of tests:
 - **What**: Tests that run on a hardware device or emulator.
 - **Speed**: Slow.
 - **Use Case**: Testing UI interactions (clicking buttons), accessing database/file system, or checking how the app behaves on a real OS.
+- **Example**: `MapViewModelInstrumentedTest.java`
 
 ---
 
@@ -65,15 +66,16 @@ public void testInvalidInput_throwsException() {
 
 ```java
 @Test
-public void calculateDistance_samePoint_returnsZero() {
+public void searchPlaces_validQuery_returnsPlaceList() {
     // 1. Arrange (Setup inputs)
-    double lat = 10.0;
+    String query = "HCMUS";
+    FakePlaceRepository repository = new FakePlaceRepository();
 
     // 2. Act (Run the code)
-    double result = DistanceUtils.calculateDistance(lat, 20.0, lat, 20.0);
+    LiveData<List<Place>> results = repository.searchPlaces(query);
 
     // 3. Assert (Verify output)
-    assertEquals("Distance should be 0", 0.0, result, 0.01);
+    assertNotNull("Results should not be null", results);
 }
 ```
 
@@ -95,7 +97,7 @@ public void calculateDistance_samePoint_returnsZero() {
   ```
 - Run specific test:
   ```bash
-  ./gradlew testDebugUnitTest --tests "com.bif.locator.utils.DistanceUtilsTest"
+  ./gradlew :feature:map:testDebugUnitTest --tests "com.bif.app.feature.map.PlaceRepositoryTest"
   ```
 
 ### Viewing Test Reports
@@ -157,7 +159,7 @@ To make tests readable and easy to debug, we use a structured **3-part naming co
 
 | Bad Name    | Good Name                                  | Why?                                  |
 | :---------- | :----------------------------------------- | :------------------------------------ |
-| `test1`     | `calculateDistance_samePoint_returnsZero`  | Explicitly states logic.              |
+| `test1`     | `searchPlaces_validQuery_returnsPlaceList` | Explicitly states logic.              |
 | `testLogin` | `login_invalidCredentials_showsToast`      | Specifies the scenario and UI result. |
 | `emailTest` | `validateEmail_missingAtSign_returnsFalse` | Describes the edge case being tested. |
 
@@ -184,27 +186,28 @@ To make tests readable and easy to debug, we use a structured **3-part naming co
 
 ### Example Scenario
 
-Imagine a `LocationTracker` class that depends on Android's `LocationManager`.
+Imagine a `MapViewModel` class that depends on an `IPlaceRepository`.
 
 ```java
 import static org.mockito.Mockito.*;
 
-public class LocationTrackerTest {
+public class MapViewModelTest {
 
     @Test
-    public void trackLocation_providerEnabled_requestsUpdates() {
-        // 1. Create a Mock of the Android dependency
-        LocationManager mockLocManager = mock(LocationManager.class);
+    public void searchPlaces_callsRepository() {
+        // 1. Create a Mock of the dependency
+        IPlaceRepository mockPlaceRepo = mock(IPlaceRepository.class);
+        IMapRepository mockMapRepo = mock(IMapRepository.class);
 
-        // 2. Stub behavior: Tell the mock to return 'true' when isProviderEnabled is called
-        when(mockLocManager.isProviderEnabled(LocationManager.GPS_PROVIDER)).thenReturn(true);
+        // 2. Stub behavior: Return a specific value when method is called
+        when(mockPlaceRepo.searchPlaces(anyString())).thenReturn(new MutableLiveData<>());
 
-        // 3. Create the class under test, injecting the mock
-        LocationTracker tracker = new LocationTracker(mockLocManager);
-        tracker.startTracking();
+        // 3. Create the class under test, injecting the mocks
+        MapViewModel viewModel = new MapViewModel(mockMapRepo, mockPlaceRepo);
+        viewModel.onSearchQueryChanged("Coffee Shop");
 
-        // 4. Verify that the tracker actually called requestLocationUpdates on the mock
-        verify(mockLocManager).requestLocationUpdates(anyString(), anyLong(), anyFloat(), any());
+        // 4. Verify that the ViewModel actually requested the search via the mock
+        verify(mockPlaceRepo).searchPlaces("Coffee Shop");
     }
 }
 ```
