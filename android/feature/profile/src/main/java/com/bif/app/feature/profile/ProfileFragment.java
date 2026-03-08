@@ -49,8 +49,17 @@ public class ProfileFragment extends Fragment {
         tvAvatar.setText("B");
         tvAvatar.setBackgroundTintList(ColorStateList.valueOf(0xFF2B7FFF));
 
+        // Display username and email
+        TextView tvName = view.findViewById(com.bif.app.core.R.id.tvName);
+        tvName.setText(R.string.bxa_user);
+
+        TextView tvEmail = view.findViewById(com.bif.app.core.R.id.tvEmail);
+        tvEmail.setText(R.string.user_email);
+
         // Edit profile button
-        view.findViewById(com.bif.app.core.R.id.btnEditProfile).setOnClickListener(v -> {
+        android.widget.Button btnEditProfile = view.findViewById(com.bif.app.core.R.id.btnEditProfile);
+        btnEditProfile.setText(R.string.edit_profile);
+        btnEditProfile.setOnClickListener(v -> {
             // TODO: Navigate to edit profile screen
         });
     }
