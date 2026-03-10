@@ -11,15 +11,18 @@ public class UserPreferences {
     private static final String KEY_EMAIL = "email";
     private static final String KEY_IS_LOGGED_IN = "is_logged_in";
 
+    private static final IPasswordEncoder encoder = new BcryptPasswordEncoder();
     private static SharedPreferences getPrefs(Context context) {
         return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
     }
 
     public static void saveUser(Context context, String username,
                                 String password, String email) {
+        String encodedPassword = encoder.encode(password);
+
         getPrefs(context).edit()
                 .putString(KEY_USERNAME, username)
-                .putString(KEY_PASSWORD, password)
+                .putString(KEY_PASSWORD, encodedPassword)
                 .putString(KEY_EMAIL, email)
                 .putBoolean(KEY_IS_LOGGED_IN, true)
                 .apply();
@@ -47,5 +50,8 @@ public class UserPreferences {
                 .apply();
     }
 
-
+    public static boolean checkPassword(Context context, String password) {
+        String encodedPassword = getPassword(context);
+        return encoder.verify(password, encodedPassword);
+    }
 }

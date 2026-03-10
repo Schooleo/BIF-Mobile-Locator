@@ -64,6 +64,12 @@ public class LoginFragment extends Fragment {
                 return;
             }
 
+            if (!UserPreferences.checkPassword(requireContext(), password)) {
+                etPassword.setError("Incorrect password");
+                etPassword.requestFocus();
+                return;
+            }
+
             UserPreferences.setLoggedIn(requireContext(), true);
             Toast.makeText(requireContext(), "Login successful!",
                     Toast.LENGTH_SHORT).show();
