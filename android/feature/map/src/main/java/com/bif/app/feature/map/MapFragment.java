@@ -66,13 +66,13 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     FusedLocationProviderClient fusedLocationClient;
 
     private final ActivityResultLauncher<String> requestPermissionLauncher =
-        registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
-            if (isGranted) {
-                enableMyLocationLayer();
-            } else {
-                viewModel.setStatusText("Permission denied. Cannot show current location.");
-            }
-        });
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+                if (isGranted) {
+                    enableMyLocationLayer();
+                } else {
+                    viewModel.setStatusText("Permission denied. Cannot show current location.");
+                }
+            });
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -214,9 +214,9 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         if (googleMap != null) {
             CameraPosition position = googleMap.getCameraPosition();
             viewModel.saveMapState(
-                position.target.latitude,
-                position.target.longitude,
-                position.zoom
+                    position.target.latitude,
+                    position.target.longitude,
+                    position.zoom
             );
         }
     }
@@ -226,15 +226,15 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         this.googleMap = map;
 
         int nightModeFlags = requireContext()
-            .getResources()
-            .getConfiguration().uiMode
+                .getResources()
+                .getConfiguration().uiMode
                 & Configuration.UI_MODE_NIGHT_MASK;
 
         // Load Dark Mode Maps Style
         if (nightModeFlags == Configuration.UI_MODE_NIGHT_YES) {
             try {
                 boolean success = googleMap.setMapStyle(
-                    MapStyleOptions.loadRawResourceStyle(requireContext(), R.raw.map_style_dark)
+                        MapStyleOptions.loadRawResourceStyle(requireContext(), R.raw.map_style_dark)
                 );
                 if (!success) {
                     Log.e("MapFragment", "Style parsing failed.");
@@ -354,12 +354,48 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
             bottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
         });
 
+        // Set initial button state based on whether the place is already a favorite
+        updateFavoriteButtonState(btnAddFavorite, findFavoriteForPlace(place) != null);
+
         // Handle "Add to Favorites"
-        // TODO: Handle "Remove from Favorites" when place is already added
         btnAddFavorite.setOnClickListener(v -> {
-            viewModel.addToFavorites(place);
-            viewModel.setStatusText(place.name + " added to Favorites!");
+            Favorite existing = findFavoriteForPlace(place);
+            if (existing != null) {
+                viewModel.removeFromFavorites(existing);
+                viewModel.setStatusText(place.name + " removed from Favorites!");
+                updateFavoriteButtonState(btnAddFavorite, false);
+            } else {
+                viewModel.addToFavorites(place);
+                viewModel.setStatusText(place.name + " added to Favorites!");
+                updateFavoriteButtonState(btnAddFavorite, true);
+            }
         });
+    }
+
+    /* Returns the Favorite matching the given place (by address or proximity), or null. */
+    private Favorite findFavoriteForPlace(com.bif.app.domain.model.Place place) {
+        for (Favorite fav : currentFavorites) {
+            if (place.address != null && !place.address.isEmpty()
+                    && place.address.equals(fav.address)) {
+                return fav;
+            }
+            if (place.location != null) {
+                double lat = fav.latitude - place.location.latitude;
+                double lng = fav.longitude - place.location.longitude;
+                if (Math.sqrt(lat * lat + lng * lng) < 0.0001) {
+                    return fav;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Tints the favorite button yellow when saved, green when not. */
+    private void updateFavoriteButtonState(ImageButton btn, boolean isFavorite) {
+        int color = isFavorite
+                ? android.graphics.Color.parseColor("#F0B100")   // yellow = saved
+                : android.graphics.Color.parseColor("#2ECC71");  // green  = not saved
+        btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(color));
     }
 
     private void fetchAddressAndShowDetails(LatLng latLng, String providedName) {
@@ -453,13 +489,13 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     private void updateFavoriteMarkers() {
         if (googleMap == null) return;
 
-        // Xóa marker cũ
+        // Delete old markers
         for (Marker m : favoriteMarkers) {
             if (m != null) m.remove();
         }
         favoriteMarkers.clear();
 
-        // Vẽ lại từ data mới nhất
+        // Redraw from latest data
         for (Favorite fav : currentFavorites) {
             LatLng pos = new LatLng(fav.latitude, fav.longitude);
             MarkerOptions opt = MarkerFactory.createFavoriteMarker(pos, fav.name);
