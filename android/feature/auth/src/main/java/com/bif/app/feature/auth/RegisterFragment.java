@@ -7,7 +7,9 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -16,6 +18,7 @@ import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 
 import com.bif.app.core.utils.UriUtils;
+import com.bif.app.core.utils.UserPreferences;
 
 public class RegisterFragment extends Fragment {
 
@@ -35,12 +38,61 @@ public class RegisterFragment extends Fragment {
 
         Uri loginUri = UriUtils.buildUri("/login");
 
+        EditText etUsername = view.findViewById(com.bif.app.core.R.id.et_username);
+        EditText etEmail = view.findViewById(com.bif.app.core.R.id.et_input);
+        EditText etPassword = view.findViewById(com.bif.app.core.R.id.et_password);
+        EditText etConfirmPassword = view.findViewById(com.bif.app.core.R.id.et_confirm_password);
+
         // Set button text to "Sign up"
         Button btnSignUp = view.findViewById(R.id.btn_signup);
         btnSignUp.setText(R.string.sign_up);
         btnSignUp.setOnClickListener(v -> {
             // TODO: Add registration logic here
-            // For now, just navigate back to login
+            String username = etUsername.getText().toString().trim();
+            String email = etEmail.getText().toString().trim();
+            String password = etPassword.getText().toString().trim();
+            String confirmPassword = etConfirmPassword.getText().toString().trim();
+
+            if (username.isEmpty()){
+                etUsername.setError("Username is required");
+                etUsername.requestFocus();
+                return;
+            }
+
+            if (email.isEmpty()){
+                etEmail.setError("Email is required");
+                etEmail.requestFocus();
+                return;
+            }
+
+            // Check xem email có đúng format không
+            if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                etEmail.setError("Please enter a valid email");
+                etEmail.requestFocus();
+                return;
+            }
+
+            if (password.isEmpty()){
+                etPassword.setError("Password is required");
+                etPassword.requestFocus();
+                return;
+            }
+
+            if (password.length() < 6) {
+                etPassword.setError("Password must be at least 6 characters");
+                etPassword.requestFocus();
+                return;
+            }
+
+            if (!password.equals(confirmPassword)) {
+                etConfirmPassword.setError("Passwords do not match");
+                etConfirmPassword.requestFocus();
+                return;
+            }
+
+            UserPreferences.saveUser(getContext(), username, password, email);
+            Toast.makeText(requireContext(), "Registration successful", Toast.LENGTH_SHORT).show();
+
             navController.navigate(loginUri);
         });
 
