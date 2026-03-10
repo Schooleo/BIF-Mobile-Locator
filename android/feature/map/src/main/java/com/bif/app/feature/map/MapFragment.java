@@ -137,6 +137,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         viewModel.statusText.observe(getViewLifecycleOwner(), text -> {
             if (text != null && !text.isEmpty()) {
                 android.widget.Toast.makeText(requireContext(), text, android.widget.Toast.LENGTH_SHORT).show();
+                viewModel.setStatusText(""); // Consume the event so it is not re-shown on navigation
             }
         });
 
