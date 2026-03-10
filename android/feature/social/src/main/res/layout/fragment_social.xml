@@ -25,10 +25,10 @@
         app:tabMode="fixed"
         app:tabGravity="fill"
         app:tabIndicator="@drawable/bg_tab_indicator"
-        app:tabIndicatorColor="@color/tab_selected"
+        app:tabIndicatorColor="@color/primary_blue"
         app:tabIndicatorHeight="3dp"
-        app:tabSelectedTextColor="@color/tab_selected"
-        app:tabTextColor="@color/tab_unselected"
+        app:tabSelectedTextColor="@color/primary_blue"
+        app:tabTextColor="@color/primary_grey"
         app:tabTextAppearance="@style/TabTextStyle">
 
         <com.google.android.material.tabs.TabItem

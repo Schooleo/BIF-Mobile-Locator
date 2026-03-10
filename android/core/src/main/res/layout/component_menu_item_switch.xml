@@ -32,6 +32,6 @@
         android:layout_height="wrap_content"
         android:visibility="gone"
         app:thumbTint="@color/white"
-        app:trackTint="@color/tab_selected"/>
+        app:trackTint="@color/primary_blue"/>
 
 </LinearLayout>

@@ -5,6 +5,6 @@
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path
-        android:fillColor="@color/tab_selected"
+        android:fillColor="@color/primary_blue"
         android:pathData="M12,1L3,5v6c0,5.55 3.84,10.74 9,12c5.16,-1.26 9,-6.45 9,-12V5L12,1zM13,17h-2v-6h2v6zM13,9h-2V7h2v2z"/>
 </vector>

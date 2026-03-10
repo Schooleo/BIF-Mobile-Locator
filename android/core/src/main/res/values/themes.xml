@@ -5,7 +5,7 @@
         <item name="colorScreenBackground">@color/white</item>
 
         <!-- Main brand color -->
-        <item name="colorPrimary">@color/button_color</item>
+        <item name="colorPrimary">@color/primary_green</item>
 
         <!-- Text on background -->
         <item name="colorOnBackground">@color/black</item>
@@ -17,7 +17,7 @@
         <item name="colorInputText">@color/black</item>
 
         <!-- Semantic color aliases -->
-        <item name="colorHintText">@color/hint_text_color</item>
+        <item name="colorHintText">@color/primary_grey</item>
         <item name="colorAuthLink">@color/auth_link_color</item>
         
         <!-- Social screen colors -->
