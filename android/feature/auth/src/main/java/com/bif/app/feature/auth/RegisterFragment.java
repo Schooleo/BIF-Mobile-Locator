@@ -47,7 +47,6 @@ public class RegisterFragment extends Fragment {
         Button btnSignUp = view.findViewById(R.id.btn_signup);
         btnSignUp.setText(R.string.sign_up);
         btnSignUp.setOnClickListener(v -> {
-            // TODO: Add registration logic here
             String username = etUsername.getText().toString().trim();
             String email = etEmail.getText().toString().trim();
             String password = etPassword.getText().toString().trim();
