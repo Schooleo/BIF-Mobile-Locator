@@ -24,6 +24,7 @@ import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
+import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -41,6 +42,7 @@ import com.google.android.libraries.places.api.Places;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -55,6 +57,10 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     private GoogleMap googleMap;
     private MapViewModel viewModel;
     private BottomSheetBehavior<View> bottomSheetBehavior;
+
+    private List<Favorite> currentFavorites = new ArrayList<>();
+    private List<Marker> favoriteMarkers = new ArrayList<>();
+    private List<Marker> temporaryMarkers = new ArrayList<>();
 
     @Inject
     FusedLocationProviderClient fusedLocationClient;
@@ -134,11 +140,17 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
             }
         });
 
+        // Update favorites marker to changes
+        viewModel.allFavorites.observe(getViewLifecycleOwner(), favorites -> {
+            this.currentFavorites = favorites != null ? favorites : new ArrayList<>();
+            updateFavoriteMarkers();
+        });
+
         // Observe the Multiple Places Search Results
         viewModel.searchResults.observe(getViewLifecycleOwner(), places -> {
             if (googleMap == null) return;
 
-            googleMap.clear(); // Remove old markers
+            clearTemporaryMarkers();
 
             if (places != null && !places.isEmpty()) {
                 com.google.android.gms.maps.model.LatLngBounds.Builder boundsBuilder =
@@ -156,6 +168,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
                         Marker marker = googleMap.addMarker(markerOptions);
                         if (marker != null) {
                             marker.setTag(place);
+                            temporaryMarkers.add(marker);
                         }
                         boundsBuilder.include(latLng);
                     }
@@ -174,12 +187,16 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         // Observe Single Location Search Result
         viewModel.searchResult.observe(getViewLifecycleOwner(), location -> {
             if (location != null && googleMap != null) {
-                googleMap.clear();
+                clearTemporaryMarkers();
 
                 LatLng target = new LatLng(location.latitude, location.longitude);
 
-                MarkerOptions marker = MarkerFactory.createMarker(target);
-                googleMap.addMarker(marker);
+                MarkerOptions markerOpt = MarkerFactory.createMarker(target);
+                Marker marker = googleMap.addMarker(markerOpt);
+
+                if(marker != null) {
+                    temporaryMarkers.add(marker); // [MỚI] Thêm vào list quản lý
+                }
 
                 googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(target, 15f));
                 viewModel.setStatusText("Location found");
@@ -242,10 +259,21 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
                 showPlaceBottomSheet(clickedPlace, requireView());
             }
+            else if (tag instanceof Favorite) {
+                // Convert Favorite to Place to re-use in UI BottomSheet
+                Favorite fav = (Favorite) tag;
+                Location loc = new Location(fav.latitude, fav.longitude);
+                com.bif.app.domain.model.Place mappedPlace = new com.bif.app.domain.model.Place(
+                        String.valueOf(fav.id), fav.name, fav.address, fav.rating, loc
+                );
+                googleMap.animateCamera(CameraUpdateFactory.newLatLng(marker.getPosition()));
+                showPlaceBottomSheet(mappedPlace, requireView());
+            }
             return true;
         });
 
         enableMyLocationLayer();
+        updateFavoriteMarkers();
 
         if (getArguments() != null) {
             String location = getArguments().getString("location");
@@ -371,11 +399,12 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
                 // Switch to Main Thread to update the UI
                 requireActivity().runOnUiThread(() -> {
-                    googleMap.clear();
+                    clearTemporaryMarkers();
                     Marker marker = googleMap.addMarker(MarkerFactory.createMarker(latLng, clickedPlace.name, clickedPlace.address));
 
                     if (marker != null) {
                         marker.setTag(clickedPlace);
+                        temporaryMarkers.add(marker);
                     }
 
                     googleMap.animateCamera(CameraUpdateFactory.newLatLng(latLng));
@@ -393,9 +422,12 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
                         com.bif.app.domain.model.Place fallbackPlace = new com.bif.app.domain.model.Place(
                                 UUID.randomUUID().toString(), providedName, "Address unavailable", 0.0, loc);
 
-                        googleMap.clear();
+                        clearTemporaryMarkers();
                         Marker marker = googleMap.addMarker(MarkerFactory.createMarker(latLng, fallbackPlace.name, fallbackPlace.address));
-                        if (marker != null) marker.setTag(fallbackPlace);
+                        if (marker != null) {
+                            marker.setTag(fallbackPlace);
+                            temporaryMarkers.add(marker);
+                        }
 
                         googleMap.animateCamera(CameraUpdateFactory.newLatLng(latLng));
                         showPlaceBottomSheet(fallbackPlace, requireView());
@@ -406,5 +438,35 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
                 });
             }
         }).start();
+    }
+
+    // Delete all temporary markers when search/click
+    private void clearTemporaryMarkers() {
+        for (Marker m : temporaryMarkers) {
+            if (m != null) m.remove();
+        }
+        temporaryMarkers.clear();
+    }
+
+    // Return Favorite Markers
+    private void updateFavoriteMarkers() {
+        if (googleMap == null) return;
+
+        // Xóa marker cũ
+        for (Marker m : favoriteMarkers) {
+            if (m != null) m.remove();
+        }
+        favoriteMarkers.clear();
+
+        // Vẽ lại từ data mới nhất
+        for (Favorite fav : currentFavorites) {
+            LatLng pos = new LatLng(fav.latitude, fav.longitude);
+            MarkerOptions opt = MarkerFactory.createFavoriteMarker(pos, fav.name);
+            Marker m = googleMap.addMarker(opt);
+            if (m != null) {
+                m.setTag(fav); // Tag là Favorite
+                favoriteMarkers.add(m);
+            }
+        }
     }
 }
