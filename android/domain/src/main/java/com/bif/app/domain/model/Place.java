@@ -5,15 +5,13 @@ public class Place {
     public String name;
     public String address;
     public double rating;
-    public double latitude;
-    public double longitude;
+    public Location location;
 
-    public Place(String id, String name, String address, double rating, double latitude, double longitude) {
+    public Place(String id, String name, String address, double rating, Location location) {
         this.id = id;
         this.name = name;
         this.address = address;
         this.rating = rating;
-        this.latitude = latitude;
-        this.longitude = longitude;
+        this.location = location;
     }
 }

@@ -2,19 +2,10 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="darkRed">#762020</color>
-    <color name="darkBlue">#070C62</color>
+    <color name="dark_red">#762020</color>
+    <color name="light_gray">#E0E0E0</color>
+    <color name="dark_blue">#070C62</color>
     <color name="red">#D30404</color>
-    <color name="brand_color_1">#d9ed92</color>
-    <color name="brand_color_2">#b5e48c</color>
-    <color name="brand_color_3">#99d98c</color>
-    <color name="brand_color_4">#76c893</color>
-    <color name="brand_color_5">#52b69a</color>
-    <color name="brand_color_6">#34a0a4</color>
-    <color name="brand_color_7">#168aad</color>
-    <color name="brand_color_8">#1a759f</color>
-    <color name="brand_color_9">#1e6091</color>
-    <color name="brand_color_10">#184e77</color>
 
     <!-- General UI -->
     <color name="button_color">#2ECC71</color>
@@ -22,6 +13,7 @@
     <color name="self_marked_color">#2B7FFF</color>
     <color name="place_marker_color">#2ECC71</color>
     <color name="hint_text_color">#9E9E9E</color>
+    <color name="yellow_primary">#F0B100</color>
 
     <!-- Light mode -->
     <color name="light_mode_box">#D9D9D9</color>

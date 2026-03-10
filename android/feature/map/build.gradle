@@ -64,6 +64,9 @@ dependencies {
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
+    androidTestImplementation libs.hilt.android.testing
+    androidTestAnnotationProcessor libs.hilt.compiler
+    androidTestImplementation libs.core.testing
 
     // Hilt
     implementation libs.hilt.android
