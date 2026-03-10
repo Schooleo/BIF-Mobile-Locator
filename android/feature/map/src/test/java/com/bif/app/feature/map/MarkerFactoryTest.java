@@ -25,7 +25,7 @@ public class MarkerFactoryTest {
     public void setUp() {
         mockedBitmapDescriptorFactory = mockStatic(BitmapDescriptorFactory.class);
         mockBitmapDescriptor = mock(BitmapDescriptor.class);
-        
+
         mockedBitmapDescriptorFactory.when(() -> BitmapDescriptorFactory.defaultMarker(anyFloat()))
                 .thenReturn(mockBitmapDescriptor);
         mockedBitmapDescriptorFactory.when(() -> BitmapDescriptorFactory.defaultMarker())
@@ -106,5 +106,77 @@ public class MarkerFactoryTest {
         assertEquals(position, result.getPosition());
         assertEquals(title, result.getTitle());
         assertEquals(mockBitmapDescriptor, result.getIcon());
+    }
+
+    // ─── zIndex ────────────────────────────────────────────────────────────────
+
+    @Test
+    public void createMarker_favoriteType_setsZIndexToOne() {
+        // Arrange
+        LatLng position = new LatLng(10.0, 20.0);
+
+        // Act
+        MarkerOptions result = MarkerFactory.createMarker(
+                position, "title", "snippet", MarkerFactory.MarkerType.FAVORITE_LOCATION);
+
+        // Assert
+        assertEquals(1.0f, result.getZIndex(), 0.01f);
+    }
+
+    @Test
+    public void createMarker_placeType_setsZIndexToZero() {
+        // Arrange
+        LatLng position = new LatLng(10.0, 20.0);
+
+        // Act
+        MarkerOptions result = MarkerFactory.createMarker(
+                position, "title", "snippet", MarkerFactory.MarkerType.PLACE_LOCATION);
+
+        // Assert
+        assertEquals(0.0f, result.getZIndex(), 0.01f);
+    }
+
+    @Test
+    public void createMarker_currentLocationType_setsZIndexToZero() {
+        // Arrange
+        LatLng position = new LatLng(10.0, 20.0);
+
+        // Act
+        MarkerOptions result = MarkerFactory.createMarker(
+                position, "title", "snippet", MarkerFactory.MarkerType.CURRENT_LOCATION);
+
+        // Assert
+        assertEquals(0.0f, result.getZIndex(), 0.01f);
+    }
+
+    // ─── createFavoriteMarker ──────────────────────────────────────────────────
+
+    @Test
+    public void createFavoriteMarker_returnsMarkerWithCorrectTitleAndSnippet() {
+        // Arrange
+        LatLng position = new LatLng(10.762, 106.682);
+        String title = "Coffee Shop";
+
+        // Act
+        MarkerOptions result = MarkerFactory.createFavoriteMarker(position, title);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(position, result.getPosition());
+        assertEquals(title, result.getTitle());
+        assertEquals("Saved in Favorites", result.getSnippet());
+    }
+
+    @Test
+    public void createFavoriteMarker_setsYellowIconAndHighZIndex() {
+        // Arrange
+        LatLng position = new LatLng(10.0, 20.0);
+
+        // Act
+        MarkerOptions result = MarkerFactory.createFavoriteMarker(position, "Fav");
+
+        // Assert: yellow marker → BitmapDescriptorFactory.HUE_YELLOW was requested
+        assertNotNull(result.getIcon());
+        assertEquals(1.0f, result.getZIndex(), 0.01f);
     }
 }

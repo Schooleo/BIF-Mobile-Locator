@@ -7,11 +7,16 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Observer;
 
+import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
+import com.bif.app.domain.model.Place;
 import com.bif.app.domain.repository.IFavoriteRepository;
 import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
+
+import java.util.Collections;
+import java.util.List;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -50,7 +55,7 @@ public class MapViewModelTest {
     public void setUp() {
         // Stub searchLocation to return a valid LiveData to prevent NullPointerException during switchMap
         Mockito.when(placeRepository.searchLocation(ArgumentMatchers.anyString())).thenReturn(new MutableLiveData<>());
-        
+
         viewModel = new MapViewModel(mapRepository, placeRepository, favoriteRepository);
         viewModel.searchResult.observeForever(searchResultObserver);
         viewModel.statusText.observeForever(statusTextObserver);
@@ -94,7 +99,7 @@ public class MapViewModelTest {
         // Assert
         ArgumentCaptor<MapState> captor = ArgumentCaptor.forClass(MapState.class);
         Mockito.verify(mapRepository).saveMapState(captor.capture());
-        
+
         MapState savedState = captor.getValue();
         assertEquals(lat, savedState.latitude, 0.001);
         assertEquals(lng, savedState.longitude, 0.001);
@@ -133,5 +138,101 @@ public class MapViewModelTest {
         assertEquals("Latitude mismatch", expectedLat, captured.latitude, 0.0001);
         assertEquals("Longitude mismatch", expectedLng, captured.longitude, 0.0001);
         assertEquals("Zoom mismatch", expectedZoom, captured.zoomLevel, 0.0001);
+    }
+
+    // ─── addToFavorites ──────────────────────────────────────────────────────
+
+    @Test
+    public void addToFavorites_validPlace_callsRepositoryWithMappedData() {
+        // Arrange
+        Location loc = new Location(10.762, 106.682);
+        Place place = new Place("id1", "Café ABC", "123 Nguyen Hue", 4.5, loc);
+
+        // Act
+        viewModel.addToFavorites(place);
+
+        // Assert
+        ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
+        Mockito.verify(favoriteRepository).addFavorite(captor.capture());
+        Favorite saved = captor.getValue();
+        assertEquals("Café ABC", saved.name);
+        assertEquals("123 Nguyen Hue", saved.address);
+        assertEquals(10.762, saved.latitude, 0.001);
+        assertEquals(106.682, saved.longitude, 0.001);
+        assertEquals(4, saved.rating); // (int) 4.5 → 4
+    }
+
+    @Test
+    public void addToFavorites_placeWithNullLocation_callsRepositoryWithZeroCoordinates() {
+        // Arrange: place with no location
+        Place place = new Place("id2", "No Loc Place", "789 Unknown St", 3.0, null);
+
+        // Act
+        viewModel.addToFavorites(place);
+
+        // Assert: coordinates default to 0.0 when location is null
+        ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
+        Mockito.verify(favoriteRepository).addFavorite(captor.capture());
+        assertEquals(0.0, captor.getValue().latitude, 0.0001);
+        assertEquals(0.0, captor.getValue().longitude, 0.0001);
+    }
+
+    // ─── removeFromFavorites ─────────────────────────────────────────────────
+
+    @Test
+    public void removeFromFavorites_validFavorite_callsRepositoryDeleteFavorite() {
+        // Arrange
+        Favorite fav = new Favorite();
+        fav.id = 10;
+        fav.name = "BookCafe";
+        fav.address = "District 3";
+
+        // Act
+        viewModel.removeFromFavorites(fav);
+
+        // Assert
+        Mockito.verify(favoriteRepository).deleteFavorite(fav);
+    }
+
+    // ─── searchForPlaces ─────────────────────────────────────────────────────
+
+    @Test
+    public void searchForPlaces_validQuery_callsPlaceRepository() {
+        // Arrange
+        String query = "university";
+        Mockito.when(placeRepository.searchPlaces(query)).thenReturn(new MutableLiveData<>());
+        viewModel.searchResults.observeForever(list -> { });
+
+        // Act
+        viewModel.searchForPlaces(query);
+
+        // Assert
+        Mockito.verify(placeRepository).searchPlaces(query);
+    }
+
+    // ─── allFavorites ────────────────────────────────────────────────────────
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void allFavorites_whenRepositoryReturnsData_exposesDataThroughLiveData() {
+        // Arrange: create a ViewModel with a properly stubbed favorites LiveData
+        MutableLiveData<List<Favorite>> favsLiveData = new MutableLiveData<>();
+        Mockito.when(favoriteRepository.getAllFavorites()).thenReturn(favsLiveData);
+        MapViewModel vm = new MapViewModel(mapRepository, placeRepository, favoriteRepository);
+
+        Observer<List<Favorite>> observer = Mockito.mock(Observer.class);
+        vm.allFavorites.observeForever(observer);
+
+        Favorite fav = new Favorite();
+        fav.name = "My Favorite Place";
+
+        // Act
+        favsLiveData.setValue(Collections.singletonList(fav));
+
+        // Assert
+        ArgumentCaptor<List<Favorite>> captor = ArgumentCaptor.forClass(List.class);
+        Mockito.verify(observer).onChanged(captor.capture());
+        assertEquals(1, captor.getValue().size());
+        assertEquals("My Favorite Place", captor.getValue().get(0).name);
     }
 }
