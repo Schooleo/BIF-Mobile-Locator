@@ -175,7 +175,7 @@ public class SocialFragment extends Fragment {
         return Arrays.asList(
                 new Friend("Alice Nguyen", "A", getResources().getColor(com.bif.app.core.R.color.avatar_red, null), false),
                 new Friend("Bob Tran", "B", getResources().getColor(com.bif.app.core.R.color.avatar_blue, null), false),
-                new Friend("Charlie Le", "C", getResources().getColor(com.bif.app.core.R.color.avatar_green, null), false)
+                new Friend("Charlie Le", "C", getResources().getColor(com.bif.app.core.R.color.secondary_green, null), false)
         );
     }
 

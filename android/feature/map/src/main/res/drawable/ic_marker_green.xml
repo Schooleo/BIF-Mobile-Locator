@@ -12,7 +12,7 @@
 
     <!-- Main marker shape -->
     <path
-        android:fillColor="@color/button_color"
+        android:fillColor="@color/primary_green"
         android:pathData="M16,2 C9.4,2 4,7.4 4,14 C4,23 16,40 16,40 C16,40 28,23 28,14 C28,7.4 22.6,2 16,2 Z" />
 
     <!-- Inner white circle -->
@@ -24,7 +24,7 @@
 
     <!-- Inner green dot -->
     <path
-        android:fillColor="@color/button_color"
+        android:fillColor="@color/primary_green"
         android:pathData="M16,14 m-3,0
                           a3,3 0 1,0 6,0
                           a3,3 0 1,0 -6,0" />

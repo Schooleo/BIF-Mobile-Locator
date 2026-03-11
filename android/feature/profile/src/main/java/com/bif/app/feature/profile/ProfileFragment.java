@@ -17,6 +17,7 @@ import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 
 import com.bif.app.core.utils.UriUtils;
+import com.google.android.material.button.MaterialButton;
 
 import dagger.hilt.android.AndroidEntryPoint;
 
@@ -49,8 +50,17 @@ public class ProfileFragment extends Fragment {
         tvAvatar.setText("B");
         tvAvatar.setBackgroundTintList(ColorStateList.valueOf(0xFF2B7FFF));
 
+        // Display username and email
+        TextView tvName = view.findViewById(com.bif.app.core.R.id.tvName);
+        tvName.setText(R.string.bxa_user);
+
+        TextView tvEmail = view.findViewById(com.bif.app.core.R.id.tvEmail);
+        tvEmail.setText(R.string.user_email);
+
         // Edit profile button
-        view.findViewById(com.bif.app.core.R.id.btnEditProfile).setOnClickListener(v -> {
+        MaterialButton btnEditProfile = view.findViewById(com.bif.app.core.R.id.btnEditProfile);
+        btnEditProfile.setText(R.string.edit_profile);
+        btnEditProfile.setOnClickListener(v -> {
             // TODO: Navigate to edit profile screen
         });
     }
@@ -91,7 +101,6 @@ public class ProfileFragment extends Fragment {
         TextView titleDarkMode = menuDarkMode.findViewById(com.bif.app.core.R.id.tvTitle);
         SwitchCompat switchDarkMode = menuDarkMode.findViewById(com.bif.app.core.R.id.switchToggle);
 
-        iconDarkMode.setImageResource(com.bif.app.core.R.drawable.ic_dark_mode);
         titleDarkMode.setText(R.string.dark_mode);
         switchDarkMode.setVisibility(View.VISIBLE);
 
@@ -99,8 +108,14 @@ public class ProfileFragment extends Fragment {
         int currentNightMode = AppCompatDelegate.getDefaultNightMode();
         boolean isDarkMode = currentNightMode == AppCompatDelegate.MODE_NIGHT_YES;
         switchDarkMode.setChecked(isDarkMode);
+        iconDarkMode.setImageResource(isDarkMode
+                ? com.bif.app.core.R.drawable.ic_moon
+                : com.bif.app.core.R.drawable.ic_sun);
 
         switchDarkMode.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            iconDarkMode.setImageResource(isChecked
+                    ? com.bif.app.core.R.drawable.ic_moon
+                    : com.bif.app.core.R.drawable.ic_sun);
             if (isChecked) {
                 AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
             } else {
