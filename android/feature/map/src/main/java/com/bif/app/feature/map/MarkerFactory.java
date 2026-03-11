@@ -20,7 +20,8 @@ public class MarkerFactory {
 
     public enum MarkerType {
         CURRENT_LOCATION,  // Blue marker for user's current location
-        PLACE_LOCATION     // Green marker for searched/selected places
+        PLACE_LOCATION,     // Green marker for searched/selected places
+        FAVORITE_LOCATION  // Marker for favorite location
     }
 
     public static MarkerOptions createMarker(LatLng position) {
@@ -49,6 +50,9 @@ public class MarkerFactory {
         if (type == MarkerType.CURRENT_LOCATION) {
             // Blue marker for current location
             icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE);
+        } else if (type == MarkerType.FAVORITE_LOCATION) {
+            // Yellow marker for favorites
+            icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW);
         } else {
             // Green marker for places
             icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN);
@@ -58,7 +62,8 @@ public class MarkerFactory {
                 .position(position)
                 .title(title)
                 .snippet(snippet)
-                .icon(icon);
+                .icon(icon)
+                .zIndex(type == MarkerType.FAVORITE_LOCATION ? 1.0f : 0.0f);
     }
 
     /**
@@ -73,5 +78,12 @@ public class MarkerFactory {
      */
     public static MarkerOptions createPlaceMarker(LatLng position, String title) {
         return createMarker(position, title, null, MarkerType.PLACE_LOCATION);
+    }
+
+    /**
+     * Create a marker for favorite location (yellow)
+     */
+    public static MarkerOptions createFavoriteMarker(LatLng position, String title) {
+        return createMarker(position, title, "Saved in Favorites", MarkerType.FAVORITE_LOCATION);
     }
 }

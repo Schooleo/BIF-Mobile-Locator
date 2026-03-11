@@ -46,18 +46,47 @@ public class FavoriteAdapter extends RecyclerView.Adapter<FavoriteAdapter.Favori
     public void onBindViewHolder(@NonNull FavoriteViewHolder holder, int position) {
         Favorite item = favorites.get(position);
 
-        holder.tvAddress.setText("Address: "+ (item.address != null ? item.address : ""));
-        holder.tvDescription.setText("Description: "+ (item.description != null ? item.description : ""));
-        holder.tvNotes.setText("Notes: "+ (item.notes != null ? item.notes : ""));
+        // Name: use name if available, otherwise fall back to address as the title
+        String name = (item.name != null && !item.name.trim().isEmpty()) ? item.name : item.address;
+        holder.tvName.setText(name != null ? name : "");
+
+        // Address: only show as subtitle if it's different from what's used as the title
+        if (item.name != null && !item.name.trim().isEmpty()
+                && item.address != null && !item.address.trim().isEmpty()) {
+            holder.tvAddress.setText(item.address);
+            holder.tvAddress.setVisibility(android.view.View.VISIBLE);
+        } else {
+            holder.tvAddress.setVisibility(android.view.View.GONE);
+        }
+
+        // Rating
+        if (item.rating > 0) {
+            holder.tvRating.setText(String.format(java.util.Locale.getDefault(), "★ %d", item.rating));
+            holder.tvRating.setVisibility(android.view.View.VISIBLE);
+        } else {
+            holder.tvRating.setVisibility(android.view.View.GONE);
+        }
+
+        // Description
+        if (item.description != null && !item.description.trim().isEmpty()) {
+            holder.tvDescription.setText(item.description);
+            holder.tvDescription.setVisibility(android.view.View.VISIBLE);
+        } else {
+            holder.tvDescription.setVisibility(android.view.View.GONE);
+        }
+
+        // Notes
+        if (item.notes != null && !item.notes.trim().isEmpty()) {
+            holder.tvNotes.setText("Notes: " + item.notes);
+            holder.tvNotes.setVisibility(android.view.View.VISIBLE);
+        } else {
+            holder.tvNotes.setVisibility(android.view.View.GONE);
+        }
+
         holder.itemView.setOnClickListener(v -> listener.onFavoriteClicked(item));
         holder.btnRemove.setOnClickListener(v -> listener.onFavoriteRemoved(item));
 
-        if (item.imagePath != null && !item.imagePath.isEmpty()) {
-            // dùng tạm vì đang dùng mockdata
-            holder.imgFavorite.setImageResource(android.R.drawable.ic_menu_gallery);
-        } else {
-            holder.imgFavorite.setImageResource(android.R.drawable.ic_menu_gallery);
-        }
+        holder.imgFavorite.setImageResource(android.R.drawable.ic_menu_gallery);
     }
 
     public void submitList(List<Favorite> favorites) {
@@ -67,7 +96,9 @@ public class FavoriteAdapter extends RecyclerView.Adapter<FavoriteAdapter.Favori
 
     static class FavoriteViewHolder extends RecyclerView.ViewHolder {
         final ImageView imgFavorite;
+        final TextView tvName;
         final TextView tvAddress;
+        final TextView tvRating;
         final TextView tvDescription;
         final TextView tvNotes;
         final ImageButton btnRemove;
@@ -76,7 +107,9 @@ public class FavoriteAdapter extends RecyclerView.Adapter<FavoriteAdapter.Favori
             super(itemView);
 
             imgFavorite = itemView.findViewById(R.id.image_favorite);
+            tvName = itemView.findViewById(R.id.tv_item_name);
             tvAddress = itemView.findViewById(R.id.tv_item_address);
+            tvRating = itemView.findViewById(R.id.tv_item_rating);
             tvDescription = itemView.findViewById(R.id.tv_item_description);
             tvNotes = itemView.findViewById(R.id.tv_item_notes);
             btnRemove = itemView.findViewById(R.id.btn_remove);

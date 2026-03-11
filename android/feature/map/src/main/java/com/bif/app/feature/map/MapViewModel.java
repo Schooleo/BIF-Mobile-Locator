@@ -34,6 +34,8 @@ public class MapViewModel extends ViewModel {
     private final MutableLiveData<String> placesSearchQuery = new MutableLiveData<>();
     public final LiveData<List<Place>> searchResults;
 
+    public final LiveData<List<Favorite>> allFavorites;
+
     @Inject
     public MapViewModel(
             IMapRepository mapRepository,
@@ -47,6 +49,8 @@ public class MapViewModel extends ViewModel {
         this.searchResult = Transformations.switchMap(locationSearchQuery, placeRepository::searchLocation);
 
         this.searchResults = Transformations.switchMap(placesSearchQuery, placeRepository::searchPlaces);
+
+        this.allFavorites = favoriteRepository.getAllFavorites();
     }
 
     public void setStatusText(String text) {

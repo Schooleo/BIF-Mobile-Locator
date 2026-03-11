@@ -24,6 +24,7 @@ import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
+import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -41,6 +42,7 @@ import com.google.android.libraries.places.api.Places;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -56,17 +58,21 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     private MapViewModel viewModel;
     private BottomSheetBehavior<View> bottomSheetBehavior;
 
+    private List<Favorite> currentFavorites = new ArrayList<>();
+    private List<Marker> favoriteMarkers = new ArrayList<>();
+    private List<Marker> temporaryMarkers = new ArrayList<>();
+
     @Inject
     FusedLocationProviderClient fusedLocationClient;
 
     private final ActivityResultLauncher<String> requestPermissionLauncher =
-        registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
-            if (isGranted) {
-                enableMyLocationLayer();
-            } else {
-                viewModel.setStatusText("Permission denied. Cannot show current location.");
-            }
-        });
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+                if (isGranted) {
+                    enableMyLocationLayer();
+                } else {
+                    viewModel.setStatusText("Permission denied. Cannot show current location.");
+                }
+            });
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -131,14 +137,21 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         viewModel.statusText.observe(getViewLifecycleOwner(), text -> {
             if (text != null && !text.isEmpty()) {
                 android.widget.Toast.makeText(requireContext(), text, android.widget.Toast.LENGTH_SHORT).show();
+                viewModel.setStatusText(""); // Consume the event so it is not re-shown on navigation
             }
+        });
+
+        // Update favorites marker to changes
+        viewModel.allFavorites.observe(getViewLifecycleOwner(), favorites -> {
+            this.currentFavorites = favorites != null ? favorites : new ArrayList<>();
+            updateFavoriteMarkers();
         });
 
         // Observe the Multiple Places Search Results
         viewModel.searchResults.observe(getViewLifecycleOwner(), places -> {
             if (googleMap == null) return;
 
-            googleMap.clear(); // Remove old markers
+            clearTemporaryMarkers();
 
             if (places != null && !places.isEmpty()) {
                 com.google.android.gms.maps.model.LatLngBounds.Builder boundsBuilder =
@@ -156,6 +169,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
                         Marker marker = googleMap.addMarker(markerOptions);
                         if (marker != null) {
                             marker.setTag(place);
+                            temporaryMarkers.add(marker);
                         }
                         boundsBuilder.include(latLng);
                     }
@@ -174,12 +188,16 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         // Observe Single Location Search Result
         viewModel.searchResult.observe(getViewLifecycleOwner(), location -> {
             if (location != null && googleMap != null) {
-                googleMap.clear();
+                clearTemporaryMarkers();
 
                 LatLng target = new LatLng(location.latitude, location.longitude);
 
-                MarkerOptions marker = MarkerFactory.createMarker(target);
-                googleMap.addMarker(marker);
+                MarkerOptions markerOpt = MarkerFactory.createMarker(target);
+                Marker marker = googleMap.addMarker(markerOpt);
+
+                if(marker != null) {
+                    temporaryMarkers.add(marker); // [MỚI] Thêm vào list quản lý
+                }
 
                 googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(target, 15f));
                 viewModel.setStatusText("Location found");
@@ -196,9 +214,9 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         if (googleMap != null) {
             CameraPosition position = googleMap.getCameraPosition();
             viewModel.saveMapState(
-                position.target.latitude,
-                position.target.longitude,
-                position.zoom
+                    position.target.latitude,
+                    position.target.longitude,
+                    position.zoom
             );
         }
     }
@@ -208,15 +226,15 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         this.googleMap = map;
 
         int nightModeFlags = requireContext()
-            .getResources()
-            .getConfiguration().uiMode
+                .getResources()
+                .getConfiguration().uiMode
                 & Configuration.UI_MODE_NIGHT_MASK;
 
         // Load Dark Mode Maps Style
         if (nightModeFlags == Configuration.UI_MODE_NIGHT_YES) {
             try {
                 boolean success = googleMap.setMapStyle(
-                    MapStyleOptions.loadRawResourceStyle(requireContext(), R.raw.map_style_dark)
+                        MapStyleOptions.loadRawResourceStyle(requireContext(), R.raw.map_style_dark)
                 );
                 if (!success) {
                     Log.e("MapFragment", "Style parsing failed.");
@@ -242,10 +260,21 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
                 showPlaceBottomSheet(clickedPlace, requireView());
             }
+            else if (tag instanceof Favorite) {
+                // Convert Favorite to Place to re-use in UI BottomSheet
+                Favorite fav = (Favorite) tag;
+                Location loc = new Location(fav.latitude, fav.longitude);
+                com.bif.app.domain.model.Place mappedPlace = new com.bif.app.domain.model.Place(
+                        String.valueOf(fav.id), fav.name, fav.address, fav.rating, loc
+                );
+                googleMap.animateCamera(CameraUpdateFactory.newLatLng(marker.getPosition()));
+                showPlaceBottomSheet(mappedPlace, requireView());
+            }
             return true;
         });
 
         enableMyLocationLayer();
+        updateFavoriteMarkers();
 
         if (getArguments() != null) {
             String location = getArguments().getString("location");
@@ -325,12 +354,48 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
             bottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
         });
 
+        // Set initial button state based on whether the place is already a favorite
+        updateFavoriteButtonState(btnAddFavorite, findFavoriteForPlace(place) != null);
+
         // Handle "Add to Favorites"
-        // TODO: Handle "Remove from Favorites" when place is already added
         btnAddFavorite.setOnClickListener(v -> {
-            viewModel.addToFavorites(place);
-            viewModel.setStatusText(place.name + " added to Favorites!");
+            Favorite existing = findFavoriteForPlace(place);
+            if (existing != null) {
+                viewModel.removeFromFavorites(existing);
+                viewModel.setStatusText(place.name + " removed from Favorites!");
+                updateFavoriteButtonState(btnAddFavorite, false);
+            } else {
+                viewModel.addToFavorites(place);
+                viewModel.setStatusText(place.name + " added to Favorites!");
+                updateFavoriteButtonState(btnAddFavorite, true);
+            }
         });
+    }
+
+    /* Returns the Favorite matching the given place (by address or proximity), or null. */
+    private Favorite findFavoriteForPlace(com.bif.app.domain.model.Place place) {
+        for (Favorite fav : currentFavorites) {
+            if (place.address != null && !place.address.isEmpty()
+                    && place.address.equals(fav.address)) {
+                return fav;
+            }
+            if (place.location != null) {
+                double lat = fav.latitude - place.location.latitude;
+                double lng = fav.longitude - place.location.longitude;
+                if (Math.sqrt(lat * lat + lng * lng) < 0.0001) {
+                    return fav;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Tints the favorite button yellow when saved, green when not. */
+    private void updateFavoriteButtonState(ImageButton btn, boolean isFavorite) {
+        int color = isFavorite
+                ? android.graphics.Color.parseColor("#F0B100")   // yellow = saved
+                : android.graphics.Color.parseColor("#2ECC71");  // green  = not saved
+        btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(color));
     }
 
     private void fetchAddressAndShowDetails(LatLng latLng, String providedName) {
@@ -371,11 +436,12 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
                 // Switch to Main Thread to update the UI
                 requireActivity().runOnUiThread(() -> {
-                    googleMap.clear();
+                    clearTemporaryMarkers();
                     Marker marker = googleMap.addMarker(MarkerFactory.createMarker(latLng, clickedPlace.name, clickedPlace.address));
 
                     if (marker != null) {
                         marker.setTag(clickedPlace);
+                        temporaryMarkers.add(marker);
                     }
 
                     googleMap.animateCamera(CameraUpdateFactory.newLatLng(latLng));
@@ -393,9 +459,12 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
                         com.bif.app.domain.model.Place fallbackPlace = new com.bif.app.domain.model.Place(
                                 UUID.randomUUID().toString(), providedName, "Address unavailable", 0.0, loc);
 
-                        googleMap.clear();
+                        clearTemporaryMarkers();
                         Marker marker = googleMap.addMarker(MarkerFactory.createMarker(latLng, fallbackPlace.name, fallbackPlace.address));
-                        if (marker != null) marker.setTag(fallbackPlace);
+                        if (marker != null) {
+                            marker.setTag(fallbackPlace);
+                            temporaryMarkers.add(marker);
+                        }
 
                         googleMap.animateCamera(CameraUpdateFactory.newLatLng(latLng));
                         showPlaceBottomSheet(fallbackPlace, requireView());
@@ -406,5 +475,35 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
                 });
             }
         }).start();
+    }
+
+    // Delete all temporary markers when search/click
+    private void clearTemporaryMarkers() {
+        for (Marker m : temporaryMarkers) {
+            if (m != null) m.remove();
+        }
+        temporaryMarkers.clear();
+    }
+
+    // Return Favorite Markers
+    private void updateFavoriteMarkers() {
+        if (googleMap == null) return;
+
+        // Delete old markers
+        for (Marker m : favoriteMarkers) {
+            if (m != null) m.remove();
+        }
+        favoriteMarkers.clear();
+
+        // Redraw from latest data
+        for (Favorite fav : currentFavorites) {
+            LatLng pos = new LatLng(fav.latitude, fav.longitude);
+            MarkerOptions opt = MarkerFactory.createFavoriteMarker(pos, fav.name);
+            Marker m = googleMap.addMarker(opt);
+            if (m != null) {
+                m.setTag(fav); // Tag là Favorite
+                favoriteMarkers.add(m);
+            }
+        }
     }
 }

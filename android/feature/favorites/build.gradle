@@ -34,8 +34,12 @@ dependencies {
     implementation libs.navigation.runtime
     testImplementation libs.junit
     testImplementation libs.core.testing
+    testImplementation libs.mockito.core
+    testImplementation libs.mockito.inline
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
+    androidTestImplementation libs.hilt.android.testing
+    androidTestAnnotationProcessor libs.hilt.compiler
 
     // Hilt
     implementation libs.hilt.android
