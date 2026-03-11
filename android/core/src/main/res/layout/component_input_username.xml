@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<EditText xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/et_username"
+    android:layout_width="match_parent"
+    android:layout_height="48dp"
+    android:layout_marginBottom="12dp"
+    android:background="@drawable/bg_input_field"
+    android:hint="@string/username"
+    android:textColorHint="?attr/colorHintText"
+    android:textColor="?attr/colorInputText"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:inputType="textPersonName"
+    android:importantForAutofill="no"
+    android:maxLines="1"
+    tools:theme="@style/Theme.BIFLocator" />

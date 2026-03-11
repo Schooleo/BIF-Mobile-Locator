@@ -10,6 +10,9 @@
     <!-- Logo -->
     <include layout="@layout/component_logo" />
 
+    <!-- Username Input -->
+    <include layout="@layout/component_input_username" />
+
     <!-- Email Input -->
     <include layout="@layout/component_input_email" />
 
