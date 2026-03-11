@@ -1,6 +1,9 @@
 package com.bif.app.feature.profile;
 
+import static androidx.core.content.ContextCompat.getDrawable;
+
 import android.content.res.ColorStateList;
+import android.content.res.Resources;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;

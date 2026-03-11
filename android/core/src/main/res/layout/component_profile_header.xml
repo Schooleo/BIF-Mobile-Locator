@@ -60,16 +60,14 @@
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnEditProfile"
-        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
         android:layout_width="wrap_content"
         android:layout_height="42dp"
         android:layout_marginTop="16dp"
         android:paddingHorizontal="32dp"
         android:textSize="14sp"
         android:textColor="?attr/colorTextPrimary"
-        android:textStyle="bold"
         android:textAllCaps="false"
-        app:backgroundTint="#D1D1D6"
+        android:backgroundTint="?attr/colorListItemBackground"
         app:strokeWidth="0dp"
         app:cornerRadius="25dp"
         app:elevation="0dp"/>
