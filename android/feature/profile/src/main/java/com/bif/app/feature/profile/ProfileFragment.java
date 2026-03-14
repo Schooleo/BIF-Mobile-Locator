@@ -10,6 +10,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -19,7 +20,9 @@ import androidx.fragment.app.Fragment;
 import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 
+import com.bif.app.core.utils.DialogUtils;
 import com.bif.app.core.utils.UriUtils;
+import com.bif.app.core.utils.UserPreferences;
 import com.google.android.material.button.MaterialButton;
 
 import dagger.hilt.android.AndroidEntryPoint;
@@ -130,7 +133,17 @@ public class ProfileFragment extends Fragment {
     private void setupLogout(View view) {
         view.findViewById(R.id.btnLogout).setOnClickListener(v -> {
             // Clear user data and navigate to login
-            navController.navigate(UriUtils.buildUri(UriUtils.PathTo.LOGIN));
+            DialogUtils.showConfirmDialog(requireContext(),
+                "Logout",
+                "Are you sure you want to logout?",
+                "Logout",
+                "Cancel",
+                ()-> {
+                    UserPreferences.clearUser(requireContext());
+                    Toast.makeText(requireContext(), R.string.logout_success, Toast.LENGTH_SHORT).show();
+                    navController.navigate(UriUtils.buildUri(UriUtils.PathTo.LOGIN));
+                }
+            );
         });
     }
 }

@@ -54,4 +54,10 @@ public class UserPreferences {
         String encodedPassword = getPassword(context);
         return encoder.verify(password, encodedPassword);
     }
+
+    public static void clearUser(Context context){
+        getPrefs(context).edit()
+                .clear()
+                .apply();
+    }
 }
