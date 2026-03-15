@@ -6,11 +6,13 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
 import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -93,6 +95,7 @@ public class ProfileFragment extends Fragment {
 
             tvAvatar.setText(resolveAvatarInitial(username, email));
             tvName.setText(username);
+            tvEmail.setVisibility(View.VISIBLE);
             tvEmail.setText(email);
             bindAvatar(ivAvatarImage, tvAvatar, avatarUri);
 
@@ -100,6 +103,7 @@ public class ProfileFragment extends Fragment {
             btnEditProfile.setEnabled(true);
             btnEditProfile.setClickable(true);
             btnEditProfile.setOnClickListener(v -> showEditProfileDialog(username));
+            applyLoggedInButtonStyle(btnEditProfile);
 
             sectionAccount.setVisibility(View.VISIBLE);
             menuPersonalInfoView.setVisibility(View.VISIBLE);
@@ -108,9 +112,9 @@ public class ProfileFragment extends Fragment {
             return;
         }
 
-        tvAvatar.setText(R.string.guest_status);
-        tvName.setText(R.string.guest_profile_title);
-        tvEmail.setText(R.string.guest_profile_subtitle);
+        tvAvatar.setText("G");
+        tvName.setText(R.string.guest_status);
+        tvEmail.setVisibility(View.GONE);
         ivAvatarImage.setImageDrawable(null);
         ivAvatarImage.setVisibility(View.GONE);
         tvAvatar.setVisibility(View.VISIBLE);
@@ -119,6 +123,7 @@ public class ProfileFragment extends Fragment {
         btnEditProfile.setText(R.string.log_in);
         btnEditProfile.setEnabled(true);
         btnEditProfile.setClickable(true);
+        applyGuestLoginButtonStyle(btnEditProfile);
         btnEditProfile.setOnClickListener(v -> navController.navigate(UriUtils.buildUri(UriUtils.PathTo.LOGIN)));
 
         sectionAccount.setVisibility(View.GONE);
@@ -295,5 +300,39 @@ public class ProfileFragment extends Fragment {
             button.setBackgroundTintList(ColorStateList.valueOf(tintColor));
             button.setTextColor(ContextCompat.getColor(requireContext(), com.bif.app.core.R.color.white));
         }
+    }
+
+    private void applyLoggedInButtonStyle(MaterialButton button) {
+        ViewGroup.LayoutParams baseParams = button.getLayoutParams();
+        if (baseParams instanceof LinearLayout.LayoutParams) {
+            LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) baseParams;
+            params.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+            params.gravity = Gravity.CENTER_HORIZONTAL;
+            params.leftMargin = 0;
+            params.rightMargin = 0;
+            button.setLayoutParams(params);
+        }
+        applyEditProfileButtonTint(button);
+    }
+
+    private void applyGuestLoginButtonStyle(MaterialButton button) {
+        ViewGroup.LayoutParams baseParams = button.getLayoutParams();
+        if (baseParams instanceof LinearLayout.LayoutParams) {
+            LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) baseParams;
+            params.width = ViewGroup.LayoutParams.MATCH_PARENT;
+            int height = (int) (52 * requireContext().getResources().getDisplayMetrics().density);
+            params.height = height;
+            params.gravity = Gravity.CENTER_HORIZONTAL;
+            int horizontalMargin = (int) (24 * requireContext().getResources().getDisplayMetrics().density);
+            params.leftMargin = horizontalMargin;
+            params.rightMargin = horizontalMargin;
+            button.setLayoutParams(params);
+        }
+        int green = ContextCompat.getColor(requireContext(), com.bif.app.core.R.color.primary_green);
+        button.setBackgroundTintList(ColorStateList.valueOf(green));
+        button.setTextColor(ContextCompat.getColor(requireContext(), com.bif.app.core.R.color.white));
+        button.setTextSize(16f);
+        int verticalPadding = (int) (12 * requireContext().getResources().getDisplayMetrics().density);
+        button.setPadding(button.getPaddingLeft(), verticalPadding, button.getPaddingRight(), verticalPadding);
     }
 }
