@@ -1,18 +1,27 @@
 package com.bif.app.feature.profile;
 
 import android.content.res.ColorStateList;
+import android.content.res.Configuration;
+import android.net.Uri;
 import android.os.Bundle;
+import android.text.InputType;
+import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.SwitchCompat;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
@@ -28,6 +37,16 @@ import dagger.hilt.android.AndroidEntryPoint;
 public class ProfileFragment extends Fragment {
 
     private NavController navController;
+
+    private final ActivityResultLauncher<String> pickAvatarLauncher =
+            registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
+                if (uri == null || !isAdded() || getView() == null) {
+                    return;
+                }
+                UserPreferences.setAvatarUri(requireContext(), uri.toString());
+                bindProfileState(getView());
+                Toast.makeText(requireContext(), R.string.avatar_updated, Toast.LENGTH_SHORT).show();
+            });
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
@@ -51,13 +70,17 @@ public class ProfileFragment extends Fragment {
         boolean isLoggedIn = UserPreferences.isLoggedIn(requireContext());
         String username = getStoredValue(UserPreferences.getUsername(requireContext()));
         String email = getStoredValue(UserPreferences.getEmail(requireContext()));
+        String avatarUri = UserPreferences.getAvatarUri(requireContext());
 
         TextView tvAvatar = view.findViewById(com.bif.app.core.R.id.tvAvatar);
         tvAvatar.setBackgroundTintList(ColorStateList.valueOf(0xFF2B7FFF));
+        ImageView ivAvatarImage = view.findViewById(com.bif.app.core.R.id.ivAvatarImage);
+        View btnAvatarCamera = view.findViewById(com.bif.app.core.R.id.btnAvatarCamera);
 
         TextView tvName = view.findViewById(com.bif.app.core.R.id.tvName);
         TextView tvEmail = view.findViewById(com.bif.app.core.R.id.tvEmail);
         MaterialButton btnEditProfile = view.findViewById(com.bif.app.core.R.id.btnEditProfile);
+        applyEditProfileButtonTint(btnEditProfile);
 
         View sectionAccount = view.findViewById(R.id.sectionAccount);
         View menuPersonalInfoView = view.findViewById(R.id.menuPersonalInfo);
@@ -65,13 +88,18 @@ public class ProfileFragment extends Fragment {
         View logoutButton = view.findViewById(R.id.btnLogout);
 
         if (isLoggedIn) {
+            btnAvatarCamera.setVisibility(View.VISIBLE);
+            btnAvatarCamera.setOnClickListener(v -> pickAvatarLauncher.launch("image/*"));
+
             tvAvatar.setText(resolveAvatarInitial(username, email));
             tvName.setText(username);
             tvEmail.setText(email);
+            bindAvatar(ivAvatarImage, tvAvatar, avatarUri);
 
-            btnEditProfile.setText(R.string.signed_in_badge);
-            btnEditProfile.setEnabled(false);
-            btnEditProfile.setClickable(false);
+            btnEditProfile.setText(R.string.edit_profile);
+            btnEditProfile.setEnabled(true);
+            btnEditProfile.setClickable(true);
+            btnEditProfile.setOnClickListener(v -> showEditProfileDialog(username));
 
             sectionAccount.setVisibility(View.VISIBLE);
             menuPersonalInfoView.setVisibility(View.VISIBLE);
@@ -83,6 +111,10 @@ public class ProfileFragment extends Fragment {
         tvAvatar.setText(R.string.guest_status);
         tvName.setText(R.string.guest_profile_title);
         tvEmail.setText(R.string.guest_profile_subtitle);
+        ivAvatarImage.setImageDrawable(null);
+        ivAvatarImage.setVisibility(View.GONE);
+        tvAvatar.setVisibility(View.VISIBLE);
+        btnAvatarCamera.setVisibility(View.GONE);
 
         btnEditProfile.setText(R.string.log_in);
         btnEditProfile.setEnabled(true);
@@ -186,5 +218,82 @@ public class ProfileFragment extends Fragment {
             return email.substring(0, 1).toUpperCase();
         }
         return getString(R.string.guest_status);
+    }
+
+    private void bindAvatar(ImageView ivAvatarImage, TextView tvAvatar, String avatarUriString) {
+        if (avatarUriString == null || avatarUriString.trim().isEmpty()) {
+            ivAvatarImage.setImageDrawable(null);
+            ivAvatarImage.setVisibility(View.GONE);
+            tvAvatar.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        try {
+            ivAvatarImage.setImageURI(Uri.parse(avatarUriString));
+            if (ivAvatarImage.getDrawable() != null) {
+                ivAvatarImage.setVisibility(View.VISIBLE);
+                tvAvatar.setVisibility(View.INVISIBLE);
+                return;
+            }
+        } catch (Exception ignored) {
+            // Fall back to initial avatar when image cannot be resolved.
+        }
+
+        ivAvatarImage.setImageDrawable(null);
+        ivAvatarImage.setVisibility(View.GONE);
+        tvAvatar.setVisibility(View.VISIBLE);
+    }
+
+    private void showEditProfileDialog(String currentUsername) {
+        EditText input = new EditText(requireContext());
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
+        input.setHint(R.string.edit_profile_hint);
+        if (!currentUsername.equals(getString(R.string.not_available))) {
+            input.setText(currentUsername);
+            input.setSelection(currentUsername.length());
+        }
+
+        int horizontalPadding = (int) (16 * requireContext().getResources().getDisplayMetrics().density);
+        input.setPadding(horizontalPadding, input.getPaddingTop(), horizontalPadding, input.getPaddingBottom());
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle(R.string.edit_profile_dialog_title)
+                .setView(input)
+                .setPositiveButton(R.string.save, (dialog, which) -> {
+                    String updatedUsername = input.getText().toString().trim();
+                    if (updatedUsername.isEmpty()) {
+                        Toast.makeText(requireContext(), R.string.username_required, Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    UserPreferences.setUsername(requireContext(), updatedUsername);
+                    if (getView() != null) {
+                        bindProfileState(getView());
+                    }
+                    Toast.makeText(requireContext(), R.string.profile_updated, Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    private void applyEditProfileButtonTint(MaterialButton button) {
+        boolean isDarkMode = (getResources().getConfiguration().uiMode
+                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+
+        if (!isDarkMode) {
+            int lightGray = ContextCompat.getColor(requireContext(), com.bif.app.core.R.color.light_gray);
+            button.setBackgroundTintList(ColorStateList.valueOf(lightGray));
+            button.setTextColor(ContextCompat.getColor(requireContext(), com.bif.app.core.R.color.black));
+            return;
+        }
+
+        TypedValue typedValue = new TypedValue();
+        if (requireContext().getTheme().resolveAttribute(com.bif.app.core.R.attr.colorListItemBackground,
+                typedValue, true)) {
+            int tintColor = typedValue.resourceId != 0
+                    ? ContextCompat.getColor(requireContext(), typedValue.resourceId)
+                    : typedValue.data;
+            button.setBackgroundTintList(ColorStateList.valueOf(tintColor));
+            button.setTextColor(ContextCompat.getColor(requireContext(), com.bif.app.core.R.color.white));
+        }
     }
 }

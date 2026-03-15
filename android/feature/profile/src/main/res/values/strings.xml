@@ -21,4 +21,11 @@
     <string name="log_in">Log In</string>
     <string name="not_available">Not available</string>
     <string name="signed_in_badge">Authenticated Account</string>
+    <string name="edit_profile_dialog_title">Edit Profile</string>
+    <string name="edit_profile_hint">Enter your username</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="username_required">Username cannot be empty</string>
+    <string name="profile_updated">Profile updated successfully</string>
+    <string name="avatar_updated">Avatar updated successfully</string>
 </resources>
