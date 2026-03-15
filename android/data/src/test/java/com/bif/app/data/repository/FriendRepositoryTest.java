@@ -64,7 +64,7 @@ public class FriendRepositoryTest {
     @Test
     public void addFriend_ValidFriend_CallsDaoInsertOnBackgroundThread() {
         // Arrange
-        Friend domainItem = new Friend("Khánh", "K", 0xFFFFFF, true);
+        Friend domainItem = new Friend(0,"Khánh", "K", 0xFFFFFF, true);
 
         // Act
         repository.addFriend(domainItem);
@@ -76,7 +76,7 @@ public class FriendRepositoryTest {
 
     @Test
     public void deleteFriend_ValidFriend_CallsDaoDeleteOnBackgroundThread() {
-        Friend domainItem = new Friend("Nam", "N", 0x000000, false);
+        Friend domainItem = new Friend(2,"Nam", "N", 0x000000, false);
 
         repository.deleteFriend(domainItem);
 

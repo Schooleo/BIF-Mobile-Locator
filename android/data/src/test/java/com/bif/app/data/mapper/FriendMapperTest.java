@@ -33,7 +33,7 @@ public class FriendMapperTest {
 
     @Test
     public void toEntity_ValidDomain_ReturnsMappedEntity() {
-        Friend domain = new Friend("Bình", "B", 54321, false);
+        Friend domain = new Friend(2,"Bình", "B", 54321, false);
 
         FriendEntity entity = FriendMapper.toEntity(domain);
 

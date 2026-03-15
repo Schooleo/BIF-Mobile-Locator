@@ -56,7 +56,7 @@ public class SocialViewModelTest {
 
     @Test
     public void deleteFriend_ValidFriend_CallsRepositoryDelete() {
-        Friend friendToDelete = new Friend("Huy", "H", 0x111111, false);
+        Friend friendToDelete = new Friend(1,"Huy", "H", 0x111111, false);
 
         viewModel.deleteFriend(friendToDelete);
 

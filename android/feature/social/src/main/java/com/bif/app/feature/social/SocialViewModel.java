@@ -28,7 +28,7 @@ public class SocialViewModel extends ViewModel {
     }
 
     public void addFriend(String name, String avatarLetter, int avatarColor) {
-        Friend newFriend = new Friend(name, avatarLetter, avatarColor, true);
+        Friend newFriend = new Friend(0, name, avatarLetter, avatarColor, true);
         friendRepository.addFriend(newFriend);
     }
 
