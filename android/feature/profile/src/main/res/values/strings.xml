@@ -10,4 +10,22 @@
     <string name="bxa_user">BXA User</string>
     <string name="user_email">user@example.com</string>
     <string name="logout_success">Logout Successful</string>
+    <string name="profile_metadata">Profile Metadata</string>
+    <string name="auth_status_label">Authentication Status</string>
+    <string name="username_label">Username</string>
+    <string name="email_label">Email</string>
+    <string name="logged_in_status">Signed In</string>
+    <string name="guest_status">Guest</string>
+    <string name="guest_profile_title">Guest User</string>
+    <string name="guest_profile_subtitle">Sign in to view your saved account details.</string>
+    <string name="log_in">Log In</string>
+    <string name="not_available">Not available</string>
+    <string name="signed_in_badge">Authenticated Account</string>
+    <string name="edit_profile_dialog_title">Edit Profile</string>
+    <string name="edit_profile_hint">Enter your username</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="username_required">Username cannot be empty</string>
+    <string name="profile_updated">Profile updated successfully</string>
+    <string name="avatar_updated">Avatar updated successfully</string>
 </resources>

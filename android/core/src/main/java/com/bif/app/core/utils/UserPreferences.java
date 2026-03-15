@@ -9,6 +9,7 @@ public class UserPreferences {
     private static final String KEY_USERNAME = "username";
     private static final String KEY_PASSWORD = "password";
     private static final String KEY_EMAIL = "email";
+    private static final String KEY_AVATAR_URI = "avatar_uri";
     private static final String KEY_IS_LOGGED_IN = "is_logged_in";
 
     private static final IPasswordEncoder encoder = new BcryptPasswordEncoder();
@@ -38,6 +39,22 @@ public class UserPreferences {
 
     public static String getEmail(Context context) {
         return getPrefs(context).getString(KEY_EMAIL, "");
+    }
+
+    public static void setUsername(Context context, String username) {
+        getPrefs(context).edit()
+                .putString(KEY_USERNAME, username)
+                .apply();
+    }
+
+    public static String getAvatarUri(Context context) {
+        return getPrefs(context).getString(KEY_AVATAR_URI, "");
+    }
+
+    public static void setAvatarUri(Context context, String avatarUri) {
+        getPrefs(context).edit()
+                .putString(KEY_AVATAR_URI, avatarUri)
+                .apply();
     }
 
     public static boolean isLoggedIn(Context context) {
