@@ -1,9 +1,6 @@
 package com.bif.app.feature.profile;
 
-import static androidx.core.content.ContextCompat.getDrawable;
-
 import android.content.res.ColorStateList;
-import android.content.res.Resources;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -43,32 +40,69 @@ public class ProfileFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         navController = Navigation.findNavController(view);
 
-        setupHeader(view);
+        bindProfileState(view);
         setupSections(view);
         setupMenuItems(view);
         setupDarkModeToggle(view);
         setupLogout(view);
     }
 
-    private void setupHeader(View view) {
-        // Setup avatar with initial
+    private void bindProfileState(View view) {
+        boolean isLoggedIn = UserPreferences.isLoggedIn(requireContext());
+        String username = getStoredValue(UserPreferences.getUsername(requireContext()));
+        String email = getStoredValue(UserPreferences.getEmail(requireContext()));
+
         TextView tvAvatar = view.findViewById(com.bif.app.core.R.id.tvAvatar);
-        tvAvatar.setText("B");
         tvAvatar.setBackgroundTintList(ColorStateList.valueOf(0xFF2B7FFF));
 
-        // Display username and email
         TextView tvName = view.findViewById(com.bif.app.core.R.id.tvName);
-        tvName.setText(R.string.bxa_user);
-
         TextView tvEmail = view.findViewById(com.bif.app.core.R.id.tvEmail);
-        tvEmail.setText(R.string.user_email);
-
-        // Edit profile button
         MaterialButton btnEditProfile = view.findViewById(com.bif.app.core.R.id.btnEditProfile);
-        btnEditProfile.setText(R.string.edit_profile);
-        btnEditProfile.setOnClickListener(v -> {
-            // TODO: Navigate to edit profile screen
-        });
+
+        TextView tvAuthStatusValue = view.findViewById(R.id.tvAuthStatusValue);
+        TextView tvUsernameValue = view.findViewById(R.id.tvUsernameValue);
+        TextView tvEmailValue = view.findViewById(R.id.tvEmailValue);
+
+        View sectionAccount = view.findViewById(R.id.sectionAccount);
+        View menuPersonalInfo = view.findViewById(R.id.menuPersonalInfo);
+        View menuPrivacySecurity = view.findViewById(R.id.menuPrivacySecurity);
+        View logoutButton = view.findViewById(R.id.btnLogout);
+
+        if (isLoggedIn) {
+            tvAvatar.setText(resolveAvatarInitial(username, email));
+            tvName.setText(username);
+            tvEmail.setText(email);
+            tvAuthStatusValue.setText(R.string.logged_in_status);
+            tvUsernameValue.setText(username);
+            tvEmailValue.setText(email);
+
+            btnEditProfile.setText(R.string.signed_in_badge);
+            btnEditProfile.setEnabled(false);
+            btnEditProfile.setClickable(false);
+
+            sectionAccount.setVisibility(View.VISIBLE);
+            menuPersonalInfo.setVisibility(View.VISIBLE);
+            menuPrivacySecurity.setVisibility(View.VISIBLE);
+            logoutButton.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        tvAvatar.setText(R.string.guest_status);
+        tvName.setText(R.string.guest_profile_title);
+        tvEmail.setText(R.string.guest_profile_subtitle);
+        tvAuthStatusValue.setText(R.string.guest_status);
+        tvUsernameValue.setText(R.string.not_available);
+        tvEmailValue.setText(R.string.not_available);
+
+        btnEditProfile.setText(R.string.log_in);
+        btnEditProfile.setEnabled(true);
+        btnEditProfile.setClickable(true);
+        btnEditProfile.setOnClickListener(v -> navController.navigate(UriUtils.buildUri(UriUtils.PathTo.LOGIN)));
+
+        sectionAccount.setVisibility(View.GONE);
+        menuPersonalInfo.setVisibility(View.GONE);
+        menuPrivacySecurity.setVisibility(View.GONE);
+        logoutButton.setVisibility(View.GONE);
     }
 
     private void setupSections(View view) {
@@ -145,5 +179,23 @@ public class ProfileFragment extends Fragment {
                 }
             );
         });
+    }
+
+    private String getStoredValue(String value) {
+        if (value == null) {
+            return getString(R.string.not_available);
+        }
+        String trimmedValue = value.trim();
+        return trimmedValue.isEmpty() ? getString(R.string.not_available) : trimmedValue;
+    }
+
+    private String resolveAvatarInitial(String username, String email) {
+        if (!username.equals(getString(R.string.not_available))) {
+            return username.substring(0, 1).toUpperCase();
+        }
+        if (!email.equals(getString(R.string.not_available))) {
+            return email.substring(0, 1).toUpperCase();
+        }
+        return getString(R.string.guest_status);
     }
 }
