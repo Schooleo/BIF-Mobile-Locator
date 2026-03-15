@@ -59,12 +59,8 @@ public class ProfileFragment extends Fragment {
         TextView tvEmail = view.findViewById(com.bif.app.core.R.id.tvEmail);
         MaterialButton btnEditProfile = view.findViewById(com.bif.app.core.R.id.btnEditProfile);
 
-        TextView tvAuthStatusValue = view.findViewById(R.id.tvAuthStatusValue);
-        TextView tvUsernameValue = view.findViewById(R.id.tvUsernameValue);
-        TextView tvEmailValue = view.findViewById(R.id.tvEmailValue);
-
         View sectionAccount = view.findViewById(R.id.sectionAccount);
-        View menuPersonalInfo = view.findViewById(R.id.menuPersonalInfo);
+        View menuPersonalInfoView = view.findViewById(R.id.menuPersonalInfo);
         View menuPrivacySecurity = view.findViewById(R.id.menuPrivacySecurity);
         View logoutButton = view.findViewById(R.id.btnLogout);
 
@@ -72,16 +68,13 @@ public class ProfileFragment extends Fragment {
             tvAvatar.setText(resolveAvatarInitial(username, email));
             tvName.setText(username);
             tvEmail.setText(email);
-            tvAuthStatusValue.setText(R.string.logged_in_status);
-            tvUsernameValue.setText(username);
-            tvEmailValue.setText(email);
 
             btnEditProfile.setText(R.string.signed_in_badge);
             btnEditProfile.setEnabled(false);
             btnEditProfile.setClickable(false);
 
             sectionAccount.setVisibility(View.VISIBLE);
-            menuPersonalInfo.setVisibility(View.VISIBLE);
+            menuPersonalInfoView.setVisibility(View.VISIBLE);
             menuPrivacySecurity.setVisibility(View.VISIBLE);
             logoutButton.setVisibility(View.VISIBLE);
             return;
@@ -90,9 +83,6 @@ public class ProfileFragment extends Fragment {
         tvAvatar.setText(R.string.guest_status);
         tvName.setText(R.string.guest_profile_title);
         tvEmail.setText(R.string.guest_profile_subtitle);
-        tvAuthStatusValue.setText(R.string.guest_status);
-        tvUsernameValue.setText(R.string.not_available);
-        tvEmailValue.setText(R.string.not_available);
 
         btnEditProfile.setText(R.string.log_in);
         btnEditProfile.setEnabled(true);
@@ -100,7 +90,7 @@ public class ProfileFragment extends Fragment {
         btnEditProfile.setOnClickListener(v -> navController.navigate(UriUtils.buildUri(UriUtils.PathTo.LOGIN)));
 
         sectionAccount.setVisibility(View.GONE);
-        menuPersonalInfo.setVisibility(View.GONE);
+        menuPersonalInfoView.setVisibility(View.GONE);
         menuPrivacySecurity.setVisibility(View.GONE);
         logoutButton.setVisibility(View.GONE);
     }
@@ -116,13 +106,12 @@ public class ProfileFragment extends Fragment {
     private void setupMenuItems(View view) {
         // Personal Information
         View menuPersonalInfo = view.findViewById(R.id.menuPersonalInfo);
-        ImageView iconPersonalInfo = menuPersonalInfo.findViewById(com.bif.app.core.R.id.ivIcon);
-        TextView titlePersonalInfo = menuPersonalInfo.findViewById(com.bif.app.core.R.id.tvTitle);
-        iconPersonalInfo.setImageResource(com.bif.app.core.R.drawable.ic_person);
-        titlePersonalInfo.setText(R.string.personal_information);
-        menuPersonalInfo.setOnClickListener(v -> {
-            // TODO: Navigate to personal information screen
-        });
+        ((android.widget.ImageView) menuPersonalInfo.findViewById(com.bif.app.core.R.id.ivIcon))
+            .setImageResource(com.bif.app.core.R.drawable.ic_person);
+        ((android.widget.TextView) menuPersonalInfo.findViewById(com.bif.app.core.R.id.tvTitle))
+            .setText(R.string.personal_information);
+        menuPersonalInfo.setOnClickListener(v ->
+            navController.navigate(UriUtils.buildUri(UriUtils.PathTo.PERSONAL_INFO)));
 
         // Privacy & Security
         View menuPrivacySecurity = view.findViewById(R.id.menuPrivacySecurity);

@@ -14,7 +14,8 @@ public class UriUtils {
         SOCIAL,
         PROFILE,
         LOGIN,
-        REGISTER
+        REGISTER,
+        PERSONAL_INFO
     }
 
     public static Uri buildUri(String scheme, String authority, String path) {
@@ -46,6 +47,8 @@ public class UriUtils {
                 return buildUri("/login");
             case REGISTER:
                 return buildUri("/register");
+            case PERSONAL_INFO:
+                return buildUri("/profile/personal-info");
             case MAP:
             default:
                 return buildUri(defaultPath);
