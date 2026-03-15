@@ -4,19 +4,16 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.ImageButton;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.bif.app.feature.social.R;
+import com.bif.app.core.utils.DialogUtils;
 import com.bif.app.domain.model.Friend;
 import com.bif.app.domain.model.Group;
 import com.google.android.material.tabs.TabLayout;
@@ -24,12 +21,16 @@ import com.google.android.material.tabs.TabLayout;
 import java.util.Arrays;
 import java.util.List;
 
+import dagger.hilt.android.AndroidEntryPoint;
+
+@AndroidEntryPoint
 public class SocialFragment extends Fragment {
 
     private TabLayout tabLayout;
     private RecyclerView recyclerView;
     private FriendsAdapter friendsAdapter;
     private GroupsAdapter groupsAdapter;
+    private SocialViewModel viewModel;
 
     @Nullable
     @Override
@@ -41,11 +42,15 @@ public class SocialFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        viewModel = new ViewModelProvider(this).get(SocialViewModel.class);
+
         tabLayout = view.findViewById(R.id.tab_layout);
         recyclerView = view.findViewById(R.id.recycler_view);
 
         setupRecyclerView();
         setupTabs();
+
+        observeViewModel();
     }
 
     private void setupRecyclerView() {
@@ -60,7 +65,15 @@ public class SocialFragment extends Fragment {
 
             @Override
             public void onDeleteFriendClick(Friend friend, int position) {
-                Toast.makeText(requireContext(), "Delete " + friend.getName(), Toast.LENGTH_SHORT).show();
+                DialogUtils.showConfirmDialog(requireContext(),
+                        "Delete " + friend.getName(),
+                        "Are you sure you want to delete " + friend.getName() + "?",
+                        "Delete",
+                        "Cancel",
+                        () -> {
+                            viewModel.deleteFriend(friend);
+                            Toast.makeText(requireContext(), "Delete " + friend.getName(), Toast.LENGTH_SHORT).show();
+                        });
             }
         });
 
@@ -77,9 +90,15 @@ public class SocialFragment extends Fragment {
             }
         });
 
-        // Set initial data and adapter (Friends)
-        friendsAdapter.setFriends(getSampleFriends());
         recyclerView.setAdapter(friendsAdapter);
+    }
+
+    private void observeViewModel() {
+        viewModel.getFriends().observe(getViewLifecycleOwner(), friends -> {
+            if (tabLayout.getSelectedTabPosition() == 0) {
+                friendsAdapter.setFriends(friends);
+            }
+        });
     }
 
     private void setupTabs() {
@@ -88,7 +107,7 @@ public class SocialFragment extends Fragment {
             public void onTabSelected(TabLayout.Tab tab) {
                 if (tab.getPosition() == 0) {
                     // Friends Tab
-                    friendsAdapter.setFriends(getSampleFriends());
+                    friendsAdapter.setFriends(viewModel.getFriends().getValue());
                     recyclerView.setAdapter(friendsAdapter);
                 } else {
                     // Groups Tab
@@ -108,74 +127,38 @@ public class SocialFragment extends Fragment {
     }
 
     private void showAddFriendDialog() {
-        View dialogView = LayoutInflater.from(requireContext())
-                .inflate(R.layout.dialog_add_friend, null);
-
-        AlertDialog dialog = new AlertDialog.Builder(requireContext())
-                .setView(dialogView)
-                .create();
-
-        // Make dialog background transparent
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-        }
-
-        ImageButton btnClose = dialogView.findViewById(R.id.btn_close);
-        EditText etSearch = dialogView.findViewById(R.id.et_search);
-        Button btnAddFriend = dialogView.findViewById(R.id.btn_add_friend);
-
-        btnClose.setOnClickListener(v -> dialog.dismiss());
-
-        btnAddFriend.setOnClickListener(v -> {
-            String searchText = etSearch.getText().toString();
-            if (!searchText.isEmpty()) {
-                Toast.makeText(requireContext(), "Adding friend: " + searchText, Toast.LENGTH_SHORT).show();
-                dialog.dismiss();
-            } else {
-                Toast.makeText(requireContext(), "Please enter a name or ID", Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        dialog.show();
+        DialogUtils.showCustomInputDialog(
+                requireContext(),
+                R.layout.dialog_add_friend,
+                R.id.btn_add_friend,
+                R.id.et_search,
+                R.id.btn_close,
+                inputText -> {
+                    if (!inputText.isEmpty()) {
+                        int color = getResources().getColor(com.bif.app.core.R.color.avatar_purple, null);
+                        viewModel.addFriend(inputText, inputText.substring(0, 1).toUpperCase(), color);
+                        Toast.makeText(requireContext(), "Added friend: " + inputText, Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(requireContext(), "Please enter a name", Toast.LENGTH_SHORT).show();
+                    }
+                }
+        );
     }
 
     private void showCreateGroupDialog() {
-        View dialogView = LayoutInflater.from(requireContext())
-                .inflate(R.layout.dialog_create_group, null);
-
-        AlertDialog dialog = new AlertDialog.Builder(requireContext())
-                .setView(dialogView)
-                .create();
-
-        // Make dialog background transparent
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-        }
-
-        ImageButton btnClose = dialogView.findViewById(R.id.btn_close);
-        EditText etSearch = dialogView.findViewById(R.id.et_search);
-        Button btnCreateGroup = dialogView.findViewById(R.id.btn_create_group);
-
-        btnClose.setOnClickListener(v -> dialog.dismiss());
-
-        btnCreateGroup.setOnClickListener(v -> {
-            String searchText = etSearch.getText().toString();
-            if (!searchText.isEmpty()) {
-                Toast.makeText(requireContext(), "Creating group: " + searchText, Toast.LENGTH_SHORT).show();
-                dialog.dismiss();
-            } else {
-                Toast.makeText(requireContext(), "Please enter a name or ID", Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        dialog.show();
-    }
-
-    private List<Friend> getSampleFriends() {
-        return Arrays.asList(
-                new Friend("Alice Nguyen", "A", getResources().getColor(com.bif.app.core.R.color.avatar_red, null), false),
-                new Friend("Bob Tran", "B", getResources().getColor(com.bif.app.core.R.color.avatar_blue, null), false),
-                new Friend("Charlie Le", "C", getResources().getColor(com.bif.app.core.R.color.secondary_green, null), false)
+        DialogUtils.showCustomInputDialog(
+                requireContext(),
+                R.layout.dialog_create_group,
+                R.id.btn_create_group,
+                R.id.et_search,
+                R.id.btn_close,
+                inputText -> {
+                    if (!inputText.isEmpty()) {
+                        Toast.makeText(requireContext(), "Created group: " + inputText, Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(requireContext(), "Please enter a name", Toast.LENGTH_SHORT).show();
+                    }
+                }
         );
     }
 

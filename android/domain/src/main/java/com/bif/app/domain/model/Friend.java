@@ -1,12 +1,14 @@
 package com.bif.app.domain.model;
 
 public class Friend {
+    private int id;
     private String name;
     private String avatarLetter;
     private int avatarColor;
     private boolean isOnline;
 
-    public Friend(String name, String avatarLetter, int avatarColor, boolean isOnline) {
+    public Friend(int id, String name, String avatarLetter, int avatarColor, boolean isOnline) {
+        this.id = id;
         this.name = name;
         this.avatarLetter = avatarLetter;
         this.avatarColor = avatarColor;
@@ -28,4 +30,6 @@ public class Friend {
     public boolean isOnline() {
         return isOnline;
     }
+
+    public int getId() { return id; }
 }

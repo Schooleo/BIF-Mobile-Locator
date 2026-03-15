@@ -9,4 +9,5 @@
     <string name="log_out">Log Out</string>
     <string name="bxa_user">BXA User</string>
     <string name="user_email">user@example.com</string>
+    <string name="logout_success">Logout Successful</string>
 </resources>

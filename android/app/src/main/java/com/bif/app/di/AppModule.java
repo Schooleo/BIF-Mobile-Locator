@@ -6,6 +6,7 @@ import androidx.room.Room;
 
 import com.bif.app.data.source.local.AppDatabase;
 import com.bif.app.data.source.local.FavoriteDao;
+import com.bif.app.data.source.local.FriendDao;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import dagger.Module;
@@ -33,7 +34,7 @@ public class AppModule {
                         AppDatabase.class,
                         "bif_database"
                 )
-                // .fallbackToDestructiveMigration()
+                .fallbackToDestructiveMigration()
                 .build();
     }
 
@@ -42,4 +43,8 @@ public class AppModule {
     public FavoriteDao provideFavoriteDao(AppDatabase database) {
         return database.favoriteDao();
     }
+
+    @Provides
+    @Singleton
+    public FriendDao provideFriendDao(AppDatabase database) { return database.friendDao(); }
 }
