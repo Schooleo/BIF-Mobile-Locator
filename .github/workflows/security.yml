@@ -32,22 +32,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: "temurin"
           java-version: "21"
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Run Snyk Test (Gradle Action)
+        uses: snyk/actions/gradle@master
         with:
-          node-version: "20"
-
-      - name: Install Snyk CLI
-        run: npm install -g snyk
-
-      - name: Run Snyk Test
+          command: test
+          args: --all-sub-projects --detection-depth=5 --file=${{ inputs.scan_path }}/build.gradle
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        working-directory: ${{ inputs.scan_path }}
-        run: snyk test --all-sub-projects --detection-depth=5
