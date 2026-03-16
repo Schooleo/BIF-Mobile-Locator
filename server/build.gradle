@@ -27,6 +27,15 @@ repositories {
 }
 
 dependencies {
+	constraints {
+		implementation 'com.fasterxml.jackson.core:jackson-core:2.21.1'
+		implementation 'com.fasterxml.jackson.core:jackson-databind:2.21.1'
+		implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.21.1'
+		implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.21.1'
+		implementation 'tools.jackson.core:jackson-core:3.1.0'
+		implementation 'tools.jackson.core:jackson-databind:3.1.0'
+	}
+
 	implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
 	implementation 'org.springframework.boot:spring-boot-starter-graphql'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
@@ -53,7 +62,7 @@ jacoco {
 }
 
 checkstyle {
-	toolVersion = '10.21.4'
+	toolVersion = '10.25.0'
 	configFile = file('config/checkstyle/checkstyle.xml')
 }
 
