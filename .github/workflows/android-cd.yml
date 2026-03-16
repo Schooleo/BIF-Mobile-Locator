@@ -11,6 +11,12 @@ on:
         description: "Android build/version number (integer)"
         required: true
         type: string
+  push:
+    branches: ["dev"]
+    paths:
+      - "android/**"
+      - ".github/workflows/android-cd.yml"
+      - ".github/workflows/security.yml"
 
 jobs:
   security:
@@ -60,8 +66,25 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BIF-Locator-Release
+          name: BIF-App-Release
           path: android/app/build/outputs/bundle/release/app-release.aab
+
+  firebase_distribute:
+    name: Distribute to Firebase App Distribution
+    needs: build_release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: BIF-App-Release
+
+      - name: Upload to Firebase App Distribution
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: ${{ secrets.FIREBASE_APP_ID }}
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_CREDENTIALS }}
+          groups: bif_test_distribution
+          file: Bring-In-Friends.apk
 
   publish_play_store:
     name: Publish to Play Store
@@ -74,7 +97,7 @@ jobs:
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
-          name: BIF-Locator-Release
+          name: BIF-App-Release
 
       - name: Create Service Account File
         run: echo '${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}' > ./play_service_account.json

@@ -7,6 +7,12 @@ on:
         description: "Release version label (e.g. 1.0.0)"
         required: true
         type: string
+  push:
+    branches: ["dev", "main"]
+    paths:
+      - "server/**"
+      - ".github/workflows/server-ci.yml"
+      - ".github/workflows/security.yml"
 
 permissions:
   contents: read

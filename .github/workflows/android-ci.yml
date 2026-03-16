@@ -7,13 +7,13 @@ permissions:
 
 on:
   push:
-    branches: ["dev"]
+    branches: ["dev", "main"]
     paths:
       - "android/**"
       - ".github/workflows/android-ci.yml"
       - ".github/workflows/security.yml"
   pull_request:
-    branches: ["dev"]
+    branches: ["dev", "main"]
     paths:
       - "android/**"
       - ".github/workflows/android-ci.yml"
