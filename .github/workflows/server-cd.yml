@@ -7,12 +7,6 @@ on:
         description: "Release version label (e.g. 1.0.0)"
         required: true
         type: string
-  push:
-    branches: ["dev", "main"]
-    paths:
-      - "server/**"
-      - ".github/workflows/server-cd.yml"
-      - ".github/workflows/security.yml"
 
 permissions:
   contents: read
@@ -59,6 +53,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare image metadata
+        id: image_meta
+        shell: bash
+        run: |
+          owner_lower=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          version_input="${{ github.event.inputs.version_number }}"
+          if [ -z "$version_input" ]; then
+            version_input="${{ github.run_number }}"
+          fi
+          echo "owner=$owner_lower" >> "$GITHUB_OUTPUT"
+          echo "version=$version_input" >> "$GITHUB_OUTPUT"
+
       - name: Build and push container image
         uses: docker/build-push-action@v6
         with:
@@ -66,16 +72,16 @@ jobs:
           file: ./server/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/bif-server:${{ inputs.version_number }}
-            ghcr.io/${{ github.repository_owner }}/bif-server:${{ github.sha }}
+            ghcr.io/${{ steps.image_meta.outputs.owner }}/bif-server:${{ steps.image_meta.outputs.version }}
+            ghcr.io/${{ steps.image_meta.outputs.owner }}/bif-server:${{ github.sha }}
 
       - name: Prepare versioned artifact
         run: |
           mkdir -p release
-          cp build/libs/*.jar release/server-${{ inputs.version_number }}.jar
+          cp build/libs/*.jar release/server-${{ steps.image_meta.outputs.version }}.jar
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: server-${{ inputs.version_number }}
-          path: server/release/server-${{ inputs.version_number }}.jar
+          name: server-${{ steps.image_meta.outputs.version }}
+          path: server/release/server-${{ steps.image_meta.outputs.version }}.jar

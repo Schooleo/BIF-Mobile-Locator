@@ -4,7 +4,6 @@
 ![Android CD](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/android-cd.yml/badge.svg)
 ![Server CI](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/server-ci.yml/badge.svg)
 ![Server CD](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/server-cd.yml/badge.svg)
-![Security](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/security.yml/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Server-green.svg)](https://developer.android.com)
 [![Language](https://img.shields.io/badge/Language-Java-orange.svg)](https://www.java.com)

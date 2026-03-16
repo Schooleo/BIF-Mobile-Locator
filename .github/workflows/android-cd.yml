@@ -11,12 +11,6 @@ on:
         description: "Android build/version number (integer)"
         required: true
         type: string
-  push:
-    branches: ["dev"]
-    paths:
-      - "android/**"
-      - ".github/workflows/android-cd.yml"
-      - ".github/workflows/security.yml"
 
 jobs:
   security:
