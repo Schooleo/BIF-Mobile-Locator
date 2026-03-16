@@ -39,7 +39,10 @@ jobs:
           distribution: "temurin"
           java-version: "21"
 
-      - name: Run Snyk Test (Gradle Action)
+      - name: Grant execute permission for gradlew
+        run: chmod +x ${{ inputs.scan_path }}/gradlew
+
+      - name: Run Snyk Test
         uses: snyk/actions/gradle@master
         with:
           command: test
