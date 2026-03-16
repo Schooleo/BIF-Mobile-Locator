@@ -42,10 +42,11 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x ${{ inputs.scan_path }}/gradlew
 
+      - name: Set up Snyk
+        uses: snyk/actions/setup@master
+
       - name: Run Snyk Test
-        uses: snyk/actions/gradle@master
-        with:
-          command: test
-          args: --all-sub-projects --detection-depth=5 --file=${{ inputs.scan_path }}/build.gradle
+        working-directory: ${{ inputs.scan_path }}
+        run: snyk test --all-sub-projects --detection-depth=5
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
