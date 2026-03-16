@@ -17,6 +17,8 @@ on:
 jobs:
   security:
     uses: ./.github/workflows/security.yml
+    with:
+      scan_path: server
     secrets:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 

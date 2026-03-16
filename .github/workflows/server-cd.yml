@@ -13,8 +13,16 @@ permissions:
   packages: write
 
 jobs:
+  security:
+    uses: ./.github/workflows/security.yml
+    with:
+      scan_path: server
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
   build_release:
     name: Build Server Release Artifact
+    needs: security
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -32,7 +40,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build server jar
-        run: ./gradlew clean build
+        run: ./gradlew clean bootJar
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

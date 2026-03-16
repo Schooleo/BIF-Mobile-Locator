@@ -2,6 +2,11 @@ name: Security Checks
 
 on:
   workflow_call:
+    inputs:
+      scan_path:
+        description: "Path to scan (android or server)"
+        required: true
+        type: string
     secrets:
       SNYK_TOKEN:
         required: true
@@ -16,6 +21,8 @@ jobs:
           fetch-depth: 0
       - name: Run Gitleaks
         uses: zricethezav/gitleaks-action@v2
+        with:
+          args: detect --source=${{ inputs.scan_path }} --verbose --redact
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -42,4 +49,5 @@ jobs:
       - name: Run Snyk Test
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: snyk test --all-projects --detection-depth=5
+        working-directory: ${{ inputs.scan_path }}
+        run: snyk test --all-sub-projects --detection-depth=5

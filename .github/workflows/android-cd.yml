@@ -9,27 +9,16 @@ on:
         type: string
 
 jobs:
-  gitleaks:
-    name: Gitleaks Scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Run Gitleaks
-        uses: zricethezav/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  check_quality:
-    needs: gitleaks
-    uses: ./.github/workflows/code-quality.yml
+  security:
+    uses: ./.github/workflows/security.yml
+    with:
+      scan_path: android
     secrets:
-      GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
   build_release:
     name: Build Release App Bundle
-    needs: check_quality
+    needs: security
     runs-on: ubuntu-latest
     defaults:
       run:
