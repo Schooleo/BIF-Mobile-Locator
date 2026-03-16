@@ -1,0 +1,72 @@
+name: Server CI
+
+on:
+  push:
+    branches: ["dev", "main"]
+    paths:
+      - "server/**"
+      - ".github/workflows/server-ci.yml"
+      - ".github/workflows/security.yml"
+  pull_request:
+    branches: ["dev", "main"]
+    paths:
+      - "server/**"
+      - ".github/workflows/server-ci.yml"
+      - ".github/workflows/security.yml"
+
+jobs:
+  security:
+    uses: ./.github/workflows/security.yml
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+  checkstyle:
+    name: Server Checkstyle
+    needs: security
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./server
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run Checkstyle
+        run: ./gradlew checkstyleMain checkstyleTest
+
+  test_and_coverage:
+    name: Server Test & Coverage
+    needs: [security, checkstyle]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./server
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run tests and coverage gate
+        run: ./gradlew clean test jacocoTestReport jacocoTestCoverageVerification
+
+      - name: Upload JaCoCo HTML report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: server-jacoco-report
+          path: server/build/reports/jacoco/test/html/

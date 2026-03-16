@@ -11,6 +11,12 @@ android {
     namespace 'com.bif.app'
     compileSdk 36
 
+    def localProperties = new Properties()
+    def localPropertiesFile = rootProject.file('local.properties')
+    if (localPropertiesFile.exists()) {
+        localProperties.load(new FileInputStream(localPropertiesFile))
+    }
+
     defaultConfig {
         def buildNumber = project.hasProperty('BUILD_NUMBER') ? project.getProperty('BUILD_NUMBER').toInteger() : 1
 
@@ -24,12 +30,6 @@ android {
         multiDexEnabled true
         ndk {
             debugSymbolLevel 'FULL'
-        }
-
-        def localProperties = new Properties()
-        def localPropertiesFile = rootProject.file('local.properties')
-        if (localPropertiesFile.exists()) {
-            localProperties.load(new FileInputStream(localPropertiesFile))
         }
 
         manifestPlaceholders = [
@@ -56,8 +56,13 @@ android {
         }
     }
 
+    android.buildFeatures.buildConfig = true
     buildTypes {
+        def localApiIp = localProperties.getProperty('LOCAL_API_IP', '"10.0.2.2"')
+
         debug {
+            buildConfigField "String", "GRAPHQL_URL", "\"http://${localApiIp.replaceAll('"', '')}:8080/graphql\""
+            buildConfigField "String", "REST_BASE_URL", "\"http://${localApiIp.replaceAll('"', '')}:8080/api\""
             signingConfig signingConfigs.debug
         }
         release {
@@ -92,6 +97,10 @@ dependencies {
     implementation project(":feature:profile")
 
     implementation libs.appcompat
+    implementation libs.apollo.java.client
+    implementation libs.retrofit.core
+    implementation libs.retrofit.gson
+    implementation libs.okhttp.logging
     implementation libs.material
     implementation libs.activity
     implementation libs.constraintlayout

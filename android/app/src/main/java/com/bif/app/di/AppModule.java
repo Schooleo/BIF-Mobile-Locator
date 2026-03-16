@@ -9,12 +9,14 @@ import com.bif.app.data.source.local.FavoriteDao;
 import com.bif.app.data.source.local.FriendDao;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
+
+import javax.inject.Singleton;
+
 import dagger.Module;
 import dagger.Provides;
 import dagger.hilt.InstallIn;
 import dagger.hilt.android.qualifiers.ApplicationContext;
 import dagger.hilt.components.SingletonComponent;
-import javax.inject.Singleton;
 
 @Module
 @InstallIn(SingletonComponent.class)

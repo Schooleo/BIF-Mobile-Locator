@@ -1,14 +1,28 @@
 name: Android Publish
 
 on:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
   workflow_dispatch:
+    inputs:
+      version_number:
+        description: "Android build/version number (integer)"
+        required: true
+        type: string
 
 jobs:
+  gitleaks:
+    name: Gitleaks Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run Gitleaks
+        uses: zricethezav/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   check_quality:
+    needs: gitleaks
     uses: ./.github/workflows/code-quality.yml
     secrets:
       GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
@@ -44,7 +58,7 @@ jobs:
           echo "PLACES_API_KEY=${{ secrets.PLACES_API_KEY }}" >> ./local.properties
 
       - name: Build Release Bundle
-        run: ./gradlew bundleRelease -PBUILD_NUMBER=${{ github.run_number }}
+        run: ./gradlew bundleRelease -PBUILD_NUMBER=${{ inputs.version_number }}
         env:
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
