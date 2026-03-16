@@ -9,3 +9,23 @@ plugins {
     alias(libs.plugins.androidx.navigation.safeargs) apply false
     alias(libs.plugins.android.library) apply false
 }
+
+subprojects {
+    configurations.configureEach {
+        resolutionStrategy {
+            force 'com.google.protobuf:protobuf-java-util:3.25.5'
+            force 'com.google.protobuf:protobuf-java:3.25.5'
+
+            force 'io.netty:netty-codec-http2:4.1.129.Final'
+            force 'io.netty:netty-codec-http:4.1.129.Final'
+            force 'io.netty:netty-handler:4.1.129.Final'
+            force 'io.netty:netty-common:4.1.129.Final'
+
+            force 'org.apache.commons:commons-lang3:3.18.0'
+            force 'org.apache.httpcomponents:httpclient:4.5.14'
+            force 'org.apache.httpcomponents:httpmime:4.5.14'
+
+            force 'org.jetbrains.kotlin:kotlin-stdlib:2.1.0'
+        }
+    }
+}
