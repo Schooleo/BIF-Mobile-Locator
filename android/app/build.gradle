@@ -7,6 +7,11 @@ plugins {
     alias(libs.plugins.androidx.navigation.safeargs)
 }
 
+checkstyle {
+    toolVersion = '10.25.0'
+    configFile = rootProject.file('config/checkstyle/checkstyle.xml')
+}
+
 android {
     namespace 'com.bif.app'
     compileSdk 36
@@ -16,6 +21,7 @@ android {
     if (localPropertiesFile.exists()) {
         localProperties.load(new FileInputStream(localPropertiesFile))
     }
+    def localApiIp = localProperties.getProperty('LOCAL_API_IP', '"10.0.2.2"')
 
     defaultConfig {
         def buildNumber = project.hasProperty('BUILD_NUMBER') ? project.getProperty('BUILD_NUMBER').toInteger() : 1
@@ -36,6 +42,9 @@ android {
             MAPS_API_KEY: localProperties.getProperty('MAPS_API_KEY', ""),
             PLACES_API_KEY: localProperties.getProperty('PLACES_API_KEY', "")
         ]
+
+        buildConfigField "String", "GRAPHQL_URL", "\"http://${localApiIp.replaceAll('"', '')}:8080/graphql\""
+        buildConfigField "String", "REST_BASE_URL", "\"http://${localApiIp.replaceAll('"', '')}:8080/api\""
     }
 
     signingConfigs {
@@ -58,11 +67,7 @@ android {
 
     android.buildFeatures.buildConfig = true
     buildTypes {
-        def localApiIp = localProperties.getProperty('LOCAL_API_IP', '"10.0.2.2"')
-
         debug {
-            buildConfigField "String", "GRAPHQL_URL", "\"http://${localApiIp.replaceAll('"', '')}:8080/graphql\""
-            buildConfigField "String", "REST_BASE_URL", "\"http://${localApiIp.replaceAll('"', '')}:8080/api\""
             signingConfig signingConfigs.debug
         }
         release {
@@ -108,7 +113,7 @@ dependencies {
     implementation libs.play.services.location
     implementation libs.navigation.fragment.ktx
     implementation libs.navigation.ui.ktx
-    implementation libs.google.places
+    implementation libs.places
     implementation libs.navigation.runtime
     testImplementation libs.junit
     testImplementation libs.mockito.core
@@ -145,6 +150,4 @@ dependencies {
     implementation libs.room.runtime
     annotationProcessor libs.room.compiler
 
-    // Places SDK for searching places
-    implementation libs.places
 }

@@ -1,7 +1,0 @@
-query GetProducts {
-    getAllProducts {
-        id
-        name
-        price
-    }
-}

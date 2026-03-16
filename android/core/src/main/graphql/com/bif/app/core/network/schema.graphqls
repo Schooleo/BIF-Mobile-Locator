@@ -1,19 +1,7 @@
+schema {
+  query: Query
+}
+
 type Query {
-    getAllProducts: [Product]
-    getProduct(id: ID!): Product
-}
-
-type Mutation {
-    createProduct(input: ProductInput!): Product
-}
-
-type Product {
-    id: ID!
-    name: String!
-    price: Float!
-}
-
-input ProductInput {
-    name: String!
-    price: Float!
+  health: String!
 }
