@@ -1,5 +1,9 @@
 name: Server CI
 
+permissions:
+  contents: read
+  security-events: write
+
 on:
   push:
     branches: ["dev", "main"]

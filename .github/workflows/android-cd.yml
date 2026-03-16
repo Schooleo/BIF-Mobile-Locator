@@ -1,5 +1,9 @@
 name: Android Publish
 
+permissions:
+  contents: read
+  security-events: write
+
 on:
   workflow_dispatch:
     inputs:
