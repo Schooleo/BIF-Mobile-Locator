@@ -1,6 +1,6 @@
 # Privacy Policy for Bring In Friends
 
-**Last updated:** March 7, 2026
+**Last updated:** March 16, 2026
 
 This Privacy Policy describes how the Bring In Friends team ("we", "us", or "our") collects, uses, and discloses your information when you use our mobile application (the "Service").
 
@@ -21,7 +21,7 @@ Our application is designed to provide location-based services. We may request a
 If you use our social or profile features, we may collect basic account details (e.g., username, email, and display picture).
 
 - **How we use it**: To manage your identity, authenticate your access, and display your profile safely to your connected friends.
-- **Storage**: Authentication data respects secure cloud backend limits, while profile snippets may be cached locally.
+- **Storage**: Data may be stored locally on your device and in our backend services to support account, social, trip planning, chat, and synchronization features.
 
 ### C. Usage Data & Analytics
 
@@ -44,7 +44,7 @@ To function correctly, the app may request the following permissions:
 
 ## 3. Data Retention
 
-We do not store your personal data on our servers. All functional data (like location history) remains on your device or is transient (erased after the session). Analytics data is retained by Google according to their policies.
+We retain only the data required to operate and synchronize core features (such as account/profile metadata, social graph links, favorites, chats, and trip-related records). Location data used for map interactions is primarily processed on-device, and exact retention depends on feature usage and provider policies. Analytics data is retained by Google according to their policies.
 
 ## 4. Security
 
@@ -63,4 +63,4 @@ We may update our Privacy Policy from time to time. Thus, you are advised to rev
 If you have any questions or suggestions about our Privacy Policy, do not hesitate to contact us at:
 
 **Email**: schooleoinbox@gmail.com
-**GitHub**: [https://github.com/Schooleo/bif-mobile-app](https://github.com/Schooleo/bif-mobile-app)
+**GitHub**: [https://github.com/Schooleo/bif-mobile-locator](https://github.com/Schooleo/bif-mobile-locator)

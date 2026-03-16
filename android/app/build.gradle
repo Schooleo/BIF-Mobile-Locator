@@ -7,9 +7,21 @@ plugins {
     alias(libs.plugins.androidx.navigation.safeargs)
 }
 
+checkstyle {
+    toolVersion = '10.25.0'
+    configFile = rootProject.file('config/checkstyle/checkstyle.xml')
+}
+
 android {
     namespace 'com.bif.app'
     compileSdk 36
+
+    def localProperties = new Properties()
+    def localPropertiesFile = rootProject.file('local.properties')
+    if (localPropertiesFile.exists()) {
+        localProperties.load(new FileInputStream(localPropertiesFile))
+    }
+    def localApiIp = localProperties.getProperty('LOCAL_API_IP', '"10.0.2.2"')
 
     defaultConfig {
         def buildNumber = project.hasProperty('BUILD_NUMBER') ? project.getProperty('BUILD_NUMBER').toInteger() : 1
@@ -26,16 +38,13 @@ android {
             debugSymbolLevel 'FULL'
         }
 
-        def localProperties = new Properties()
-        def localPropertiesFile = rootProject.file('local.properties')
-        if (localPropertiesFile.exists()) {
-            localProperties.load(new FileInputStream(localPropertiesFile))
-        }
-
         manifestPlaceholders = [
             MAPS_API_KEY: localProperties.getProperty('MAPS_API_KEY', ""),
             PLACES_API_KEY: localProperties.getProperty('PLACES_API_KEY', "")
         ]
+
+        buildConfigField "String", "GRAPHQL_URL", "\"http://${localApiIp.replaceAll('"', '')}:8080/graphql\""
+        buildConfigField "String", "REST_BASE_URL", "\"http://${localApiIp.replaceAll('"', '')}:8080/api\""
     }
 
     signingConfigs {
@@ -56,6 +65,7 @@ android {
         }
     }
 
+    android.buildFeatures.buildConfig = true
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
@@ -92,6 +102,10 @@ dependencies {
     implementation project(":feature:profile")
 
     implementation libs.appcompat
+    implementation libs.apollo.java.client
+    implementation libs.retrofit.core
+    implementation libs.retrofit.gson
+    implementation libs.okhttp.logging
     implementation libs.material
     implementation libs.activity
     implementation libs.constraintlayout
@@ -99,7 +113,7 @@ dependencies {
     implementation libs.play.services.location
     implementation libs.navigation.fragment.ktx
     implementation libs.navigation.ui.ktx
-    implementation libs.google.places
+    implementation libs.places
     implementation libs.navigation.runtime
     testImplementation libs.junit
     testImplementation libs.mockito.core
@@ -136,6 +150,20 @@ dependencies {
     implementation libs.room.runtime
     annotationProcessor libs.room.compiler
 
-    // Places SDK for searching places
-    implementation libs.places
+}
+
+tasks.register('checkstyleMain', Checkstyle) {
+    description = 'Runs Checkstyle on main Java sources.'
+    group = 'verification'
+    source = fileTree('src/main/java')
+    include '**/*.java'
+    classpath = files()
+}
+
+tasks.register('checkstyleTest', Checkstyle) {
+    description = 'Runs Checkstyle on test Java sources.'
+    group = 'verification'
+    source = files('src/test/java', 'src/androidTest/java')
+    include '**/*.java'
+    classpath = files()
 }

@@ -1,58 +1,172 @@
 # Bring In Friends
 
-![Android CI](https://github.com/Schooleo/bif-mobile-app/actions/workflows/android-dev.yml/badge.svg)
-![Android Publish](https://github.com/Schooleo/bif-mobile-app/actions/workflows/android-publish.yml/badge.svg)
+![Android CI](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/android-ci.yml/badge.svg)
+![Android CD](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/android-cd.yml/badge.svg)
+![Server CI](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/server-ci.yml/badge.svg)
+![Server CD](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/server-cd.yml/badge.svg)
+![Security](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/security.yml/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Platform](https://img.shields.io/badge/Platform-Android-green.svg)](https://developer.android.com)
+[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Server-green.svg)](https://developer.android.com)
 [![Language](https://img.shields.io/badge/Language-Java-orange.svg)](https://www.java.com)
 [![API](https://img.shields.io/badge/API-29%2B-brightgreen.svg?style=flat)](https://android-arsenal.com/api?level=29)
 
-**Bring In Friends** is a native Android application designed to provide robust location-based services. Built entirely in Java, this project demonstrates modern Android development practices including Edge-to-Edge UI.
+**Bring In Friends** is an offline-first location social platform composed of:
 
-## Key Features
+- A modular native Android app for map, favorites, social, profile, and auth experiences.
+- A Spring Boot backend for sync, user/group/trip/chat/favorite/place APIs via REST and GraphQL.
 
-- **Native Android Development**: Built using the official Android SDK for optimal performance and integration.
-- **Pure Java Implementation**: 100% Java codebase, leveraging established patterns and libraries.
-- **Modular Clean Architecture**: Organized into distinct structural layers (`app`, `core`, `data`, `domain`) and feature modules (`auth`, `favorites`, `map`, `profile`, `social`) for high scalability and separation of concerns.
-- **Interactive Mapping & Places**: Real-time location tracking and place search functionality utilizing repositories and device sensors.
-- **Dependency Injection**: Powered by Dagger Hilt for robust and testable dependency management.
-- **Edge-to-Edge Modern UI**: Implements edge-to-edge display support for an immersive user experience.
+The project is built in Java end-to-end and is organized for scalability, testing, and CI/CD automation.
 
-## Technical Stack
+## Core Features
 
-- **Language**: Java 11
-- **Minimum SDK**: API 29 (Android 10)
-- **Target SDK**: API 36 (Android 16)
-- **Build System**: Gradle with Version Catalogs.
-- **Namespace**: `com.bif.app`
+- **Offline-first sync workflow** with server-side change metadata and synchronization endpoints.
+- **Interactive mapping and place discovery** with map markers, place details, and location support.
+- **Favorites management** with add/remove actions and list/detail UI flows.
+- **Social features** including friend/group management and trip planning scaffolding.
+- **Auth and profile management** with local credential handling and profile editing UI.
+- **Dual API surface** on backend: REST for straightforward CRUD and GraphQL for nested sync-friendly payloads.
+- **Comprehensive validation pipeline**: security scanning, linting, testing, checkstyle, and coverage gates.
+
+## Technology Stack
+
+### Android Application
+
+- **Language**: Java
+- **Build**: Gradle (multi-module + version catalogs)
+- **Architecture**: Modular Clean Architecture
+  - `android/app`
+  - `android/core`
+  - `android/data`
+  - `android/domain`
+  - `android/feature/*`
+- **DI**: Dagger Hilt
+- **Persistence**: Room
+- **Networking**: Retrofit + Apollo GraphQL
+- **UI**: Android Fragments + Material components + Edge-to-Edge layout
+- **SDK**: Min API 29, Target API 36
+
+### Spring Boot Server
+
+- **Framework**: Spring Boot 4.x
+- **Language**: Java (toolchain JDK 21)
+- **Build**: Gradle
+- **Data Store**: MongoDB
+- **APIs**:
+  - Spring Web (REST)
+  - Spring GraphQL
+- **Containerization**: Docker + GitHub Container Registry (GHCR)
+- **Quality/Security**: Checkstyle, JaCoCo (70% gate), Gitleaks, Snyk
+
+## Project Structure
+
+```text
+BIF-Mobile-App/
+├── android/
+│   ├── app/                 # App shell, navigation, DI bootstrap
+│   ├── core/                # Shared utils, network, common UI resources
+│   ├── data/                # Repositories, Room DB/DAO, data sources, mappers
+│   ├── domain/              # Domain models and repository interfaces
+│   ├── feature/
+│   │   ├── auth/
+│   │   ├── favorites/
+│   │   ├── map/
+│   │   ├── profile/
+│   │   └── social/
+│   └── config/checkstyle/
+├── server/
+│   ├── src/main/java/com/bif/server/
+│   │   ├── common/           # Shared config/models (sync metadata, mongo config)
+│   │   └── features/
+│   │       ├── user/
+│   │       ├── group/
+│   │       ├── place/
+│   │       ├── favorite/
+│   │       ├── chat/
+│   │       ├── trip/
+│   │       └── sync/
+│   ├── src/main/resources/graphql/
+│   ├── src/test/             # Service and controller unit tests
+│   └── Dockerfile
+└── .github/workflows/
+    ├── android-ci.yml
+    ├── android-cd.yml
+    ├── server-ci.yml
+    ├── server-cd.yml
+    └── security.yml
+```
 
 ## CI/CD Pipeline
 
-This project uses [GitHub Actions](.github/workflows/android.yml) for Continuous Integration.
+This project uses split CI and CD workflows with security as a prerequisite.
 
-- **Platform**: GitHub Actions
-- **Triggers**:
-  - Push to `main` and `dev` branches.
-  - Pull Requests to `main` and `dev` branches.
-- **Workflow Steps**:
-  1.  **Setup**: Configures JDK 17.
-  2.  **Lint**: Runs static code analysis (`./gradlew lint`).
-  3.  **Test**: Executes local unit tests (`./gradlew test`).
-  4.  **Build**: Assembles the debug APK (`./gradlew assembleDebug`).
-- **Artifacts**: A debug APK (`BIF-Mobile-App.apk`) is uploaded and distributed via Firebase.
+### Android Workflows
+
+- **CI**: `.github/workflows/android-ci.yml`
+  - Trigger: push/PR on `dev` for Android-related paths.
+  - Flow: `security -> lint + unit_test + checkstyle -> build debug artifact`.
+- **CD**: `.github/workflows/android-cd.yml`
+  - Trigger: manual `workflow_dispatch` with `version_number`.
+  - Flow: `security -> build release bundle -> publish to Play Store`.
+
+### Server Workflows
+
+- **CI**: `.github/workflows/server-ci.yml`
+  - Trigger: push/PR on `dev` and `main` for Server-related paths.
+  - Flow: `security -> checkstyle -> tests + jacoco verification`.
+- **CD**: `.github/workflows/server-cd.yml`
+  - Trigger: manual `workflow_dispatch` with `version_number`.
+  - Flow: `security -> package bootJar -> build/push container image + upload artifact`.
+
+### Reusable Security Workflow
+
+- **Workflow**: `.github/workflows/security.yml`
+- Runs **Gitleaks** first, then **Snyk**.
+- Scans are path-scoped (`android` or `server`) to avoid cross-project false failures.
 
 ## Setup & Installation
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/Schooleo/bif-mobile-app.git
+    git clone https://github.com/Schooleo/bif-mobile-locator.git
     ```
-2.  **Open in Android Studio**:
+2.  **Android app setup**:
     - Launch Android Studio.
-    - Select "Open" and navigate to the cloned directory.
-3.  **Build the project**:
-    - Android Studio will automatically sync with Gradle.
-    - Click the "Run" button (Green Arrow) to deploy to an emulator or physical device.
+    - Open the `android` folder.
+    - Configure local secrets and keys (`google-services.json`, maps/places API keys).
+    - Build and run from Android Studio or CLI.
+
+    ```bash
+    cd android
+    ./gradlew assembleDebug
+    ```
+
+3.  **Server setup**:
+    - Ensure Docker is available for local MongoDB compose setup.
+    - Run the Spring Boot server from the `server` folder.
+
+    ```bash
+    cd server
+    ./gradlew bootRun
+    ```
+
+4.  **Run server container from registry (root compose)**:
+    - Use the root `docker-compose.yml` to pull and run the published server image.
+    - Optional: set `SERVER_IMAGE_TAG` (default: `latest`) before running.
+
+    ```bash
+    docker compose pull
+    docker compose up -d
+    ```
+
+5.  **Run tests locally**:
+
+    ```bash
+    cd android
+    ./gradlew test
+
+    cd ../server
+    ./gradlew test jacocoTestReport jacocoTestCoverageVerification
+    ```
 
 ### Contributors
 

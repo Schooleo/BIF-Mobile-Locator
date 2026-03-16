@@ -1,6 +1,6 @@
-# Android Unit Testing Guide
+# Testing Guide
 
-This guide explains how to write, run, and automate tests for the Bring In Friends project.
+This guide explains how to write, run, and automate tests for the Bring In Friends project across Android and Server modules.
 
 ## 1. Types of Tests
 
@@ -8,7 +8,7 @@ In Android, there are two main categories of tests:
 
 ### A. Local Unit Tests (`src/test`)
 
-- **Where**: `app/src/test/java/`
+- **Where**: `android/**/src/test/java/`
 - **What**: Pure Java tests that run on your development machine's JVM (not on an Android device).
 - **Speed**: Very Fast.
 - **Use Case**: Testing business logic, calculations, and utility classes that don't depend on Android APIs (e.g., `Context`, `View`).
@@ -16,7 +16,7 @@ In Android, there are two main categories of tests:
 
 ### B. Instrumented Tests (`src/androidTest`)
 
-- **Where**: `app/src/androidTest/java/`
+- **Where**: `android/**/src/androidTest/java/`
 - **What**: Tests that run on a hardware device or emulator.
 - **Speed**: Slow.
 - **Use Case**: Testing UI interactions (clicking buttons), accessing database/file system, or checking how the app behaves on a real OS.
@@ -93,38 +93,55 @@ public void searchPlaces_validQuery_returnsPlaceList() {
 
 - Run all unit tests:
   ```bash
+  cd android
   ./gradlew test
   ```
 - Run specific test:
   ```bash
+  cd android
   ./gradlew :feature:map:testDebugUnitTest --tests "com.bif.app.feature.map.PlaceRepositoryTest"
   ```
 
 ### Viewing Test Reports
 
-After running tests via command line, a detailed HTML report is generated. You can open it immediately with the command (from the root directory):
+After running tests via command line, a detailed HTML report is generated. You can open it immediately with the command:
 
 **Windows (PowerShell/CMD):**
 
 ```powershell
-start app/build/reports/tests/testDebugUnitTest/index.html
+start android/app/build/reports/tests/testDebugUnitTest/index.html
 ```
 
 **Or run the combination:**
 
 ```powershell
+cd android
 ./gradlew test
 start app/build/reports/tests/testDebugUnitTest/index.html
 ```
+
+### Server Tests
+
+- Run server unit tests and coverage verification:
+  ```bash
+  cd server
+  ./gradlew test jacocoTestReport jacocoTestCoverageVerification
+  ```
+- Open JaCoCo HTML report (Windows):
+  ```powershell
+  start server/build/reports/jacoco/test/html/index.html
+  ```
 
 ---
 
 ## 4. CI/CD Integration
 
-Our GitHub Actions pipeline (`.github/workflows/android.yml`) automatically protects the codebase.
+Our GitHub Actions workflows automatically protect the codebase.
 
-- **Job**: `unit_test`
-- **Command**: `./gradlew test`
+- **Android CI**: `.github/workflows/android-ci.yml`
+  - Runs security, lint, unit tests, checkstyle, and debug build artifact.
+- **Server CI**: `.github/workflows/server-ci.yml`
+  - Runs security, checkstyle, tests, and JaCoCo verification.
 - **Effect**:
   - Every time you push code or open a Pull Request, GitHub runs all unit tests.
   - If **any** test fails, the build turns **red**, and deployment is blocked.

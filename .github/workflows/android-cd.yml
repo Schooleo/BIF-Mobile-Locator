@@ -1,21 +1,28 @@
 name: Android Publish
 
+permissions:
+  contents: read
+  security-events: write
+
 on:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
   workflow_dispatch:
+    inputs:
+      version_number:
+        description: "Android build/version number (integer)"
+        required: true
+        type: string
 
 jobs:
-  check_quality:
-    uses: ./.github/workflows/code-quality.yml
+  security:
+    uses: ./.github/workflows/security.yml
+    with:
+      scan_path: android
     secrets:
-      GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
   build_release:
     name: Build Release App Bundle
-    needs: check_quality
+    needs: security
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -44,7 +51,7 @@ jobs:
           echo "PLACES_API_KEY=${{ secrets.PLACES_API_KEY }}" >> ./local.properties
 
       - name: Build Release Bundle
-        run: ./gradlew bundleRelease -PBUILD_NUMBER=${{ github.run_number }}
+        run: ./gradlew bundleRelease -PBUILD_NUMBER=${{ inputs.version_number }}
         env:
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
