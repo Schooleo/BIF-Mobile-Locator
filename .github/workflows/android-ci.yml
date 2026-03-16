@@ -72,7 +72,7 @@ jobs:
         run: ./gradlew test
 
       - name: Publish unit test report
-        if: always()
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false)
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
           files: android/**/build/test-results/test*/TEST-*.xml

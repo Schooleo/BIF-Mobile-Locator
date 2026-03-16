@@ -48,5 +48,7 @@ public class AppModule {
 
     @Provides
     @Singleton
-    public FriendDao provideFriendDao(AppDatabase database) { return database.friendDao(); }
+    public FriendDao provideFriendDao(AppDatabase database) {
+        return database.friendDao();
+    }
 }

@@ -151,3 +151,19 @@ dependencies {
     annotationProcessor libs.room.compiler
 
 }
+
+tasks.register('checkstyleMain', Checkstyle) {
+    description = 'Runs Checkstyle on main Java sources.'
+    group = 'verification'
+    source = fileTree('src/main/java')
+    include '**/*.java'
+    classpath = files()
+}
+
+tasks.register('checkstyleTest', Checkstyle) {
+    description = 'Runs Checkstyle on test Java sources.'
+    group = 'verification'
+    source = files('src/test/java', 'src/androidTest/java')
+    include '**/*.java'
+    classpath = files()
+}
