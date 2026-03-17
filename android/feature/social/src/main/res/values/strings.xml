@@ -5,6 +5,7 @@
     <string name="groups">Groups</string>
     <string name="add_new_friend">Add New Friend</string>
     <string name="create_new_group">Create New Group</string>
+    <string name="group_name">Group Name</string>
     <string name="online">Online</string>
     <string name="offline">Offline</string>
     <string name="members">%d members</string>

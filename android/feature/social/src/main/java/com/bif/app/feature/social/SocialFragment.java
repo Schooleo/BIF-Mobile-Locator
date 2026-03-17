@@ -4,6 +4,8 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -18,7 +20,7 @@ import com.bif.app.domain.model.Friend;
 import com.bif.app.domain.model.Group;
 import com.google.android.material.tabs.TabLayout;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
 import dagger.hilt.android.AndroidEntryPoint;
@@ -81,12 +83,12 @@ public class SocialFragment extends Fragment {
         groupsAdapter = new GroupsAdapter(new GroupsAdapter.OnGroupActionListener() {
             @Override
             public void onCreateGroupClick() {
-                showCreateGroupDialog();
+                showCreateGroupWithFriendsDialog();
             }
 
             @Override
             public void onGroupOptionsClick(Group group, int position) {
-                Toast.makeText(requireContext(), group.getName() + " options", Toast.LENGTH_SHORT).show();
+                handleGroupOptions(group);
             }
         });
 
@@ -97,6 +99,12 @@ public class SocialFragment extends Fragment {
         viewModel.getFriends().observe(getViewLifecycleOwner(), friends -> {
             if (tabLayout.getSelectedTabPosition() == 0) {
                 friendsAdapter.setFriends(friends);
+            }
+        });
+
+        viewModel.getGroups().observe(getViewLifecycleOwner(), groups -> {
+            if (tabLayout.getSelectedTabPosition() == 1) {
+                groupsAdapter.setGroups(groups);
             }
         });
     }
@@ -111,7 +119,7 @@ public class SocialFragment extends Fragment {
                     recyclerView.setAdapter(friendsAdapter);
                 } else {
                     // Groups Tab
-                    groupsAdapter.setGroups(getSampleGroups());
+                    groupsAdapter.setGroups(viewModel.getGroups().getValue());
                     recyclerView.setAdapter(groupsAdapter);
                 }
             }
@@ -145,28 +153,59 @@ public class SocialFragment extends Fragment {
         );
     }
 
-    private void showCreateGroupDialog() {
-        DialogUtils.showCustomInputDialog(
+    private void showCreateGroupWithFriendsDialog() {
+        List<Friend> currentFriends = viewModel.getFriends().getValue();
+        List<Friend> friendList = currentFriends != null ? currentFriends : new ArrayList<>();
+
+        DialogUtils.showCustomViewDialog(
                 requireContext(),
                 R.layout.dialog_create_group,
-                R.id.btn_create_group,
-                R.id.et_search,
                 R.id.btn_close,
-                inputText -> {
-                    if (!inputText.isEmpty()) {
-                        Toast.makeText(requireContext(), "Created group: " + inputText, Toast.LENGTH_SHORT).show();
-                    } else {
-                        Toast.makeText(requireContext(), "Please enter a name", Toast.LENGTH_SHORT).show();
-                    }
+                (dialogView, dialog) -> {
+                    EditText etGroupName = dialogView.findViewById(R.id.et_group_name);
+                    RecyclerView rvFriends = dialogView.findViewById(R.id.rv_friends_select);
+                    Button btnCreate = dialogView.findViewById(R.id.btn_create_group);
+
+                    SelectFriendAdapter selectAdapter = new SelectFriendAdapter(friendList);
+                    rvFriends.setLayoutManager(new LinearLayoutManager(requireContext()));
+                    rvFriends.setAdapter(selectAdapter);
+
+                    btnCreate.setOnClickListener(v -> {
+                        String groupName = etGroupName.getText().toString().trim();
+                        List<Friend> selectedFriends = selectAdapter.getSelectedFriends();
+
+                        if (groupName.isEmpty()) {
+                            Toast.makeText(requireContext(), "Please input group name", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        if (selectedFriends.isEmpty()) {
+                            Toast.makeText(requireContext(), "Please choose at least 1 member", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+
+                        viewModel.createGroup(groupName, selectedFriends);
+                        Toast.makeText(requireContext(), "Group created: " + groupName, Toast.LENGTH_SHORT).show();
+                        dialog.dismiss();
+                    });
                 }
         );
     }
 
-    private List<Group> getSampleGroups() {
-        return Arrays.asList(
-                new Group("Family", "F", getResources().getColor(com.bif.app.core.R.color.avatar_purple, null), 4),
-                new Group("High School Friends", "H", getResources().getColor(com.bif.app.core.R.color.avatar_yellow, null), 8),
-                new Group("Work Team", "W", getResources().getColor(com.bif.app.core.R.color.avatar_blue, null), 6)
-        );
+    private void handleGroupOptions(Group group) {
+        String title = group.isOwner() ? "Disband Group" : "Leave Group";
+        String message = group.isOwner()
+                ? "Do you want to disband the group '" + group.getName() + "'?"
+                : "Do you want to leave the group '" + group.getName() + "'?";
+        String actionBtn = group.isOwner() ? "Disband" : "Leave";
+
+        DialogUtils.showConfirmDialog(requireContext(),
+                title,
+                message,
+                actionBtn,
+                "Cancel",
+                () -> {
+                    viewModel.handleGroupAction(group);
+                    Toast.makeText(requireContext(), group.isOwner() ? "Disbanded" : "Left", Toast.LENGTH_SHORT).show();
+                });
     }
 }

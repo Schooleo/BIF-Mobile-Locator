@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+    <!-- Circle background -->
+    <path
+        android:pathData="M32,32m-28,0a28,28 0,1 1,56 0a28,28 0,1 1,-56 0"
+        android:fillColor="#FFD700"/>
+    <!-- Star shape -->
+    <path
+        android:pathData="M32,16L35.09,25.18L44.85,26.54L38.43,32.82L39.91,42.54L32,37.77L24.09,42.54L25.57,32.82L19.15,26.54L28.91,25.18Z"
+        android:fillColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeColor="#333333"/>
+</vector>
