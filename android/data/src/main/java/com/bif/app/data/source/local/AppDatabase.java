@@ -4,10 +4,17 @@ import androidx.room.Database;
 import androidx.room.RoomDatabase;
 import com.bif.app.data.source.local.entity.FavoriteEntity;
 import com.bif.app.data.source.local.entity.FriendEntity;
-import com.bif.app.domain.model.Friend;
+import com.bif.app.data.source.local.entity.GroupEntity;
+import com.bif.app.data.source.local.entity.GroupFriendCrossRef;
 
-@Database(entities = {FavoriteEntity.class, FriendEntity.class}, version = 2, exportSchema = false)
+@Database(entities = {
+        FriendEntity.class,
+        FavoriteEntity.class,
+        GroupEntity.class,
+        GroupFriendCrossRef.class
+}, version = 3, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
-    public abstract FavoriteDao favoriteDao();
     public abstract FriendDao friendDao();
+    public abstract FavoriteDao favoriteDao();
+    public abstract GroupDao groupDao();
 }

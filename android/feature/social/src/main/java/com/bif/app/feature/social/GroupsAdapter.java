@@ -1,5 +1,6 @@
 package com.bif.app.feature.social;
 
+import android.annotation.SuppressLint;
 import android.content.res.ColorStateList;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -10,7 +11,6 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.bif.app.feature.social.R;
 import com.bif.app.domain.model.Group;
 
 import java.util.ArrayList;
@@ -26,6 +26,7 @@ public class GroupsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 
     public interface OnGroupActionListener {
         void onCreateGroupClick();
+        void onGroupClick(Group group);
         void onGroupOptionsClick(Group group, int position);
     }
 
@@ -33,6 +34,7 @@ public class GroupsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
         this.listener = listener;
     }
 
+    @SuppressLint("NotifyDataSetChanged")
     public void setGroups(List<Group> groups) {
         this.groups = groups;
         notifyDataSetChanged();
@@ -111,6 +113,12 @@ public class GroupsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
             tvAvatar.setBackgroundTintList(ColorStateList.valueOf(group.getAvatarColor()));
             tvGroupName.setText(group.getName());
             tvMembers.setText(itemView.getContext().getString(R.string.members, group.getMemberCount()));
+
+            itemView.setOnClickListener(v -> {
+                if (listener != null) {
+                    listener.onGroupClick(group);
+                }
+            });
 
             btnMore.setOnClickListener(v -> {
                 if (listener != null) {
