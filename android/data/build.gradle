@@ -40,7 +40,7 @@ dependencies {
     androidTestImplementation libs.espresso.core
 
     // Google
-    implementation libs.google.places
+    implementation libs.places
 
     // Room
     implementation libs.room.runtime

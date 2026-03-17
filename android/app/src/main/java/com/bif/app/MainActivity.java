@@ -28,14 +28,13 @@ public class MainActivity extends AppCompatActivity {
         NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager().findFragmentById(R.id.nav_host_fragment);
         assert navHostFragment != null;
 
-        NavController navController = navHostFragment.getNavController();
-
         // Prevent Bottom Nav from auto padding
         BottomNavigationView bottomNav = findViewById(R.id.bottom_navigation);
         bottomNav.setOnApplyWindowInsetsListener(null);
         bottomNav.setPadding(0, 0, 0, 0);
         bottomNav.setItemActiveIndicatorEnabled(false);
 
+        final NavController navController = navHostFragment.getNavController();
         NavigationUI.setupWithNavController(bottomNav, navController);
 
         navController.addOnDestinationChangedListener((controller, destination, arguments) -> {

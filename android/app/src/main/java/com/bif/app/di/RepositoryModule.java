@@ -13,11 +13,12 @@ import com.bif.app.domain.repository.ILocationRepository;
 import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
 
+import javax.inject.Singleton;
+
 import dagger.Binds;
 import dagger.Module;
 import dagger.hilt.InstallIn;
 import dagger.hilt.components.SingletonComponent;
-import javax.inject.Singleton;
 
 @Module
 @InstallIn(SingletonComponent.class)

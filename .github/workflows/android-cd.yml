@@ -1,21 +1,28 @@
 name: Android Publish
 
+permissions:
+  contents: read
+  security-events: write
+
 on:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
   workflow_dispatch:
+    inputs:
+      version_number:
+        description: "Android build/version number (integer)"
+        required: true
+        type: string
 
 jobs:
-  check_quality:
-    uses: ./.github/workflows/code-quality.yml
+  security:
+    uses: ./.github/workflows/security.yml
+    with:
+      scan_path: android
     secrets:
-      GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
   build_release:
     name: Build Release App Bundle
-    needs: check_quality
+    needs: security
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -44,7 +51,7 @@ jobs:
           echo "PLACES_API_KEY=${{ secrets.PLACES_API_KEY }}" >> ./local.properties
 
       - name: Build Release Bundle
-        run: ./gradlew bundleRelease -PBUILD_NUMBER=${{ github.run_number }}
+        run: ./gradlew bundleRelease -PBUILD_NUMBER=${{ inputs.version_number }}
         env:
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
@@ -53,8 +60,25 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BIF-Locator-Release
+          name: BIF-App-Release
           path: android/app/build/outputs/bundle/release/app-release.aab
+
+  firebase_distribute:
+    name: Distribute to Firebase App Distribution
+    needs: build_release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: BIF-App-Release
+
+      - name: Upload to Firebase App Distribution
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: ${{ secrets.FIREBASE_APP_ID }}
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_CREDENTIALS }}
+          groups: bif_test_distribution
+          file: Bring-In-Friends.apk
 
   publish_play_store:
     name: Publish to Play Store
@@ -67,7 +91,7 @@ jobs:
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
-          name: BIF-Locator-Release
+          name: BIF-App-Release
 
       - name: Create Service Account File
         run: echo '${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}' > ./play_service_account.json

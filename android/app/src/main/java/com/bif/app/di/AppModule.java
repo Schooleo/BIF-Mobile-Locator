@@ -10,12 +10,14 @@ import com.bif.app.data.source.local.FriendDao;
 import com.bif.app.data.source.local.GroupDao;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
+
+import javax.inject.Singleton;
+
 import dagger.Module;
 import dagger.Provides;
 import dagger.hilt.InstallIn;
 import dagger.hilt.android.qualifiers.ApplicationContext;
 import dagger.hilt.components.SingletonComponent;
-import javax.inject.Singleton;
 
 @Module
 @InstallIn(SingletonComponent.class)
@@ -47,9 +49,13 @@ public class AppModule {
 
     @Provides
     @Singleton
-    public FriendDao provideFriendDao(AppDatabase database) { return database.friendDao(); }
+    public FriendDao provideFriendDao(AppDatabase database) { 
+      return database.friendDao(); 
+    }
 
     @Provides
     @Singleton
-    public GroupDao provideGroupDao(AppDatabase database) { return database.groupDao(); }
+    public GroupDao provideGroupDao(AppDatabase database) { 
+      return database.groupDao(); 
+    }
 }

@@ -1,0 +1,10 @@
+services:
+  bif-server:
+    image: ghcr.io/schooleo/bif-server:${SERVER_IMAGE_TAG:-latest}
+    container_name: bif-server
+    pull_policy: always
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    restart: unless-stopped
