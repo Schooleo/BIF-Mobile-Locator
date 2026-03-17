@@ -1,6 +1,7 @@
 package com.bif.app.data.repository;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.timeout;
@@ -142,5 +143,56 @@ public class GroupRepositoryTest {
 
         // Assert
         verify(mockDao, timeout(1000)).deleteGroupById(7);
+    }
+
+    // ==================== New Method Tests ====================
+
+    @Test
+    public void getGroupById_DaoReturnsData_ReturnsMappedDomain() throws InterruptedException {
+        // Arrange
+        GroupWithFriends gwf = new GroupWithFriends();
+        gwf.group = new GroupEntity(1, "Team", "T", 0xFF03DAC5, true);
+        gwf.friends = new ArrayList<>();
+
+        MutableLiveData<GroupWithFriends> fakeLiveData = new MutableLiveData<>();
+        fakeLiveData.setValue(gwf);
+        when(mockDao.getGroupWithFriendsById(1)).thenReturn(fakeLiveData);
+
+        Group expectedGroup = new Group(1, "Team", "T", 0xFF03DAC5, new ArrayList<>(), true);
+        when(mockMapper.mapToDomain(gwf)).thenReturn(expectedGroup);
+
+        // Re-create repository to pick up new mock behavior
+        repository = new GroupRepository(mockDao, mockMapper);
+
+        // Act
+        Group result = LiveDataTestUtil.getOrAwaitValue(repository.getGroupById(1));
+
+        // Assert
+        assertNotNull(result);
+        assertEquals("Team", result.getName());
+        assertEquals(1, result.getId());
+    }
+
+    @Test
+    public void updateGroup_ValidGroup_CallsDaoUpdateOnBackgroundThread() {
+        // Arrange
+        Group group = new Group(3, "Updated", "U", 0xFF00FF, new ArrayList<>(), true);
+        GroupEntity entity = new GroupEntity(3, "Updated", "U", 0xFF00FF, true);
+        when(mockMapper.mapToEntity(group)).thenReturn(entity);
+
+        // Act
+        repository.updateGroup(group);
+
+        // Assert — use timeout because Repository runs on ExecutorService
+        verify(mockDao, timeout(1000)).updateGroup(entity);
+    }
+
+    @Test
+    public void removeMember_ValidIds_CallsDaoDeleteCrossRefOnBackgroundThread() {
+        // Act
+        repository.removeMember(5, 10);
+
+        // Assert
+        verify(mockDao, timeout(1000)).deleteGroupFriendCrossRef(5, 10);
     }
 }

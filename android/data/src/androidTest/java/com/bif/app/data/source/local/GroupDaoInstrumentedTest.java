@@ -1,6 +1,8 @@
 package com.bif.app.data.source.local;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
@@ -159,5 +161,153 @@ public class GroupDaoInstrumentedTest {
         List<FriendEntity> remainingFriends = LiveDataTestUtil.getOrAwaitValue(friendDao.getAllFriends());
         assertEquals(1, remainingFriends.size());
         assertEquals("Cường", remainingFriends.get(0).name);
+    }
+
+    // ==================== New Method Tests ====================
+
+    @Test
+    public void getGroupWithFriendsById_ExistingGroup_ReturnsCorrectGroup() throws InterruptedException {
+        // Arrange
+        GroupEntity group1 = new GroupEntity(0, "Alpha", "A", 0xFFBB86FC, true);
+        GroupEntity group2 = new GroupEntity(0, "Beta", "B", 0xFF03DAC5, false);
+        long id1 = groupDao.insertGroup(group1);
+        groupDao.insertGroup(group2);
+
+        // Act
+        GroupWithFriends result = LiveDataTestUtil.getOrAwaitValue(
+                groupDao.getGroupWithFriendsById((int) id1));
+
+        // Assert
+        assertNotNull(result);
+        assertEquals("Alpha", result.group.getName());
+        assertEquals("A", result.group.getAvatarLetter());
+        assertTrue(result.group.isOwner());
+    }
+
+    @Test
+    public void getGroupWithFriendsById_WithMembers_ReturnsGroupWithFriends() throws InterruptedException {
+        // Add Friends
+        FriendEntity f1 = new FriendEntity();
+        f1.name = "An";
+        f1.avatarLetter = "A";
+        friendDao.insert(f1);
+
+        FriendEntity f2 = new FriendEntity();
+        f2.name = "Bình";
+        f2.avatarLetter = "B";
+        friendDao.insert(f2);
+
+        List<FriendEntity> friends = LiveDataTestUtil.getOrAwaitValue(friendDao.getAllFriends());
+        int fId1 = friends.get(0).id;
+        int fId2 = friends.get(1).id;
+
+        // Add Group
+        GroupEntity group = new GroupEntity(0, "WithMembers", "W", 0, true);
+        long groupId = groupDao.insertGroup(group);
+
+        // Add CrossRefs
+        groupDao.insertGroupFriendCrossRefs(Arrays.asList(
+                new GroupFriendCrossRef((int) groupId, fId1),
+                new GroupFriendCrossRef((int) groupId, fId2)
+        ));
+
+        // Act
+        GroupWithFriends result = LiveDataTestUtil.getOrAwaitValue(
+                groupDao.getGroupWithFriendsById((int) groupId));
+
+        // Assert
+        assertNotNull(result);
+        assertEquals("WithMembers", result.group.getName());
+        assertEquals(2, result.friends.size());
+    }
+
+    @Test
+    public void getGroupWithFriendsById_NonExistentId_ReturnsNull() throws InterruptedException {
+        // Act
+        GroupWithFriends result = LiveDataTestUtil.getOrAwaitValue(
+                groupDao.getGroupWithFriendsById(999));
+
+        // Assert
+        assertNull(result);
+    }
+
+    @Test
+    public void updateGroup_ValidData_UpdatesInDatabase() throws InterruptedException {
+        // Arrange
+        GroupEntity group = new GroupEntity(0, "Original", "O", 0xFFBB86FC, true);
+        long groupId = groupDao.insertGroup(group);
+
+        // Act
+        GroupEntity updated = new GroupEntity((int) groupId, "Renamed", "R", 0xFF03DAC5, true);
+        groupDao.updateGroup(updated);
+
+        // Assert
+        GroupWithFriends result = LiveDataTestUtil.getOrAwaitValue(
+                groupDao.getGroupWithFriendsById((int) groupId));
+        assertNotNull(result);
+        assertEquals("Renamed", result.group.getName());
+        assertEquals("R", result.group.getAvatarLetter());
+        assertEquals(0xFF03DAC5, result.group.getAvatarColor());
+    }
+
+    @Test
+    public void deleteGroupFriendCrossRef_RemovesOneMember_KeepsOthers() throws InterruptedException {
+        // Add Friends
+        FriendEntity f1 = new FriendEntity();
+        f1.name = "An";
+        f1.avatarLetter = "A";
+        friendDao.insert(f1);
+
+        FriendEntity f2 = new FriendEntity();
+        f2.name = "Bình";
+        f2.avatarLetter = "B";
+        friendDao.insert(f2);
+
+        List<FriendEntity> friends = LiveDataTestUtil.getOrAwaitValue(friendDao.getAllFriends());
+        int fId1 = friends.get(0).id;
+        int fId2 = friends.get(1).id;
+
+        // Add Group + CrossRefs
+        GroupEntity group = new GroupEntity(0, "RemoveTest", "R", 0, true);
+        long groupId = groupDao.insertGroup(group);
+        groupDao.insertGroupFriendCrossRefs(Arrays.asList(
+                new GroupFriendCrossRef((int) groupId, fId1),
+                new GroupFriendCrossRef((int) groupId, fId2)
+        ));
+
+        // Verify 2 members
+        GroupWithFriends before = LiveDataTestUtil.getOrAwaitValue(
+                groupDao.getGroupWithFriendsById((int) groupId));
+        assertEquals(2, before.friends.size());
+
+        // Act — remove first friend
+        groupDao.deleteGroupFriendCrossRef((int) groupId, fId1);
+
+        // Assert — 1 member remains
+        GroupWithFriends after = LiveDataTestUtil.getOrAwaitValue(
+                groupDao.getGroupWithFriendsById((int) groupId));
+        assertEquals(1, after.friends.size());
+        assertEquals("Bình", after.friends.get(0).name);
+
+        // Friend entity still exists
+        List<FriendEntity> allFriends = LiveDataTestUtil.getOrAwaitValue(friendDao.getAllFriends());
+        assertEquals(2, allFriends.size());
+    }
+
+    @Test
+    public void deleteGroupFriendCrossRef_NonExistentRef_DoesNothing() throws InterruptedException {
+        // Arrange
+        GroupEntity group = new GroupEntity(0, "NoEffect", "N", 0, true);
+        long groupId = groupDao.insertGroup(group);
+
+        // Act — delete non-existent cross ref
+        groupDao.deleteGroupFriendCrossRef((int) groupId, 999);
+
+        // Assert — group still exists, no crash
+        GroupWithFriends result = LiveDataTestUtil.getOrAwaitValue(
+                groupDao.getGroupWithFriendsById((int) groupId));
+        assertNotNull(result);
+        assertEquals("NoEffect", result.group.getName());
+        assertTrue(result.friends.isEmpty());
     }
 }
