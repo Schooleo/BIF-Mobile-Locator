@@ -7,6 +7,7 @@ import androidx.room.Room;
 import com.bif.app.data.source.local.AppDatabase;
 import com.bif.app.data.source.local.FavoriteDao;
 import com.bif.app.data.source.local.FriendDao;
+import com.bif.app.data.source.local.GroupDao;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import dagger.Module;
@@ -47,4 +48,8 @@ public class AppModule {
     @Provides
     @Singleton
     public FriendDao provideFriendDao(AppDatabase database) { return database.friendDao(); }
+
+    @Provides
+    @Singleton
+    public GroupDao provideGroupDao(AppDatabase database) { return database.groupDao(); }
 }
