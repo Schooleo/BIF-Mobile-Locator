@@ -12,10 +12,12 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bif.app.core.utils.DialogUtils;
+import com.bif.app.core.utils.UriUtils;
 import com.bif.app.domain.model.Friend;
 import com.bif.app.domain.model.Group;
 import com.google.android.material.tabs.TabLayout;
@@ -53,6 +55,15 @@ public class SocialFragment extends Fragment {
         setupTabs();
 
         observeViewModel();
+
+        // Listen for result from GroupDetailFragment to switch to Groups tab
+        getParentFragmentManager().setFragmentResultListener("groupDetailResult",
+                getViewLifecycleOwner(), (requestKey, result) -> {
+                    TabLayout.Tab groupsTab = tabLayout.getTabAt(1);
+                    if (groupsTab != null) {
+                        groupsTab.select();
+                    }
+                });
     }
 
     private void setupRecyclerView() {
@@ -84,6 +95,11 @@ public class SocialFragment extends Fragment {
             @Override
             public void onCreateGroupClick() {
                 showCreateGroupWithFriendsDialog();
+            }
+
+            @Override
+            public void onGroupClick(Group group) {
+                navigateToGroupDetail(group);
             }
 
             @Override
@@ -207,5 +223,12 @@ public class SocialFragment extends Fragment {
                     viewModel.handleGroupAction(group);
                     Toast.makeText(requireContext(), group.isOwner() ? "Disbanded" : "Left", Toast.LENGTH_SHORT).show();
                 });
+    }
+
+    private void navigateToGroupDetail(Group group) {
+        android.net.Uri destUri = UriUtils.buildUri(UriUtils.PathTo.GROUP_DETAIL).buildUpon()
+                .appendQueryParameter("groupId", String.valueOf(group.getId()))
+                .build();
+        Navigation.findNavController(requireView()).navigate(destUri);
     }
 }

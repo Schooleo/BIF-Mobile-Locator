@@ -6,6 +6,7 @@ import androidx.room.Insert;
 import androidx.room.OnConflictStrategy;
 import androidx.room.Query;
 import androidx.room.Transaction;
+import androidx.room.Update;
 
 import com.bif.app.data.source.local.entity.GroupEntity;
 import com.bif.app.data.source.local.entity.GroupFriendCrossRef;
@@ -19,12 +20,22 @@ public interface GroupDao {
     @Query("SELECT * FROM `groups`")
     LiveData<List<GroupWithFriends>> getAllGroupsWithFriends();
 
+    @Transaction
+    @Query("SELECT * FROM `groups` WHERE id = :groupId")
+    LiveData<GroupWithFriends> getGroupWithFriendsById(int groupId);
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     long insertGroup(GroupEntity group);
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     void insertGroupFriendCrossRefs(List<GroupFriendCrossRef> crossRefs);
 
+    @Update
+    void updateGroup(GroupEntity group);
+
     @Query("DELETE FROM `groups` WHERE id = :groupId")
     void deleteGroupById(int groupId);
+
+    @Query("DELETE FROM group_friend_cross_ref WHERE groupId = :groupId AND friendId = :friendId")
+    void deleteGroupFriendCrossRef(int groupId, int friendId);
 }

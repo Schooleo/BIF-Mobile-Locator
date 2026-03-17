@@ -93,5 +93,17 @@
 
         <deepLink app:uri="app://bif.app/profile/personal-info" />
     </fragment>
+    <fragment
+        android:id="@+id/nav_group_detail"
+        android:name="com.bif.app.feature.social.GroupDetailFragment"
+        android:label="Group Detail"
+        app:route="/social/group-detail"
+        tools:layout="@layout/fragment_group_detail">
+
+        <argument android:name="groupId" app:argType="integer" android:defaultValue="0" />
+
+        <deepLink app:uri="app://bif.app/social/group-detail?groupId={groupId}" />
+    </fragment>
 
 </navigation>
+

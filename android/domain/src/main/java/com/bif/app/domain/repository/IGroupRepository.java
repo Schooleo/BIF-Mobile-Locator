@@ -7,7 +7,10 @@ import java.util.List;
 
 public interface IGroupRepository {
     LiveData<List<Group>> getGroups();
+    LiveData<Group> getGroupById(int groupId);
     void createGroup(String name, List<Friend> selectedFriends);
+    void updateGroup(Group group);
+    void removeMember(int groupId, int friendId);
     void leaveGroup(Group group);
     void disbandGroup(Group group);
 }

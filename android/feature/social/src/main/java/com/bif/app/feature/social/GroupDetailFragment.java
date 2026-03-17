@@ -1,0 +1,171 @@
+package com.bif.app.feature.social;
+
+import android.content.res.ColorStateList;
+import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ImageButton;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
+import androidx.navigation.Navigation;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.bif.app.core.utils.DialogUtils;
+import com.bif.app.domain.model.Friend;
+import com.bif.app.domain.model.Group;
+
+import dagger.hilt.android.AndroidEntryPoint;
+
+@AndroidEntryPoint
+public class GroupDetailFragment extends Fragment {
+
+    private GroupDetailViewModel viewModel;
+    private GroupMembersAdapter membersAdapter;
+
+    private TextView tvHeaderTitle;
+    private TextView tvGroupAvatar;
+    private EditText etGroupName;
+    private Button btnSave;
+    private TextView tvMembersHeader;
+    private RecyclerView rvMembers;
+    private ImageButton btnDisband;
+
+    @Nullable
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater,
+                             @Nullable ViewGroup container,
+                             @Nullable Bundle savedInstanceState) {
+        return inflater.inflate(R.layout.fragment_group_detail, container, false);
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+
+        viewModel = new ViewModelProvider(this).get(GroupDetailViewModel.class);
+
+        // Bind views
+        tvHeaderTitle = view.findViewById(R.id.tv_header_title);
+        tvGroupAvatar = view.findViewById(R.id.tv_group_avatar);
+        etGroupName = view.findViewById(R.id.et_group_name);
+        btnSave = view.findViewById(R.id.btn_save);
+        tvMembersHeader = view.findViewById(R.id.tv_members_header);
+        rvMembers = view.findViewById(R.id.rv_members);
+        btnDisband = view.findViewById(R.id.btn_disband);
+
+        ImageButton btnBack = view.findViewById(R.id.btn_back);
+        btnBack.setOnClickListener(v -> navigateBackToGroups());
+
+        // Load group from args
+        Bundle args = getArguments();
+        if (args != null) {
+            int groupId = args.getInt("groupId", 0);
+            viewModel.loadGroup(groupId);
+        }
+
+        observeViewModel();
+        setupSaveButton();
+    }
+
+    private void navigateBackToGroups() {
+        // Set result so SocialFragment knows to show the Groups tab
+        getParentFragmentManager().setFragmentResult("groupDetailResult",
+                new Bundle());
+        Navigation.findNavController(requireView()).popBackStack();
+    }
+
+    private void observeViewModel() {
+        viewModel.getGroup().observe(getViewLifecycleOwner(), group -> {
+            if (group == null) return;
+
+            // Update header title with group name
+            tvHeaderTitle.setText(group.getName());
+
+            // Update avatar
+            tvGroupAvatar.setText(group.getAvatarLetter());
+            tvGroupAvatar.setBackgroundTintList(ColorStateList.valueOf(group.getAvatarColor()));
+
+            // Update name field (only set if user hasn't started editing)
+            if (!etGroupName.hasFocus()) {
+                etGroupName.setText(group.getName());
+            }
+
+            // Update members header
+            tvMembersHeader.setText(getString(R.string.members_header, group.getMemberCount()));
+
+            // Show disband button only for owners
+            if (group.isOwner()) {
+                btnDisband.setVisibility(View.VISIBLE);
+                btnDisband.setOnClickListener(v -> confirmDisbandGroup(group));
+            } else {
+                btnDisband.setVisibility(View.GONE);
+            }
+
+            // Setup members adapter
+            setupMembersAdapter(group);
+        });
+    }
+
+    private void setupMembersAdapter(Group group) {
+        if (membersAdapter == null) {
+            membersAdapter = new GroupMembersAdapter(
+                    (member, position) -> confirmRemoveMember(member),
+                    group.isOwner()
+            );
+            rvMembers.setLayoutManager(new LinearLayoutManager(requireContext()));
+            rvMembers.setAdapter(membersAdapter);
+        }
+        membersAdapter.setMembers(group.getMembers());
+    }
+
+    private void setupSaveButton() {
+        btnSave.setOnClickListener(v -> {
+            String newName = etGroupName.getText().toString().trim();
+            if (newName.isEmpty()) {
+                Toast.makeText(requireContext(), R.string.enter_group_name, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            viewModel.updateGroupName(newName);
+            Toast.makeText(requireContext(), R.string.group_updated, Toast.LENGTH_SHORT).show();
+            etGroupName.clearFocus();
+        });
+    }
+
+    private void confirmRemoveMember(Friend member) {
+        DialogUtils.showConfirmDialog(requireContext(),
+                getString(R.string.remove_member),
+                getString(R.string.remove_member_confirm, member.getName()),
+                getString(R.string.remove),
+                getString(R.string.cancel),
+                () -> {
+                    viewModel.removeMember(member);
+                    Toast.makeText(requireContext(),
+                            getString(R.string.member_removed, member.getName()),
+                            Toast.LENGTH_SHORT).show();
+                });
+    }
+
+    private void confirmDisbandGroup(Group group) {
+        DialogUtils.showConfirmDialog(requireContext(),
+                getString(R.string.disband_group),
+                getString(R.string.disband_group_confirm, group.getName()),
+                getString(R.string.disband),
+                getString(R.string.cancel),
+                () -> {
+                    viewModel.disbandGroup();
+                    Toast.makeText(requireContext(),
+                            getString(R.string.group_disbanded),
+                            Toast.LENGTH_SHORT).show();
+                    navigateBackToGroups();
+                });
+    }
+}

@@ -38,6 +38,21 @@ public class GroupRepository implements IGroupRepository {
     }
 
     @Override
+    public LiveData<Group> getGroupById(int groupId) {
+        return Transformations.map(groupDao.getGroupWithFriendsById(groupId), groupMapper::mapToDomain);
+    }
+
+    @Override
+    public void updateGroup(Group group) {
+        executorService.execute(() -> groupDao.updateGroup(groupMapper.mapToEntity(group)));
+    }
+
+    @Override
+    public void removeMember(int groupId, int friendId) {
+        executorService.execute(() -> groupDao.deleteGroupFriendCrossRef(groupId, friendId));
+    }
+
+    @Override
     public void createGroup(String name, List<Friend> selectedFriends) {
         executorService.execute(() -> {
             GroupEntity newGroup = new GroupEntity(

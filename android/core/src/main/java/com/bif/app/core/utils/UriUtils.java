@@ -12,6 +12,7 @@ public class UriUtils {
         FAVORITES,
         FAVORITES_DETAIL,
         SOCIAL,
+        GROUP_DETAIL,
         PROFILE,
         LOGIN,
         REGISTER,
@@ -41,6 +42,8 @@ public class UriUtils {
                 return buildUri("/favorites/detail");
             case SOCIAL:
                 return buildUri("/social");
+            case GROUP_DETAIL:
+                return buildUri("/social/group-detail");
             case PROFILE:
                 return buildUri("/profile");
             case LOGIN:

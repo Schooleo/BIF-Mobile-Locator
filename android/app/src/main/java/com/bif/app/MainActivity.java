@@ -39,7 +39,12 @@ public class MainActivity extends AppCompatActivity {
         NavigationUI.setupWithNavController(bottomNav, navController);
 
         navController.addOnDestinationChangedListener((controller, destination, arguments) -> {
-            if (destination.getId() == R.id.nav_login || destination.getId() == R.id.nav_register) {
+            int destId = destination.getId();
+            if (destId == R.id.nav_login
+                    || destId == R.id.nav_register
+                    || destId == R.id.nav_group_detail
+                    || destId == R.id.nav_favorite_detail
+                    || destId == R.id.nav_personal_info) {
                 bottomNav.setVisibility(View.GONE);
             } else {
                 bottomNav.setVisibility(View.VISIBLE);
