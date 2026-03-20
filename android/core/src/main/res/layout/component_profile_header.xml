@@ -12,13 +12,13 @@
         android:layout_width="100dp"
         android:layout_height="100dp">
 
-        <ImageView
+        <com.google.android.material.imageview.ShapeableImageView
             android:id="@+id/ivAvatarImage"
             android:layout_width="100dp"
             android:layout_height="100dp"
-            android:background="@drawable/bg_profile_avatar"
             android:scaleType="centerCrop"
-            android:visibility="gone" />
+            android:visibility="gone"
+            app:shapeAppearanceOverlay="@style/CircleImageStyle" />
 
         <TextView
             android:id="@+id/tvAvatar"
