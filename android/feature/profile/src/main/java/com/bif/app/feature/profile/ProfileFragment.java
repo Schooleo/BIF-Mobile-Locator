@@ -171,9 +171,9 @@ public class ProfileFragment extends Fragment {
         titleDarkMode.setText(R.string.dark_mode);
         switchDarkMode.setVisibility(View.VISIBLE);
 
-        // Get current theme mode
-        int currentNightMode = AppCompatDelegate.getDefaultNightMode();
-        boolean isDarkMode = currentNightMode == AppCompatDelegate.MODE_NIGHT_YES;
+        // Get current theme mode from actual configuration
+        boolean isDarkMode = (getResources().getConfiguration().uiMode
+                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
         switchDarkMode.setChecked(isDarkMode);
         iconDarkMode.setImageResource(isDarkMode
                 ? com.bif.app.core.R.drawable.ic_moon
