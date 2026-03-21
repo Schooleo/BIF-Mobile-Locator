@@ -5,6 +5,7 @@ import com.bif.server.features.user.services.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
@@ -87,5 +88,170 @@ class UserRestControllerTest {
         ResponseEntity<Void> result = controller.deleteUser("u1");
 
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
+    }
+
+    @Test
+    void getMyAuthState_WhenHeaderMissing_ReturnsUnauthorizedAndNotAuthenticated() {
+        ResponseEntity<UserRestController.AuthStateResponse> result = controller.getMyAuthState(null);
+
+        assertEquals(HttpStatus.UNAUTHORIZED, result.getStatusCode());
+        assertNotNull(result.getBody());
+        assertFalse(result.getBody().authenticated());
+        assertNull(result.getBody().userId());
+        assertFalse(result.getBody().hasProfile());
+        verify(userService, never()).getById(anyString());
+    }
+
+    @Test
+    void getMyAuthState_WhenUserHasNoProfile_ReturnsOkAndHasProfileFalse() {
+        when(userService.getById("u1")).thenReturn(Optional.empty());
+
+        ResponseEntity<UserRestController.AuthStateResponse> result = controller.getMyAuthState("u1");
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertNotNull(result.getBody());
+        assertTrue(result.getBody().authenticated());
+        assertEquals("u1", result.getBody().userId());
+        assertFalse(result.getBody().hasProfile());
+        verify(userService).getById("u1");
+    }
+
+    @Test
+    void getMyAuthState_WhenUserHasProfile_ReturnsOkAndHasProfileTrue() {
+        User user = new User();
+        when(userService.getById("u1")).thenReturn(Optional.of(user));
+
+        ResponseEntity<UserRestController.AuthStateResponse> result = controller.getMyAuthState("u1");
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertNotNull(result.getBody());
+        assertTrue(result.getBody().authenticated());
+        assertEquals("u1", result.getBody().userId());
+        assertTrue(result.getBody().hasProfile());
+        verify(userService).getById("u1");
+    }
+
+    @Test
+    void getMyProfileMetadata_WhenHeaderMissing_ReturnsUnauthorized() {
+        ResponseEntity<UserRestController.ProfileMetadataResponse> result =
+                controller.getMyProfileMetadata(null);
+
+        assertEquals(HttpStatus.UNAUTHORIZED, result.getStatusCode());
+        assertNull(result.getBody());
+        verify(userService, never()).getById(anyString());
+    }
+
+    @Test
+    void getMyProfileMetadata_WhenUserNotFound_ReturnsNotFound() {
+        when(userService.getById("u1")).thenReturn(Optional.empty());
+
+        ResponseEntity<UserRestController.ProfileMetadataResponse> result =
+                controller.getMyProfileMetadata("u1");
+
+        assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
+        assertNull(result.getBody());
+        verify(userService).getById("u1");
+    }
+
+    @Test
+    void getMyProfileMetadata_WhenUserFound_ReturnsMetadataWithCompletionPercent() {
+        User user = new User();
+        user.setId("u1");
+        user.setName("Alex");
+        user.setEmail("alex@bif.local");
+        user.setAvatarLetter("A");
+        user.setAvatarColor(0xFF1E88E5);
+        user.setOnline(true);
+        user.setServerVersion(7);
+
+        when(userService.getById("u1")).thenReturn(Optional.of(user));
+
+        ResponseEntity<UserRestController.ProfileMetadataResponse> result =
+                controller.getMyProfileMetadata("u1");
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertNotNull(result.getBody());
+        assertEquals("u1", result.getBody().userId());
+        assertEquals("Alex", result.getBody().displayName());
+        assertEquals("alex@bif.local", result.getBody().email());
+        assertEquals("A", result.getBody().avatarLetter());
+        assertEquals(0xFF1E88E5, result.getBody().avatarColor());
+        assertTrue(result.getBody().online());
+        assertEquals(7, result.getBody().serverVersion());
+        assertEquals(100, result.getBody().profileCompletionPercent());
+        verify(userService).getById("u1");
+    }
+
+    @Test
+    void updateMyProfile_WhenHeaderMissing_ReturnsUnauthorized() {
+        UserRestController.UpdateMyProfileRequest request =
+                new UserRestController.UpdateMyProfileRequest("Alex", "A", 123, null);
+
+        ResponseEntity<User> result = controller.updateMyProfile(null, request);
+
+        assertEquals(HttpStatus.UNAUTHORIZED, result.getStatusCode());
+        verify(userService, never()).getById(anyString());
+        verify(userService, never()).save(any(User.class));
+    }
+
+    @Test
+    void updateMyProfile_WhenUserNotFound_ReturnsNotFound() {
+        when(userService.getById("u1")).thenReturn(Optional.empty());
+
+        UserRestController.UpdateMyProfileRequest request =
+                new UserRestController.UpdateMyProfileRequest("Alex", "A", 123, null);
+
+        ResponseEntity<User> result = controller.updateMyProfile("u1", request);
+
+        assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
+        verify(userService).getById("u1");
+        verify(userService, never()).save(any(User.class));
+    }
+
+    @Test
+    void updateMyProfile_WhenNameBlank_ReturnsBadRequest() {
+        User existing = new User();
+        existing.setId("u1");
+        when(userService.getById("u1")).thenReturn(Optional.of(existing));
+
+        UserRestController.UpdateMyProfileRequest request =
+                new UserRestController.UpdateMyProfileRequest("   ", "A", 123, null);
+
+        ResponseEntity<User> result = controller.updateMyProfile("u1", request);
+
+        assertEquals(HttpStatus.BAD_REQUEST, result.getStatusCode());
+        verify(userService).getById("u1");
+        verify(userService, never()).save(any(User.class));
+    }
+
+    @Test
+    void updateMyProfile_WhenValidRequest_UpdatesProfileButKeepsEmailUnchanged() {
+        User existing = new User();
+        existing.setId("u1");
+        existing.setEmail("old@bif.local");
+        existing.setOnline(true);
+        existing.setServerVersion(10);
+
+        when(userService.getById("u1")).thenReturn(Optional.of(existing));
+        when(userService.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserRestController.UpdateMyProfileRequest request =
+                new UserRestController.UpdateMyProfileRequest(" Alex ", " A ", 0xFF1E88E5, "new@bif.local");
+
+        ResponseEntity<User> result = controller.updateMyProfile("u1", request);
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertNotNull(result.getBody());
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userService).save(captor.capture());
+        User saved = captor.getValue();
+
+        assertEquals("Alex", saved.getName());
+        assertEquals("A", saved.getAvatarLetter());
+        assertEquals(0xFF1E88E5, saved.getAvatarColor());
+        assertEquals("old@bif.local", saved.getEmail());
+        assertTrue(saved.isOnline());
+        assertEquals(10, saved.getServerVersion());
     }
 }
