@@ -1,7 +1,10 @@
 package com.bif.server.features.group.services;
 
+import com.bif.server.features.group.dto.AddMemberRequest;
 import com.bif.server.features.group.dto.CreateGroupRequest;
+import com.bif.server.features.group.dto.GroupMemberResponse;
 import com.bif.server.features.group.dto.UpdateGroupRequest;
+import com.bif.server.features.group.dto.UpdateMemberRoleRequest;
 import com.bif.server.features.group.models.Group;
 import com.bif.server.features.group.repositories.GroupRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 
@@ -232,5 +236,134 @@ class GroupServiceTest {
 
         assertFalse(result);
         verify(groupRepository, never()).deleteById(anyString());
+    }
+
+    @Test
+    void addMember_WhenGroupFound_AddsMemberAndRole() {
+        Group existing = new Group();
+        existing.setId("g1");
+        existing.setOwnerId("owner-1");
+        existing.setMemberIds(Arrays.asList("owner-1", "member-1"));
+        existing.setMemberRoles(new HashMap<>());
+        when(groupRepository.findById("g1")).thenReturn(Optional.of(existing));
+        when(groupRepository.save(existing)).thenReturn(existing);
+
+        AddMemberRequest request = new AddMemberRequest();
+        request.setMemberId("member-2");
+        request.setRole("admin");
+
+        Optional<Group> result = groupService.addMember("g1", request);
+
+        assertTrue(result.isPresent());
+        assertTrue(result.get().getMemberIds().contains("member-2"));
+        assertEquals("ADMIN", result.get().getMemberRoles().get("member-2"));
+        assertEquals(3, result.get().getMemberCount());
+    }
+
+    @Test
+    void removeMember_WhenOwner_ThrowsIllegalArgumentException() {
+        Group existing = new Group();
+        existing.setId("g1");
+        existing.setOwnerId("owner-1");
+        existing.setMemberIds(Arrays.asList("owner-1", "member-1"));
+        when(groupRepository.findById("g1")).thenReturn(Optional.of(existing));
+
+        assertThrows(IllegalArgumentException.class, () -> groupService.removeMember("g1", "owner-1"));
+    }
+
+    @Test
+    void removeMember_WhenMemberFound_RemovesAndUpdatesCount() {
+        Group existing = new Group();
+        existing.setId("g1");
+        existing.setOwnerId("owner-1");
+        existing.setMemberIds(new java.util.ArrayList<>(Arrays.asList("owner-1", "member-1", "member-2")));
+        HashMap<String, String> roles = new HashMap<>();
+        roles.put("owner-1", "ADMIN");
+        roles.put("member-1", "MEMBER");
+        roles.put("member-2", "ADMIN");
+        existing.setMemberRoles(roles);
+        when(groupRepository.findById("g1")).thenReturn(Optional.of(existing));
+        when(groupRepository.save(existing)).thenReturn(existing);
+
+        Optional<Group> result = groupService.removeMember("g1", "member-2");
+
+        assertTrue(result.isPresent());
+        assertFalse(result.get().getMemberIds().contains("member-2"));
+        assertNull(result.get().getMemberRoles().get("member-2"));
+        assertEquals(2, result.get().getMemberCount());
+    }
+
+    @Test
+    void updateMemberRole_WhenMemberMissing_ThrowsIllegalArgumentException() {
+        Group existing = new Group();
+        existing.setId("g1");
+        existing.setOwnerId("owner-1");
+        existing.setMemberIds(List.of("owner-1"));
+        when(groupRepository.findById("g1")).thenReturn(Optional.of(existing));
+
+        UpdateMemberRoleRequest request = new UpdateMemberRoleRequest();
+        request.setRole("ADMIN");
+
+        assertThrows(IllegalArgumentException.class, () -> groupService.updateMemberRole("g1", "member-1", request));
+    }
+
+    @Test
+    void updateMemberRole_WhenOwner_ThrowsIllegalArgumentException() {
+        Group existing = new Group();
+        existing.setId("g1");
+        existing.setOwnerId("owner-1");
+        existing.setMemberIds(List.of("owner-1", "member-1"));
+        when(groupRepository.findById("g1")).thenReturn(Optional.of(existing));
+
+        UpdateMemberRoleRequest request = new UpdateMemberRoleRequest();
+        request.setRole("MEMBER");
+
+        assertThrows(IllegalArgumentException.class, () -> groupService.updateMemberRole("g1", "owner-1", request));
+    }
+
+    @Test
+    void updateMemberRole_WhenValid_UpdatesRole() {
+        Group existing = new Group();
+        existing.setId("g1");
+        existing.setOwnerId("owner-1");
+        existing.setMemberIds(new java.util.ArrayList<>(List.of("owner-1", "member-1")));
+        existing.setMemberRoles(new HashMap<>());
+        when(groupRepository.findById("g1")).thenReturn(Optional.of(existing));
+        when(groupRepository.save(existing)).thenReturn(existing);
+
+        UpdateMemberRoleRequest request = new UpdateMemberRoleRequest();
+        request.setRole("ADMIN");
+
+        Optional<Group> result = groupService.updateMemberRole("g1", "member-1", request);
+
+        assertTrue(result.isPresent());
+        assertEquals("ADMIN", result.get().getMemberRoles().get("member-1"));
+    }
+
+    @Test
+    void getMembers_WhenGroupFound_ReturnsMemberListWithRoles() {
+        Group existing = new Group();
+        existing.setId("g1");
+        existing.setOwnerId("owner-1");
+        existing.setMemberIds(List.of("owner-1", "member-1"));
+        HashMap<String, String> roles = new HashMap<>();
+        roles.put("owner-1", "ADMIN");
+        roles.put("member-1", "MEMBER");
+        existing.setMemberRoles(roles);
+        when(groupRepository.findById("g1")).thenReturn(Optional.of(existing));
+
+        Optional<List<GroupMemberResponse>> result = groupService.getMembers("g1");
+
+        assertTrue(result.isPresent());
+        assertEquals(2, result.get().size());
+    }
+
+    @Test
+    void getMembers_WhenMissing_ReturnsEmpty() {
+        when(groupRepository.findById("g1")).thenReturn(Optional.empty());
+
+        Optional<List<GroupMemberResponse>> result = groupService.getMembers("g1");
+
+        assertTrue(result.isEmpty());
     }
 }

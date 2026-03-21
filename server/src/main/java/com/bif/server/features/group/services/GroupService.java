@@ -1,14 +1,19 @@
 package com.bif.server.features.group.services;
 
+import com.bif.server.features.group.dto.AddMemberRequest;
 import com.bif.server.features.group.dto.CreateGroupRequest;
+import com.bif.server.features.group.dto.GroupMemberResponse;
 import com.bif.server.features.group.dto.UpdateGroupRequest;
+import com.bif.server.features.group.dto.UpdateMemberRoleRequest;
 import com.bif.server.features.group.models.Group;
 import com.bif.server.features.group.repositories.GroupRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -16,6 +21,8 @@ import java.util.Set;
 public class GroupService {
     private static final int DEFAULT_AVATAR_COLOR = 0xFF03DAC5;
     private static final long UNSIGNED_INT_MAX = 0xFFFFFFFFL;
+    private static final String ROLE_MEMBER = "MEMBER";
+    private static final String ROLE_ADMIN = "ADMIN";
 
     private final GroupRepository groupRepository;
 
@@ -64,8 +71,135 @@ public class GroupService {
         }
         group.setMemberIds(new ArrayList<>(members));
         group.setMemberCount(group.getMemberIds().size());
+        group.setMemberRoles(buildInitialMemberRoles(group.getMemberIds(), ownerId));
 
         return groupRepository.save(group);
+    }
+
+    public Optional<Group> addMember(String id, AddMemberRequest request) {
+        validateNonBlank(id, "id");
+        if (request == null) {
+            throw new IllegalArgumentException("request is required");
+        }
+
+        String memberId = validateNonBlank(request.getMemberId(), "memberId");
+        String role = normalizeRole(request.getRole(), false);
+
+        Optional<Group> existing = groupRepository.findById(id);
+        if (existing.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Group group = existing.get();
+        if (group.getMemberIds() == null) {
+            group.setMemberIds(new ArrayList<>());
+        } else {
+            group.setMemberIds(new ArrayList<>(group.getMemberIds()));
+        }
+        if (group.getMemberRoles() == null) {
+            group.setMemberRoles(new HashMap<>());
+        } else {
+            group.setMemberRoles(new HashMap<>(group.getMemberRoles()));
+        }
+
+        if (!group.getMemberIds().contains(memberId)) {
+            group.getMemberIds().add(memberId);
+        }
+        group.getMemberRoles().put(memberId, role);
+        group.setMemberCount(group.getMemberIds().size());
+
+        return Optional.of(groupRepository.save(group));
+    }
+
+    public Optional<Group> removeMember(String id, String memberId) {
+        validateNonBlank(id, "id");
+        String memberIdValue = validateNonBlank(memberId, "memberId");
+
+        Optional<Group> existing = groupRepository.findById(id);
+        if (existing.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Group group = existing.get();
+        if (memberIdValue.equals(group.getOwnerId())) {
+            throw new IllegalArgumentException("owner cannot be removed from group");
+        }
+
+        if (group.getMemberIds() != null) {
+            group.setMemberIds(new ArrayList<>(group.getMemberIds()));
+        }
+        if (group.getMemberRoles() != null) {
+            group.setMemberRoles(new HashMap<>(group.getMemberRoles()));
+        }
+
+        if (group.getMemberIds() != null) {
+            group.getMemberIds().remove(memberIdValue);
+        }
+        if (group.getMemberRoles() != null) {
+            group.getMemberRoles().remove(memberIdValue);
+        }
+        group.setMemberCount(group.getMemberIds() != null ? group.getMemberIds().size() : 0);
+
+        return Optional.of(groupRepository.save(group));
+    }
+
+    public Optional<Group> updateMemberRole(String id, String memberId, UpdateMemberRoleRequest request) {
+        validateNonBlank(id, "id");
+        String memberIdValue = validateNonBlank(memberId, "memberId");
+        if (request == null) {
+            throw new IllegalArgumentException("request is required");
+        }
+
+        Optional<Group> existing = groupRepository.findById(id);
+        if (existing.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Group group = existing.get();
+        if (group.getMemberIds() == null || !group.getMemberIds().contains(memberIdValue)) {
+            throw new IllegalArgumentException("member is not in group");
+        }
+
+        if (memberIdValue.equals(group.getOwnerId())) {
+            throw new IllegalArgumentException("owner role cannot be changed");
+        }
+
+        if (group.getMemberRoles() == null) {
+            group.setMemberRoles(new HashMap<>());
+        }
+        group.getMemberRoles().put(memberIdValue, normalizeRole(request.getRole(), true));
+
+        return Optional.of(groupRepository.save(group));
+    }
+
+    public Optional<List<GroupMemberResponse>> getMembers(String id) {
+        validateNonBlank(id, "id");
+        return groupRepository.findById(id).map(group -> {
+            List<GroupMemberResponse> members = new ArrayList<>();
+            List<String> memberIds = group.getMemberIds();
+            Map<String, String> memberRoles = group.getMemberRoles();
+            if (memberIds == null) {
+                return members;
+            }
+
+            for (String memberId : memberIds) {
+                if (memberId == null || memberId.isBlank()) {
+                    continue;
+                }
+
+                String role;
+                if (memberId.equals(group.getOwnerId())) {
+                    role = ROLE_ADMIN;
+                } else if (memberRoles != null && memberRoles.containsKey(memberId)) {
+                    role = normalizeRole(memberRoles.get(memberId), false);
+                } else {
+                    role = ROLE_MEMBER;
+                }
+                members.add(new GroupMemberResponse(memberId, role));
+            }
+
+            return members;
+        });
     }
 
     public Optional<Group> update(String id, UpdateGroupRequest request) {
@@ -117,5 +251,37 @@ public class GroupService {
             throw new IllegalArgumentException("avatarColor is out of supported range");
         }
         return (int) value;
+    }
+
+    private Map<String, String> buildInitialMemberRoles(List<String> members, String ownerId) {
+        Map<String, String> roles = new HashMap<>();
+        if (members == null) {
+            roles.put(ownerId, ROLE_ADMIN);
+            return roles;
+        }
+
+        for (String memberId : members) {
+            if (memberId == null || memberId.isBlank()) {
+                continue;
+            }
+            roles.put(memberId, memberId.equals(ownerId) ? ROLE_ADMIN : ROLE_MEMBER);
+        }
+        roles.put(ownerId, ROLE_ADMIN);
+        return roles;
+    }
+
+    private String normalizeRole(String role, boolean required) {
+        if (role == null || role.isBlank()) {
+            if (required) {
+                throw new IllegalArgumentException("role is required");
+            }
+            return ROLE_MEMBER;
+        }
+
+        String normalized = role.trim().toUpperCase();
+        if (!ROLE_MEMBER.equals(normalized) && !ROLE_ADMIN.equals(normalized)) {
+            throw new IllegalArgumentException("role must be MEMBER or ADMIN");
+        }
+        return normalized;
     }
 }

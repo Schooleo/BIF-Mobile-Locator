@@ -1,7 +1,10 @@
 package com.bif.server.features.group.controllers;
 
+import com.bif.server.features.group.dto.AddMemberRequest;
 import com.bif.server.features.group.dto.CreateGroupRequest;
+import com.bif.server.features.group.dto.GroupMemberResponse;
 import com.bif.server.features.group.dto.UpdateGroupRequest;
+import com.bif.server.features.group.dto.UpdateMemberRoleRequest;
 import com.bif.server.features.group.models.Group;
 import com.bif.server.features.group.services.GroupService;
 import org.springframework.http.ResponseEntity;
@@ -57,6 +60,57 @@ public class GroupRestController {
     public ResponseEntity<Group> updateGroup(@PathVariable String id, @RequestBody UpdateGroupRequest request) {
         try {
             return groupService.update(id, request)
+                    .map(ResponseEntity::ok)
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(BAD_REQUEST, ex.getMessage());
+        }
+    }
+
+    @GetMapping("/{id}/members")
+    public ResponseEntity<List<GroupMemberResponse>> getGroupMembers(@PathVariable String id) {
+        try {
+            return groupService.getMembers(id)
+                    .map(ResponseEntity::ok)
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(BAD_REQUEST, ex.getMessage());
+        }
+    }
+
+    @PostMapping("/{id}/members")
+    public ResponseEntity<Group> addMember(
+            @PathVariable String id,
+            @RequestBody AddMemberRequest request
+    ) {
+        try {
+            return groupService.addMember(id, request)
+                    .map(ResponseEntity::ok)
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(BAD_REQUEST, ex.getMessage());
+        }
+    }
+
+    @DeleteMapping("/{id}/members/{memberId}")
+    public ResponseEntity<Group> removeMember(@PathVariable String id, @PathVariable String memberId) {
+        try {
+            return groupService.removeMember(id, memberId)
+                    .map(ResponseEntity::ok)
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(BAD_REQUEST, ex.getMessage());
+        }
+    }
+
+    @PatchMapping("/{id}/members/{memberId}/role")
+    public ResponseEntity<Group> updateMemberRole(
+            @PathVariable String id,
+            @PathVariable String memberId,
+            @RequestBody UpdateMemberRoleRequest request
+    ) {
+        try {
+            return groupService.updateMemberRole(id, memberId, request)
                     .map(ResponseEntity::ok)
                     .orElseGet(() -> ResponseEntity.notFound().build());
         } catch (IllegalArgumentException ex) {
