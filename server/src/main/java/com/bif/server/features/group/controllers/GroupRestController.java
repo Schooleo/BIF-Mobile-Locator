@@ -14,6 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
+import static org.springframework.http.HttpStatus.FORBIDDEN;
 
 @RestController
 @RequestMapping("/api/groups")
@@ -57,22 +58,33 @@ public class GroupRestController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Group> updateGroup(@PathVariable String id, @RequestBody UpdateGroupRequest request) {
+    public ResponseEntity<Group> updateGroup(
+            @PathVariable String id,
+            @RequestParam String actorId,
+            @RequestBody UpdateGroupRequest request
+    ) {
         try {
-            return groupService.update(id, request)
+            return groupService.update(id, actorId, request)
                     .map(ResponseEntity::ok)
                     .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (SecurityException ex) {
+            throw new ResponseStatusException(FORBIDDEN, ex.getMessage());
         } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(BAD_REQUEST, ex.getMessage());
         }
     }
 
     @GetMapping("/{id}/members")
-    public ResponseEntity<List<GroupMemberResponse>> getGroupMembers(@PathVariable String id) {
+    public ResponseEntity<List<GroupMemberResponse>> getGroupMembers(
+            @PathVariable String id,
+            @RequestParam String actorId
+    ) {
         try {
-            return groupService.getMembers(id)
+            return groupService.getMembers(id, actorId)
                     .map(ResponseEntity::ok)
                     .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (SecurityException ex) {
+            throw new ResponseStatusException(FORBIDDEN, ex.getMessage());
         } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(BAD_REQUEST, ex.getMessage());
         }
@@ -81,23 +93,32 @@ public class GroupRestController {
     @PostMapping("/{id}/members")
     public ResponseEntity<Group> addMember(
             @PathVariable String id,
+            @RequestParam String actorId,
             @RequestBody AddMemberRequest request
     ) {
         try {
-            return groupService.addMember(id, request)
+            return groupService.addMember(id, actorId, request)
                     .map(ResponseEntity::ok)
                     .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (SecurityException ex) {
+            throw new ResponseStatusException(FORBIDDEN, ex.getMessage());
         } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(BAD_REQUEST, ex.getMessage());
         }
     }
 
     @DeleteMapping("/{id}/members/{memberId}")
-    public ResponseEntity<Group> removeMember(@PathVariable String id, @PathVariable String memberId) {
+    public ResponseEntity<Group> removeMember(
+            @PathVariable String id,
+            @RequestParam String actorId,
+            @PathVariable String memberId
+    ) {
         try {
-            return groupService.removeMember(id, memberId)
+            return groupService.removeMember(id, actorId, memberId)
                     .map(ResponseEntity::ok)
                     .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (SecurityException ex) {
+            throw new ResponseStatusException(FORBIDDEN, ex.getMessage());
         } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(BAD_REQUEST, ex.getMessage());
         }
@@ -106,13 +127,16 @@ public class GroupRestController {
     @PatchMapping("/{id}/members/{memberId}/role")
     public ResponseEntity<Group> updateMemberRole(
             @PathVariable String id,
+            @RequestParam String actorId,
             @PathVariable String memberId,
             @RequestBody UpdateMemberRoleRequest request
     ) {
         try {
-            return groupService.updateMemberRole(id, memberId, request)
+            return groupService.updateMemberRole(id, actorId, memberId, request)
                     .map(ResponseEntity::ok)
                     .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (SecurityException ex) {
+            throw new ResponseStatusException(FORBIDDEN, ex.getMessage());
         } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(BAD_REQUEST, ex.getMessage());
         }
@@ -124,9 +148,13 @@ public class GroupRestController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteGroup(@PathVariable String id) {
+    public ResponseEntity<Void> deleteGroup(@PathVariable String id, @RequestParam String actorId) {
         try {
-            return groupService.deleteById(id) ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
+            return groupService.deleteById(id, actorId)
+                    ? ResponseEntity.noContent().build()
+                    : ResponseEntity.notFound().build();
+        } catch (SecurityException ex) {
+            throw new ResponseStatusException(FORBIDDEN, ex.getMessage());
         } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(BAD_REQUEST, ex.getMessage());
         }

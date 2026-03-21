@@ -116,9 +116,9 @@ class GroupRestControllerTest {
         UpdateGroupRequest request = new UpdateGroupRequest();
         request.setName("Updated");
         Group updated = new Group();
-        when(groupService.update("g1", request)).thenReturn(Optional.of(updated));
+        when(groupService.update("g1", "owner-1", request)).thenReturn(Optional.of(updated));
 
-        ResponseEntity<Group> result = controller.updateGroup("g1", request);
+        ResponseEntity<Group> result = controller.updateGroup("g1", "owner-1", request);
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
         assertSame(updated, result.getBody());
@@ -128,9 +128,9 @@ class GroupRestControllerTest {
     void updateGroup_WhenMissing_ReturnsNotFound() {
         UpdateGroupRequest request = new UpdateGroupRequest();
         request.setName("Updated");
-        when(groupService.update("g1", request)).thenReturn(Optional.empty());
+        when(groupService.update("g1", "owner-1", request)).thenReturn(Optional.empty());
 
-        ResponseEntity<Group> result = controller.updateGroup("g1", request);
+        ResponseEntity<Group> result = controller.updateGroup("g1", "owner-1", request);
 
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
     }
@@ -138,13 +138,24 @@ class GroupRestControllerTest {
     @Test
     void updateGroup_WhenInvalid_ThrowsBadRequest() {
         UpdateGroupRequest request = new UpdateGroupRequest();
-        when(groupService.update("g1", request)).thenThrow(new IllegalArgumentException("name is required"));
+        when(groupService.update("g1", "owner-1", request)).thenThrow(new IllegalArgumentException("name is required"));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                () -> controller.updateGroup("g1", request));
+            () -> controller.updateGroup("g1", "owner-1", request));
 
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
     }
+
+        @Test
+        void updateGroup_WhenForbidden_ThrowsForbidden() {
+        UpdateGroupRequest request = new UpdateGroupRequest();
+        when(groupService.update("g1", "member-1", request)).thenThrow(new SecurityException("admin access required"));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> controller.updateGroup("g1", "member-1", request));
+
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+        }
 
     @Test
     void upsertGroup_DelegatesToService() {
@@ -158,38 +169,48 @@ class GroupRestControllerTest {
 
     @Test
     void deleteGroup_WhenDeleted_ReturnsNoContent() {
-        when(groupService.deleteById("g1")).thenReturn(true);
+        when(groupService.deleteById("g1", "owner-1")).thenReturn(true);
 
-        ResponseEntity<Void> result = controller.deleteGroup("g1");
+        ResponseEntity<Void> result = controller.deleteGroup("g1", "owner-1");
 
         assertEquals(HttpStatus.NO_CONTENT, result.getStatusCode());
     }
 
     @Test
     void deleteGroup_WhenMissing_ReturnsNotFound() {
-        when(groupService.deleteById("g1")).thenReturn(false);
+        when(groupService.deleteById("g1", "owner-1")).thenReturn(false);
 
-        ResponseEntity<Void> result = controller.deleteGroup("g1");
+        ResponseEntity<Void> result = controller.deleteGroup("g1", "owner-1");
 
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
     }
 
     @Test
     void deleteGroup_WhenInvalid_ThrowsBadRequest() {
-        when(groupService.deleteById(" ")).thenThrow(new IllegalArgumentException("id is required"));
+        when(groupService.deleteById(" ", "owner-1")).thenThrow(new IllegalArgumentException("id is required"));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                () -> controller.deleteGroup(" "));
+            () -> controller.deleteGroup(" ", "owner-1"));
 
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
     }
 
+        @Test
+        void deleteGroup_WhenForbidden_ThrowsForbidden() {
+        when(groupService.deleteById("g1", "member-1")).thenThrow(new SecurityException("owner access required"));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> controller.deleteGroup("g1", "member-1"));
+
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+        }
+
     @Test
     void getGroupMembers_WhenFound_ReturnsOk() {
-        when(groupService.getMembers("g1"))
+        when(groupService.getMembers("g1", "member-1"))
                 .thenReturn(Optional.of(List.of(new GroupMemberResponse("user-1", "ADMIN"))));
 
-        ResponseEntity<List<GroupMemberResponse>> result = controller.getGroupMembers("g1");
+        ResponseEntity<List<GroupMemberResponse>> result = controller.getGroupMembers("g1", "member-1");
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
         assertNotNull(result.getBody());
@@ -198,22 +219,32 @@ class GroupRestControllerTest {
 
     @Test
     void getGroupMembers_WhenMissing_ReturnsNotFound() {
-        when(groupService.getMembers("g1")).thenReturn(Optional.empty());
+        when(groupService.getMembers("g1", "member-1")).thenReturn(Optional.empty());
 
-        ResponseEntity<List<GroupMemberResponse>> result = controller.getGroupMembers("g1");
+        ResponseEntity<List<GroupMemberResponse>> result = controller.getGroupMembers("g1", "member-1");
 
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
     }
 
     @Test
     void getGroupMembers_WhenInvalid_ThrowsBadRequest() {
-        when(groupService.getMembers(" ")).thenThrow(new IllegalArgumentException("id is required"));
+        when(groupService.getMembers(" ", "member-1")).thenThrow(new IllegalArgumentException("id is required"));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                () -> controller.getGroupMembers(" "));
+            () -> controller.getGroupMembers(" ", "member-1"));
 
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
     }
+
+        @Test
+        void getGroupMembers_WhenForbidden_ThrowsForbidden() {
+        when(groupService.getMembers("g1", "outsider")).thenThrow(new SecurityException("member access required"));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> controller.getGroupMembers("g1", "outsider"));
+
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+        }
 
     @Test
     void addMember_WhenFound_ReturnsOk() {
@@ -221,9 +252,9 @@ class GroupRestControllerTest {
         request.setMemberId("user-2");
         request.setRole("MEMBER");
         Group group = new Group();
-        when(groupService.addMember("g1", request)).thenReturn(Optional.of(group));
+        when(groupService.addMember("g1", "owner-1", request)).thenReturn(Optional.of(group));
 
-        ResponseEntity<Group> result = controller.addMember("g1", request);
+        ResponseEntity<Group> result = controller.addMember("g1", "owner-1", request);
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
     }
@@ -232,9 +263,9 @@ class GroupRestControllerTest {
     void addMember_WhenMissing_ReturnsNotFound() {
         AddMemberRequest request = new AddMemberRequest();
         request.setMemberId("user-2");
-        when(groupService.addMember("g1", request)).thenReturn(Optional.empty());
+        when(groupService.addMember("g1", "owner-1", request)).thenReturn(Optional.empty());
 
-        ResponseEntity<Group> result = controller.addMember("g1", request);
+        ResponseEntity<Group> result = controller.addMember("g1", "owner-1", request);
 
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
     }
@@ -242,29 +273,40 @@ class GroupRestControllerTest {
     @Test
     void addMember_WhenInvalid_ThrowsBadRequest() {
         AddMemberRequest request = new AddMemberRequest();
-        when(groupService.addMember("g1", request)).thenThrow(new IllegalArgumentException("memberId is required"));
+        when(groupService.addMember("g1", "owner-1", request)).thenThrow(new IllegalArgumentException("memberId is required"));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                () -> controller.addMember("g1", request));
+            () -> controller.addMember("g1", "owner-1", request));
 
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
     }
 
+        @Test
+        void addMember_WhenForbidden_ThrowsForbidden() {
+        AddMemberRequest request = new AddMemberRequest();
+        when(groupService.addMember("g1", "member-1", request)).thenThrow(new SecurityException("admin access required"));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> controller.addMember("g1", "member-1", request));
+
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+        }
+
     @Test
     void removeMember_WhenFound_ReturnsOk() {
         Group group = new Group();
-        when(groupService.removeMember("g1", "u2")).thenReturn(Optional.of(group));
+        when(groupService.removeMember("g1", "owner-1", "u2")).thenReturn(Optional.of(group));
 
-        ResponseEntity<Group> result = controller.removeMember("g1", "u2");
+        ResponseEntity<Group> result = controller.removeMember("g1", "owner-1", "u2");
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
     }
 
     @Test
     void removeMember_WhenMissing_ReturnsNotFound() {
-        when(groupService.removeMember("g1", "u2")).thenReturn(Optional.empty());
+        when(groupService.removeMember("g1", "owner-1", "u2")).thenReturn(Optional.empty());
 
-        ResponseEntity<Group> result = controller.removeMember("g1", "u2");
+        ResponseEntity<Group> result = controller.removeMember("g1", "owner-1", "u2");
 
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
     }
@@ -274,9 +316,9 @@ class GroupRestControllerTest {
         UpdateMemberRoleRequest request = new UpdateMemberRoleRequest();
         request.setRole("ADMIN");
         Group group = new Group();
-        when(groupService.updateMemberRole("g1", "u2", request)).thenReturn(Optional.of(group));
+        when(groupService.updateMemberRole("g1", "owner-1", "u2", request)).thenReturn(Optional.of(group));
 
-        ResponseEntity<Group> result = controller.updateMemberRole("g1", "u2", request);
+        ResponseEntity<Group> result = controller.updateMemberRole("g1", "owner-1", "u2", request);
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
     }
@@ -285,9 +327,9 @@ class GroupRestControllerTest {
     void updateMemberRole_WhenMissing_ReturnsNotFound() {
         UpdateMemberRoleRequest request = new UpdateMemberRoleRequest();
         request.setRole("ADMIN");
-        when(groupService.updateMemberRole("g1", "u2", request)).thenReturn(Optional.empty());
+        when(groupService.updateMemberRole("g1", "owner-1", "u2", request)).thenReturn(Optional.empty());
 
-        ResponseEntity<Group> result = controller.updateMemberRole("g1", "u2", request);
+        ResponseEntity<Group> result = controller.updateMemberRole("g1", "owner-1", "u2", request);
 
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
     }
@@ -295,12 +337,24 @@ class GroupRestControllerTest {
     @Test
     void updateMemberRole_WhenInvalid_ThrowsBadRequest() {
         UpdateMemberRoleRequest request = new UpdateMemberRoleRequest();
-        when(groupService.updateMemberRole("g1", "u2", request))
+        when(groupService.updateMemberRole("g1", "owner-1", "u2", request))
                 .thenThrow(new IllegalArgumentException("role is required"));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                () -> controller.updateMemberRole("g1", "u2", request));
+            () -> controller.updateMemberRole("g1", "owner-1", "u2", request));
 
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
     }
+
+        @Test
+        void updateMemberRole_WhenForbidden_ThrowsForbidden() {
+        UpdateMemberRoleRequest request = new UpdateMemberRoleRequest();
+        when(groupService.updateMemberRole("g1", "member-1", "u2", request))
+            .thenThrow(new SecurityException("admin access required"));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> controller.updateMemberRole("g1", "member-1", "u2", request));
+
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+        }
 }

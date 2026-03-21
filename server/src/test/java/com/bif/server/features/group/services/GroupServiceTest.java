@@ -142,6 +142,7 @@ class GroupServiceTest {
     void update_WhenFound_UpdatesGroupInfo() {
         Group existing = new Group();
         existing.setId("g1");
+        existing.setOwnerId("owner-1");
         existing.setName("Old Name");
         existing.setAvatarLetter("O");
         existing.setAvatarColor(123);
@@ -152,7 +153,7 @@ class GroupServiceTest {
         request.setName("New Name");
         request.setAvatarColor(456L);
 
-        Optional<Group> result = groupService.update("g1", request);
+        Optional<Group> result = groupService.update("g1", "owner-1", request);
 
         assertTrue(result.isPresent());
         assertEquals("New Name", result.get().getName());
@@ -164,12 +165,13 @@ class GroupServiceTest {
     void update_WhenAvatarColorOutOfRange_ThrowsIllegalArgumentException() {
         Group existing = new Group();
         existing.setId("g1");
+        existing.setOwnerId("owner-1");
         when(groupRepository.findById("g1")).thenReturn(Optional.of(existing));
 
         UpdateGroupRequest request = new UpdateGroupRequest();
         request.setAvatarColor(5000000000L);
 
-        assertThrows(IllegalArgumentException.class, () -> groupService.update("g1", request));
+        assertThrows(IllegalArgumentException.class, () -> groupService.update("g1", "owner-1", request));
     }
 
     @Test
@@ -179,7 +181,7 @@ class GroupServiceTest {
         UpdateGroupRequest request = new UpdateGroupRequest();
         request.setName("New Name");
 
-        Optional<Group> result = groupService.update("g1", request);
+        Optional<Group> result = groupService.update("g1", "owner-1", request);
 
         assertTrue(result.isEmpty());
     }
@@ -188,12 +190,13 @@ class GroupServiceTest {
     void update_WhenBlankName_ThrowsIllegalArgumentException() {
         Group existing = new Group();
         existing.setId("g1");
+        existing.setOwnerId("owner-1");
         when(groupRepository.findById("g1")).thenReturn(Optional.of(existing));
 
         UpdateGroupRequest request = new UpdateGroupRequest();
         request.setName("   ");
 
-        assertThrows(IllegalArgumentException.class, () -> groupService.update("g1", request));
+        assertThrows(IllegalArgumentException.class, () -> groupService.update("g1", "owner-1", request));
         verify(groupRepository, never()).save(any(Group.class));
     }
 
@@ -220,9 +223,12 @@ class GroupServiceTest {
 
     @Test
     void deleteById_WhenExists_DeletesAndReturnsTrue() {
-        when(groupRepository.existsById("g1")).thenReturn(true);
+        Group existing = new Group();
+        existing.setId("g1");
+        existing.setOwnerId("owner-1");
+        when(groupRepository.findById("g1")).thenReturn(Optional.of(existing));
 
-        boolean result = groupService.deleteById("g1");
+        boolean result = groupService.deleteById("g1", "owner-1");
 
         assertTrue(result);
         verify(groupRepository).deleteById("g1");
@@ -230,9 +236,9 @@ class GroupServiceTest {
 
     @Test
     void deleteById_WhenMissing_ReturnsFalse() {
-        when(groupRepository.existsById("g1")).thenReturn(false);
+        when(groupRepository.findById("g1")).thenReturn(Optional.empty());
 
-        boolean result = groupService.deleteById("g1");
+        boolean result = groupService.deleteById("g1", "owner-1");
 
         assertFalse(result);
         verify(groupRepository, never()).deleteById(anyString());
@@ -252,7 +258,7 @@ class GroupServiceTest {
         request.setMemberId("member-2");
         request.setRole("admin");
 
-        Optional<Group> result = groupService.addMember("g1", request);
+        Optional<Group> result = groupService.addMember("g1", "owner-1", request);
 
         assertTrue(result.isPresent());
         assertTrue(result.get().getMemberIds().contains("member-2"));
@@ -268,7 +274,7 @@ class GroupServiceTest {
         existing.setMemberIds(Arrays.asList("owner-1", "member-1"));
         when(groupRepository.findById("g1")).thenReturn(Optional.of(existing));
 
-        assertThrows(IllegalArgumentException.class, () -> groupService.removeMember("g1", "owner-1"));
+        assertThrows(IllegalArgumentException.class, () -> groupService.removeMember("g1", "owner-1", "owner-1"));
     }
 
     @Test
@@ -285,7 +291,7 @@ class GroupServiceTest {
         when(groupRepository.findById("g1")).thenReturn(Optional.of(existing));
         when(groupRepository.save(existing)).thenReturn(existing);
 
-        Optional<Group> result = groupService.removeMember("g1", "member-2");
+        Optional<Group> result = groupService.removeMember("g1", "owner-1", "member-2");
 
         assertTrue(result.isPresent());
         assertFalse(result.get().getMemberIds().contains("member-2"));
@@ -304,7 +310,7 @@ class GroupServiceTest {
         UpdateMemberRoleRequest request = new UpdateMemberRoleRequest();
         request.setRole("ADMIN");
 
-        assertThrows(IllegalArgumentException.class, () -> groupService.updateMemberRole("g1", "member-1", request));
+        assertThrows(IllegalArgumentException.class, () -> groupService.updateMemberRole("g1", "owner-1", "member-1", request));
     }
 
     @Test
@@ -318,7 +324,7 @@ class GroupServiceTest {
         UpdateMemberRoleRequest request = new UpdateMemberRoleRequest();
         request.setRole("MEMBER");
 
-        assertThrows(IllegalArgumentException.class, () -> groupService.updateMemberRole("g1", "owner-1", request));
+        assertThrows(IllegalArgumentException.class, () -> groupService.updateMemberRole("g1", "owner-1", "owner-1", request));
     }
 
     @Test
@@ -334,7 +340,7 @@ class GroupServiceTest {
         UpdateMemberRoleRequest request = new UpdateMemberRoleRequest();
         request.setRole("ADMIN");
 
-        Optional<Group> result = groupService.updateMemberRole("g1", "member-1", request);
+        Optional<Group> result = groupService.updateMemberRole("g1", "owner-1", "member-1", request);
 
         assertTrue(result.isPresent());
         assertEquals("ADMIN", result.get().getMemberRoles().get("member-1"));
@@ -352,7 +358,7 @@ class GroupServiceTest {
         existing.setMemberRoles(roles);
         when(groupRepository.findById("g1")).thenReturn(Optional.of(existing));
 
-        Optional<List<GroupMemberResponse>> result = groupService.getMembers("g1");
+        Optional<List<GroupMemberResponse>> result = groupService.getMembers("g1", "member-1");
 
         assertTrue(result.isPresent());
         assertEquals(2, result.get().size());
@@ -362,7 +368,7 @@ class GroupServiceTest {
     void getMembers_WhenMissing_ReturnsEmpty() {
         when(groupRepository.findById("g1")).thenReturn(Optional.empty());
 
-        Optional<List<GroupMemberResponse>> result = groupService.getMembers("g1");
+        Optional<List<GroupMemberResponse>> result = groupService.getMembers("g1", "member-1");
 
         assertTrue(result.isEmpty());
     }

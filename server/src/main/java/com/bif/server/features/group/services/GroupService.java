@@ -77,6 +77,10 @@ public class GroupService {
     }
 
     public Optional<Group> addMember(String id, AddMemberRequest request) {
+        return addMember(id, null, request);
+    }
+
+    public Optional<Group> addMember(String id, String actorId, AddMemberRequest request) {
         validateNonBlank(id, "id");
         if (request == null) {
             throw new IllegalArgumentException("request is required");
@@ -91,6 +95,8 @@ public class GroupService {
         }
 
         Group group = existing.get();
+        requireAdmin(group, actorId);
+
         if (group.getMemberIds() == null) {
             group.setMemberIds(new ArrayList<>());
         } else {
@@ -112,6 +118,10 @@ public class GroupService {
     }
 
     public Optional<Group> removeMember(String id, String memberId) {
+        return removeMember(id, null, memberId);
+    }
+
+    public Optional<Group> removeMember(String id, String actorId, String memberId) {
         validateNonBlank(id, "id");
         String memberIdValue = validateNonBlank(memberId, "memberId");
 
@@ -121,6 +131,8 @@ public class GroupService {
         }
 
         Group group = existing.get();
+        requireAdmin(group, actorId);
+
         if (memberIdValue.equals(group.getOwnerId())) {
             throw new IllegalArgumentException("owner cannot be removed from group");
         }
@@ -144,6 +156,10 @@ public class GroupService {
     }
 
     public Optional<Group> updateMemberRole(String id, String memberId, UpdateMemberRoleRequest request) {
+        return updateMemberRole(id, null, memberId, request);
+    }
+
+    public Optional<Group> updateMemberRole(String id, String actorId, String memberId, UpdateMemberRoleRequest request) {
         validateNonBlank(id, "id");
         String memberIdValue = validateNonBlank(memberId, "memberId");
         if (request == null) {
@@ -156,6 +172,8 @@ public class GroupService {
         }
 
         Group group = existing.get();
+        requireAdmin(group, actorId);
+
         if (group.getMemberIds() == null || !group.getMemberIds().contains(memberIdValue)) {
             throw new IllegalArgumentException("member is not in group");
         }
@@ -173,8 +191,14 @@ public class GroupService {
     }
 
     public Optional<List<GroupMemberResponse>> getMembers(String id) {
+        return getMembers(id, null);
+    }
+
+    public Optional<List<GroupMemberResponse>> getMembers(String id, String actorId) {
         validateNonBlank(id, "id");
         return groupRepository.findById(id).map(group -> {
+            requireMember(group, actorId);
+
             List<GroupMemberResponse> members = new ArrayList<>();
             List<String> memberIds = group.getMemberIds();
             Map<String, String> memberRoles = group.getMemberRoles();
@@ -203,6 +227,10 @@ public class GroupService {
     }
 
     public Optional<Group> update(String id, UpdateGroupRequest request) {
+        return update(id, null, request);
+    }
+
+    public Optional<Group> update(String id, String actorId, UpdateGroupRequest request) {
         validateNonBlank(id, "id");
         if (request == null) {
             throw new IllegalArgumentException("request is required");
@@ -214,6 +242,8 @@ public class GroupService {
         }
 
         Group group = existing.get();
+        requireAdmin(group, actorId);
+
         if (request.getName() != null) {
             String name = validateNonBlank(request.getName(), "name");
             group.setName(name);
@@ -231,10 +261,16 @@ public class GroupService {
     }
 
     public boolean deleteById(String id) {
+        return deleteById(id, null);
+    }
+
+    public boolean deleteById(String id, String actorId) {
         validateNonBlank(id, "id");
-        if (!groupRepository.existsById(id)) {
+        Optional<Group> existing = groupRepository.findById(id);
+        if (existing.isEmpty()) {
             return false;
         }
+        requireOwner(existing.get(), actorId);
         groupRepository.deleteById(id);
         return true;
     }
@@ -283,5 +319,57 @@ public class GroupService {
             throw new IllegalArgumentException("role must be MEMBER or ADMIN");
         }
         return normalized;
+    }
+
+    private void requireMember(Group group, String actorId) {
+        String userId = validateNonBlank(actorId, "actorId");
+        if (!isMember(group, userId)) {
+            throw new SecurityException("member access required");
+        }
+    }
+
+    private void requireAdmin(Group group, String actorId) {
+        String userId = validateNonBlank(actorId, "actorId");
+        if (!isAdmin(group, userId)) {
+            throw new SecurityException("admin access required");
+        }
+    }
+
+    private void requireOwner(Group group, String actorId) {
+        String userId = validateNonBlank(actorId, "actorId");
+        if (!isOwner(group, userId)) {
+            throw new SecurityException("owner access required");
+        }
+    }
+
+    private boolean isMember(Group group, String userId) {
+        if (group == null || userId == null || userId.isBlank()) {
+            return false;
+        }
+        if (isOwner(group, userId)) {
+            return true;
+        }
+        return group.getMemberIds() != null && group.getMemberIds().contains(userId);
+    }
+
+    private boolean isAdmin(Group group, String userId) {
+        if (group == null || userId == null || userId.isBlank()) {
+            return false;
+        }
+        if (isOwner(group, userId)) {
+            return true;
+        }
+        if (group.getMemberRoles() == null) {
+            return false;
+        }
+        String role = group.getMemberRoles().get(userId);
+        return ROLE_ADMIN.equals(normalizeRole(role, false));
+    }
+
+    private boolean isOwner(Group group, String userId) {
+        if (group == null || userId == null || userId.isBlank()) {
+            return false;
+        }
+        return userId.equals(group.getOwnerId());
     }
 }
