@@ -1,6 +1,7 @@
 package com.bif.server.features.place.controllers;
 
 import com.bif.server.features.place.models.Place;
+import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.services.PlaceService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -23,7 +24,24 @@ public class PlaceRestController {
 
     @GetMapping("/{id}")
     public ResponseEntity<Place> getPlaceById(@PathVariable String id) {
-        return placeService.getById(id).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+        return placeService.getById(id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/search")
+    public List<Place> searchPlaces(@RequestParam String q) {
+        return placeService.search(q);
+    }
+
+    @GetMapping("/tag/{tag}")
+    public List<Place> getByTag(@PathVariable String tag) {
+        return placeService.getByTag(tag);
+    }
+
+    @GetMapping("/user/{userId}")
+    public List<Place> getByUser(@PathVariable String userId) {
+        return placeService.getByUserId(userId);
     }
 
     @PostMapping
@@ -31,8 +49,21 @@ public class PlaceRestController {
         return placeService.save(place);
     }
 
+    @PostMapping("/from-search")
+    public Place saveFromSearch(@RequestBody Place place) {
+        return placeService.saveFromSearch(place);
+    }
+
+    @PostMapping("/{id}/reviews")
+    public Place addReview(@PathVariable String id,
+                           @RequestBody PlaceReview review) {
+        return placeService.addReview(id, review);
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deletePlace(@PathVariable String id) {
-        return placeService.deleteById(id) ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
+        return placeService.deleteById(id)
+                ? ResponseEntity.noContent().build()
+                : ResponseEntity.notFound().build();
     }
 }

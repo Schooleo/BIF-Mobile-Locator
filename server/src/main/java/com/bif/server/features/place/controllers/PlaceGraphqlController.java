@@ -1,6 +1,7 @@
 package com.bif.server.features.place.controllers;
 
 import com.bif.server.features.place.models.Place;
+import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.services.PlaceService;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -27,9 +28,35 @@ public class PlaceGraphqlController {
         return placeService.getById(id).orElse(null);
     }
 
+    @QueryMapping
+    public List<Place> searchPlaces(@Argument String query) {
+        return placeService.search(query);
+    }
+
+    @QueryMapping
+    public List<Place> placesByTag(@Argument String tag) {
+        return placeService.getByTag(tag);
+    }
+
+    @QueryMapping
+    public List<Place> placesByUser(@Argument String userId) {
+        return placeService.getByUserId(userId);
+    }
+
     @MutationMapping
     public Place upsertPlace(@Argument Place input) {
         return placeService.save(input);
+    }
+
+    @MutationMapping
+    public Place saveFromSearch(@Argument Place input) {
+        return placeService.saveFromSearch(input);
+    }
+
+    @MutationMapping
+    public Place addPlaceReview(@Argument String placeId,
+                                @Argument PlaceReview input) {
+        return placeService.addReview(placeId, input);
     }
 
     @MutationMapping

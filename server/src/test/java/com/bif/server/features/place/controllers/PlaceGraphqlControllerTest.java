@@ -1,6 +1,7 @@
 package com.bif.server.features.place.controllers;
 
 import com.bif.server.features.place.models.Place;
+import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.services.PlaceService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,9 +29,9 @@ class PlaceGraphqlControllerTest {
     }
 
     @Test
-    void places_ReturnsData() {
-        Place item = new Place();
-        when(placeService.getAll()).thenReturn(List.of(item));
+    void places_ReturnsAll() {
+        Place place = new Place();
+        when(placeService.getAll()).thenReturn(List.of(place));
 
         List<Place> result = controller.places();
 
@@ -38,20 +39,55 @@ class PlaceGraphqlControllerTest {
     }
 
     @Test
-    void place_WhenFound_ReturnsEntity() {
-        Place item = new Place();
-        when(placeService.getById("p1")).thenReturn(Optional.of(item));
+    void place_WhenFound_ReturnsPlace() {
+        Place place = new Place();
+        when(placeService.getById("p1")).thenReturn(Optional.of(place));
 
         Place result = controller.place("p1");
 
-        assertSame(item, result);
+        assertSame(place, result);
     }
 
     @Test
     void place_WhenMissing_ReturnsNull() {
         when(placeService.getById("p1")).thenReturn(Optional.empty());
 
-        assertNull(controller.place("p1"));
+        Place result = controller.place("p1");
+
+        assertNull(result);
+    }
+
+    @Test
+    void searchPlaces_DelegatesToService() {
+        Place place = new Place();
+        when(placeService.search("cathedral")).thenReturn(List.of(place));
+
+        List<Place> result = controller.searchPlaces("cathedral");
+
+        assertEquals(1, result.size());
+        verify(placeService).search("cathedral");
+    }
+
+    @Test
+    void placesByTag_DelegatesToService() {
+        Place place = new Place();
+        when(placeService.getByTag("church")).thenReturn(List.of(place));
+
+        List<Place> result = controller.placesByTag("church");
+
+        assertEquals(1, result.size());
+        verify(placeService).getByTag("church");
+    }
+
+    @Test
+    void placesByUser_DelegatesToService() {
+        Place place = new Place();
+        when(placeService.getByUserId("u1")).thenReturn(List.of(place));
+
+        List<Place> result = controller.placesByUser("u1");
+
+        assertEquals(1, result.size());
+        verify(placeService).getByUserId("u1");
     }
 
     @Test
@@ -65,9 +101,34 @@ class PlaceGraphqlControllerTest {
     }
 
     @Test
+    void saveFromSearch_DelegatesToService() {
+        Place input = new Place();
+        when(placeService.saveFromSearch(input)).thenReturn(input);
+
+        Place result = controller.saveFromSearch(input);
+
+        assertSame(input, result);
+        verify(placeService).saveFromSearch(input);
+    }
+
+    @Test
+    void addPlaceReview_DelegatesToService() {
+        Place place = new Place();
+        PlaceReview review = new PlaceReview();
+        when(placeService.addReview("p1", review)).thenReturn(place);
+
+        Place result = controller.addPlaceReview("p1", review);
+
+        assertSame(place, result);
+        verify(placeService).addReview("p1", review);
+    }
+
+    @Test
     void deletePlace_DelegatesToService() {
         when(placeService.deleteById("p1")).thenReturn(true);
 
-        assertTrue(controller.deletePlace("p1"));
+        Boolean result = controller.deletePlace("p1");
+
+        assertTrue(result);
     }
 }

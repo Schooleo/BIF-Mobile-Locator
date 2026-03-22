@@ -5,6 +5,9 @@ type Query {
   group(id: ID!): Group
   places: [Place!]!
   place(id: ID!): Place
+  searchPlaces(query: String!): [Place!]!
+  placesByTag(tag: String!): [Place!]!
+  placesByUser(userId: ID!): [Place!]!
   favorites: [Favorite!]!
   favorite(id: ID!): Favorite
   favoritesByUser(userId: ID!): [Favorite!]!
@@ -23,7 +26,9 @@ type Mutation {
   upsertGroup(input: GroupInput!): Group!
   deleteGroup(id: ID!): Boolean!
   upsertPlace(input: PlaceInput!): Place!
+  saveFromSearch(input: PlaceInput!): Place!
   deletePlace(id: ID!): Boolean!
+  addPlaceReview(placeId: ID!, input: PlaceReviewInput!): Place!
   upsertFavorite(input: FavoriteInput!): Favorite!
   deleteFavorite(id: ID!): Boolean!
   upsertChatMessage(input: ChatMessageInput!): ChatMessage!
@@ -59,6 +64,19 @@ type Place {
   rating: Float
   location: Location
   tags: [String!]
+  placeSource: String
+  persistedByAction: String
+  persistedByUserId: ID
+  reviewCount: Int
+  reviews: [PlaceReview!]
+}
+
+type PlaceReview {
+  userId: ID
+  userName: String
+  rating: Int
+  comment: String
+  createdAt: String
 }
 
 type Favorite {
@@ -110,6 +128,7 @@ type Location {
 type SyncResponse {
   currentServerVersion: Int!
   pulledChanges: [SyncChange!]!
+  conflicts: [SyncConflict!]
 }
 
 type SyncChange {
@@ -117,6 +136,17 @@ type SyncChange {
   entityId: String
   serverVersion: Int
   operation: String
+  clientChangeId: String
+  timestamp: String
+}
+
+type SyncConflict {
+  entityType: String
+  entityId: String
+  clientChangeId: String
+  clientVersion: Int
+  serverVersion: Int
+  resolution: String
 }
 
 input UserInput {
@@ -145,6 +175,16 @@ input PlaceInput {
   rating: Float
   location: LocationInput
   tags: [String!]
+  placeSource: String
+  persistedByAction: String
+  persistedByUserId: ID
+}
+
+input PlaceReviewInput {
+  userId: ID
+  userName: String
+  rating: Int
+  comment: String
 }
 
 input FavoriteInput {
@@ -205,4 +245,5 @@ input SyncChangeInput {
   entityId: String
   serverVersion: Int
   operation: String
+  clientChangeId: String
 }

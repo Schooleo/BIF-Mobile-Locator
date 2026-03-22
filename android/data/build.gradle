@@ -27,17 +27,24 @@ android {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
     }
+
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
 }
 
 dependencies {
     // Module
     implementation project(":domain")
+    implementation project(":core")
 
     implementation libs.appcompat
     implementation libs.material
+    implementation libs.work.runtime
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
+    implementation libs.retrofit.core
 
     // Google
     implementation libs.places
