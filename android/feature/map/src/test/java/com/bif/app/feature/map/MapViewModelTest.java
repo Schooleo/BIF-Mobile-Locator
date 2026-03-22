@@ -47,14 +47,17 @@ public class MapViewModelTest {
     private Observer<Location> searchResultObserver;
 
     @Mock
-    private Observer<String> statusTextObserver;
+    private Observer<Event<String>> statusTextObserver;
 
     private MapViewModel viewModel;
 
     @Before
     public void setUp() {
-        // Stub searchLocation to return a valid LiveData to prevent NullPointerException during switchMap
-        Mockito.when(placeRepository.searchLocation(ArgumentMatchers.anyString())).thenReturn(new MutableLiveData<>());
+        // Lenient: these guard switchMap NPEs but not every test exercises them
+        Mockito.lenient().when(placeRepository.searchLocation(ArgumentMatchers.anyString()))
+                .thenReturn(new MutableLiveData<>());
+        Mockito.lenient().when(placeRepository.searchPlacesFromHistory(ArgumentMatchers.anyString()))
+                .thenReturn(new MutableLiveData<>());
 
         viewModel = new MapViewModel(mapRepository, placeRepository, favoriteRepository);
         viewModel.searchResult.observeForever(searchResultObserver);
@@ -81,9 +84,10 @@ public class MapViewModelTest {
         // Act
         viewModel.setStatusText(status);
 
-        // Assert
-        Mockito.verify(statusTextObserver).onChanged(status);
-        assertEquals(status, viewModel.statusText.getValue());
+        // Assert — statusText is now LiveData<Event<String>>
+        Event<String> event = viewModel.statusText.getValue();
+        assertNotNull(event);
+        assertEquals(status, event.peekContent());
     }
 
     @Test
@@ -160,6 +164,9 @@ public class MapViewModelTest {
         assertEquals(10.762, saved.latitude, 0.001);
         assertEquals(106.682, saved.longitude, 0.001);
         assertEquals(4, saved.rating); // (int) 4.5 → 4
+
+        // Also verifies the place is persisted locally (new behavior)
+        Mockito.verify(placeRepository).persistPlace(place, "favorite");
     }
 
     @Test
@@ -175,6 +182,9 @@ public class MapViewModelTest {
         Mockito.verify(favoriteRepository).addFavorite(captor.capture());
         assertEquals(0.0, captor.getValue().latitude, 0.0001);
         assertEquals(0.0, captor.getValue().longitude, 0.0001);
+
+        // Also verifies the place is persisted locally even with null location
+        Mockito.verify(placeRepository).persistPlace(place, "favorite");
     }
 
     // ─── removeFromFavorites ─────────────────────────────────────────────────

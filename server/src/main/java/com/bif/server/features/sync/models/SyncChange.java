@@ -8,4 +8,6 @@ public class SyncChange {
     private String entityId;
     private long serverVersion;
     private String operation;
+    private String clientChangeId;
+    private String timestamp;
 }

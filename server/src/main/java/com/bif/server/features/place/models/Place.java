@@ -20,4 +20,9 @@ public class Place extends SyncDocument {
     private double rating;
     private Location location;
     private List<String> tags;
+    private String placeSource;
+    private String persistedByAction;
+    private String persistedByUserId;
+    private int reviewCount;
+    private List<PlaceReview> reviews;
 }
