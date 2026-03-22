@@ -5,6 +5,8 @@ import com.bif.server.features.group.dto.CreateGroupRequest;
 import com.bif.server.features.group.dto.GroupMemberResponse;
 import com.bif.server.features.group.dto.UpdateGroupRequest;
 import com.bif.server.features.group.dto.UpdateMemberRoleRequest;
+import com.bif.server.features.group.exceptions.DuplicateGroupMemberException;
+import com.bif.server.features.group.exceptions.GroupMemberNotFoundException;
 import com.bif.server.features.group.models.Group;
 import com.bif.server.features.group.repositories.GroupRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -300,7 +302,37 @@ class GroupServiceTest {
     }
 
     @Test
-    void updateMemberRole_WhenMemberMissing_ThrowsIllegalArgumentException() {
+    void addMember_WhenDuplicate_ThrowsDuplicateGroupMemberException() {
+        Group existing = new Group();
+        existing.setId("g1");
+        existing.setOwnerId("owner-1");
+        existing.setMemberIds(Arrays.asList("owner-1", "member-1"));
+        existing.setMemberRoles(new HashMap<>());
+        when(groupRepository.findById("g1")).thenReturn(Optional.of(existing));
+
+        AddMemberRequest request = new AddMemberRequest();
+        request.setMemberId("member-1");
+
+        assertThrows(DuplicateGroupMemberException.class,
+                () -> groupService.addMember("g1", "owner-1", request));
+        verify(groupRepository, never()).save(any(Group.class));
+    }
+
+    @Test
+    void removeMember_WhenMemberNotInGroup_ThrowsGroupMemberNotFoundException() {
+        Group existing = new Group();
+        existing.setId("g1");
+        existing.setOwnerId("owner-1");
+        existing.setMemberIds(Arrays.asList("owner-1", "member-1"));
+        when(groupRepository.findById("g1")).thenReturn(Optional.of(existing));
+
+        assertThrows(GroupMemberNotFoundException.class,
+                () -> groupService.removeMember("g1", "owner-1", "member-2"));
+        verify(groupRepository, never()).save(any(Group.class));
+    }
+
+    @Test
+    void updateMemberRole_WhenMemberMissing_ThrowsGroupMemberNotFoundException() {
         Group existing = new Group();
         existing.setId("g1");
         existing.setOwnerId("owner-1");
@@ -310,7 +342,8 @@ class GroupServiceTest {
         UpdateMemberRoleRequest request = new UpdateMemberRoleRequest();
         request.setRole("ADMIN");
 
-        assertThrows(IllegalArgumentException.class, () -> groupService.updateMemberRole("g1", "owner-1", "member-1", request));
+        assertThrows(GroupMemberNotFoundException.class,
+            () -> groupService.updateMemberRole("g1", "owner-1", "member-1", request));
     }
 
     @Test

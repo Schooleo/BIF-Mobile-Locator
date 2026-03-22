@@ -227,7 +227,7 @@ public class SocialFragment extends Fragment {
 
     private void navigateToGroupDetail(Group group) {
         android.net.Uri destUri = UriUtils.buildUri(UriUtils.PathTo.GROUP_DETAIL).buildUpon()
-                .appendQueryParameter("groupId", String.valueOf(group.getId()))
+                .appendQueryParameter("groupId", group.getServerId())
                 .build();
         Navigation.findNavController(requireView()).navigate(destUri);
     }

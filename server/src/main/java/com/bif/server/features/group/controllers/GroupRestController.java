@@ -5,6 +5,8 @@ import com.bif.server.features.group.dto.CreateGroupRequest;
 import com.bif.server.features.group.dto.GroupMemberResponse;
 import com.bif.server.features.group.dto.UpdateGroupRequest;
 import com.bif.server.features.group.dto.UpdateMemberRoleRequest;
+import com.bif.server.features.group.exceptions.DuplicateGroupMemberException;
+import com.bif.server.features.group.exceptions.GroupMemberNotFoundException;
 import com.bif.server.features.group.models.Group;
 import com.bif.server.features.group.services.GroupService;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +17,7 @@ import java.util.List;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
+import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @RestController
 @RequestMapping("/api/groups")
@@ -102,6 +105,8 @@ public class GroupRestController {
                     .orElseGet(() -> ResponseEntity.notFound().build());
         } catch (SecurityException ex) {
             throw new ResponseStatusException(FORBIDDEN, ex.getMessage());
+        } catch (DuplicateGroupMemberException ex) {
+            throw new ResponseStatusException(BAD_REQUEST, ex.getMessage());
         } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(BAD_REQUEST, ex.getMessage());
         }
@@ -119,6 +124,8 @@ public class GroupRestController {
                     .orElseGet(() -> ResponseEntity.notFound().build());
         } catch (SecurityException ex) {
             throw new ResponseStatusException(FORBIDDEN, ex.getMessage());
+        } catch (GroupMemberNotFoundException ex) {
+            throw new ResponseStatusException(NOT_FOUND, ex.getMessage());
         } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(BAD_REQUEST, ex.getMessage());
         }
@@ -137,6 +144,8 @@ public class GroupRestController {
                     .orElseGet(() -> ResponseEntity.notFound().build());
         } catch (SecurityException ex) {
             throw new ResponseStatusException(FORBIDDEN, ex.getMessage());
+        } catch (GroupMemberNotFoundException ex) {
+            throw new ResponseStatusException(NOT_FOUND, ex.getMessage());
         } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(BAD_REQUEST, ex.getMessage());
         }

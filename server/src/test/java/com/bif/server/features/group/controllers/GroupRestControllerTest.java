@@ -5,6 +5,8 @@ import com.bif.server.features.group.dto.CreateGroupRequest;
 import com.bif.server.features.group.dto.GroupMemberResponse;
 import com.bif.server.features.group.dto.UpdateGroupRequest;
 import com.bif.server.features.group.dto.UpdateMemberRoleRequest;
+import com.bif.server.features.group.exceptions.DuplicateGroupMemberException;
+import com.bif.server.features.group.exceptions.GroupMemberNotFoundException;
 import com.bif.server.features.group.models.Group;
 import com.bif.server.features.group.services.GroupService;
 import org.junit.jupiter.api.BeforeEach;
@@ -281,6 +283,18 @@ class GroupRestControllerTest {
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
     }
 
+    @Test
+    void addMember_WhenDuplicate_ThrowsBadRequest() {
+        AddMemberRequest request = new AddMemberRequest();
+        when(groupService.addMember("g1", "owner-1", request))
+                .thenThrow(new DuplicateGroupMemberException("member-1"));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> controller.addMember("g1", "owner-1", request));
+
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+    }
+
         @Test
         void addMember_WhenForbidden_ThrowsForbidden() {
         AddMemberRequest request = new AddMemberRequest();
@@ -345,6 +359,29 @@ class GroupRestControllerTest {
 
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
     }
+
+        @Test
+        void removeMember_WhenMemberNotInGroup_ThrowsNotFound() {
+        when(groupService.removeMember("g1", "owner-1", "u2"))
+            .thenThrow(new GroupMemberNotFoundException("u2"));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> controller.removeMember("g1", "owner-1", "u2"));
+
+        assertEquals(HttpStatus.NOT_FOUND, ex.getStatusCode());
+        }
+
+        @Test
+        void updateMemberRole_WhenMemberNotInGroup_ThrowsNotFound() {
+        UpdateMemberRoleRequest request = new UpdateMemberRoleRequest();
+        when(groupService.updateMemberRole("g1", "owner-1", "u2", request))
+            .thenThrow(new GroupMemberNotFoundException("u2"));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> controller.updateMemberRole("g1", "owner-1", "u2", request));
+
+        assertEquals(HttpStatus.NOT_FOUND, ex.getStatusCode());
+        }
 
         @Test
         void updateMemberRole_WhenForbidden_ThrowsForbidden() {

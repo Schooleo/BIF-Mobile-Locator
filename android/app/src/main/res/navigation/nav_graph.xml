@@ -100,7 +100,7 @@
         app:route="/social/group-detail"
         tools:layout="@layout/fragment_group_detail">
 
-        <argument android:name="groupId" app:argType="integer" android:defaultValue="0" />
+        <argument android:name="groupId" app:argType="string" android:defaultValue="" />
 
         <deepLink app:uri="app://bif.app/social/group-detail?groupId={groupId}" />
     </fragment>

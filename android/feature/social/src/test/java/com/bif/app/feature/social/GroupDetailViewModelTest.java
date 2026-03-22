@@ -3,6 +3,7 @@ package com.bif.app.feature.social;
 import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,8 +40,8 @@ public class GroupDetailViewModelTest {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         groupLiveData = new MutableLiveData<>();
-        // Return groupLiveData for any groupId
-        when(mockGroupRepository.getGroupById(anyInt())).thenReturn(groupLiveData);
+        // Return groupLiveData for any server group id
+        when(mockGroupRepository.getGroupByServerId(anyString())).thenReturn(groupLiveData);
         viewModel = new GroupDetailViewModel(mockGroupRepository);
     }
 
@@ -67,7 +68,7 @@ public class GroupDetailViewModelTest {
         viewModel.loadGroup(1);
 
         // Assert
-        verify(mockGroupRepository).getGroupById(1);
+        verify(mockGroupRepository).getGroupByServerId("1");
     }
 
     @Test

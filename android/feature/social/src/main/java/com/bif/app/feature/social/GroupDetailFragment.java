@@ -68,7 +68,7 @@ public class GroupDetailFragment extends Fragment {
         // Load group from args
         Bundle args = getArguments();
         if (args != null) {
-            int groupId = args.getInt("groupId", 0);
+            String groupId = args.getString("groupId", "");
             viewModel.loadGroup(groupId);
         }
 

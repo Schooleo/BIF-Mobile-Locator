@@ -5,6 +5,8 @@ import com.bif.server.features.group.dto.CreateGroupRequest;
 import com.bif.server.features.group.dto.GroupMemberResponse;
 import com.bif.server.features.group.dto.UpdateGroupRequest;
 import com.bif.server.features.group.dto.UpdateMemberRoleRequest;
+import com.bif.server.features.group.exceptions.DuplicateGroupMemberException;
+import com.bif.server.features.group.exceptions.GroupMemberNotFoundException;
 import com.bif.server.features.group.models.Group;
 import com.bif.server.features.group.repositories.GroupRepository;
 import org.springframework.stereotype.Service;
@@ -108,9 +110,11 @@ public class GroupService {
             group.setMemberRoles(new HashMap<>(group.getMemberRoles()));
         }
 
-        if (!group.getMemberIds().contains(memberId)) {
-            group.getMemberIds().add(memberId);
+        if (group.getMemberIds().contains(memberId)) {
+            throw new DuplicateGroupMemberException(memberId);
         }
+
+        group.getMemberIds().add(memberId);
         group.getMemberRoles().put(memberId, role);
         group.setMemberCount(group.getMemberIds().size());
 
@@ -135,6 +139,10 @@ public class GroupService {
 
         if (memberIdValue.equals(group.getOwnerId())) {
             throw new IllegalArgumentException("owner cannot be removed from group");
+        }
+
+        if (group.getMemberIds() == null || !group.getMemberIds().contains(memberIdValue)) {
+            throw new GroupMemberNotFoundException(memberIdValue);
         }
 
         if (group.getMemberIds() != null) {
@@ -175,7 +183,7 @@ public class GroupService {
         requireAdmin(group, actorId);
 
         if (group.getMemberIds() == null || !group.getMemberIds().contains(memberIdValue)) {
-            throw new IllegalArgumentException("member is not in group");
+            throw new GroupMemberNotFoundException(memberIdValue);
         }
 
         if (memberIdValue.equals(group.getOwnerId())) {
