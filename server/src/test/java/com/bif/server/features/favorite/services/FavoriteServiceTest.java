@@ -90,4 +90,58 @@ class FavoriteServiceTest {
         assertFalse(result);
         verify(favoriteRepository, never()).deleteById(anyString());
     }
+
+    @Test
+    void getMyFavorites_WhenUserIdBlank_ThrowsIllegalArgumentException() {
+        assertThrows(IllegalArgumentException.class, () -> favoriteService.getMyFavorites(" "));
+        verify(favoriteRepository, never()).findByUserId(anyString());
+    }
+
+    @Test
+    void saveMyFavorite_WhenCreate_OverwritesUserIdWithCurrentUser() {
+        Favorite input = new Favorite();
+        input.setUserId("other-user");
+        when(favoriteRepository.save(input)).thenReturn(input);
+
+        Favorite result = favoriteService.saveMyFavorite("u1", input);
+
+        assertSame(input, result);
+        assertEquals("u1", input.getUserId());
+        verify(favoriteRepository).save(input);
+    }
+
+    @Test
+    void saveMyFavorite_WhenNotOwner_ThrowsSecurityException() {
+        Favorite input = new Favorite();
+        input.setId("f1");
+
+        Favorite existing = new Favorite();
+        existing.setId("f1");
+        existing.setUserId("u2");
+        when(favoriteRepository.findById("f1")).thenReturn(Optional.of(existing));
+
+        assertThrows(SecurityException.class, () -> favoriteService.saveMyFavorite("u1", input));
+        verify(favoriteRepository, never()).save(any(Favorite.class));
+    }
+
+    @Test
+    void deleteMyFavorite_WhenOwner_DeletesAndReturnsDeleted() {
+        when(favoriteRepository.existsByIdAndUserId("f1", "u1")).thenReturn(true);
+
+        FavoriteService.DeleteMyFavoriteResult result = favoriteService.deleteMyFavorite("u1", "f1");
+
+        assertEquals(FavoriteService.DeleteMyFavoriteResult.DELETED, result);
+        verify(favoriteRepository).deleteById("f1");
+    }
+
+    @Test
+    void deleteMyFavorite_WhenExistsButNotOwner_ReturnsForbidden() {
+        when(favoriteRepository.existsByIdAndUserId("f1", "u1")).thenReturn(false);
+        when(favoriteRepository.existsById("f1")).thenReturn(true);
+
+        FavoriteService.DeleteMyFavoriteResult result = favoriteService.deleteMyFavorite("u1", "f1");
+
+        assertEquals(FavoriteService.DeleteMyFavoriteResult.FORBIDDEN, result);
+        verify(favoriteRepository, never()).deleteById(anyString());
+    }
 }
