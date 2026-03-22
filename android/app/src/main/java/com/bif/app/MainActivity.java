@@ -43,6 +43,8 @@ public class MainActivity extends AppCompatActivity {
                     || destId == R.id.nav_register
                     || destId == R.id.nav_group_detail
                     || destId == R.id.nav_social_chat
+                    || destId == R.id.nav_friend_settings_locations
+                    || destId == R.id.nav_friend_settings_trips
                     || destId == R.id.nav_group_settings_plans
                     || destId == R.id.nav_group_settings_locations
                     || destId == R.id.nav_group_settings_members

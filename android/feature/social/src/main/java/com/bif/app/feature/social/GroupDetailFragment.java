@@ -80,7 +80,7 @@ public class GroupDetailFragment extends Fragment {
         // Set result so SocialFragment knows to show the Groups tab
         getParentFragmentManager().setFragmentResult("groupDetailResult",
                 new Bundle());
-        Navigation.findNavController(requireView()).popBackStack();
+        Navigation.findNavController(requireView()).navigateUp();
     }
 
     private void observeViewModel() {

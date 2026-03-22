@@ -143,4 +143,5 @@ public class GroupSettingsMembersFragment extends Fragment {
 
         Navigation.findNavController(rootView).navigate(uriBuilder.build());
     }
+
 }

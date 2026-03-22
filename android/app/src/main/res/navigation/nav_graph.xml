@@ -123,6 +123,34 @@
     </fragment>
 
     <fragment
+        android:id="@+id/nav_friend_settings_locations"
+        android:name="com.bif.app.feature.social.FriendSettingsLocationsFragment"
+        android:label="Friend Shared Locations"
+        app:route="/social/friend-settings/locations"
+        tools:layout="@layout/fragment_friend_settings_locations">
+
+        <argument android:name="friendId" app:argType="string" android:defaultValue="" />
+        <argument android:name="friendName" app:argType="string" android:defaultValue="" />
+        <argument android:name="avatarLetter" app:argType="string" android:defaultValue="?" />
+        <argument android:name="avatarColor" app:argType="integer" android:defaultValue="0" />
+        <deepLink app:uri="app://bif.app/social/friend-settings/locations?friendId={friendId}&amp;friendName={friendName}&amp;avatarLetter={avatarLetter}&amp;avatarColor={avatarColor}" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_friend_settings_trips"
+        android:name="com.bif.app.feature.social.FriendSettingsTripsFragment"
+        android:label="Friend Trip Plans"
+        app:route="/social/friend-settings/trips"
+        tools:layout="@layout/fragment_friend_settings_trips">
+
+        <argument android:name="friendId" app:argType="string" android:defaultValue="" />
+        <argument android:name="friendName" app:argType="string" android:defaultValue="" />
+        <argument android:name="avatarLetter" app:argType="string" android:defaultValue="?" />
+        <argument android:name="avatarColor" app:argType="integer" android:defaultValue="0" />
+        <deepLink app:uri="app://bif.app/social/friend-settings/trips?friendId={friendId}&amp;friendName={friendName}&amp;avatarLetter={avatarLetter}&amp;avatarColor={avatarColor}" />
+    </fragment>
+
+    <fragment
         android:id="@+id/nav_group_settings_plans"
         android:name="com.bif.app.feature.social.GroupSettingsPlansFragment"
         android:label="Group Plans"

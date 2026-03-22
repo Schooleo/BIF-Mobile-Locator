@@ -84,10 +84,20 @@ public class CommonChatFragment extends Fragment {
             });
         } else {
             tvSubtitle.setText(R.string.chat_direct_subtitle);
-            btnGroupSettings.setVisibility(View.GONE);
+            btnGroupSettings.setVisibility(View.VISIBLE);
+            btnGroupSettings.setOnClickListener(v -> {
+                android.net.Uri settingsUri = UriUtils.buildUri(UriUtils.PathTo.FRIEND_SETTINGS_LOCATIONS)
+                        .buildUpon()
+                        .appendQueryParameter("friendId", chatId)
+                        .appendQueryParameter("friendName", chatName)
+                        .appendQueryParameter("avatarLetter", avatarLetter)
+                        .appendQueryParameter("avatarColor", String.valueOf(avatarColor))
+                        .build();
+                Navigation.findNavController(view).navigate(settingsUri);
+            });
         }
 
-        btnBack.setOnClickListener(v -> Navigation.findNavController(view).popBackStack());
+        btnBack.setOnClickListener(v -> navigateBackFromChat(view));
 
         // Tap blank space on the chat screen to focus the input.
         view.setOnClickListener(v -> focusInputAndShowKeyboard(etMessage));
@@ -207,6 +217,16 @@ public class CommonChatFragment extends Fragment {
             return fallback;
         }
         return value;
+    }
+
+    private void navigateBackFromChat(View rootView) {
+        if ("group".equalsIgnoreCase(chatType)) {
+            // Ask Social screen to open the Groups tab after navigation.
+            getParentFragmentManager().setFragmentResult("groupDetailResult", new Bundle());
+        }
+
+        android.net.Uri socialUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL);
+        Navigation.findNavController(rootView).navigate(socialUri);
     }
 
     private void focusInputAndShowKeyboard(EditText etMessage) {

@@ -13,6 +13,8 @@ public class UriUtils {
         FAVORITES_DETAIL,
         SOCIAL,
         SOCIAL_CHAT,
+        FRIEND_SETTINGS_LOCATIONS,
+        FRIEND_SETTINGS_TRIPS,
         GROUP_SETTINGS_PLANS,
         GROUP_SETTINGS_LOCATIONS,
         GROUP_SETTINGS_MEMBERS,
@@ -48,6 +50,10 @@ public class UriUtils {
                 return buildUri("/social");
             case SOCIAL_CHAT:
                 return buildUri("/social/chat");
+            case FRIEND_SETTINGS_LOCATIONS:
+                return buildUri("/social/friend-settings/locations");
+            case FRIEND_SETTINGS_TRIPS:
+                return buildUri("/social/friend-settings/trips");
             case GROUP_SETTINGS_PLANS:
                 return buildUri("/social/group-settings/plans");
             case GROUP_SETTINGS_LOCATIONS:
