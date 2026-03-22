@@ -122,5 +122,38 @@
         <deepLink app:uri="app://bif.app/social/chat?chatType={chatType}&amp;chatId={chatId}&amp;chatName={chatName}&amp;avatarLetter={avatarLetter}&amp;avatarColor={avatarColor}&amp;memberCount={memberCount}" />
     </fragment>
 
+    <fragment
+        android:id="@+id/nav_group_settings_plans"
+        android:name="com.bif.app.feature.social.GroupSettingsPlansFragment"
+        android:label="Group Plans"
+        app:route="/social/group-settings/plans"
+        tools:layout="@layout/fragment_group_settings_plans">
+
+        <argument android:name="groupId" app:argType="string" android:defaultValue="" />
+        <deepLink app:uri="app://bif.app/social/group-settings/plans?groupId={groupId}" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_group_settings_locations"
+        android:name="com.bif.app.feature.social.GroupSettingsLocationsFragment"
+        android:label="Group Locations"
+        app:route="/social/group-settings/locations"
+        tools:layout="@layout/fragment_group_settings_locations">
+
+        <argument android:name="groupId" app:argType="string" android:defaultValue="" />
+        <deepLink app:uri="app://bif.app/social/group-settings/locations?groupId={groupId}" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_group_settings_members"
+        android:name="com.bif.app.feature.social.GroupSettingsMembersFragment"
+        android:label="Group Members"
+        app:route="/social/group-settings/members"
+        tools:layout="@layout/fragment_group_settings_members">
+
+        <argument android:name="groupId" app:argType="string" android:defaultValue="" />
+        <deepLink app:uri="app://bif.app/social/group-settings/members?groupId={groupId}" />
+    </fragment>
+
 </navigation>
 

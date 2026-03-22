@@ -23,6 +23,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.button.MaterialButton;
+import com.bif.app.core.utils.UriUtils;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -49,6 +50,7 @@ public class CommonChatFragment extends Fragment {
 
         Bundle args = getArguments();
         chatType = getArg(args, "chatType", "friend");
+        String chatId = getArg(args, "chatId", "");
         String chatName = getArg(args, "chatName", getString(R.string.chat_default_name));
         String avatarLetter = getArg(args, "avatarLetter", "?");
         int avatarColor = args != null ? args.getInt("avatarColor", 0) : 0;
@@ -58,6 +60,7 @@ public class CommonChatFragment extends Fragment {
         TextView tvTitle = view.findViewById(R.id.tv_chat_title);
         TextView tvSubtitle = view.findViewById(R.id.tv_chat_subtitle);
         ImageButton btnBack = view.findViewById(R.id.btn_back);
+        ImageButton btnGroupSettings = view.findViewById(R.id.btn_group_settings);
         RecyclerView rvMessages = view.findViewById(R.id.rv_messages);
         EditText etMessage = view.findViewById(R.id.et_message);
         messageInput = etMessage;
@@ -71,8 +74,17 @@ public class CommonChatFragment extends Fragment {
         tvTitle.setText(chatName);
         if ("group".equalsIgnoreCase(chatType)) {
             tvSubtitle.setText(getString(R.string.chat_member_count, Math.max(memberCount, 1)));
+            btnGroupSettings.setVisibility(View.VISIBLE);
+            btnGroupSettings.setOnClickListener(v -> {
+                android.net.Uri settingsUri = UriUtils.buildUri(UriUtils.PathTo.GROUP_SETTINGS_PLANS)
+                        .buildUpon()
+                        .appendQueryParameter("groupId", chatId)
+                        .build();
+                Navigation.findNavController(view).navigate(settingsUri);
+            });
         } else {
             tvSubtitle.setText(R.string.chat_direct_subtitle);
+            btnGroupSettings.setVisibility(View.GONE);
         }
 
         btnBack.setOnClickListener(v -> Navigation.findNavController(view).popBackStack());
