@@ -1,5 +1,7 @@
 package com.bif.server.features.favorite.controllers;
 
+import com.bif.server.features.favorite.dto.rest.FavoriteResponse;
+import com.bif.server.features.favorite.dto.rest.UpsertMyFavoriteRequest;
 import com.bif.server.features.favorite.models.Favorite;
 import com.bif.server.features.favorite.services.FavoriteService;
 import org.springframework.http.ResponseEntity;
@@ -39,5 +41,101 @@ public class FavoriteRestController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteFavorite(@PathVariable String id) {
         return favoriteService.deleteById(id) ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<List<FavoriteResponse>> getMyFavorites(
+            @RequestHeader(value = "X-User-Id", required = false) String currentUserId
+    ) {
+        if (currentUserId == null || currentUserId.isBlank()) {
+            return ResponseEntity.status(401).build();
+        }
+
+        List<FavoriteResponse> result = favoriteService.getMyFavorites(currentUserId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+        return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/me/{id}")
+    public ResponseEntity<FavoriteResponse> getMyFavoriteById(
+            @RequestHeader(value = "X-User-Id", required = false) String currentUserId,
+            @PathVariable String id
+    ) {
+        if (currentUserId == null || currentUserId.isBlank()) {
+            return ResponseEntity.status(401).build();
+        }
+
+        return favoriteService.getMyFavoriteById(currentUserId, id)
+                .map(favorite -> ResponseEntity.ok(toResponse(favorite)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/me")
+    public ResponseEntity<FavoriteResponse> upsertMyFavorite(
+            @RequestHeader(value = "X-User-Id", required = false) String currentUserId,
+            @RequestBody UpsertMyFavoriteRequest request
+    ) {
+        if (currentUserId == null || currentUserId.isBlank()) {
+            return ResponseEntity.status(401).build();
+        }
+
+        Favorite input = new Favorite();
+        input.setId(request.id());
+        input.setName(request.name());
+        input.setLocation(request.location());
+        input.setAddress(request.address());
+        input.setDescription(request.description());
+        input.setNotes(request.notes());
+        input.setRating(request.rating());
+        input.setImagePath(request.imagePath());
+
+        try {
+            Favorite saved = favoriteService.saveMyFavorite(currentUserId, input);
+            return ResponseEntity.ok(toResponse(saved));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @DeleteMapping("/me/{id}")
+    public ResponseEntity<Void> deleteMyFavorite(
+            @RequestHeader(value = "X-User-Id", required = false) String currentUserId,
+            @PathVariable String id
+    ) {
+        if (currentUserId == null || currentUserId.isBlank()) {
+            return ResponseEntity.status(401).build();
+        }
+
+        try {
+            FavoriteService.DeleteMyFavoriteResult result = favoriteService.deleteMyFavorite(currentUserId, id);
+            return switch (result) {
+                case DELETED -> ResponseEntity.noContent().build();
+                case FORBIDDEN -> ResponseEntity.status(403).build();
+                case NOT_FOUND -> ResponseEntity.notFound().build();
+            };
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    private FavoriteResponse toResponse(Favorite favorite) {
+        return new FavoriteResponse(
+                favorite.getId(),
+                favorite.getName(),
+                favorite.getLocation(),
+                favorite.getAddress(),
+                favorite.getDescription(),
+                favorite.getNotes(),
+                favorite.getRating(),
+                favorite.getImagePath(),
+                favorite.getServerVersion(),
+                favorite.getUpdatedAt()
+        );
     }
 }

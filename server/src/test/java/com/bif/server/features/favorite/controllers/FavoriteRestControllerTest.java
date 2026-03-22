@@ -1,5 +1,7 @@
 package com.bif.server.features.favorite.controllers;
 
+import com.bif.server.features.favorite.dto.rest.FavoriteResponse;
+import com.bif.server.features.favorite.dto.rest.UpsertMyFavoriteRequest;
 import com.bif.server.features.favorite.models.Favorite;
 import com.bif.server.features.favorite.services.FavoriteService;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -93,6 +96,101 @@ class FavoriteRestControllerTest {
         when(favoriteService.deleteById("f1")).thenReturn(false);
 
         ResponseEntity<Void> result = controller.deleteFavorite("f1");
+
+        assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
+    }
+
+    @Test
+    void getMyFavorites_WhenHeaderMissing_ReturnsUnauthorized() {
+        ResponseEntity<List<FavoriteResponse>> result = controller.getMyFavorites(null);
+
+        assertEquals(HttpStatus.UNAUTHORIZED, result.getStatusCode());
+        verify(favoriteService, never()).getMyFavorites(anyString());
+    }
+
+    @Test
+    void getMyFavorites_WhenAuthorized_ReturnsCurrentUserFavorites() {
+        Favorite item = new Favorite();
+        item.setId("f1");
+        item.setName("Coffee");
+
+        when(favoriteService.getMyFavorites("u1")).thenReturn(List.of(item));
+
+        ResponseEntity<List<FavoriteResponse>> result = controller.getMyFavorites("u1");
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertNotNull(result.getBody());
+        assertEquals(1, result.getBody().size());
+        assertEquals("f1", result.getBody().getFirst().id());
+        verify(favoriteService).getMyFavorites("u1");
+    }
+
+    @Test
+    void getMyFavoriteById_WhenMissing_ReturnsNotFound() {
+        when(favoriteService.getMyFavoriteById("u1", "f1")).thenReturn(Optional.empty());
+
+        ResponseEntity<FavoriteResponse> result = controller.getMyFavoriteById("u1", "f1");
+
+        assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
+        verify(favoriteService).getMyFavoriteById("u1", "f1");
+    }
+
+    @Test
+    void upsertMyFavorite_WhenHeaderMissing_ReturnsUnauthorized() {
+        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest(null, "Coffee", null, null, null, null, 5, null);
+
+        ResponseEntity<FavoriteResponse> result = controller.upsertMyFavorite(null, request);
+
+        assertEquals(HttpStatus.UNAUTHORIZED, result.getStatusCode());
+        verify(favoriteService, never()).saveMyFavorite(anyString(), any(Favorite.class));
+    }
+
+    @Test
+    void upsertMyFavorite_WhenNotOwner_ReturnsForbidden() {
+        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", "Coffee", null, null, null, null, 5, null);
+
+        when(favoriteService.saveMyFavorite(eq("u1"), any(Favorite.class))).thenThrow(new SecurityException("forbidden"));
+
+        ResponseEntity<FavoriteResponse> result = controller.upsertMyFavorite("u1", request);
+
+        assertEquals(HttpStatus.FORBIDDEN, result.getStatusCode());
+    }
+
+    @Test
+    void upsertMyFavorite_WhenTargetMissing_ReturnsNotFound() {
+        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", "Coffee", null, null, null, null, 5, null);
+
+        when(favoriteService.saveMyFavorite(eq("u1"), any(Favorite.class)))
+                .thenThrow(new NoSuchElementException("missing"));
+
+        ResponseEntity<FavoriteResponse> result = controller.upsertMyFavorite("u1", request);
+
+        assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
+    }
+
+    @Test
+    void deleteMyFavorite_WhenOwner_ReturnsNoContent() {
+        when(favoriteService.deleteMyFavorite("u1", "f1")).thenReturn(FavoriteService.DeleteMyFavoriteResult.DELETED);
+
+        ResponseEntity<Void> result = controller.deleteMyFavorite("u1", "f1");
+
+        assertEquals(HttpStatus.NO_CONTENT, result.getStatusCode());
+    }
+
+    @Test
+    void deleteMyFavorite_WhenNotOwner_ReturnsForbidden() {
+        when(favoriteService.deleteMyFavorite("u1", "f1")).thenReturn(FavoriteService.DeleteMyFavoriteResult.FORBIDDEN);
+
+        ResponseEntity<Void> result = controller.deleteMyFavorite("u1", "f1");
+
+        assertEquals(HttpStatus.FORBIDDEN, result.getStatusCode());
+    }
+
+    @Test
+    void deleteMyFavorite_WhenMissing_ReturnsNotFound() {
+        when(favoriteService.deleteMyFavorite("u1", "f1")).thenReturn(FavoriteService.DeleteMyFavoriteResult.NOT_FOUND);
+
+        ResponseEntity<Void> result = controller.deleteMyFavorite("u1", "f1");
 
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
     }
