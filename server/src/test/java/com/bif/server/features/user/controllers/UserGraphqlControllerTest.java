@@ -1,5 +1,8 @@
 package com.bif.server.features.user.controllers;
 
+import com.bif.server.features.user.dto.graphql.AuthStateResponse;
+import com.bif.server.features.user.dto.graphql.ProfileMetadataResponse;
+import com.bif.server.features.user.dto.graphql.UpdateMyProfileInput;
 import com.bif.server.features.user.models.User;
 import com.bif.server.features.user.services.UserService;
 import org.junit.jupiter.api.BeforeEach;
@@ -79,7 +82,7 @@ class UserGraphqlControllerTest {
 
     @Test
     void myAuthState_WhenUserIdMissing_ReturnsUnauthenticated() {
-        UserGraphqlController.AuthStateResponse result = controller.myAuthState(null);
+        AuthStateResponse result = controller.myAuthState(null);
 
         assertFalse(result.authenticated());
         assertNull(result.userId());
@@ -91,7 +94,7 @@ class UserGraphqlControllerTest {
     void myAuthState_WhenUserExists_ReturnsAuthenticatedWithProfile() {
         when(userService.getById("u1")).thenReturn(Optional.of(new User()));
 
-        UserGraphqlController.AuthStateResponse result = controller.myAuthState("u1");
+        AuthStateResponse result = controller.myAuthState("u1");
 
         assertTrue(result.authenticated());
         assertEquals("u1", result.userId());
@@ -111,8 +114,9 @@ class UserGraphqlControllerTest {
         user.setServerVersion(9);
 
         when(userService.getById("u1")).thenReturn(Optional.of(user));
+        when(userService.calculateProfileCompletion(user)).thenReturn(100);
 
-        UserGraphqlController.ProfileMetadataResponse result = controller.myProfileMetadata("u1");
+        ProfileMetadataResponse result = controller.myProfileMetadata("u1");
 
         assertNotNull(result);
         assertEquals("u1", result.userId());
@@ -120,31 +124,45 @@ class UserGraphqlControllerTest {
         assertEquals("alex@bif.local", result.email());
         assertEquals(100, result.profileCompletionPercent());
         verify(userService).getById("u1");
+        verify(userService).calculateProfileCompletion(user);
     }
 
     @Test
-    void updateMyProfile_WhenValidInput_UpdatesAllowedFieldsAndKeepsEmail() {
-        User existing = new User();
-        existing.setId("u1");
-        existing.setEmail("old@bif.local");
-        existing.setOnline(true);
-        existing.setServerVersion(10);
+    void updateMyProfile_WhenUserIdMissing_ReturnsNull() {
+        UpdateMyProfileInput input = new UpdateMyProfileInput("Alex", "A", 123);
 
-        when(userService.getById("u1")).thenReturn(Optional.of(existing));
-        when(userService.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        User result = controller.updateMyProfile(null, input);
 
-        UserGraphqlController.UpdateMyProfileInput input =
-                new UserGraphqlController.UpdateMyProfileInput(" Alex ", " A ", 0xFF1E88E5);
+        assertNull(result);
+        verify(userService, never()).updateMyProfile(anyString(), any(), any(), any());
+    }
 
-        User saved = controller.updateMyProfile("u1", input);
+    @Test
+    void updateMyProfile_WhenUserNotFound_ReturnsNull() {
+        UpdateMyProfileInput input = new UpdateMyProfileInput("Alex", "A", 123);
 
-        assertNotNull(saved);
-        assertEquals("Alex", saved.getName());
-        assertEquals("A", saved.getAvatarLetter());
-        assertEquals(0xFF1E88E5, saved.getAvatarColor());
-        assertEquals("old@bif.local", saved.getEmail());
-        assertTrue(saved.isOnline());
-        assertEquals(10, saved.getServerVersion());
-        verify(userService).save(existing);
+        when(userService.updateMyProfile("u1", "Alex", "A", 123)).thenReturn(Optional.empty());
+
+        User result = controller.updateMyProfile("u1", input);
+
+        assertNull(result);
+        verify(userService).updateMyProfile("u1", "Alex", "A", 123);
+    }
+
+    @Test
+    void updateMyProfile_WhenValidInput_ReturnsSavedUser() {
+        User saved = new User();
+        saved.setId("u1");
+        saved.setEmail("old@bif.local");
+
+        UpdateMyProfileInput input = new UpdateMyProfileInput("Alex", "A", 123);
+
+        when(userService.updateMyProfile("u1", "Alex", "A", 123)).thenReturn(Optional.of(saved));
+
+        User result = controller.updateMyProfile("u1", input);
+
+        assertNotNull(result);
+        assertEquals("u1", result.getId());
+        verify(userService).updateMyProfile("u1", "Alex", "A", 123);
     }
 }

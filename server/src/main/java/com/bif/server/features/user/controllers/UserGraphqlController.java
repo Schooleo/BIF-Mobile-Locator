@@ -1,5 +1,8 @@
 package com.bif.server.features.user.controllers;
 
+import com.bif.server.features.user.dto.graphql.AuthStateResponse;
+import com.bif.server.features.user.dto.graphql.ProfileMetadataResponse;
+import com.bif.server.features.user.dto.graphql.UpdateMyProfileInput;
 import com.bif.server.features.user.models.User;
 import com.bif.server.features.user.services.UserService;
 import org.springframework.graphql.data.method.annotation.Argument;
@@ -37,26 +40,6 @@ public class UserGraphqlController {
         return userService.deleteById(id);
     }
 
-    public record AuthStateResponse(boolean authenticated, String userId, boolean hasProfile) {}
-
-    public record ProfileMetadataResponse(
-            String userId,
-            String displayName,
-            String email,
-            String avatarLetter,
-            int avatarColor,
-            boolean online,
-            long serverVersion,
-            java.time.Instant updatedAt,
-            int profileCompletionPercent
-    ) {}
-
-    public record UpdateMyProfileInput(
-            String name,
-            String avatarLetter,
-            Integer avatarColor
-    ) {}
-
     @QueryMapping
     public AuthStateResponse myAuthState(@Argument String userId) {
         if (userId == null || userId.isBlank()) {
@@ -81,7 +64,7 @@ public class UserGraphqlController {
                         user.isOnline(),
                         user.getServerVersion(),
                         user.getUpdatedAt(),
-                        calculateProfileCompletion(user)
+                        userService.calculateProfileCompletion(user)
                 ))
                 .orElse(null);
     }
@@ -89,53 +72,14 @@ public class UserGraphqlController {
     @MutationMapping
     public User updateMyProfile(@Argument String userId, @Argument UpdateMyProfileInput input) {
         if (userId == null || userId.isBlank()) {
-        return null;
-    }
-
-    return userService.getById(userId)
-            .map(user -> {
-                if (input.name() != null) {
-                    String name = input.name().trim();
-                    if (name.isBlank()) {
-                        throw new IllegalArgumentException("name must not be blank");
-                    }
-                    user.setName(name);
-                }
-
-                if (input.avatarLetter() != null) {
-                    String avatarLetter = input.avatarLetter().trim();
-                    if (avatarLetter.isBlank()) {
-                        throw new IllegalArgumentException("avatarLetter must not be blank");
-                    }
-                    user.setAvatarLetter(avatarLetter);
-                }
-
-                if (input.avatarColor() != null) {
-                    user.setAvatarColor(input.avatarColor());
-                }
-
-                return userService.save(user);
-            })
-            .orElse(null);
-    }
-
-    private int calculateProfileCompletion(User user) {
-        int completed = 0;
-        int total = 4;
-
-        if (user.getName() != null && !user.getName().isBlank()) {
-            completed++;
-        }
-        if (user.getEmail() != null && !user.getEmail().isBlank()) {
-            completed++;
-        }
-        if (user.getAvatarLetter() != null && !user.getAvatarLetter().isBlank()) {
-            completed++;
-        }
-        if (user.getAvatarColor() != 0) {
-            completed++;
+            return null;
         }
 
-        return (completed * 100) / total;
+        return userService.updateMyProfile(
+                userId,
+                input.name(),
+                input.avatarLetter(),
+                input.avatarColor()
+        ).orElse(null);
     }
 }

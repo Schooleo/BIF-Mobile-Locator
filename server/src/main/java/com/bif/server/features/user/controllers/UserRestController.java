@@ -1,11 +1,13 @@
 package com.bif.server.features.user.controllers;
 
+import com.bif.server.features.user.dto.rest.AuthStateResponse;
+import com.bif.server.features.user.dto.rest.ProfileMetadataResponse;
+import com.bif.server.features.user.dto.rest.UpdateMyProfileRequest;
 import com.bif.server.features.user.models.User;
 import com.bif.server.features.user.services.UserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Instant;
 import java.util.List;
 
 @RestController
@@ -37,11 +39,6 @@ public class UserRestController {
         return userService.deleteById(id) ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
     }
 
-    public record AuthStateResponse(boolean authenticated,
-                                    String userId,
-                                    boolean hasProfile) 
-    {}                        
-
     @GetMapping("/me/auth-state")
     public ResponseEntity<AuthStateResponse> getMyAuthState(
         @RequestHeader(value = "X-User-Id", required = false) String userId
@@ -54,18 +51,6 @@ public class UserRestController {
         boolean hasProfile = userService.getById(userId).isPresent();
         return ResponseEntity.ok(new AuthStateResponse(true, userId, hasProfile));
     }
-
-    public record ProfileMetadataResponse(
-            String userId,
-            String displayName,
-            String email,
-            String avatarLetter,
-            int avatarColor,
-            boolean online,
-            long serverVersion,
-            Instant updatedAt,
-            int profileCompletionPercent
-    ) {}
 
     @GetMapping("/me/profile-metadata")
     public ResponseEntity<ProfileMetadataResponse> getMyProfileMetadata(
@@ -85,37 +70,10 @@ public class UserRestController {
                         user.isOnline(),
                         user.getServerVersion(),
                         user.getUpdatedAt(),
-                        calculateProfileCompletion(user)
+                        userService.calculateProfileCompletion(user)
                 )))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
-
-    private int calculateProfileCompletion(User user) {
-        int completed = 0;
-        int total = 4;
-
-        if (user.getName() != null && !user.getName().isBlank()) {
-            completed++;
-        }
-        if (user.getEmail() != null && !user.getEmail().isBlank()) {
-            completed++;
-        }
-        if (user.getAvatarLetter() != null && !user.getAvatarLetter().isBlank()) {
-            completed++;
-        }
-        if (user.getAvatarColor() != 0) {
-            completed++;
-        }
-
-        return (completed * 100) / total;
-    }
-
-    public record UpdateMyProfileRequest(
-        String name,
-        String avatarLetter,
-        Integer avatarColor,
-        String email
-        ) {}
     
     @PatchMapping("/me/profile")
     public ResponseEntity<User> updateMyProfile(
@@ -126,28 +84,16 @@ public class UserRestController {
             return ResponseEntity.status(401).build();
         }
 
-        return userService.getById(userId)
-                .map(user -> {
-                    if (request.name() != null) {
-                        String name = request.name().trim();
-                        if (name.isBlank()) {
-                            return ResponseEntity.badRequest().<User>build();
-                        }
-                        user.setName(name);
-                    }
-                    if (request.avatarLetter() != null) {
-                        String avatarLetter = request.avatarLetter().trim();
-                        if (avatarLetter.isBlank()) {
-                            return ResponseEntity.badRequest().<User>build();
-                        }
-                        user.setAvatarLetter(avatarLetter);
-                    }
-                    if (request.avatarColor() != null) {
-                        user.setAvatarColor(request.avatarColor());
-                    }
-                    User updatedUser = userService.save(user);
-                    return ResponseEntity.ok(updatedUser);
-                })
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        try {
+            return userService.updateMyProfile(
+                    userId,
+                    request.name(),
+                    request.avatarLetter(),
+                    request.avatarColor()
+            ).map(ResponseEntity::ok)
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
     }
 }
