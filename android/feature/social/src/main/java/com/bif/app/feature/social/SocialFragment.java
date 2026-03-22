@@ -77,6 +77,11 @@ public class SocialFragment extends Fragment {
             }
 
             @Override
+            public void onFriendClick(Friend friend) {
+                navigateToChatFromFriend(friend);
+            }
+
+            @Override
             public void onDeleteFriendClick(Friend friend, int position) {
                 DialogUtils.showConfirmDialog(requireContext(),
                         "Delete " + friend.getName(),
@@ -99,7 +104,7 @@ public class SocialFragment extends Fragment {
 
             @Override
             public void onGroupClick(Group group) {
-                navigateToGroupDetail(group);
+                navigateToChatFromGroup(group);
             }
 
             @Override
@@ -225,9 +230,26 @@ public class SocialFragment extends Fragment {
                 });
     }
 
-    private void navigateToGroupDetail(Group group) {
-        android.net.Uri destUri = UriUtils.buildUri(UriUtils.PathTo.GROUP_DETAIL).buildUpon()
-                .appendQueryParameter("groupId", group.getServerId())
+    private void navigateToChatFromFriend(Friend friend) {
+        android.net.Uri destUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL_CHAT).buildUpon()
+                .appendQueryParameter("chatType", "friend")
+                .appendQueryParameter("chatId", String.valueOf(friend.getId()))
+                .appendQueryParameter("chatName", friend.getName())
+                .appendQueryParameter("avatarLetter", friend.getAvatarLetter())
+                .appendQueryParameter("avatarColor", String.valueOf(friend.getAvatarColor()))
+                .appendQueryParameter("memberCount", "0")
+                .build();
+        Navigation.findNavController(requireView()).navigate(destUri);
+    }
+
+    private void navigateToChatFromGroup(Group group) {
+        android.net.Uri destUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL_CHAT).buildUpon()
+                .appendQueryParameter("chatType", "group")
+                .appendQueryParameter("chatId", group.getServerId())
+                .appendQueryParameter("chatName", group.getName())
+                .appendQueryParameter("avatarLetter", group.getAvatarLetter())
+                .appendQueryParameter("avatarColor", String.valueOf(group.getAvatarColor()))
+                .appendQueryParameter("memberCount", String.valueOf(group.getMemberCount()))
                 .build();
         Navigation.findNavController(requireView()).navigate(destUri);
     }

@@ -105,5 +105,22 @@
         <deepLink app:uri="app://bif.app/social/group-detail?groupId={groupId}" />
     </fragment>
 
+    <fragment
+        android:id="@+id/nav_social_chat"
+        android:name="com.bif.app.feature.social.CommonChatFragment"
+        android:label="Chat"
+        app:route="/social/chat"
+        tools:layout="@layout/fragment_common_chat">
+
+        <argument android:name="chatType" app:argType="string" android:defaultValue="friend" />
+        <argument android:name="chatId" app:argType="string" android:defaultValue="" />
+        <argument android:name="chatName" app:argType="string" android:defaultValue="" />
+        <argument android:name="avatarLetter" app:argType="string" android:defaultValue="?" />
+        <argument android:name="avatarColor" app:argType="integer" android:defaultValue="0" />
+        <argument android:name="memberCount" app:argType="integer" android:defaultValue="0" />
+
+        <deepLink app:uri="app://bif.app/social/chat?chatType={chatType}&amp;chatId={chatId}&amp;chatName={chatName}&amp;avatarLetter={avatarLetter}&amp;avatarColor={avatarColor}&amp;memberCount={memberCount}" />
+    </fragment>
+
 </navigation>
 
