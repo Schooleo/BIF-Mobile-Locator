@@ -63,8 +63,8 @@ public class FavoritesViewModelTest {
     @Test
     public void init_repositoryReturnsItems_favoritesListIsPopulated() {
         // Arrange
-        Favorite home = makeFavorite(1, "Home", "123 Main St", 5);
-        Favorite work = makeFavorite(2, "Work", "456 Corp Blvd", 4);
+        Favorite home = makeFavorite("fav-1", "Home", "123 Main St", 5);
+        Favorite work = makeFavorite("fav-2", "Work", "456 Corp Blvd", 4);
 
         // Act
         allFavoritesLiveData.setValue(Arrays.asList(home, work));
@@ -123,7 +123,7 @@ public class FavoritesViewModelTest {
     @Test
     public void filterFavorites_nonEmptyQuery_favoritesUpdatedFromSearchResults() {
         // Arrange
-        Favorite cafe = makeFavorite(3, "Café Central", "789 Brew Lane", 4);
+        Favorite cafe = makeFavorite("fav-3", "Café Central", "789 Brew Lane", 4);
         searchFavoritesLiveData.setValue(Collections.singletonList(cafe));
 
         // Act
@@ -152,8 +152,8 @@ public class FavoritesViewModelTest {
         viewModel.filterFavorites("gym");
         verify(favoriteRepository).searchFavorites("gym");
 
-        Favorite home = makeFavorite(1, "Home", "123 Main St", 5);
-        Favorite gym = makeFavorite(4, "Gym Plus", "321 Fitness Rd", 3);
+        Favorite home = makeFavorite("fav-1", "Home", "123 Main St", 5);
+        Favorite gym = makeFavorite("fav-4", "Gym Plus", "321 Fitness Rd", 3);
         allFavoritesLiveData.setValue(Arrays.asList(home, gym));
 
         // Act: reset the filter
@@ -183,7 +183,7 @@ public class FavoritesViewModelTest {
     @Test
     public void removeFavoriteItem_existingFavorite_callsRepositoryDelete() {
         // Arrange
-        Favorite toRemove = makeFavorite(1, "Home", "123 Main St", 5);
+        Favorite toRemove = makeFavorite("fav-1", "Home", "123 Main St", 5);
 
         // Act
         viewModel.removeFavoriteItem(toRemove);
@@ -195,7 +195,7 @@ public class FavoritesViewModelTest {
     @Test
     public void removeFavoriteItem_callsDeleteWithExactSameObject() {
         // Arrange
-        Favorite library = makeFavorite(42, "Library", "789 Book Ave", 5);
+        Favorite library = makeFavorite("fav-42", "Library", "789 Book Ave", 5);
 
         // Act
         viewModel.removeFavoriteItem(library);
@@ -203,7 +203,7 @@ public class FavoritesViewModelTest {
         // Assert: the repository receives the exact same object
         ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
         verify(favoriteRepository).deleteFavorite(captor.capture());
-        assertEquals(42, captor.getValue().id);
+        assertEquals("fav-42", captor.getValue().id);
         assertEquals("Library", captor.getValue().name);
         assertEquals("789 Book Ave", captor.getValue().address);
     }
@@ -211,8 +211,8 @@ public class FavoritesViewModelTest {
     @Test
     public void removeFavoriteItem_calledMultipleTimes_callsRepositoryEachTime() {
         // Arrange
-        Favorite fav1 = makeFavorite(1, "Cafe A", "Addr 1", 3);
-        Favorite fav2 = makeFavorite(2, "Cafe B", "Addr 2", 4);
+        Favorite fav1 = makeFavorite("fav-1", "Cafe A", "Addr 1", 3);
+        Favorite fav2 = makeFavorite("fav-2", "Cafe B", "Addr 2", 4);
 
         // Act
         viewModel.removeFavoriteItem(fav1);
@@ -225,7 +225,7 @@ public class FavoritesViewModelTest {
 
     // ─── helpers ───────────────────────────────────────────────────────────────
 
-    private Favorite makeFavorite(int id, String name, String address, int rating) {
+    private Favorite makeFavorite(String id, String name, String address, int rating) {
         Favorite f = new Favorite();
         f.id = id;
         f.name = name;

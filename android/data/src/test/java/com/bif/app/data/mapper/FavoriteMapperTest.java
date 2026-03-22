@@ -15,7 +15,7 @@ public class FavoriteMapperTest {
     public void toDomain_ValidEntity_ReturnsMappedDomain() {
         // Arrange
         FavoriteEntity entity = new FavoriteEntity();
-        entity.id = 1;
+        entity.id = "fav-1";
         entity.name = "Home";
         entity.address = "123 Main St";
 
@@ -24,7 +24,7 @@ public class FavoriteMapperTest {
 
         // Assert
         assertNotNull(domain);
-        assertEquals(1, domain.id);
+        assertEquals("fav-1", domain.id);
         assertEquals("Home", domain.name);
         assertEquals("123 Main St", domain.address);
     }
@@ -33,7 +33,7 @@ public class FavoriteMapperTest {
     public void toEntity_ValidDomain_ReturnsMappedEntity() {
         // Arrange
         Favorite domain = new Favorite();
-        domain.id = 2;
+        domain.id = "fav-2";
         domain.name = "Work";
         domain.rating = 5;
 
@@ -42,7 +42,7 @@ public class FavoriteMapperTest {
 
         // Assert
         assertNotNull(entity);
-        assertEquals(2, entity.id);
+        assertEquals("fav-2", entity.id);
         assertEquals("Work", entity.name);
         assertEquals(5, entity.rating);
     }

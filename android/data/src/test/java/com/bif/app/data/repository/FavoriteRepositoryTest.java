@@ -44,7 +44,7 @@ public class FavoriteRepositoryTest {
         // Arrange
         List<FavoriteEntity> mockEntities = new ArrayList<>();
         FavoriteEntity entity = new FavoriteEntity();
-        entity.id = 1;
+        entity.id = "fav-1";
         entity.name = "Test Place";
         mockEntities.add(entity);
 
@@ -59,14 +59,14 @@ public class FavoriteRepositoryTest {
         // Assert
         assertEquals(1, result.size());
         assertEquals("Test Place", result.get(0).name);
-        assertEquals(1, result.get(0).id);
+        assertEquals("fav-1", result.get(0).id);
     }
 
     @Test
     public void addFavorite_ValidFavorite_CallsDaoInsert() {
         // Arrange
         Favorite domainItem = new Favorite();
-        domainItem.id = 10;
+        domainItem.id = "fav-10";
         domainItem.name = "Cafe";
 
         // Act

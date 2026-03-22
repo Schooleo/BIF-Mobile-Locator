@@ -83,7 +83,7 @@ public class FavoritesFragment extends Fragment
     public void onFavoriteClicked(Favorite favorite) {
         // Deep Link
         android.net.Uri destUri = UriUtils.buildUri(UriUtils.PathTo.FAVORITES_DETAIL).buildUpon()
-                .appendQueryParameter("favId", String.valueOf(favorite.id))
+            .appendQueryParameter("favId", favorite.id != null ? favorite.id : "")
                 .appendQueryParameter("favName", favorite.name != null ? favorite.name : "")
                 .appendQueryParameter("favAddress", favorite.address != null ? favorite.address : "")
                 .appendQueryParameter("favDescription", favorite.description != null ? favorite.description : "")

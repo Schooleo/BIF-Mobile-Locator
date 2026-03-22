@@ -5,6 +5,7 @@ import com.bif.app.domain.model.Favorite;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 public class FavoriteMapper {
 
@@ -28,7 +29,9 @@ public class FavoriteMapper {
     public static FavoriteEntity toEntity(Favorite domain) {
         if (domain == null) return null;
         FavoriteEntity entity = new FavoriteEntity();
-        entity.id = domain.id;
+        entity.id = (domain.id == null || domain.id.trim().isEmpty())
+            ? UUID.randomUUID().toString()
+            : domain.id;
         entity.name = domain.name;
         entity.latitude = domain.latitude;
         entity.longitude = domain.longitude;

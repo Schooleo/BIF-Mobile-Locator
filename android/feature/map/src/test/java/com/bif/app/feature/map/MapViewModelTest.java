@@ -183,7 +183,7 @@ public class MapViewModelTest {
     public void removeFromFavorites_validFavorite_callsRepositoryDeleteFavorite() {
         // Arrange
         Favorite fav = new Favorite();
-        fav.id = 10;
+        fav.id = "fav-10";
         fav.name = "BookCafe";
         fav.address = "District 3";
 

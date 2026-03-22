@@ -8,7 +8,7 @@ public class FavoriteTest {
     @Test
     public void favorite_initialization_setsValuesCorrectly() {
         Favorite favorite = new Favorite();
-        favorite.id = 1;
+        favorite.id = "fav-1";
         favorite.name = "My Favorite Place";
         favorite.latitude = 10.0;
         favorite.longitude = 20.0;
@@ -18,7 +18,7 @@ public class FavoriteTest {
         favorite.rating = 5;
         favorite.imagePath = "/images/fav.png";
 
-        assertEquals(1, favorite.id);
+        assertEquals("fav-1", favorite.id);
         assertEquals("My Favorite Place", favorite.name);
         assertEquals(10.0, favorite.latitude, 0.0);
         assertEquals(20.0, favorite.longitude, 0.0);

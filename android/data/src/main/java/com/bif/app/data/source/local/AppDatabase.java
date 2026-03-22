@@ -12,7 +12,7 @@ import com.bif.app.data.source.local.entity.GroupFriendCrossRef;
         FavoriteEntity.class,
         GroupEntity.class,
         GroupFriendCrossRef.class
-}, version = 3, exportSchema = false)
+}, version = 4, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
     public abstract FriendDao friendDao();
     public abstract FavoriteDao favoriteDao();
