@@ -76,4 +76,75 @@ class UserGraphqlControllerTest {
         assertTrue(result);
         verify(userService).deleteById("u1");
     }
+
+    @Test
+    void myAuthState_WhenUserIdMissing_ReturnsUnauthenticated() {
+        UserGraphqlController.AuthStateResponse result = controller.myAuthState(null);
+
+        assertFalse(result.authenticated());
+        assertNull(result.userId());
+        assertFalse(result.hasProfile());
+        verify(userService, never()).getById(anyString());
+    }
+
+    @Test
+    void myAuthState_WhenUserExists_ReturnsAuthenticatedWithProfile() {
+        when(userService.getById("u1")).thenReturn(Optional.of(new User()));
+
+        UserGraphqlController.AuthStateResponse result = controller.myAuthState("u1");
+
+        assertTrue(result.authenticated());
+        assertEquals("u1", result.userId());
+        assertTrue(result.hasProfile());
+        verify(userService).getById("u1");
+    }
+
+    @Test
+    void myProfileMetadata_WhenUserFound_ReturnsCompletionPercent() {
+        User user = new User();
+        user.setId("u1");
+        user.setName("Alex");
+        user.setEmail("alex@bif.local");
+        user.setAvatarLetter("A");
+        user.setAvatarColor(0xFF1E88E5);
+        user.setOnline(true);
+        user.setServerVersion(9);
+
+        when(userService.getById("u1")).thenReturn(Optional.of(user));
+
+        UserGraphqlController.ProfileMetadataResponse result = controller.myProfileMetadata("u1");
+
+        assertNotNull(result);
+        assertEquals("u1", result.userId());
+        assertEquals("Alex", result.displayName());
+        assertEquals("alex@bif.local", result.email());
+        assertEquals(100, result.profileCompletionPercent());
+        verify(userService).getById("u1");
+    }
+
+    @Test
+    void updateMyProfile_WhenValidInput_UpdatesAllowedFieldsAndKeepsEmail() {
+        User existing = new User();
+        existing.setId("u1");
+        existing.setEmail("old@bif.local");
+        existing.setOnline(true);
+        existing.setServerVersion(10);
+
+        when(userService.getById("u1")).thenReturn(Optional.of(existing));
+        when(userService.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserGraphqlController.UpdateMyProfileInput input =
+                new UserGraphqlController.UpdateMyProfileInput(" Alex ", " A ", 0xFF1E88E5);
+
+        User saved = controller.updateMyProfile("u1", input);
+
+        assertNotNull(saved);
+        assertEquals("Alex", saved.getName());
+        assertEquals("A", saved.getAvatarLetter());
+        assertEquals(0xFF1E88E5, saved.getAvatarColor());
+        assertEquals("old@bif.local", saved.getEmail());
+        assertTrue(saved.isOnline());
+        assertEquals(10, saved.getServerVersion());
+        verify(userService).save(existing);
+    }
 }

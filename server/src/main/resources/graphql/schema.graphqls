@@ -1,6 +1,8 @@
 type Query {
   users: [User!]!
   user(id: ID!): User
+  myAuthState(userId: ID): AuthState!
+  myProfileMetadata(userId: ID!): ProfileMetadata
   groups: [Group!]!
   group(id: ID!): Group
   places: [Place!]!
@@ -20,6 +22,7 @@ type Query {
 type Mutation {
   upsertUser(input: UserInput!): User!
   deleteUser(id: ID!): Boolean!
+  updateMyProfile(userId: ID!, input: UpdateMyProfileInput!): User
   upsertGroup(input: GroupInput!): Group!
   deleteGroup(id: ID!): Boolean!
   upsertPlace(input: PlaceInput!): Place!
@@ -191,6 +194,30 @@ input TripStopInput {
 input LocationInput {
   latitude: Float
   longitude: Float
+}
+
+type AuthState {
+  authenticated: Boolean!
+  userId: ID
+  hasProfile: Boolean!
+}
+
+type ProfileMetadata {
+  userId: ID
+  displayName: String
+  email: String
+  avatarLetter: String
+  avatarColor: Int
+  online: Boolean
+  serverVersion: Int
+  updatedAt: String
+  profileCompletionPercent: Int!
+}
+
+input UpdateMyProfileInput {
+  name: String
+  avatarLetter: String
+  avatarColor: Int
 }
 
 input SyncRequestInput {
