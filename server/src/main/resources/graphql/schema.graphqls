@@ -10,6 +10,7 @@ type Query {
   favorites: [Favorite!]!
   favorite(id: ID!): Favorite
   favoritesByUser(userId: ID!): [Favorite!]!
+  myFavorites(userId: ID): [Favorite!]!
   chatMessages: [ChatMessage!]!
   chatMessage(id: ID!): ChatMessage
   chatMessagesByGroup(groupId: ID!): [ChatMessage!]!
@@ -29,6 +30,8 @@ type Mutation {
   deletePlace(id: ID!): Boolean!
   upsertFavorite(input: FavoriteInput!): Favorite!
   deleteFavorite(id: ID!): Boolean!
+  upsertMyFavorite(userId: ID, input: FavoriteInput!): Favorite!
+  deleteMyFavorite(userId: ID, id: ID!): DeleteMyFavoriteResult!
   upsertChatMessage(input: ChatMessageInput!): ChatMessage!
   deleteChatMessage(id: ID!): Boolean!
   upsertTripPlan(input: TripPlanInput!): TripPlan!
@@ -120,6 +123,12 @@ type SyncChange {
   entityId: String
   serverVersion: Int
   operation: String
+}
+
+enum DeleteMyFavoriteResult {
+  DELETED
+  FORBIDDEN
+  NOT_FOUND
 }
 
 input UserInput {

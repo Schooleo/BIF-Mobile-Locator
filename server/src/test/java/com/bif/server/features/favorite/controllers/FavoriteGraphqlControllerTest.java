@@ -1,5 +1,6 @@
 package com.bif.server.features.favorite.controllers;
 
+import com.bif.server.features.favorite.dto.graphql.DeleteMyFavoriteResult;
 import com.bif.server.features.favorite.models.Favorite;
 import com.bif.server.features.favorite.services.FavoriteService;
 import org.junit.jupiter.api.BeforeEach;
@@ -79,5 +80,43 @@ class FavoriteGraphqlControllerTest {
         when(favoriteService.deleteById("f1")).thenReturn(true);
 
         assertTrue(controller.deleteFavorite("f1"));
+    }
+
+    @Test
+    void myFavorites_WhenUserIdMissing_ThrowsIllegalArgumentException() {
+        assertThrows(IllegalArgumentException.class, () -> controller.myFavorites(" "));
+        verify(favoriteService, never()).getMyFavorites(anyString());
+    }
+
+    @Test
+    void myFavorites_WhenAuthorized_ReturnsCurrentUserData() {
+        Favorite item = new Favorite();
+        when(favoriteService.getMyFavorites("u1")).thenReturn(List.of(item));
+
+        List<Favorite> result = controller.myFavorites("u1");
+
+        assertEquals(1, result.size());
+        verify(favoriteService).getMyFavorites("u1");
+    }
+
+    @Test
+    void upsertMyFavorite_DelegatesToService() {
+        Favorite input = new Favorite();
+        when(favoriteService.saveMyFavorite("u1", input)).thenReturn(input);
+
+        Favorite result = controller.upsertMyFavorite("u1", input);
+
+        assertSame(input, result);
+        verify(favoriteService).saveMyFavorite("u1", input);
+    }
+
+    @Test
+    void deleteMyFavorite_WhenForbidden_ReturnsForbiddenEnum() {
+        when(favoriteService.deleteMyFavorite("u1", "f1"))
+                .thenReturn(FavoriteService.DeleteMyFavoriteResult.FORBIDDEN);
+
+        DeleteMyFavoriteResult result = controller.deleteMyFavorite("u1", "f1");
+
+        assertEquals(DeleteMyFavoriteResult.FORBIDDEN, result);
     }
 }
