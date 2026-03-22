@@ -125,7 +125,7 @@ class UserServiceTest {
         assertTrue(result.isPresent());
         User saved = result.get();
 
-        assertEquals("Alex", saved.getName());
+        assertEquals("Alex", saved.getUsername());
         assertEquals("A", saved.getAvatarLetter());
         assertEquals(0xFF1E88E5, saved.getAvatarColor());
         assertEquals("old@bif.local", saved.getEmail());

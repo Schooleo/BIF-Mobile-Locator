@@ -106,7 +106,7 @@ class UserGraphqlControllerTest {
     void myProfileMetadata_WhenUserFound_ReturnsCompletionPercent() {
         User user = new User();
         user.setId("u1");
-        user.setName("Alex");
+        user.setUsername("Alex");
         user.setEmail("alex@bif.local");
         user.setAvatarLetter("A");
         user.setAvatarColor(0xFF1E88E5);

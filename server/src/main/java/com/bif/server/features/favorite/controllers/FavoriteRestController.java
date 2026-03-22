@@ -5,6 +5,7 @@ import com.bif.server.features.favorite.dto.rest.UpsertMyFavoriteRequest;
 import com.bif.server.features.favorite.models.Favorite;
 import com.bif.server.features.favorite.services.FavoriteService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -45,8 +46,9 @@ public class FavoriteRestController {
 
     @GetMapping("/me")
     public ResponseEntity<List<FavoriteResponse>> getMyFavorites(
-            @RequestHeader(value = "X-User-Id", required = false) String currentUserId
+            Authentication authentication
     ) {
+        String currentUserId = currentUserId(authentication);
         if (currentUserId == null || currentUserId.isBlank()) {
             return ResponseEntity.status(401).build();
         }
@@ -60,9 +62,10 @@ public class FavoriteRestController {
 
     @GetMapping("/me/{id}")
     public ResponseEntity<FavoriteResponse> getMyFavoriteById(
-            @RequestHeader(value = "X-User-Id", required = false) String currentUserId,
+            Authentication authentication,
             @PathVariable String id
     ) {
+        String currentUserId = currentUserId(authentication);
         if (currentUserId == null || currentUserId.isBlank()) {
             return ResponseEntity.status(401).build();
         }
@@ -74,9 +77,10 @@ public class FavoriteRestController {
 
     @PostMapping("/me")
     public ResponseEntity<FavoriteResponse> upsertMyFavorite(
-            @RequestHeader(value = "X-User-Id", required = false) String currentUserId,
+            Authentication authentication,
             @RequestBody UpsertMyFavoriteRequest request
     ) {
+        String currentUserId = currentUserId(authentication);
         if (currentUserId == null || currentUserId.isBlank()) {
             return ResponseEntity.status(401).build();
         }
@@ -105,9 +109,10 @@ public class FavoriteRestController {
 
     @DeleteMapping("/me/{id}")
     public ResponseEntity<Void> deleteMyFavorite(
-            @RequestHeader(value = "X-User-Id", required = false) String currentUserId,
+            Authentication authentication,
             @PathVariable String id
     ) {
+        String currentUserId = currentUserId(authentication);
         if (currentUserId == null || currentUserId.isBlank()) {
             return ResponseEntity.status(401).build();
         }
@@ -122,6 +127,13 @@ public class FavoriteRestController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
         }
+    }
+
+    private String currentUserId(Authentication authentication) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return null;
+        }
+        return authentication.getPrincipal().toString();
     }
 
     private FavoriteResponse toResponse(Favorite favorite) {

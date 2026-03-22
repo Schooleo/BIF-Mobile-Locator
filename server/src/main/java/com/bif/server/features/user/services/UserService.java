@@ -37,14 +37,14 @@ public class UserService {
 
     public Optional<User> updateMyProfile(
             String userId,
-            String name,
+            String username,
             String avatarLetter,
             Integer avatarColor
     ) {
         if (userId == null || userId.isBlank()) {
             throw new IllegalArgumentException("userId must not be blank");
         }
-        if (name != null && name.isBlank()) {
+        if (username != null && username.isBlank()) {
             throw new IllegalArgumentException("name must not be blank");
         }
         if (avatarLetter != null && avatarLetter.isBlank()) {
@@ -52,8 +52,8 @@ public class UserService {
         }
 
         return userRepository.findById(userId).map(user -> {
-            if (name != null) {
-                user.setName(name.trim());
+            if (username != null) {
+                user.setUsername(username.trim());
             }
             if (avatarLetter != null) {
                 user.setAvatarLetter(avatarLetter.trim());
@@ -69,7 +69,7 @@ public class UserService {
         int completed = 0;
         int total = 4;
 
-        if (user.getName() != null && !user.getName().isBlank()) {
+        if (user.getUsername() != null && !user.getUsername().isBlank()) {
             completed++;
         }
         if (user.getEmail() != null && !user.getEmail().isBlank()) {

@@ -12,6 +12,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 
 import java.util.List;
 import java.util.Optional;
@@ -106,9 +108,10 @@ class UserRestControllerTest {
 
     @Test
     void getMyAuthState_WhenUserHasNoProfile_ReturnsOkAndHasProfileFalse() {
+        Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
         when(userService.getById("u1")).thenReturn(Optional.empty());
 
-        ResponseEntity<AuthStateResponse> result = controller.getMyAuthState("u1");
+        ResponseEntity<AuthStateResponse> result = controller.getMyAuthState(auth);
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
         assertNotNull(result.getBody());
@@ -120,10 +123,11 @@ class UserRestControllerTest {
 
     @Test
     void getMyAuthState_WhenUserHasProfile_ReturnsOkAndHasProfileTrue() {
+        Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
         User user = new User();
         when(userService.getById("u1")).thenReturn(Optional.of(user));
 
-        ResponseEntity<AuthStateResponse> result = controller.getMyAuthState("u1");
+        ResponseEntity<AuthStateResponse> result = controller.getMyAuthState(auth);
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
         assertNotNull(result.getBody());
@@ -145,10 +149,11 @@ class UserRestControllerTest {
 
     @Test
     void getMyProfileMetadata_WhenUserNotFound_ReturnsNotFound() {
+        Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
         when(userService.getById("u1")).thenReturn(Optional.empty());
 
         ResponseEntity<ProfileMetadataResponse> result =
-                controller.getMyProfileMetadata("u1");
+            controller.getMyProfileMetadata(auth);
 
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
         assertNull(result.getBody());
@@ -157,9 +162,10 @@ class UserRestControllerTest {
 
     @Test
     void getMyProfileMetadata_WhenUserFound_ReturnsMetadataWithCompletionPercent() {
+        Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
         User user = new User();
         user.setId("u1");
-        user.setName("Alex");
+        user.setUsername("Alex");
         user.setEmail("alex@bif.local");
         user.setAvatarLetter("A");
         user.setAvatarColor(0xFF1E88E5);
@@ -170,7 +176,7 @@ class UserRestControllerTest {
         when(userService.calculateProfileCompletion(user)).thenReturn(100);
 
         ResponseEntity<ProfileMetadataResponse> result =
-                controller.getMyProfileMetadata("u1");
+            controller.getMyProfileMetadata(auth);
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
         assertNotNull(result.getBody());
@@ -198,11 +204,12 @@ class UserRestControllerTest {
 
     @Test
     void updateMyProfile_WhenUserNotFound_ReturnsNotFound() {
+        Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
         UpdateMyProfileRequest request = new UpdateMyProfileRequest("Alex", "A", 123);
 
         when(userService.updateMyProfile("u1", "Alex", "A", 123)).thenReturn(Optional.empty());
 
-        ResponseEntity<User> result = controller.updateMyProfile("u1", request);
+        ResponseEntity<User> result = controller.updateMyProfile(auth, request);
 
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
         verify(userService).updateMyProfile("u1", "Alex", "A", 123);
@@ -210,12 +217,13 @@ class UserRestControllerTest {
 
     @Test
     void updateMyProfile_WhenServiceThrowsBadInput_ReturnsBadRequest() {
+        Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
         UpdateMyProfileRequest request = new UpdateMyProfileRequest("   ", "A", 123);
 
         when(userService.updateMyProfile("u1", "   ", "A", 123))
                 .thenThrow(new IllegalArgumentException("name must not be blank"));
 
-        ResponseEntity<User> result = controller.updateMyProfile("u1", request);
+        ResponseEntity<User> result = controller.updateMyProfile(auth, request);
 
         assertEquals(HttpStatus.BAD_REQUEST, result.getStatusCode());
         verify(userService).updateMyProfile("u1", "   ", "A", 123);
@@ -223,6 +231,7 @@ class UserRestControllerTest {
 
     @Test
     void updateMyProfile_WhenValid_ReturnsOk() {
+        Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
         User saved = new User();
         saved.setId("u1");
         saved.setEmail("old@bif.local");
@@ -231,7 +240,7 @@ class UserRestControllerTest {
 
         when(userService.updateMyProfile("u1", " Alex ", " A ", 0xFF1E88E5)).thenReturn(Optional.of(saved));
 
-        ResponseEntity<User> result = controller.updateMyProfile("u1", request);
+    ResponseEntity<User> result = controller.updateMyProfile(auth, request);
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
         assertNotNull(result.getBody());

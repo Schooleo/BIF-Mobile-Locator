@@ -3,5 +3,9 @@ package com.bif.server.features.user.repositories;
 import com.bif.server.features.user.models.User;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
+import java.util.Optional;
+
 public interface UserRepository extends MongoRepository<User, String> {
+	Optional<User> findByEmailIgnoreCase(String email);
+	boolean existsByEmailIgnoreCase(String email);
 }

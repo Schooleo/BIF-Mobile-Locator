@@ -57,7 +57,7 @@ public class UserGraphqlController {
         return userService.getById(userId)
                 .map(user -> new ProfileMetadataResponse(
                         user.getId(),
-                        user.getName(),
+                        user.getUsername(),
                         user.getEmail(),
                         user.getAvatarLetter(),
                         user.getAvatarColor(),

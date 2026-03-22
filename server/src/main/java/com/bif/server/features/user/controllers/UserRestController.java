@@ -5,6 +5,7 @@ import com.bif.server.features.user.dto.rest.ProfileMetadataResponse;
 import com.bif.server.features.user.dto.rest.UpdateMyProfileRequest;
 import com.bif.server.features.user.models.User;
 import com.bif.server.features.user.services.UserService;
+import org.springframework.security.core.Authentication;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -41,8 +42,9 @@ public class UserRestController {
 
     @GetMapping("/me/auth-state")
     public ResponseEntity<AuthStateResponse> getMyAuthState(
-        @RequestHeader(value = "X-User-Id", required = false) String userId
+        Authentication authentication
     ) {
+        String userId = currentUserId(authentication);
         if (userId == null || userId.isBlank()) {
             return ResponseEntity.status(401)
             .body(new AuthStateResponse(false, null, false));
@@ -54,8 +56,9 @@ public class UserRestController {
 
     @GetMapping("/me/profile-metadata")
     public ResponseEntity<ProfileMetadataResponse> getMyProfileMetadata(
-            @RequestHeader(value = "X-User-Id", required = false) String userId
+            Authentication authentication
     ) {
+        String userId = currentUserId(authentication);
         if (userId == null || userId.isBlank()) {
             return ResponseEntity.status(401).build();
         }
@@ -63,7 +66,7 @@ public class UserRestController {
         return userService.getById(userId)
                 .map(user -> ResponseEntity.ok(new ProfileMetadataResponse(
                         user.getId(),
-                        user.getName(),
+                        user.getUsername(),
                         user.getEmail(),
                         user.getAvatarLetter(),
                         user.getAvatarColor(),
@@ -77,9 +80,10 @@ public class UserRestController {
     
     @PatchMapping("/me/profile")
     public ResponseEntity<User> updateMyProfile(
-        @RequestHeader(value = "X-User-Id", required = false) String userId,
+        Authentication authentication,
         @RequestBody UpdateMyProfileRequest request
     ) {
+        String userId = currentUserId(authentication);
         if (userId == null || userId.isBlank()) {
             return ResponseEntity.status(401).build();
         }
@@ -95,5 +99,12 @@ public class UserRestController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
         }
+    }
+
+    private String currentUserId(Authentication authentication) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return null;
+        }
+        return authentication.getPrincipal().toString();
     }
 }
