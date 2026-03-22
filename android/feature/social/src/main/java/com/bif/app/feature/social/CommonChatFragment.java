@@ -1,5 +1,6 @@
 package com.bif.app.feature.social;
 
+import android.annotation.SuppressLint;
 import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.text.format.DateFormat;
@@ -33,7 +34,6 @@ public class CommonChatFragment extends Fragment {
 
     private ChatMessageAdapter adapter;
     private String chatType;
-    private int memberCount;
     private EditText messageInput;
 
     @Nullable
@@ -44,6 +44,7 @@ public class CommonChatFragment extends Fragment {
         return inflater.inflate(R.layout.fragment_common_chat, container, false);
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
@@ -54,7 +55,7 @@ public class CommonChatFragment extends Fragment {
         String chatName = getArg(args, "chatName", getString(R.string.chat_default_name));
         String avatarLetter = getArg(args, "avatarLetter", "?");
         int avatarColor = args != null ? args.getInt("avatarColor", 0) : 0;
-        memberCount = args != null ? args.getInt("memberCount", 0) : 0;
+        int memberCount = args != null ? args.getInt("memberCount", 0) : 0;
 
         TextView tvAvatar = view.findViewById(R.id.tv_avatar);
         TextView tvTitle = view.findViewById(R.id.tv_chat_title);
@@ -105,16 +106,22 @@ public class CommonChatFragment extends Fragment {
         // Always open keyboard when entering the chat screen.
         etMessage.post(() -> focusInputAndShowKeyboard(etMessage));
 
-        adapter = new ChatMessageAdapter();
+        adapter = new ChatMessageAdapter(this::handleLocationLinkClick);
         rvMessages.setLayoutManager(new LinearLayoutManager(requireContext()));
         rvMessages.setAdapter(adapter);
         adapter.submit(buildSeedMessages(chatType));
+
+        if (savedInstanceState == null) {
+            appendSharedPlaceMessageIfPresent(args);
+        }
+
         rvMessages.scrollToPosition(Math.max(0, adapter.getItemCount() - 1));
 
         // Tap on the chat area to type immediately instead of triggering any navigation.
         rvMessages.setOnTouchListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_DOWN) {
                 focusInputAndShowKeyboard(etMessage);
+                v.performClick();
             }
             return false;
         });
@@ -208,6 +215,51 @@ public class CommonChatFragment extends Fragment {
         return DateFormat.format("HH:mm", new Date()).toString();
     }
 
+    private void appendSharedPlaceMessageIfPresent(Bundle args) {
+        if (args == null || !"group".equalsIgnoreCase(chatType)) {
+            return;
+        }
+
+        String placeName = getArg(args, "sharedPlaceName", "");
+        if (placeName.isEmpty()) {
+            return;
+        }
+
+        String placeAddress = getArg(args, "sharedPlaceAddress", "");
+        String mapLink = getArg(args, "sharedPlaceLink", "");
+
+        adapter.add(new ChatMessageAdapter.ChatMessage(
+                getString(R.string.chat_you),
+                placeName,
+                placeAddress,
+                getString(R.string.chat_seed_group_5),
+                mapLink,
+                nowTime(),
+                true,
+                ChatMessageAdapter.MessageType.LOCATION
+        ));
+    }
+
+    private void handleLocationLinkClick(ChatMessageAdapter.ChatMessage message) {
+        String mapQuery = message.getMapQuery();
+        if (mapQuery == null || mapQuery.trim().isEmpty()) {
+            if (message.getSubtitle() != null && !message.getSubtitle().trim().isEmpty()) {
+                mapQuery = message.getSubtitle();
+            } else {
+                mapQuery = message.getTitle();
+            }
+        }
+
+        Bundle args = new Bundle();
+        args.putString("location", mapQuery);
+        // Using deep link navigation for map to avoid direct resource dependency across modules
+        android.net.Uri mapUri = UriUtils.buildUri("/map")
+                .buildUpon()
+                .appendQueryParameter("location", mapQuery)
+                .build();
+        Navigation.findNavController(requireView()).navigate(mapUri);
+    }
+
     private String getArg(Bundle args, String key, String fallback) {
         if (args == null) {
             return fallback;
@@ -245,15 +297,17 @@ public class CommonChatFragment extends Fragment {
 
         // Retry once after layout pass for devices that ignore the first request.
         etMessage.postDelayed(() -> {
-            if (!etMessage.hasFocus()) {
-                etMessage.requestFocus();
-            }
-            WindowInsetsControllerCompat delayedController = ViewCompat.getWindowInsetsController(etMessage);
-            if (delayedController != null) {
-                delayedController.show(WindowInsetsCompat.Type.ime());
-            }
-            if (imm != null) {
-                imm.showSoftInput(etMessage, InputMethodManager.SHOW_IMPLICIT);
+            if (isAdded()) {
+                if (!etMessage.hasFocus()) {
+                    etMessage.requestFocus();
+                }
+                WindowInsetsControllerCompat delayedController = ViewCompat.getWindowInsetsController(etMessage);
+                if (delayedController != null) {
+                    delayedController.show(WindowInsetsCompat.Type.ime());
+                }
+                if (imm != null) {
+                    imm.showSoftInput(etMessage, InputMethodManager.SHOW_IMPLICIT);
+                }
             }
         }, 120);
     }

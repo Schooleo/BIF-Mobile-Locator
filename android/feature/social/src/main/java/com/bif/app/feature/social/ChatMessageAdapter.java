@@ -6,12 +6,17 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+
+    public interface OnLocationLinkClickListener {
+        void onLocationLinkClick(ChatMessage message);
+    }
 
     public enum MessageType {
         TEXT,
@@ -24,15 +29,28 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         private final String title;
         private final String subtitle;
         private final String linkText;
+        private final String mapQuery;
         private final String time;
         private final boolean mine;
         private final MessageType type;
 
         public ChatMessage(String sender, String title, String subtitle, String linkText, String time, boolean mine, MessageType type) {
+            this(sender, title, subtitle, linkText, "", time, mine, type);
+        }
+
+        public ChatMessage(String sender,
+                           String title,
+                           String subtitle,
+                           String linkText,
+                           String mapQuery,
+                           String time,
+                           boolean mine,
+                           MessageType type) {
             this.sender = sender;
             this.title = title;
             this.subtitle = subtitle;
             this.linkText = linkText;
+            this.mapQuery = mapQuery;
             this.time = time;
             this.mine = mine;
             this.type = type;
@@ -58,6 +76,10 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             return time;
         }
 
+        public String getMapQuery() {
+            return mapQuery;
+        }
+
         public boolean isMine() {
             return mine;
         }
@@ -71,6 +93,15 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     private static final int VIEW_TYPE_OUTGOING = 2;
 
     private final List<ChatMessage> messages = new ArrayList<>();
+    private final OnLocationLinkClickListener locationLinkClickListener;
+
+    public ChatMessageAdapter() {
+        this(null);
+    }
+
+    public ChatMessageAdapter(OnLocationLinkClickListener locationLinkClickListener) {
+        this.locationLinkClickListener = locationLinkClickListener;
+    }
 
     public void submit(List<ChatMessage> newMessages) {
         messages.clear();
@@ -97,7 +128,7 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                 ? R.layout.item_chat_outgoing
                 : R.layout.item_chat_incoming;
         View view = LayoutInflater.from(parent.getContext()).inflate(layout, parent, false);
-        return new ChatMessageViewHolder(view);
+        return new ChatMessageViewHolder(view, locationLinkClickListener);
     }
 
     @Override
@@ -116,14 +147,19 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         private final TextView tvSubtitle;
         private final TextView tvLink;
         private final TextView tvTime;
+        private final OnLocationLinkClickListener locationLinkClickListener;
+        private final int defaultLinkColor;
 
-        ChatMessageViewHolder(@NonNull View itemView) {
+        ChatMessageViewHolder(@NonNull View itemView,
+                              OnLocationLinkClickListener locationLinkClickListener) {
             super(itemView);
             tvSender = itemView.findViewById(R.id.tv_sender);
             tvTitle = itemView.findViewById(R.id.tv_message_title);
             tvSubtitle = itemView.findViewById(R.id.tv_message_subtitle);
             tvLink = itemView.findViewById(R.id.tv_message_link);
             tvTime = itemView.findViewById(R.id.tv_message_time);
+            this.locationLinkClickListener = locationLinkClickListener;
+            this.defaultLinkColor = tvLink.getCurrentTextColor();
         }
 
         void bind(ChatMessage message) {
@@ -145,9 +181,17 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
 
             if (message.getLinkText() == null || message.getLinkText().isEmpty()) {
                 tvLink.setVisibility(View.GONE);
+                tvLink.setOnClickListener(null);
             } else {
                 tvLink.setVisibility(View.VISIBLE);
                 tvLink.setText(message.getLinkText());
+                if (message.getType() == MessageType.LOCATION && locationLinkClickListener != null) {
+                    tvLink.setTextColor(ContextCompat.getColor(itemView.getContext(), android.R.color.white));
+                    tvLink.setOnClickListener(v -> locationLinkClickListener.onLocationLinkClick(message));
+                } else {
+                    tvLink.setTextColor(defaultLinkColor);
+                    tvLink.setOnClickListener(null);
+                }
             }
 
             tvTime.setText(message.getTime());

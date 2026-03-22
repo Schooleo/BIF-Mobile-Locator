@@ -39,9 +39,11 @@
         <argument android:name="favDescription" app:argType="string" android:defaultValue="" />
         <argument android:name="favNotes" app:argType="string" android:defaultValue="" />
         <argument android:name="favRating" app:argType="integer" android:defaultValue="0" />
+        <argument android:name="favLatitude" app:argType="string" android:defaultValue="" />
+        <argument android:name="favLongitude" app:argType="string" android:defaultValue="" />
 
         <deepLink
-            app:uri="app://bif.app/favorites/detail?favId={favId}&amp;favName={favName}&amp;favAddress={favAddress}&amp;favDescription={favDescription}&amp;favNotes={favNotes}&amp;favRating={favRating}" />
+            app:uri="app://bif.app/favorites/detail?favId={favId}&amp;favName={favName}&amp;favAddress={favAddress}&amp;favDescription={favDescription}&amp;favNotes={favNotes}&amp;favRating={favRating}&amp;favLatitude={favLatitude}&amp;favLongitude={favLongitude}" />
     </fragment>
 
     <fragment
@@ -118,8 +120,11 @@
         <argument android:name="avatarLetter" app:argType="string" android:defaultValue="?" />
         <argument android:name="avatarColor" app:argType="integer" android:defaultValue="0" />
         <argument android:name="memberCount" app:argType="integer" android:defaultValue="0" />
+        <argument android:name="sharedPlaceName" app:argType="string" android:defaultValue="" />
+        <argument android:name="sharedPlaceAddress" app:argType="string" android:defaultValue="" />
+        <argument android:name="sharedPlaceLink" app:argType="string" android:defaultValue="" />
 
-        <deepLink app:uri="app://bif.app/social/chat?chatType={chatType}&amp;chatId={chatId}&amp;chatName={chatName}&amp;avatarLetter={avatarLetter}&amp;avatarColor={avatarColor}&amp;memberCount={memberCount}" />
+        <deepLink app:uri="app://bif.app/social/chat?chatType={chatType}&amp;chatId={chatId}&amp;chatName={chatName}&amp;avatarLetter={avatarLetter}&amp;avatarColor={avatarColor}&amp;memberCount={memberCount}&amp;sharedPlaceName={sharedPlaceName}&amp;sharedPlaceAddress={sharedPlaceAddress}&amp;sharedPlaceLink={sharedPlaceLink}" />
     </fragment>
 
     <fragment

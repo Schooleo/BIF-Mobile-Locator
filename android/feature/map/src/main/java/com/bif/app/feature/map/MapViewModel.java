@@ -6,10 +6,12 @@ import androidx.lifecycle.Transformations;
 import androidx.lifecycle.ViewModel;
 
 import com.bif.app.domain.model.Favorite;
+import com.bif.app.domain.model.Group;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.MapState;
 import com.bif.app.domain.repository.IFavoriteRepository;
+import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
 
@@ -24,6 +26,7 @@ public class MapViewModel extends ViewModel {
     private final IMapRepository mapRepository;
     private final IPlaceRepository placeRepository;
     private final IFavoriteRepository favoriteRepository;
+    private final IGroupRepository groupRepository;
 
     private final MutableLiveData<String> _statusText = new MutableLiveData<>();
     public final LiveData<String> statusText = _statusText;
@@ -35,22 +38,26 @@ public class MapViewModel extends ViewModel {
     public final LiveData<List<Place>> searchResults;
 
     public final LiveData<List<Favorite>> allFavorites;
+    public final LiveData<List<Group>> allGroups;
 
     @Inject
     public MapViewModel(
             IMapRepository mapRepository,
             IPlaceRepository placeRepository,
-            IFavoriteRepository favoriteRepository
+            IFavoriteRepository favoriteRepository,
+            IGroupRepository groupRepository
     ) {
         this.mapRepository = mapRepository;
         this.placeRepository = placeRepository;
         this.favoriteRepository = favoriteRepository;
+        this.groupRepository = groupRepository;
 
         this.searchResult = Transformations.switchMap(locationSearchQuery, placeRepository::searchLocation);
 
         this.searchResults = Transformations.switchMap(placesSearchQuery, placeRepository::searchPlaces);
 
         this.allFavorites = favoriteRepository.getAllFavorites();
+        this.allGroups = groupRepository.getGroups();
     }
 
     public void setStatusText(String text) {
