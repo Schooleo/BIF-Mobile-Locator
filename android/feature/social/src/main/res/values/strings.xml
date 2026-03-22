@@ -64,4 +64,12 @@
     <string name="friend_tab_shared_locations">Shared Locations</string>
     <string name="friend_tab_trip_plans">Trip Plans</string>
     <string name="friend_plan_trip">Plan a Trip</string>
+    <string name="social_loading">Loading...</string>
+    <string name="social_empty_friends">No friends yet.</string>
+    <string name="social_empty_groups">No groups yet.</string>
+    <string name="social_error_friends">Unable to load friends.</string>
+    <string name="social_error_groups">Unable to load groups.</string>
+    <string name="social_retry">Retry</string>
+    <string name="group_members_empty">No members found.</string>
+    <string name="group_members_error">Unable to load members.</string>
 </resources>

@@ -6,6 +6,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageButton;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -32,6 +33,8 @@ public class GroupSettingsMembersFragment extends Fragment {
     private GroupDetailViewModel viewModel;
     private GroupSettingsMembersAdapter membersAdapter;
     private String groupId;
+    private ProgressBar progressMembers;
+    private TextView tvMembersState;
 
     @Nullable
     @Override
@@ -55,6 +58,8 @@ public class GroupSettingsMembersFragment extends Fragment {
         MaterialButton btnAdd = view.findViewById(R.id.btn_add_member);
         TabLayout tabLayout = view.findViewById(R.id.tab_group_settings);
         RecyclerView rvMembers = view.findViewById(R.id.rv_group_members);
+        progressMembers = view.findViewById(R.id.progress_members);
+        tvMembersState = view.findViewById(R.id.tv_members_state);
 
         btnBack.setOnClickListener(v -> navigateBackToGroupChat(view));
         btnAdd.setOnClickListener(v -> Toast.makeText(requireContext(), R.string.member_add_placeholder, Toast.LENGTH_SHORT).show());
@@ -64,10 +69,12 @@ public class GroupSettingsMembersFragment extends Fragment {
         membersAdapter = new GroupSettingsMembersAdapter(this::confirmRemoveMember);
         rvMembers.setLayoutManager(new LinearLayoutManager(requireContext()));
         rvMembers.setAdapter(membersAdapter);
+        showMembersLoading(rvMembers);
 
         viewModel.loadGroup(groupId);
         viewModel.getGroup().observe(getViewLifecycleOwner(), group -> {
             if (group == null) {
+                showMembersError(rvMembers, getString(R.string.group_members_error));
                 return;
             }
             tvAvatar.setText(group.getAvatarLetter());
@@ -75,6 +82,13 @@ public class GroupSettingsMembersFragment extends Fragment {
             tvName.setText(group.getName());
             tvMemberCount.setText(getString(R.string.chat_member_count, group.getMemberCount()));
             membersAdapter.submit(group.getMembers(), group.isOwner());
+
+            if (group.getMembers() == null || group.getMembers().isEmpty()) {
+                showMembersEmpty(rvMembers, getString(R.string.group_members_empty));
+                return;
+            }
+
+            showMembersList(rvMembers);
         });
     }
 
@@ -142,6 +156,32 @@ public class GroupSettingsMembersFragment extends Fragment {
         }
 
         Navigation.findNavController(rootView).navigate(uriBuilder.build());
+    }
+
+    private void showMembersLoading(RecyclerView rvMembers) {
+        rvMembers.setVisibility(View.GONE);
+        tvMembersState.setVisibility(View.GONE);
+        progressMembers.setVisibility(View.VISIBLE);
+    }
+
+    private void showMembersError(RecyclerView rvMembers, String message) {
+        rvMembers.setVisibility(View.GONE);
+        progressMembers.setVisibility(View.GONE);
+        tvMembersState.setVisibility(View.VISIBLE);
+        tvMembersState.setText(message);
+    }
+
+    private void showMembersEmpty(RecyclerView rvMembers, String message) {
+        rvMembers.setVisibility(View.GONE);
+        progressMembers.setVisibility(View.GONE);
+        tvMembersState.setVisibility(View.VISIBLE);
+        tvMembersState.setText(message);
+    }
+
+    private void showMembersList(RecyclerView rvMembers) {
+        progressMembers.setVisibility(View.GONE);
+        tvMembersState.setVisibility(View.GONE);
+        rvMembers.setVisibility(View.VISIBLE);
     }
 
 }
