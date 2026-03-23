@@ -131,7 +131,7 @@ public class GroupDetailViewModelTest {
     // ==================== removeMember Tests ====================
 
     @Test
-    public void removeMember_ValidMember_CallsRepositoryRemoveMember() {
+    public void removeMember_ValidMember_CallsRepositoryRemoveMemberByServerId() {
         // Arrange
         List<Friend> members = Arrays.asList(
                 new Friend(10, "An", "A", 111, true),
@@ -146,7 +146,7 @@ public class GroupDetailViewModelTest {
         viewModel.removeMember(memberToRemove);
 
         // Assert
-        verify(mockGroupRepository).removeMember(1, 10);
+        verify(mockGroupRepository).removeMemberByServerId("1", 10);
     }
 
     @Test
@@ -159,7 +159,7 @@ public class GroupDetailViewModelTest {
         viewModel.removeMember(member);
 
         // Assert
-        verify(mockGroupRepository, never()).removeMember(anyInt(), anyInt());
+        verify(mockGroupRepository, never()).removeMemberByServerId(anyString(), anyInt());
     }
 
     // ==================== disbandGroup Tests ====================
