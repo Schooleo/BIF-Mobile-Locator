@@ -1,7 +1,5 @@
 package com.bif.server.features.sync.services;
 
-import com.bif.server.common.models.Location;
-import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.sync.models.*;
 import com.bif.server.features.sync.repositories.SyncChangeRepository;
@@ -79,6 +77,44 @@ class SyncServiceTest {
     }
 
     @Test
+    void sync_WhenPullContainsJustPushedClientChangeId_filtersEchoedEntry() {
+        SyncRequest request = new SyncRequest();
+        request.setUserId("user1");
+        request.setLastPulledVersion(5);
+
+        SyncChange pushed = new SyncChange();
+        pushed.setEntityType("place");
+        pushed.setEntityId("p1");
+        pushed.setOperation("UPDATE");
+        pushed.setClientChangeId("client-echo");
+        request.setPushedChanges(List.of(pushed));
+
+        SyncChangeEntry echoedEntry = new SyncChangeEntry();
+        echoedEntry.setEntityType("place");
+        echoedEntry.setEntityId("p1");
+        echoedEntry.setServerVersion(6);
+        echoedEntry.setOperation("UPDATE");
+        echoedEntry.setClientChangeId("client-echo");
+        echoedEntry.setPayload("{\"id\":\"p1\"}");
+
+        when(syncChangeRepository.findByClientChangeId("client-echo"))
+                .thenReturn(Optional.empty());
+        when(syncVersionService.nextVersion()).thenReturn(6L);
+        when(syncVersionService.getCurrentVersion()).thenReturn(6L);
+        when(placeSyncEntityHandler.applyPushedChange(any(), any(), anyLong()))
+                .thenReturn("{\"id\":\"p1\"}");
+        when(syncChangeRepository
+                .findByUserIdAndServerVersionGreaterThanOrderByServerVersionAsc(
+                        "user1", 5))
+                .thenReturn(List.of(echoedEntry));
+
+        SyncResponse response = syncService.sync(request);
+
+        assertNotNull(response);
+        assertTrue(response.getPulledChanges().isEmpty());
+    }
+
+    @Test
     void sync_WhenPushChanges_PersistsToChangeLog() {
         SyncRequest request = new SyncRequest();
         request.setUserId("user1");
@@ -96,6 +132,10 @@ class SyncServiceTest {
         request.setPushedChanges(List.of(pushed));
 
         when(syncChangeRepository.findByClientChangeId("client-1"))
+                .thenReturn(Optional.empty());
+        when(syncChangeRepository
+                .findTopByUserIdAndEntityTypeAndEntityIdOrderByServerVersionDesc(
+                        "user1", "place", "p1"))
                 .thenReturn(Optional.empty());
         when(placeSyncEntityHandler.applyPushedChange(any(), any(), anyLong()))
                 .thenReturn("{\"id\":\"p1\"}");
@@ -163,10 +203,16 @@ class SyncServiceTest {
 
         when(syncChangeRepository.findByClientChangeId("conflict-1"))
                 .thenReturn(Optional.empty());
+        SyncChangeEntry latestEntityVersion = new SyncChangeEntry();
+        latestEntityVersion.setServerVersion(5);
+        when(syncChangeRepository
+                .findTopByUserIdAndEntityTypeAndEntityIdOrderByServerVersionDesc(
+                        "user1", "place", "p1"))
+                .thenReturn(Optional.of(latestEntityVersion));
         when(placeSyncEntityHandler.applyPushedChange(any(), any(), anyLong()))
                 .thenReturn(pushed.getPayload());
-        when(syncVersionService.getCurrentVersion()).thenReturn(5L);
         when(syncVersionService.nextVersion()).thenReturn(6L);
+        when(syncVersionService.getCurrentVersion()).thenReturn(6L);
         when(syncChangeRepository
                 .findByUserIdAndServerVersionGreaterThanOrderByServerVersionAsc(
                         "user1", 5))
@@ -185,6 +231,39 @@ class SyncServiceTest {
         assertEquals(3, conflict.getClientVersion());
         assertEquals(5, conflict.getServerVersion());
         assertEquals("SERVER_WINS", conflict.getResolution());
+    }
+
+    @Test
+    void sync_WhenGlobalVersionAheadButSameEntityNotAhead_DoesNotConflict() {
+        SyncRequest request = new SyncRequest();
+        request.setUserId("user1");
+        request.setLastPulledVersion(10);
+
+        SyncChange pushed = new SyncChange();
+        pushed.setEntityType("favorite");
+        pushed.setEntityId("fav-1");
+        pushed.setServerVersion(10);
+        pushed.setOperation("UPDATE");
+        pushed.setClientChangeId("fav-change");
+        request.setPushedChanges(List.of(pushed));
+
+        when(syncChangeRepository.findByClientChangeId("fav-change"))
+                .thenReturn(Optional.empty());
+        when(syncChangeRepository
+                .findTopByUserIdAndEntityTypeAndEntityIdOrderByServerVersionDesc(
+                        "user1", "favorite", "fav-1"))
+                .thenReturn(Optional.of(new SyncChangeEntry()));
+        when(syncVersionService.nextVersion()).thenReturn(12L);
+        when(syncVersionService.getCurrentVersion()).thenReturn(12L);
+        when(syncChangeRepository
+                .findByUserIdAndServerVersionGreaterThanOrderByServerVersionAsc(
+                        "user1", 10))
+                .thenReturn(Collections.emptyList());
+
+        SyncResponse response = syncService.sync(request);
+
+        assertNotNull(response);
+        assertNull(response.getConflicts());
     }
 
     @Test
@@ -223,6 +302,10 @@ class SyncServiceTest {
         when(syncVersionService.getCurrentVersion()).thenReturn(0L);
         when(syncVersionService.nextVersion()).thenReturn(1L);
         when(syncChangeRepository
+                .findTopByUserIdAndEntityTypeAndEntityIdOrderByServerVersionDesc(
+                        "user1", "favorite", "f1"))
+                .thenReturn(Optional.empty());
+        when(syncChangeRepository
                 .findByUserIdAndServerVersionGreaterThanOrderByServerVersionAsc(
                         "user1", 0))
                 .thenReturn(Collections.emptyList());
@@ -247,6 +330,10 @@ class SyncServiceTest {
         request.setPushedChanges(List.of(pushed));
 
         when(syncChangeRepository.findByClientChangeId("delete-1"))
+                .thenReturn(Optional.empty());
+        when(syncChangeRepository
+                .findTopByUserIdAndEntityTypeAndEntityIdOrderByServerVersionDesc(
+                        "user1", "place", "p-del"))
                 .thenReturn(Optional.empty());
         when(syncVersionService.getCurrentVersion()).thenReturn(2L);
         when(syncVersionService.nextVersion()).thenReturn(3L);

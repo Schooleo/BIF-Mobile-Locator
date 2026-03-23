@@ -137,6 +137,7 @@ public class SyncManager {
             SyncChangeDto change = new SyncChangeDto();
             change.entityType = entry.entityType;
             change.entityId = entry.entityId;
+            change.serverVersion = lastPulledVersion;
             change.operation = entry.operation;
             change.clientChangeId = entry.clientChangeId;
             change.payload = entry.payload;

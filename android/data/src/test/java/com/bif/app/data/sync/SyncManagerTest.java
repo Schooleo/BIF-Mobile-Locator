@@ -250,6 +250,7 @@ public class SyncManagerTest {
     public void sync_whenPendingHasPayload_includesPayloadInRequest()
             throws IOException {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
+                syncManager.setLastPulledVersion(7);
 
         SyncQueueEntity entry = new SyncQueueEntity();
         entry.id = 10;
@@ -283,6 +284,7 @@ public class SyncManagerTest {
         assertNotNull(sent.pushedChanges);
         assertEquals(1, sent.pushedChanges.size());
         assertEquals(entry.payload, sent.pushedChanges.get(0).payload);
+                assertEquals(7, sent.pushedChanges.get(0).serverVersion);
     }
 
     @Test

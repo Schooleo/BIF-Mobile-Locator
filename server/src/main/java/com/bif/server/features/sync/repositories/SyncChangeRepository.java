@@ -14,4 +14,7 @@ public interface SyncChangeRepository extends MongoRepository<SyncChangeEntry, S
             String userId, long version);
 
     Optional<SyncChangeEntry> findByClientChangeId(String clientChangeId);
+
+        Optional<SyncChangeEntry> findTopByUserIdAndEntityTypeAndEntityIdOrderByServerVersionDesc(
+                        String userId, String entityType, String entityId);
 }

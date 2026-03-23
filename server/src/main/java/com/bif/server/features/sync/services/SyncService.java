@@ -11,9 +11,11 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class SyncService {
@@ -37,10 +39,15 @@ public class SyncService {
     public SyncResponse sync(SyncRequest request) {
         SyncResponse response = new SyncResponse();
         List<SyncConflict> conflicts = new ArrayList<>();
+        Set<String> pushedClientChangeIds = new HashSet<>();
 
         // Phase 1: Process pushed changes from client
         if (request.getPushedChanges() != null) {
             for (SyncChange pushed : request.getPushedChanges()) {
+                if (pushed.getClientChangeId() != null
+                        && !pushed.getClientChangeId().isBlank()) {
+                    pushedClientChangeIds.add(pushed.getClientChangeId());
+                }
                 processPushedChange(pushed, request.getUserId(), conflicts);
             }
         }
@@ -53,6 +60,11 @@ public class SyncService {
 
         List<SyncChange> pulledChanges = new ArrayList<>();
         for (SyncChangeEntry entry : entries) {
+            if (entry.getClientChangeId() != null
+                    && pushedClientChangeIds.contains(entry.getClientChangeId())) {
+                continue;
+            }
+
             SyncChange change = new SyncChange();
             change.setEntityType(entry.getEntityType());
             change.setEntityId(entry.getEntityId());
@@ -82,17 +94,22 @@ public class SyncService {
             }
         }
 
-        // Conflict detection: if server version is ahead of what client saw
-        long currentVersion = syncVersionService.getCurrentVersion();
+        // Conflict detection: only compare against latest version for same
+        // user + entityType + entityId.
+        Optional<SyncChangeEntry> latestEntityChange =
+            findLatestForSameEntity(userId, pushed);
         if (pushed.getServerVersion() > 0
-                && pushed.getServerVersion() < currentVersion) {
+            && latestEntityChange.isPresent()
+            && pushed.getServerVersion()
+            < latestEntityChange.get().getServerVersion()) {
             // LWW: accept the change but report the conflict
             SyncConflict conflict = new SyncConflict();
             conflict.setEntityType(pushed.getEntityType());
             conflict.setEntityId(pushed.getEntityId());
             conflict.setClientChangeId(pushed.getClientChangeId());
             conflict.setClientVersion(pushed.getServerVersion());
-            conflict.setServerVersion(currentVersion);
+            conflict.setServerVersion(latestEntityChange
+                .get().getServerVersion());
             conflict.setResolution("SERVER_WINS");
             conflicts.add(conflict);
         }
@@ -141,5 +158,17 @@ public class SyncService {
         }
 
         return handler.resolvePayload(entry);
+    }
+
+    private Optional<SyncChangeEntry> findLatestForSameEntity(
+            String userId, SyncChange pushed) {
+        if (userId == null || pushed.getEntityType() == null
+                || pushed.getEntityId() == null) {
+            return Optional.empty();
+        }
+
+        return syncChangeRepository
+                .findTopByUserIdAndEntityTypeAndEntityIdOrderByServerVersionDesc(
+                        userId, pushed.getEntityType(), pushed.getEntityId());
     }
 }
