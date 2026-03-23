@@ -7,6 +7,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.util.List;
+import java.util.Map;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -19,5 +20,6 @@ public class Group extends SyncDocument {
     private int avatarColor;
     private int memberCount;
     private List<String> memberIds;
+    private Map<String, String> memberRoles;
     private String ownerId;
 }

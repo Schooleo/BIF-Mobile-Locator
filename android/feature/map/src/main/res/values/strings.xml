@@ -11,4 +11,9 @@
     <string name="favorites">Favorites</string>
     <string name="about_header">About</string>
     <string name="photos_header">Photos</string>
+    <string name="share_place">Share Place</string>
+    <string name="navigate_to_place">Go to Place</string>
+    <string name="no_group_available">No group available to share.</string>
+    <string name="select_group_to_share">Share to group</string>
+    <string name="maps_app_not_found">No map application found.</string>
 </resources>

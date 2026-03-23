@@ -4,6 +4,7 @@ import java.util.List;
 
 public class Group {
     private int id;
+    private String serverId;
     private String name;
     private String avatarLetter;
     private int avatarColor;
@@ -12,7 +13,12 @@ public class Group {
 
 
     public Group(int id, String name, String avatarLetter, int avatarColor, List<Friend> members, boolean isOwner) {
+        this(id, String.valueOf(id), name, avatarLetter, avatarColor, members, isOwner);
+    }
+
+    public Group(int id, String serverId, String name, String avatarLetter, int avatarColor, List<Friend> members, boolean isOwner) {
         this.id = id;
+        this.serverId = serverId;
         this.name = name;
         this.avatarLetter = avatarLetter;
         this.avatarColor = avatarColor;
@@ -21,6 +27,7 @@ public class Group {
     }
 
     public int getId() { return id; }
+    public String getServerId() { return serverId; }
     public String getName() { return name; }
     public String getAvatarLetter() { return avatarLetter; }
     public int getAvatarColor() { return avatarColor; }

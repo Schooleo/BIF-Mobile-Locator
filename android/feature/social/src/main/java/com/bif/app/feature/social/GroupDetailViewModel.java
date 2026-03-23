@@ -16,17 +16,21 @@ import dagger.hilt.android.lifecycle.HiltViewModel;
 @HiltViewModel
 public class GroupDetailViewModel extends ViewModel {
     private final IGroupRepository groupRepository;
-    private final MutableLiveData<Integer> groupIdLiveData = new MutableLiveData<>();
+    private final MutableLiveData<String> groupIdLiveData = new MutableLiveData<>();
     private final LiveData<Group> group;
 
     @Inject
     public GroupDetailViewModel(IGroupRepository groupRepository) {
         this.groupRepository = groupRepository;
-        this.group = Transformations.switchMap(groupIdLiveData, groupRepository::getGroupById);
+        this.group = Transformations.switchMap(groupIdLiveData, groupRepository::getGroupByServerId);
+    }
+
+    public void loadGroup(String groupId) {
+        groupIdLiveData.setValue(groupId);
     }
 
     public void loadGroup(int groupId) {
-        groupIdLiveData.setValue(groupId);
+        loadGroup(String.valueOf(groupId));
     }
 
     public LiveData<Group> getGroup() {
@@ -39,6 +43,7 @@ public class GroupDetailViewModel extends ViewModel {
 
         Group updatedGroup = new Group(
                 currentGroup.getId(),
+            currentGroup.getServerId(),
                 newName,
                 newName.substring(0, 1).toUpperCase(),
                 currentGroup.getAvatarColor(),
@@ -51,7 +56,7 @@ public class GroupDetailViewModel extends ViewModel {
     public void removeMember(Friend member) {
         Group currentGroup = group.getValue();
         if (currentGroup == null) return;
-        groupRepository.removeMember(currentGroup.getId(), member.getId());
+        groupRepository.removeMemberByServerId(currentGroup.getServerId(), member.getId());
     }
 
     public void disbandGroup() {

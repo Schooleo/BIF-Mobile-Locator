@@ -27,6 +27,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bif.app.domain.model.Favorite;
+import com.bif.app.domain.model.Group;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -454,6 +455,8 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         TextView tvAddress = root.findViewById(R.id.tv_place_address);
         TextView tvRating = root.findViewById(R.id.tv_place_rating);
         ImageButton btnAddFavorite = root.findViewById(R.id.btn_add_favorite);
+        com.google.android.material.button.MaterialButton btnSharePlace = root.findViewById(R.id.btn_share_place);
+        com.google.android.material.button.MaterialButton btnNavigatePlace = root.findViewById(R.id.btn_navigate_place);
 
         tvName.setText(place.name);
         tvAddress.setText(place.address);
@@ -495,6 +498,71 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
                 updateFavoriteButtonState(btnAddFavorite, true);
             }
         });
+        
+        btnSharePlace.setOnClickListener(v -> showShareToGroupDialog(place));
+        btnNavigatePlace.setOnClickListener(v -> navigateToPlace(place));
+    }
+
+    private void showShareToGroupDialog(com.bif.app.domain.model.Place place) {
+        List<Group> groups = viewModel.allGroups.getValue();
+        if (groups == null || groups.isEmpty()) {
+            viewModel.setStatusText(getString(R.string.no_group_available));
+            return;
+        }
+
+        String[] groupNames = new String[groups.size()];
+        for (int i = 0; i < groups.size(); i++) {
+            groupNames[i] = groups.get(i).getName();
+        }
+
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle(R.string.select_group_to_share)
+                .setItems(groupNames, (dialog, which) -> navigateToGroupChatWithPlace(groups.get(which), place))
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void navigateToGroupChatWithPlace(Group group, com.bif.app.domain.model.Place place) {
+        String mapLink = buildPlaceMapLink(place);
+
+        android.net.Uri destUri = com.bif.app.core.utils.UriUtils.buildUri(com.bif.app.core.utils.UriUtils.PathTo.SOCIAL_CHAT)
+                .buildUpon()
+                .appendQueryParameter("chatType", "group")
+                .appendQueryParameter("chatId", group.getServerId())
+                .appendQueryParameter("chatName", group.getName())
+                .appendQueryParameter("avatarLetter", group.getAvatarLetter())
+                .appendQueryParameter("avatarColor", String.valueOf(group.getAvatarColor()))
+                .appendQueryParameter("memberCount", String.valueOf(group.getMemberCount()))
+                .appendQueryParameter("sharedPlaceName", place.name != null ? place.name : "")
+                .appendQueryParameter("sharedPlaceAddress", place.address != null ? place.address : "")
+                .appendQueryParameter("sharedPlaceLink", mapLink)
+                .build();
+
+        androidx.navigation.Navigation.findNavController(requireView()).navigate(destUri);
+    }
+  
+    private String buildPlaceMapLink(com.bif.app.domain.model.Place place) {
+        if (place.location != null) {
+            return place.location.latitude + "," + place.location.longitude;
+        }
+        return place.address != null ? place.address : "";
+    }
+
+    private void navigateToPlace(com.bif.app.domain.model.Place place) {
+        String query;
+        if (place.location != null) {
+            query = place.location.latitude + "," + place.location.longitude;
+        } else if (place.address != null && !place.address.isEmpty()) {
+            query = place.address;
+        } else {
+            query = place.name;
+        }
+
+        android.net.Uri mapUri = com.bif.app.core.utils.UriUtils.buildUri(com.bif.app.core.utils.UriUtils.PathTo.MAP)
+                .buildUpon()
+                .appendQueryParameter("location", query)
+                .build();
+        androidx.navigation.Navigation.findNavController(requireView()).navigate(mapUri);
     }
 
     /* Returns the Favorite matching the given place (by address or proximity), or null. */
