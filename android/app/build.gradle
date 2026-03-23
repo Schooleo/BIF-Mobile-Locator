@@ -44,7 +44,7 @@ android {
         ]
 
         buildConfigField "String", "GRAPHQL_URL", "\"http://${localApiIp.replaceAll('"', '')}:8080/graphql\""
-        buildConfigField "String", "REST_BASE_URL", "\"http://${localApiIp.replaceAll('"', '')}:8080/api\""
+        buildConfigField "String", "REST_BASE_URL", "\"http://${localApiIp.replaceAll('"', '')}:8080/api/\""
     }
 
     signingConfigs {
