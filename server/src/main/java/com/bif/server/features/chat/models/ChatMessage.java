@@ -1,5 +1,6 @@
 package com.bif.server.features.chat.models;
 
+import com.bif.server.common.models.Location;
 import com.bif.server.common.models.SyncDocument;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -20,4 +21,9 @@ public class ChatMessage extends SyncDocument {
     private String content;
     private Instant sentAt;
     private String clientMessageId;
+
+    private String type = "TEXT";
+    private Location sharedLocation;
+    private String sharedAddress;
+    private boolean confirmed;
 }

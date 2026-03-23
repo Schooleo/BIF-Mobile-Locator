@@ -98,6 +98,10 @@ type ChatMessage {
   content: String
   sentAt: String
   clientMessageId: String
+  type: String
+  sharedLocation: Location
+  sharedAddress: String
+  confirmed: Boolean
 }
 
 type TripPlan {
@@ -206,6 +210,10 @@ input ChatMessageInput {
   content: String
   sentAt: String
   clientMessageId: String
+  type: String
+  sharedLocation: LocationInput
+  sharedAddress: String
+  confirmed: Boolean
 }
 
 input TripPlanInput {
