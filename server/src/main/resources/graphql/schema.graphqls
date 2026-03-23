@@ -34,6 +34,9 @@ type Mutation {
   upsertChatMessage(input: ChatMessageInput!): ChatMessage!
   deleteChatMessage(id: ID!): Boolean!
   upsertTripPlan(input: TripPlanInput!): TripPlan!
+  addTripStop(tripId: ID!, input: TripStopInput!): TripPlan
+  removeTripStop(tripId: ID!, orderIndex: Int!): TripPlan
+  rearrangeTripStops(tripId: ID!, stops: [TripStopInput!]!): TripPlan
   deleteTripPlan(id: ID!): Boolean!
   sync(input: SyncRequestInput!): SyncResponse!
 }

@@ -1,17 +1,21 @@
 package com.bif.server.features.trip.services;
 
 import com.bif.server.features.trip.models.TripPlan;
+import com.bif.server.features.trip.models.TripStop;
 import com.bif.server.features.trip.repositories.TripPlanRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -69,6 +73,118 @@ class TripServiceTest {
 
         assertSame(plan, result);
         verify(tripPlanRepository).save(plan);
+    }
+
+    @Test
+    void addStop_WhenPlanFound_AddsStopAndSaves() {
+        TripPlan plan = new TripPlan();
+        plan.setStops(new ArrayList<>());
+        when(tripPlanRepository.findById("t1")).thenReturn(Optional.of(plan));
+        when(tripPlanRepository.save(any(TripPlan.class))).thenAnswer(i -> i.getArgument(0));
+
+        TripStop stop = new TripStop();
+        stop.setTitle("Central Park");
+
+        Optional<TripPlan> result = tripService.addStop("t1", stop);
+
+        assertTrue(result.isPresent());
+        assertEquals(1, result.get().getStops().size());
+        assertEquals(0, result.get().getStops().get(0).getOrderIndex());
+        assertEquals("Central Park", result.get().getStops().get(0).getTitle());
+        verify(tripPlanRepository).save(plan);
+    }
+
+    @Test
+    void addStop_WhenNullStops_InitializesListAndAdds() {
+        TripPlan plan = new TripPlan();
+        plan.setStops(null);
+        when(tripPlanRepository.findById("t1")).thenReturn(Optional.of(plan));
+        when(tripPlanRepository.save(any(TripPlan.class))).thenAnswer(i -> i.getArgument(0));
+
+        TripStop stop = new TripStop();
+        stop.setTitle("First Stop");
+
+        Optional<TripPlan> result = tripService.addStop("t1", stop);
+
+        assertTrue(result.isPresent());
+        assertEquals(1, result.get().getStops().size());
+    }
+
+    @Test
+    void addStop_WhenPlanMissing_ReturnsEmpty() {
+        when(tripPlanRepository.findById("t1")).thenReturn(Optional.empty());
+
+        Optional<TripPlan> result = tripService.addStop("t1", new TripStop());
+
+        assertTrue(result.isEmpty());
+        verify(tripPlanRepository, never()).save(any());
+    }
+
+    @Test
+    void removeStop_WhenFound_RemovesAndReindexes() {
+        TripStop stop0 = new TripStop();
+        stop0.setTitle("A");
+        stop0.setOrderIndex(0);
+        TripStop stop1 = new TripStop();
+        stop1.setTitle("B");
+        stop1.setOrderIndex(1);
+        TripStop stop2 = new TripStop();
+        stop2.setTitle("C");
+        stop2.setOrderIndex(2);
+
+        TripPlan plan = new TripPlan();
+        plan.setStops(new ArrayList<>(List.of(stop0, stop1, stop2)));
+        when(tripPlanRepository.findById("t1")).thenReturn(Optional.of(plan));
+        when(tripPlanRepository.save(any(TripPlan.class))).thenAnswer(i -> i.getArgument(0));
+
+        Optional<TripPlan> result = tripService.removeStop("t1", 1);
+
+        assertTrue(result.isPresent());
+        assertEquals(2, result.get().getStops().size());
+        assertEquals(0, result.get().getStops().get(0).getOrderIndex());
+        assertEquals(1, result.get().getStops().get(1).getOrderIndex());
+        assertEquals("A", result.get().getStops().get(0).getTitle());
+        assertEquals("C", result.get().getStops().get(1).getTitle());
+    }
+
+    @Test
+    void removeStop_WhenPlanMissing_ReturnsEmpty() {
+        when(tripPlanRepository.findById("t1")).thenReturn(Optional.empty());
+
+        Optional<TripPlan> result = tripService.removeStop("t1", 0);
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void rearrangeStops_WhenFound_ReplacesAndReindexes() {
+        TripPlan plan = new TripPlan();
+        plan.setStops(new ArrayList<>());
+        when(tripPlanRepository.findById("t1")).thenReturn(Optional.of(plan));
+        when(tripPlanRepository.save(any(TripPlan.class))).thenAnswer(i -> i.getArgument(0));
+
+        TripStop newStop0 = new TripStop();
+        newStop0.setTitle("Z");
+        TripStop newStop1 = new TripStop();
+        newStop1.setTitle("Y");
+
+        Optional<TripPlan> result = tripService.rearrangeStops("t1",
+                new ArrayList<>(List.of(newStop0, newStop1)));
+
+        assertTrue(result.isPresent());
+        assertEquals(2, result.get().getStops().size());
+        assertEquals(0, result.get().getStops().get(0).getOrderIndex());
+        assertEquals(1, result.get().getStops().get(1).getOrderIndex());
+        assertEquals("Z", result.get().getStops().get(0).getTitle());
+    }
+
+    @Test
+    void rearrangeStops_WhenPlanMissing_ReturnsEmpty() {
+        when(tripPlanRepository.findById("t1")).thenReturn(Optional.empty());
+
+        Optional<TripPlan> result = tripService.rearrangeStops("t1", List.of());
+
+        assertTrue(result.isEmpty());
     }
 
     @Test
