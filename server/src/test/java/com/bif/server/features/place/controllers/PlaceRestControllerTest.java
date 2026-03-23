@@ -1,6 +1,7 @@
 package com.bif.server.features.place.controllers;
 
 import com.bif.server.features.place.models.Place;
+import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.services.PlaceService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -60,6 +61,39 @@ class PlaceRestControllerTest {
     }
 
     @Test
+    void searchPlaces_DelegatesToService() {
+        Place item = new Place();
+        when(placeService.search("test")).thenReturn(List.of(item));
+
+        List<Place> result = controller.searchPlaces("test");
+
+        assertEquals(1, result.size());
+        verify(placeService).search("test");
+    }
+
+    @Test
+    void getByTag_DelegatesToService() {
+        Place item = new Place();
+        when(placeService.getByTag("church")).thenReturn(List.of(item));
+
+        List<Place> result = controller.getByTag("church");
+
+        assertEquals(1, result.size());
+        verify(placeService).getByTag("church");
+    }
+
+    @Test
+    void getByUser_DelegatesToService() {
+        Place item = new Place();
+        when(placeService.getByUserId("u1")).thenReturn(List.of(item));
+
+        List<Place> result = controller.getByUser("u1");
+
+        assertEquals(1, result.size());
+        verify(placeService).getByUserId("u1");
+    }
+
+    @Test
     void upsertPlace_DelegatesToService() {
         Place input = new Place();
         when(placeService.save(input)).thenReturn(input);
@@ -67,6 +101,29 @@ class PlaceRestControllerTest {
         Place result = controller.upsertPlace(input);
 
         assertSame(input, result);
+    }
+
+    @Test
+    void saveFromSearch_DelegatesToService() {
+        Place input = new Place();
+        when(placeService.saveFromSearch(input)).thenReturn(input);
+
+        Place result = controller.saveFromSearch(input);
+
+        assertSame(input, result);
+        verify(placeService).saveFromSearch(input);
+    }
+
+    @Test
+    void addReview_DelegatesToService() {
+        Place place = new Place();
+        PlaceReview review = new PlaceReview();
+        when(placeService.addReview("p1", review)).thenReturn(place);
+
+        Place result = controller.addReview("p1", review);
+
+        assertSame(place, result);
+        verify(placeService).addReview("p1", review);
     }
 
     @Test

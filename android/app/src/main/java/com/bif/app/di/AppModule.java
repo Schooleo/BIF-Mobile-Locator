@@ -8,6 +8,9 @@ import com.bif.app.data.source.local.AppDatabase;
 import com.bif.app.data.source.local.FavoriteDao;
 import com.bif.app.data.source.local.FriendDao;
 import com.bif.app.data.source.local.GroupDao;
+import com.bif.app.data.source.local.PlaceDao;
+import com.bif.app.data.source.local.SearchHistoryDao;
+import com.bif.app.data.source.local.SyncQueueDao;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 
@@ -37,7 +40,7 @@ public class AppModule {
                         AppDatabase.class,
                         "bif_database"
                 )
-                .fallbackToDestructiveMigration()
+                .fallbackToDestructiveMigration(true)
                 .build();
     }
 
@@ -49,13 +52,31 @@ public class AppModule {
 
     @Provides
     @Singleton
-    public FriendDao provideFriendDao(AppDatabase database) { 
-      return database.friendDao(); 
+    public FriendDao provideFriendDao(AppDatabase database) {
+      return database.friendDao();
     }
 
     @Provides
     @Singleton
-    public GroupDao provideGroupDao(AppDatabase database) { 
-      return database.groupDao(); 
+    public GroupDao provideGroupDao(AppDatabase database) {
+      return database.groupDao();
+    }
+
+    @Provides
+    @Singleton
+    public PlaceDao providePlaceDao(AppDatabase database) {
+        return database.placeDao();
+    }
+
+    @Provides
+    @Singleton
+    public SearchHistoryDao provideSearchHistoryDao(AppDatabase database) {
+        return database.searchHistoryDao();
+    }
+
+    @Provides
+    @Singleton
+    public SyncQueueDao provideSyncQueueDao(AppDatabase database) {
+      return database.syncQueueDao();
     }
 }

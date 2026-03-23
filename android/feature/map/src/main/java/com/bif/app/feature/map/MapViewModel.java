@@ -28,8 +28,8 @@ public class MapViewModel extends ViewModel {
     private final IFavoriteRepository favoriteRepository;
     private final IGroupRepository groupRepository;
 
-    private final MutableLiveData<String> _statusText = new MutableLiveData<>();
-    public final LiveData<String> statusText = _statusText;
+    private final MutableLiveData<Event<String>> _statusText = new MutableLiveData<>();
+    public final LiveData<Event<String>> statusText = _statusText;
 
     private final MutableLiveData<String> locationSearchQuery = new MutableLiveData<>();
     public final LiveData<Location> searchResult;
@@ -37,8 +37,15 @@ public class MapViewModel extends ViewModel {
     private final MutableLiveData<String> placesSearchQuery = new MutableLiveData<>();
     public final LiveData<List<Place>> searchResults;
 
+    private final MutableLiveData<String> placesHistoryQuery = new MutableLiveData<>();
+    public final LiveData<List<Place>> historySearchResults;
+
     public final LiveData<List<Favorite>> allFavorites;
     public final LiveData<List<Group>> allGroups;
+    public final LiveData<List<String>> searchHistory;
+
+    private final java.util.concurrent.atomic.AtomicBoolean activeSearchPending =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
 
     @Inject
     public MapViewModel(
@@ -54,14 +61,19 @@ public class MapViewModel extends ViewModel {
 
         this.searchResult = Transformations.switchMap(locationSearchQuery, placeRepository::searchLocation);
 
-        this.searchResults = Transformations.switchMap(placesSearchQuery, placeRepository::searchPlaces);
+        this.searchResults = Transformations.switchMap(
+                placesSearchQuery, placeRepository::searchPlaces);
+
+        this.historySearchResults = Transformations.switchMap(
+                placesHistoryQuery, placeRepository::searchPlacesFromHistory);
 
         this.allFavorites = favoriteRepository.getAllFavorites();
         this.allGroups = groupRepository.getGroups();
+        this.searchHistory = placeRepository.getSearchHistory();
     }
 
     public void setStatusText(String text) {
-        _statusText.setValue(text);
+        _statusText.setValue(new Event<>(text));
     }
 
     public void searchLocation(String query) {
@@ -69,7 +81,23 @@ public class MapViewModel extends ViewModel {
     }
 
     public void searchForPlaces(String query) {
+        activeSearchPending.set(true);
         placesSearchQuery.setValue(query);
+    }
+
+    public void searchForPlacesFromHistory(String query) {
+        activeSearchPending.set(true);
+        placesHistoryQuery.setValue(query);
+    }
+
+    public void notifySearchDone(int resultCount) {
+        if (activeSearchPending.compareAndSet(true, false)) {
+            if (resultCount > 0) {
+                setStatusText("Found " + resultCount + " places.");
+            } else {
+                setStatusText("No places found.");
+            }
+        }
     }
 
     public void saveMapState(double lat, double lng, float zoom) {
@@ -96,6 +124,7 @@ public class MapViewModel extends ViewModel {
         }
 
         favoriteRepository.addFavorite(favorite);
+        placeRepository.persistPlace(place, "favorite");
     }
 
     public void removeFromFavorites(Favorite favorite) {

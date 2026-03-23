@@ -7,8 +7,11 @@
     android:layout_height="match_parent">
 
     <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/map_root"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:focusable="true"
+        android:focusableInTouchMode="true">
 
         <androidx.fragment.app.FragmentContainerView
             android:id="@+id/map"
@@ -17,21 +20,46 @@
             android:layout_height="match_parent"
             tools:layout="@layout/fragment_map_preview" />
 
-        <androidx.appcompat.widget.SearchView
-            android:id="@+id/map_search"
+        <!-- Search bar + history dropdown (visually unified card) -->
+        <LinearLayout
+            android:id="@+id/search_container"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_margin="16dp"
-            android:background="@drawable/bg_searchbar"
+            android:orientation="vertical"
             android:elevation="4dp"
-            android:imeOptions="actionSearch"
-            app:queryHint="Search for places..."
-            app:queryBackground="@null"
-            app:iconifiedByDefault="false"
-            app:searchIcon="@drawable/ic_search"
+            android:clipToOutline="true"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <androidx.appcompat.widget.SearchView
+                android:id="@+id/map_search"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_searchbar"
+                android:imeOptions="actionSearch"
+                app:queryHint="Search for places..."
+                app:queryBackground="@null"
+                app:iconifiedByDefault="false"
+                app:searchIcon="@drawable/ic_search" />
+
+            <!-- History dropdown — matches search bar -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_search_history"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_search_history"
+                android:visibility="gone"
+                android:paddingTop="4dp"
+                android:paddingBottom="8dp"
+                android:clipToPadding="false"
+                android:nestedScrollingEnabled="false"
+                tools:visibility="visible"
+                tools:itemCount="3"
+                tools:listitem="@layout/item_search_history" />
+
+        </LinearLayout>
 
         <ImageButton
             android:id="@+id/btn_my_location"

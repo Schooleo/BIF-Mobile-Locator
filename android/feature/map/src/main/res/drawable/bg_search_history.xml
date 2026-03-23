@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- thin separator line at the top to divide from search bar -->
+    <item
+        android:top="0dp"
+        android:bottom="0dp">
+        <shape>
+            <solid android:color="@color/item_background" />
+            <corners
+                android:bottomLeftRadius="36dp"
+                android:bottomRightRadius="36dp"
+                android:topLeftRadius="0dp"
+                android:topRightRadius="0dp" />
+        </shape>
+    </item>
+    <!-- hairline divider at the top -->
+    <item android:height="1dp" android:gravity="top">
+        <shape>
+            <solid android:color="#1A000000" />
+        </shape>
+    </item>
+</layer-list>

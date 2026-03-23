@@ -3,11 +3,11 @@ package com.bif.server.features.sync.models;
 import lombok.Data;
 
 @Data
-public class SyncChange {
+public class SyncConflict {
     private String entityType;
     private String entityId;
-    private long serverVersion;
-    private String operation;
     private String clientChangeId;
-    private String timestamp;
+    private long clientVersion;
+    private long serverVersion;
+    private String resolution;
 }
