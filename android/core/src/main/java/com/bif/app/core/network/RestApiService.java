@@ -1,9 +1,12 @@
 package com.bif.app.core.network;
 
+import com.bif.app.core.network.dto.ChatMessageDto;
 import com.bif.app.core.network.dto.PlaceDto;
 import com.bif.app.core.network.dto.PlaceReviewDto;
 import com.bif.app.core.network.dto.SyncRequestDto;
 import com.bif.app.core.network.dto.SyncResponseDto;
+import com.bif.app.core.network.dto.TripPlanDto;
+import com.bif.app.core.network.dto.TripStopDto;
 
 import java.util.List;
 
@@ -13,6 +16,7 @@ import retrofit2.http.Body;
 import retrofit2.http.DELETE;
 import retrofit2.http.GET;
 import retrofit2.http.Multipart;
+import retrofit2.http.PATCH;
 import retrofit2.http.POST;
 import retrofit2.http.Part;
 import retrofit2.http.Path;
@@ -44,4 +48,22 @@ public interface RestApiService {
     // Sync
     @POST("sync")
     Call<SyncResponseDto> sync(@Body SyncRequestDto request);
-}
+
+    // Chat
+    @GET("chat/group/{groupId}")
+    Call<List<ChatMessageDto>> getChatMessages(@Path("groupId") String groupId);
+
+    @POST("chat")
+    Call<ChatMessageDto> postChatMessage(@Body ChatMessageDto message);
+
+    @PATCH("chat/{id}/confirm")
+    Call<ChatMessageDto> confirmMessage(@Path("id") String id);
+
+    // Trips
+    @GET("trips/group/{groupId}")
+    Call<List<TripPlanDto>> getTripsByGroup(@Path("groupId") String groupId);
+
+    @POST("trips/{tripId}/stops")
+    Call<TripPlanDto> addTripStop(@Path("tripId") String tripId,
+                                  @Body TripStopDto stop);
+}
