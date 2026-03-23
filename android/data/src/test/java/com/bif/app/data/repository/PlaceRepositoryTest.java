@@ -6,6 +6,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -156,7 +157,8 @@ public class PlaceRepositoryTest {
             throws IOException, InterruptedException {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
         // Stub local cache (doSearch now queries this first)
-        when(mockPlaceDao.searchByName(anyString())).thenReturn(new ArrayList<>());
+        when(mockPlaceDao.searchByName(anyString(), anyString()))
+                .thenReturn(new ArrayList<>());
 
         // Server returns one place
         PlaceDto serverDto = new PlaceDto();
@@ -190,7 +192,7 @@ public class PlaceRepositoryTest {
                 .thenReturn(saveCall);
 
         // Mock placeDao.count() to avoid eviction
-        when(mockPlaceDao.count()).thenReturn(2);
+        when(mockPlaceDao.count(anyString())).thenReturn(2);
 
         LiveData<List<Place>> result =
                 placeRepository.searchPlaces("test");
@@ -206,7 +208,8 @@ public class PlaceRepositoryTest {
     public void searchPlaces_online_savesSearchHistory()
             throws IOException, InterruptedException {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
-        when(mockPlaceDao.searchByName(anyString())).thenReturn(new ArrayList<>());
+        when(mockPlaceDao.searchByName(anyString(), anyString()))
+                .thenReturn(new ArrayList<>());
 
         Call<List<PlaceDto>> mockCall = mock(Call.class);
         when(mockCall.execute())
@@ -215,7 +218,7 @@ public class PlaceRepositoryTest {
                 .thenReturn(mockCall);
         when(mockGoogleMapsDataSource.geocodeLocation("cafe"))
                 .thenReturn(new ArrayList<>());
-        when(mockPlaceDao.count()).thenReturn(0);
+        when(mockPlaceDao.count(anyString())).thenReturn(0);
 
         placeRepository.searchPlaces("cafe");
         Thread.sleep(300);
@@ -229,7 +232,8 @@ public class PlaceRepositoryTest {
     public void searchPlacesFromHistory_doesNotSaveHistory()
             throws IOException, InterruptedException {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
-        when(mockPlaceDao.searchByName(anyString())).thenReturn(new ArrayList<>());
+        when(mockPlaceDao.searchByName(anyString(), anyString()))
+                .thenReturn(new ArrayList<>());
 
         Call<List<PlaceDto>> mockCall = mock(Call.class);
         when(mockCall.execute())
@@ -238,7 +242,7 @@ public class PlaceRepositoryTest {
                 .thenReturn(mockCall);
         when(mockGoogleMapsDataSource.geocodeLocation("cafe"))
                 .thenReturn(new ArrayList<>());
-        when(mockPlaceDao.count()).thenReturn(0);
+        when(mockPlaceDao.count(anyString())).thenReturn(0);
 
         placeRepository.searchPlacesFromHistory("cafe");
         Thread.sleep(300);
@@ -253,7 +257,8 @@ public class PlaceRepositoryTest {
     public void searchPlaces_online_enforcesLocalCacheLimit()
             throws IOException, InterruptedException {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
-        when(mockPlaceDao.searchByName(anyString())).thenReturn(new ArrayList<>());
+        when(mockPlaceDao.searchByName(anyString(), anyString()))
+                .thenReturn(new ArrayList<>());
 
         Call<List<PlaceDto>> mockCall = mock(Call.class);
         when(mockCall.execute())
@@ -264,12 +269,12 @@ public class PlaceRepositoryTest {
                 .thenReturn(new ArrayList<>());
 
         // Simulate 105 places in local cache
-        when(mockPlaceDao.count()).thenReturn(105);
+        when(mockPlaceDao.count(anyString())).thenReturn(105);
 
         placeRepository.searchPlaces("test");
         Thread.sleep(300);
 
-        verify(mockPlaceDao).evictOldest(5);
+        verify(mockPlaceDao).evictOldest(eq(5), anyString());
     }
 
     // --- persistPlace Tests ---
@@ -279,7 +284,7 @@ public class PlaceRepositoryTest {
             throws InterruptedException {
         Place place = new Place("p1", "Test", "Addr", 4.5,
                 new Location(10.0, 20.0));
-        when(mockPlaceDao.count()).thenReturn(50);
+        when(mockPlaceDao.count(anyString())).thenReturn(50);
 
         placeRepository.persistPlace(place, "favorite");
         Thread.sleep(300);
@@ -290,7 +295,7 @@ public class PlaceRepositoryTest {
         assertEquals("favorite", entityCaptor.getValue().persistedByAction);
 
         verify(mockSyncManager).enqueueChange(
-                anyString(), anyString(), anyString(), anyString());
+                anyString(), anyString(), anyString(), anyString(), any());
         verify(mockSyncManager).syncIfOnline();
     }
 
@@ -299,11 +304,11 @@ public class PlaceRepositoryTest {
             throws InterruptedException {
         Place place = new Place("p1", "Test", "Addr", 4.5,
                 new Location(10.0, 20.0));
-        when(mockPlaceDao.count()).thenReturn(110);
+        when(mockPlaceDao.count(anyString())).thenReturn(110);
 
         placeRepository.persistPlace(place, "review");
         Thread.sleep(300);
 
-        verify(mockPlaceDao).evictOldest(10);
+        verify(mockPlaceDao).evictOldest(eq(10), anyString());
     }
 }

@@ -10,4 +10,5 @@ public class SyncChange {
     private String operation;
     private String clientChangeId;
     private String timestamp;
+    private String payload;
 }

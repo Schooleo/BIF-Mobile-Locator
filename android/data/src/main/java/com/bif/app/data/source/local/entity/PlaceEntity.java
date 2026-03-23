@@ -2,11 +2,11 @@ package com.bif.app.data.source.local.entity;
 
 import androidx.annotation.NonNull;
 import androidx.room.Entity;
-import androidx.room.PrimaryKey;
 
-@Entity(tableName = "places")
+@Entity(tableName = "places", primaryKeys = {"ownerUserId", "id"})
 public class PlaceEntity {
-    @PrimaryKey
+    @NonNull
+    public String ownerUserId;
     @NonNull
     public String id;
     public String name;
@@ -20,4 +20,9 @@ public class PlaceEntity {
     public long serverVersion;
     public boolean deleted;
     public long lastSyncedAt;
+
+    public PlaceEntity() {
+        ownerUserId = "";
+        id = "";
+    }
 }

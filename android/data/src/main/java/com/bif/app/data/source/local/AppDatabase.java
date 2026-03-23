@@ -18,7 +18,7 @@ import com.bif.app.data.source.local.entity.SyncQueueEntity;
         PlaceEntity.class,
         SyncQueueEntity.class,
         SearchHistoryEntity.class
-}, version = 5, exportSchema = false)
+}, version = 6, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
     public abstract FriendDao friendDao();
     public abstract FavoriteDao favoriteDao();

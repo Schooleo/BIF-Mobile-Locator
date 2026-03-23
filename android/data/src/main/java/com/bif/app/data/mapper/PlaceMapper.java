@@ -32,7 +32,12 @@ public class PlaceMapper {
     }
 
     public static PlaceEntity toEntity(Place place) {
+        return toEntity(place, "anonymous");
+    }
+
+    public static PlaceEntity toEntity(Place place, String ownerUserId) {
         PlaceEntity entity = new PlaceEntity();
+        entity.ownerUserId = ownerUserId;
         entity.id = place.id;
         entity.name = place.name;
         entity.address = place.address;
@@ -46,7 +51,16 @@ public class PlaceMapper {
     }
 
     public static PlaceEntity fromDto(PlaceDto dto) {
+        return fromDto(dto, null);
+    }
+
+    public static PlaceEntity fromDto(PlaceDto dto, String fallbackOwnerUserId) {
         PlaceEntity entity = new PlaceEntity();
+        String owner = dto.persistedByUserId != null
+                && !dto.persistedByUserId.trim().isEmpty()
+                ? dto.persistedByUserId
+                : fallbackOwnerUserId;
+        entity.ownerUserId = owner != null ? owner : "anonymous";
         entity.id = dto.id;
         entity.name = dto.name;
         entity.address = dto.address;
@@ -56,6 +70,7 @@ public class PlaceMapper {
         entity.placeSource = dto.placeSource;
         entity.persistedByAction = dto.persistedByAction;
         entity.serverVersion = dto.serverVersion;
+        entity.deleted = dto.deleted;
         entity.lastSyncedAt = System.currentTimeMillis();
         if (dto.tags != null) {
             entity.tags = String.join(",", dto.tags);
@@ -64,11 +79,16 @@ public class PlaceMapper {
     }
 
     public static PlaceDto toDto(Place place) {
+        return toDto(place, null);
+    }
+
+    public static PlaceDto toDto(Place place, String persistedByUserId) {
         PlaceDto dto = new PlaceDto();
         dto.id = place.id;
         dto.name = place.name;
         dto.address = place.address;
         dto.rating = place.rating;
+        dto.persistedByUserId = persistedByUserId;
         if (place.location != null) {
             dto.latitude = place.location.latitude;
             dto.longitude = place.location.longitude;

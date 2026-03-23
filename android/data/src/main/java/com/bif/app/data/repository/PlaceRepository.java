@@ -1,5 +1,6 @@
 package com.bif.app.data.repository;
 
+import android.content.Context;
 import android.location.Address;
 import android.util.Log;
 
@@ -9,6 +10,7 @@ import androidx.lifecycle.Transformations;
 
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.PlaceDto;
+import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.PlaceMapper;
 import com.bif.app.data.source.GoogleMapsDataSource;
 import com.bif.app.data.source.local.PlaceDao;
@@ -32,6 +34,8 @@ import java.util.concurrent.Executors;
 
 import javax.inject.Inject;
 
+import dagger.hilt.android.qualifiers.ApplicationContext;
+
 import retrofit2.Response;
 
 public class PlaceRepository implements IPlaceRepository {
@@ -46,6 +50,7 @@ public class PlaceRepository implements IPlaceRepository {
     private final SyncManager syncManager;
     private final NetworkMonitor networkMonitor;
     private final ExecutorService executorService;
+    private final String activeUserId;
 
     @Inject
     public PlaceRepository(GoogleMapsDataSource googleMapsDataSource,
@@ -53,7 +58,8 @@ public class PlaceRepository implements IPlaceRepository {
                            PlaceDao placeDao,
                            SearchHistoryDao searchHistoryDao,
                            SyncManager syncManager,
-                           NetworkMonitor networkMonitor) {
+                           NetworkMonitor networkMonitor,
+                           @ApplicationContext Context appContext) {
         this.googleMapsDataSource = googleMapsDataSource;
         this.restApiService = restApiService;
         this.placeDao = placeDao;
@@ -61,6 +67,22 @@ public class PlaceRepository implements IPlaceRepository {
         this.syncManager = syncManager;
         this.networkMonitor = networkMonitor;
         this.executorService = Executors.newFixedThreadPool(4);
+        this.activeUserId = resolveActiveUserId(appContext);
+
+        if (!activeUserId.trim().isEmpty()) {
+            syncManager.setUserContext(activeUserId, null);
+        }
+    }
+
+    // Backward-compatible constructor used by tests.
+    public PlaceRepository(GoogleMapsDataSource googleMapsDataSource,
+                           RestApiService restApiService,
+                           PlaceDao placeDao,
+                           SearchHistoryDao searchHistoryDao,
+                           SyncManager syncManager,
+                           NetworkMonitor networkMonitor) {
+        this(googleMapsDataSource, restApiService, placeDao,
+                searchHistoryDao, syncManager, networkMonitor, null);
     }
 
     @Override
@@ -110,7 +132,8 @@ public class PlaceRepository implements IPlaceRepository {
 
             // Step 1: Always search local Room cache first (includes favorites, persisted places)
             String queryLower = query.toLowerCase(java.util.Locale.getDefault());
-            List<PlaceEntity> localMatches = placeDao.searchByName(queryLower);
+            List<PlaceEntity> localMatches = placeDao.searchByName(
+                    queryLower, activeUserId);
             if (localMatches != null) {
                 for (PlaceEntity entity : localMatches) {
                     combinedResults.add(PlaceMapper.toDomain(entity));
@@ -130,7 +153,8 @@ public class PlaceRepository implements IPlaceRepository {
                                 seenIds.add(dto.id);
                             }
                             // Always keep local cache up-to-date from server
-                            placeDao.upsert(PlaceMapper.fromDto(dto));
+                            placeDao.upsert(PlaceMapper.fromDto(dto,
+                                    activeUserId));
                         }
                     }
                 } catch (IOException e) {
@@ -142,25 +166,25 @@ public class PlaceRepository implements IPlaceRepository {
                     List<Address> googleResults =
                             googleMapsDataSource.geocodeLocation(query);
                     if (googleResults != null) {
-                        for (Address addr : googleResults) {
+                        for (Address address : googleResults) {
                             String id = "google_"
-                                    + addr.getLatitude() + "_"
-                                    + addr.getLongitude();
+                                    + address.getLatitude() + "_"
+                                    + address.getLongitude();
                             if (!seenIds.contains(id)) {
                                 Place place = new Place(
                                         id,
-                                        addr.getFeatureName() != null
-                                                ? addr.getFeatureName()
+                                        address.getFeatureName() != null
+                                                ? address.getFeatureName()
                                                 : query,
-                                        addr.getAddressLine(0) != null
-                                                ? addr.getAddressLine(0)
+                                        address.getAddressLine(0) != null
+                                                ? address.getAddressLine(0)
                                                 : "",
                                         0.0,
-                                        new Location(addr.getLatitude(),
-                                                addr.getLongitude()));
+                                        new Location(address.getLatitude(),
+                                                address.getLongitude()));
                                 combinedResults.add(place);
                                 seenIds.add(id);
-                                autoPeristFromSearch(place);
+                                autoPersistFromSearch(place);
                             }
                         }
                     }
@@ -184,25 +208,58 @@ public class PlaceRepository implements IPlaceRepository {
     @Override
     public void persistPlace(Place place, String action) {
         executorService.execute(() -> {
+            PlaceEntity existing = placeDao.getByIdSync(place.id,
+                    activeUserId);
+
             // Cache locally
-            PlaceEntity entity = PlaceMapper.toEntity(place);
+            PlaceEntity entity = PlaceMapper.toEntity(place,
+                    activeUserId);
             entity.persistedByAction = action;
+            if (existing != null) {
+                entity.serverVersion = existing.serverVersion;
+            }
+
+            boolean isDelete = "DELETE".equalsIgnoreCase(action)
+                    || "REMOVE".equalsIgnoreCase(action);
+            if (isDelete) {
+                entity.deleted = true;
+            }
+
             placeDao.upsert(entity);
 
             // Enforce local cache limit
             enforceLocalCacheLimit();
 
             // Enqueue for server sync
+            String operation;
+            if (isDelete) {
+                operation = "DELETE";
+            } else if (existing == null || existing.deleted) {
+                operation = "CREATE";
+            } else {
+                operation = "UPDATE";
+            }
+
+            PlaceDto payload = PlaceMapper.toDto(place, activeUserId);
+            payload.placeSource = entity.placeSource;
+            payload.persistedByAction = action;
+            payload.persistedByUserId = activeUserId;
+            payload.serverVersion = entity.serverVersion;
+            payload.deleted = entity.deleted;
+
             syncManager.enqueueChange(
-                    "place", place.id, "CREATE",
-                    UUID.randomUUID().toString());
+                    "place",
+                    place.id,
+                    operation,
+                    UUID.randomUUID().toString(),
+                    payload);
             syncManager.syncIfOnline();
         });
     }
 
     @Override
     public LiveData<List<Place>> getAllPersistedPlaces() {
-        return Transformations.map(placeDao.getAll(),
+        return Transformations.map(placeDao.getAll(activeUserId),
                 PlaceMapper::toDomainList);
     }
 
@@ -230,7 +287,7 @@ public class PlaceRepository implements IPlaceRepository {
     private void cacheResultsLocally(List<Place> places) {
         List<PlaceEntity> entities = new ArrayList<>();
         for (Place place : places) {
-            entities.add(PlaceMapper.toEntity(place));
+            entities.add(PlaceMapper.toEntity(place, activeUserId));
         }
         if (!entities.isEmpty()) {
             placeDao.upsertAll(entities);
@@ -239,29 +296,42 @@ public class PlaceRepository implements IPlaceRepository {
     }
 
     private void enforceLocalCacheLimit() {
-        int count = placeDao.count();
+        int count = placeDao.count(activeUserId);
         if (count > MAX_LOCAL_PLACES) {
-            placeDao.evictOldest(count - MAX_LOCAL_PLACES);
+            placeDao.evictOldest(count - MAX_LOCAL_PLACES, activeUserId);
         }
     }
 
-    private void autoPeristFromSearch(Place place) {
+    private void autoPersistFromSearch(Place place) {
         executorService.execute(() -> {
             if (!networkMonitor.isOnline()) {
                 return;
             }
             try {
-                PlaceDto dto = PlaceMapper.toDto(place);
+                PlaceDto dto = PlaceMapper.toDto(place, activeUserId);
                 dto.placeSource = "google_maps";
                 dto.persistedByAction = "search_discovered";
+                dto.persistedByUserId = activeUserId;
                 Response<PlaceDto> response = restApiService
                         .saveFromSearch(dto).execute();
                 if (response.isSuccessful() && response.body() != null) {
-                    placeDao.upsert(PlaceMapper.fromDto(response.body()));
+                    placeDao.upsert(PlaceMapper.fromDto(response.body(),
+                            activeUserId));
                 }
             } catch (IOException e) {
                 Log.e(TAG, "Auto-persist from search failed", e);
             }
         });
+    }
+
+    private String resolveActiveUserId(Context appContext) {
+        if (appContext == null) {
+            return "anonymous";
+        }
+        String username = UserPreferences.getUsername(appContext);
+        if (username.trim().isEmpty()) {
+            return "anonymous";
+        }
+        return username.trim();
     }
 }
