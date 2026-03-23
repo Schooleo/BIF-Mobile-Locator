@@ -17,11 +17,11 @@ import androidx.fragment.app.Fragment;
 import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 
+import com.bif.app.core.auth.AuthSessionManager;
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.auth.AuthResponse;
 import com.bif.app.core.network.dto.auth.LoginRequest;
 import com.bif.app.core.utils.UriUtils;
-import com.bif.app.core.utils.UserPreferences;
 
 import javax.inject.Inject;
 
@@ -37,6 +37,9 @@ public class LoginFragment extends Fragment {
 
     @Inject
     RestApiService restApiService;
+
+    @Inject
+    AuthSessionManager authSessionManager;
 
     @Nullable
     @Override
@@ -86,15 +89,7 @@ public class LoginFragment extends Fragment {
 
                     if (response.isSuccessful() && response.body() != null) {
                         AuthResponse auth = response.body();
-                        UserPreferences.saveAuthSession(requireContext(), auth.accessToken, auth.refreshToken);
-
-                        if (auth.user != null) {
-                            UserPreferences.saveUserProfile(
-                                    requireContext(),
-                                    auth.user.username != null ? auth.user.username : "",
-                                    auth.user.email != null ? auth.user.email : ""
-                            );
-                        }
+                        authSessionManager.saveSessionFromAuth(auth);
 
                         Toast.makeText(requireContext(), "Login successful!", Toast.LENGTH_SHORT).show();
                         navController.navigate(UriUtils.buildUri(UriUtils.PathTo.MAP));

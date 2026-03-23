@@ -19,10 +19,17 @@ public class SecurityConfig {
             .httpBasic(httpBasic -> httpBasic.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-            .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout").permitAll()
-            .requestMatchers("/api/auth/me").authenticated()
-            .requestMatchers("/api/users/me/**", "/api/favorites/me/**").authenticated()
-            .anyRequest().permitAll()
+            .requestMatchers(
+                "/api/auth/register",
+                "/api/auth/login",
+                "/api/auth/refresh",
+                "/api/auth/logout",
+                "/swagger-ui/**",
+                "/v3/api-docs/**",
+                "/graphiql",
+                "/graphql"
+            ).permitAll()
+            .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .build();

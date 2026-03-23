@@ -17,6 +17,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -65,9 +66,12 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@RequestBody RefreshTokenRequest request) {
+    public ResponseEntity<Void> logout(
+            @RequestBody RefreshTokenRequest request,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader
+    ) {
         try {
-            authService.logout(request);
+            authService.logout(request, extractBearerToken(authorizationHeader));
             return ResponseEntity.noContent().build();
         } catch (InvalidRegistrationException e) {
             return ResponseEntity.badRequest().build();
@@ -89,5 +93,13 @@ public class AuthController {
 
         boolean hasProfile = userService.getById(userId).isPresent();
         return ResponseEntity.ok(new AuthStateResponse(true, userId, hasProfile));
+    }
+
+    private String extractBearerToken(String authorizationHeader) {
+        if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
+            return null;
+        }
+        String token = authorizationHeader.substring(7).trim();
+        return token.isBlank() ? null : token;
     }
 }

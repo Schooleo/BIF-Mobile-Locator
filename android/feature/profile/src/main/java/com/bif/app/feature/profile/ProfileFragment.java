@@ -28,10 +28,13 @@ import androidx.fragment.app.Fragment;
 import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 
+import com.bif.app.core.auth.AuthSessionManager;
 import com.bif.app.core.utils.DialogUtils;
 import com.bif.app.core.utils.UriUtils;
 import com.bif.app.core.utils.UserPreferences;
 import com.google.android.material.button.MaterialButton;
+
+import javax.inject.Inject;
 
 import dagger.hilt.android.AndroidEntryPoint;
 
@@ -39,6 +42,9 @@ import dagger.hilt.android.AndroidEntryPoint;
 public class ProfileFragment extends Fragment {
 
     private NavController navController;
+
+    @Inject
+    AuthSessionManager authSessionManager;
 
     private final ActivityResultLauncher<String> pickAvatarLauncher =
             registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
@@ -192,16 +198,19 @@ public class ProfileFragment extends Fragment {
 
     private void setupLogout(View view) {
         view.findViewById(R.id.btnLogout).setOnClickListener(v -> {
-            // Clear user data and navigate to login
             DialogUtils.showConfirmDialog(requireContext(),
                 "Logout",
                 "Are you sure you want to logout?",
                 "Logout",
                 "Cancel",
                 ()-> {
-                    UserPreferences.clearUser(requireContext());
-                    Toast.makeText(requireContext(), R.string.logout_success, Toast.LENGTH_SHORT).show();
-                    navController.navigate(UriUtils.buildUri(UriUtils.PathTo.LOGIN));
+                    authSessionManager.logout(remoteSuccess -> {
+                        if (!isAdded()) {
+                            return;
+                        }
+                        Toast.makeText(requireContext(), R.string.logout_success, Toast.LENGTH_SHORT).show();
+                        navController.navigate(UriUtils.buildUri(UriUtils.PathTo.LOGIN));
+                    });
                 }
             );
         });

@@ -11,6 +11,7 @@ import com.bif.server.features.auth.exceptions.InvalidRefreshTokenException;
 import com.bif.server.features.auth.exceptions.InvalidRegistrationException;
 import com.bif.server.features.auth.models.RefreshToken;
 import com.bif.server.features.auth.repositories.RefreshTokenRepository;
+import com.bif.server.features.auth.security.AccessTokenBlacklistService;
 import com.bif.server.features.auth.security.JwtService;
 import com.bif.server.features.user.models.User;
 import com.bif.server.features.user.repositories.UserRepository;
@@ -31,6 +32,7 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final AccessTokenBlacklistService accessTokenBlacklistService;
     private final long refreshTokenExpirationSeconds;
 
     public AuthService(
@@ -38,12 +40,14 @@ public class AuthService {
             RefreshTokenRepository refreshTokenRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
+            AccessTokenBlacklistService accessTokenBlacklistService,
             @Value("${security.jwt.refresh-token-expiration-seconds:2592000}") long refreshTokenExpirationSeconds
     ) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.accessTokenBlacklistService = accessTokenBlacklistService;
         this.refreshTokenExpirationSeconds = refreshTokenExpirationSeconds;
     }
 
@@ -115,12 +119,16 @@ public class AuthService {
         return toAuthResponse(user);
     }
 
-    public void logout(RefreshTokenRequest request) {
+    public void logout(RefreshTokenRequest request, String accessToken) {
         String tokenValue = requiredTrimmed(request.refreshToken(), "refreshToken");
         refreshTokenRepository.findByToken(tokenValue).ifPresent(token -> {
             token.setRevoked(true);
             refreshTokenRepository.save(token);
         });
+
+        if (accessToken != null && !accessToken.isBlank()) {
+            accessTokenBlacklistService.revoke(accessToken);
+        }
     }
 
     private AuthResponse toAuthResponse(User user) {

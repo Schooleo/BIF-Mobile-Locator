@@ -127,10 +127,21 @@ class AuthControllerTest {
     void logout_WhenValid_ReturnsNoContent() {
         RefreshTokenRequest request = new RefreshTokenRequest("rt");
 
-        ResponseEntity<Void> result = controller.logout(request);
+        ResponseEntity<Void> result = controller.logout(request, null);
 
         assertEquals(HttpStatus.NO_CONTENT, result.getStatusCode());
-        verify(authService).logout(request);
+        verify(authService).logout(request, null);
+    }
+
+    @Test
+    void logout_WhenWithAccessToken_RevokesAndReturnsNoContent() {
+        RefreshTokenRequest request = new RefreshTokenRequest("rt");
+        String authHeader = "Bearer access-token-value";
+
+        ResponseEntity<Void> result = controller.logout(request, authHeader);
+
+        assertEquals(HttpStatus.NO_CONTENT, result.getStatusCode());
+        verify(authService).logout(request, "access-token-value");
     }
 
     @Test

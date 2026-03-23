@@ -10,6 +10,7 @@ import com.bif.server.features.auth.exceptions.InvalidRefreshTokenException;
 import com.bif.server.features.auth.exceptions.InvalidRegistrationException;
 import com.bif.server.features.auth.models.RefreshToken;
 import com.bif.server.features.auth.repositories.RefreshTokenRepository;
+import com.bif.server.features.auth.security.AccessTokenBlacklistService;
 import com.bif.server.features.auth.security.JwtService;
 import com.bif.server.features.user.models.User;
 import com.bif.server.features.user.repositories.UserRepository;
@@ -41,11 +42,14 @@ class AuthServiceTest {
     @Mock
     private JwtService jwtService;
 
+    @Mock
+    private AccessTokenBlacklistService accessTokenBlacklistService;
+
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, refreshTokenRepository, passwordEncoder, jwtService, 2592000L);
+        authService = new AuthService(userRepository, refreshTokenRepository, passwordEncoder, jwtService, accessTokenBlacklistService, 2592000L);
     }
 
     @Test
@@ -186,9 +190,25 @@ class AuthServiceTest {
         when(refreshTokenRepository.findByToken("rt")).thenReturn(Optional.of(existing));
         when(refreshTokenRepository.save(any(RefreshToken.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        authService.logout(new RefreshTokenRequest("rt"));
+        authService.logout(new RefreshTokenRequest("rt"), null);
 
         assertTrue(existing.isRevoked());
         verify(refreshTokenRepository).save(existing);
+    }
+
+    @Test
+    void logout_WhenAccessTokenProvided_RevokesAccessToken() {
+        RefreshToken existing = new RefreshToken();
+        existing.setToken("rt");
+        existing.setRevoked(false);
+
+        when(refreshTokenRepository.findByToken("rt")).thenReturn(Optional.of(existing));
+        when(refreshTokenRepository.save(any(RefreshToken.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        authService.logout(new RefreshTokenRequest("rt"), "access-token-value");
+
+        assertTrue(existing.isRevoked());
+        verify(refreshTokenRepository).save(existing);
+        verify(accessTokenBlacklistService).revoke("access-token-value");
     }
 }

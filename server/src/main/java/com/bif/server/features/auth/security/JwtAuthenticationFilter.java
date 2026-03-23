@@ -16,9 +16,11 @@ import java.util.Collections;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
+    private final AccessTokenBlacklistService accessTokenBlacklistService;
 
-    public JwtAuthenticationFilter(JwtService jwtService) {
+    public JwtAuthenticationFilter(JwtService jwtService, AccessTokenBlacklistService accessTokenBlacklistService) {
         this.jwtService = jwtService;
+        this.accessTokenBlacklistService = accessTokenBlacklistService;
     }
 
     @Override
@@ -31,7 +33,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
-            if (jwtService.isTokenValid(token) && SecurityContextHolder.getContext().getAuthentication() == null) {
+            if (jwtService.isTokenValid(token)
+                    && !accessTokenBlacklistService.isRevoked(token)
+                    && SecurityContextHolder.getContext().getAuthentication() == null) {
                 String userId = jwtService.extractUserId(token);
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(userId, null, Collections.emptyList());
