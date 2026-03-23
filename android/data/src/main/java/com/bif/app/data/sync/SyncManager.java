@@ -1,21 +1,29 @@
 package com.bif.app.data.sync;
 
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.util.Log;
 
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.SyncChangeDto;
 import com.bif.app.core.network.dto.SyncRequestDto;
 import com.bif.app.core.network.dto.SyncResponseDto;
+import com.bif.app.data.source.local.PlaceDao;
 import com.bif.app.data.source.local.SyncQueueDao;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
+import com.google.gson.Gson;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
+import dagger.hilt.android.qualifiers.ApplicationContext;
 import retrofit2.Response;
 
 @Singleton
@@ -23,10 +31,17 @@ public class SyncManager {
 
     private static final String TAG = "SyncManager";
     private static final int MAX_RETRY_COUNT = 5;
+    private static final String PREF_NAME = "SYNC_PREF";
+    private static final String KEY_USER_ID = "sync_user_id";
+    private static final String KEY_DEVICE_ID = "sync_device_id";
+    private static final String KEY_LAST_PULLED_VERSION = "last_pulled_version";
 
     private final RestApiService restApiService;
     private final SyncQueueDao syncQueueDao;
     private final NetworkMonitor networkMonitor;
+    private final SharedPreferences syncPrefs;
+    private final Gson gson;
+    private final Map<String, SyncEntityHandler> handlersByEntityType;
 
     private String userId;
     private String deviceId;
@@ -35,19 +50,51 @@ public class SyncManager {
     @Inject
     public SyncManager(RestApiService restApiService,
                        SyncQueueDao syncQueueDao,
-                       NetworkMonitor networkMonitor) {
+                       PlaceDao placeDao,
+                       NetworkMonitor networkMonitor,
+                       @ApplicationContext Context appContext) {
         this.restApiService = restApiService;
         this.syncQueueDao = syncQueueDao;
         this.networkMonitor = networkMonitor;
+        this.syncPrefs = appContext.getSharedPreferences(PREF_NAME,
+                Context.MODE_PRIVATE);
+        this.gson = new Gson();
+        this.handlersByEntityType = new HashMap<>();
+        registerHandler(new PlaceSyncEntityHandler(placeDao, gson));
+        loadPersistedSyncState();
+    }
+
+    // Backward-compatible constructor used by unit tests.
+    SyncManager(RestApiService restApiService,
+                SyncQueueDao syncQueueDao,
+                NetworkMonitor networkMonitor) {
+        this.restApiService = restApiService;
+        this.syncQueueDao = syncQueueDao;
+        this.networkMonitor = networkMonitor;
+        this.syncPrefs = null;
+        this.gson = new Gson();
+        this.handlersByEntityType = new HashMap<>();
     }
 
     public void setUserContext(String userId, String deviceId) {
-        this.userId = userId;
-        this.deviceId = deviceId;
+        this.userId = userId != null ? userId.trim() : null;
+        this.deviceId = resolveDeviceId(deviceId);
+
+        if (syncPrefs != null) {
+            syncPrefs.edit()
+                    .putString(KEY_USER_ID, this.userId)
+                    .putString(KEY_DEVICE_ID, this.deviceId)
+                    .apply();
+        }
     }
 
     public void setLastPulledVersion(long version) {
         this.lastPulledVersion = version;
+        if (syncPrefs != null) {
+            syncPrefs.edit()
+                    .putLong(KEY_LAST_PULLED_VERSION, version)
+                    .apply();
+        }
     }
 
     public long getLastPulledVersion() {
@@ -60,6 +107,12 @@ public class SyncManager {
      * @return the SyncResponseDto if successful, null if offline or failed
      */
     public SyncResponseDto sync() {
+        ensureSyncContext();
+        if (userId == null || userId.isEmpty()) {
+            Log.w(TAG, "Missing user context - skipping sync");
+            return null;
+        }
+
         if (!networkMonitor.isOnline()) {
             Log.d(TAG, "Offline - skipping sync");
             return null;
@@ -86,6 +139,7 @@ public class SyncManager {
             change.entityId = entry.entityId;
             change.operation = entry.operation;
             change.clientChangeId = entry.clientChangeId;
+            change.payload = entry.payload;
             pushedChanges.add(change);
         }
         request.pushedChanges = pushedChanges.isEmpty()
@@ -104,8 +158,10 @@ public class SyncManager {
                     syncQueueDao.remove(entry.id);
                 }
 
+                applyPulledChanges(syncResponse.pulledChanges);
+
                 // Update last pulled version
-                lastPulledVersion = syncResponse.currentServerVersion;
+                setLastPulledVersion(syncResponse.currentServerVersion);
 
                 // Log conflicts if any
                 if (syncResponse.conflicts != null) {
@@ -132,11 +188,22 @@ public class SyncManager {
      */
     public void enqueueChange(String entityType, String entityId,
                                String operation, String clientChangeId) {
+        enqueueChange(entityType, entityId, operation,
+                clientChangeId, null);
+    }
+
+    /**
+     * Enqueue a change with optional payload for later sync.
+     */
+    public void enqueueChange(String entityType, String entityId,
+                              String operation, String clientChangeId,
+                              Object payload) {
         SyncQueueEntity entry = new SyncQueueEntity();
         entry.entityType = entityType;
         entry.entityId = entityId;
         entry.operation = operation;
         entry.clientChangeId = clientChangeId;
+        entry.payload = serializePayload(entityType, payload);
         entry.status = "PENDING";
         entry.retryCount = 0;
         entry.createdAt = System.currentTimeMillis();
@@ -164,5 +231,100 @@ public class SyncManager {
             }
             syncQueueDao.update(entry);
         }
+    }
+
+    private void applyPulledChanges(List<SyncChangeDto> pulledChanges) {
+        if (pulledChanges == null || pulledChanges.isEmpty()) {
+            return;
+        }
+
+        for (SyncChangeDto change : pulledChanges) {
+            if (change.entityType == null) {
+                continue;
+            }
+
+            SyncEntityHandler handler = handlersByEntityType.get(
+                    change.entityType.toLowerCase());
+            if (handler == null) {
+                continue;
+            }
+            handler.applyPulledChange(change, userId);
+        }
+    }
+
+    private void ensureSyncContext() {
+        if (userId == null || userId.isEmpty()) {
+            loadPersistedSyncState();
+        }
+        if (deviceId == null || deviceId.isEmpty()) {
+            deviceId = resolveDeviceId(null);
+            if (syncPrefs != null) {
+                syncPrefs.edit()
+                        .putString(KEY_DEVICE_ID, deviceId)
+                        .apply();
+            }
+        }
+    }
+
+    private void loadPersistedSyncState() {
+        if (syncPrefs == null) {
+            return;
+        }
+
+        userId = syncPrefs.getString(KEY_USER_ID, userId);
+        deviceId = syncPrefs.getString(KEY_DEVICE_ID, deviceId);
+        lastPulledVersion = syncPrefs.getLong(KEY_LAST_PULLED_VERSION,
+                lastPulledVersion);
+    }
+
+    private String resolveDeviceId(String preferred) {
+        if (preferred != null && !preferred.trim().isEmpty()) {
+            return preferred.trim();
+        }
+
+        if (deviceId != null && !deviceId.trim().isEmpty()) {
+            return deviceId;
+        }
+
+        if (syncPrefs != null) {
+            String persistedDeviceId = syncPrefs.getString(KEY_DEVICE_ID,
+                    null);
+            if (persistedDeviceId != null
+                    && !persistedDeviceId.trim().isEmpty()) {
+                return persistedDeviceId;
+            }
+        }
+
+        String generatedId = "app-" + UUID.randomUUID();
+        if (syncPrefs != null) {
+            syncPrefs.edit()
+                    .putString(KEY_DEVICE_ID, generatedId)
+                    .apply();
+        }
+        return generatedId;
+    }
+
+    private void registerHandler(SyncEntityHandler handler) {
+        handlersByEntityType.put(handler.entityType().toLowerCase(),
+                handler);
+    }
+
+    private String serializePayload(String entityType, Object payload) {
+        if (payload == null) {
+            return null;
+        }
+
+        if (entityType != null) {
+            SyncEntityHandler handler = handlersByEntityType.get(
+                    entityType.toLowerCase());
+            if (handler != null) {
+                return handler.serializePayload(payload);
+            }
+        }
+
+        if (payload instanceof String) {
+            return (String) payload;
+        }
+        return gson.toJson(payload);
     }
 }

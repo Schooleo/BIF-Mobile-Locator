@@ -7,4 +7,5 @@ public class SyncChangeDto {
     public String operation;
     public String clientChangeId;
     public String timestamp;
+    public String payload;
 }

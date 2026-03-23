@@ -1,5 +1,8 @@
 package com.bif.server.features.sync.services;
 
+import com.bif.server.common.models.Location;
+import com.bif.server.features.place.models.Place;
+import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.sync.models.*;
 import com.bif.server.features.sync.repositories.SyncChangeRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,16 +29,26 @@ class SyncServiceTest {
     @Mock
     private SyncChangeRepository syncChangeRepository;
 
+        @Mock
+        private PlaceRepository placeRepository;
+
+        @Mock
+        private SyncEntityHandler placeSyncEntityHandler;
+
     private SyncService syncService;
 
     @BeforeEach
     void setUp() {
-        syncService = new SyncService(syncVersionService, syncChangeRepository);
+        when(placeSyncEntityHandler.entityType()).thenReturn("place");
+                syncService = new SyncService(syncVersionService,
+                                syncChangeRepository,
+                List.of(placeSyncEntityHandler));
     }
 
     @Test
     void sync_WhenNoPushChanges_ReturnsPulledChanges() {
         SyncRequest request = new SyncRequest();
+                request.setUserId("user1");
         request.setLastPulledVersion(5);
         request.setPushedChanges(null);
 
@@ -44,11 +57,15 @@ class SyncServiceTest {
         entry.setEntityId("p1");
         entry.setServerVersion(6);
         entry.setOperation("CREATE");
+        entry.setPayload("{\"id\":\"p1\",\"name\":\"Payload Place\"}");
         entry.setTimestamp(Instant.now());
 
         when(syncChangeRepository
-                .findByServerVersionGreaterThanOrderByServerVersionAsc(5))
+                .findByUserIdAndServerVersionGreaterThanOrderByServerVersionAsc(
+                        "user1", 5))
                 .thenReturn(List.of(entry));
+        when(placeSyncEntityHandler.resolvePayload(entry))
+                .thenReturn(entry.getPayload());
         when(syncVersionService.getCurrentVersion()).thenReturn(6L);
 
         SyncResponse response = syncService.sync(request);
@@ -56,6 +73,8 @@ class SyncServiceTest {
         assertEquals(6, response.getCurrentServerVersion());
         assertEquals(1, response.getPulledChanges().size());
         assertEquals("place", response.getPulledChanges().get(0).getEntityType());
+        assertEquals("{\"id\":\"p1\",\"name\":\"Payload Place\"}",
+                response.getPulledChanges().get(0).getPayload());
         assertNull(response.getConflicts());
     }
 
@@ -71,14 +90,20 @@ class SyncServiceTest {
         pushed.setServerVersion(5);
         pushed.setOperation("CREATE");
         pushed.setClientChangeId("client-1");
+        pushed.setPayload("{\"id\":\"p1\",\"name\":\"Cafe\","
+                + "\"address\":\"A\",\"rating\":4.2,"
+                + "\"latitude\":1.0,\"longitude\":2.0}");
         request.setPushedChanges(List.of(pushed));
 
         when(syncChangeRepository.findByClientChangeId("client-1"))
                 .thenReturn(Optional.empty());
+        when(placeSyncEntityHandler.applyPushedChange(any(), any(), anyLong()))
+                .thenReturn("{\"id\":\"p1\"}");
         when(syncVersionService.getCurrentVersion()).thenReturn(5L);
         when(syncVersionService.nextVersion()).thenReturn(6L);
         when(syncChangeRepository
-                .findByServerVersionGreaterThanOrderByServerVersionAsc(5))
+                .findByUserIdAndServerVersionGreaterThanOrderByServerVersionAsc(
+                        "user1", 5))
                 .thenReturn(Collections.emptyList());
 
         SyncResponse response = syncService.sync(request);
@@ -93,6 +118,9 @@ class SyncServiceTest {
         assertEquals(6L, saved.getServerVersion());
         assertEquals("client-1", saved.getClientChangeId());
         assertEquals("user1", saved.getUserId());
+                assertNotNull(saved.getPayload());
+        verify(placeSyncEntityHandler)
+                .applyPushedChange(any(), any(), anyLong());
     }
 
     @Test
@@ -108,12 +136,15 @@ class SyncServiceTest {
                 .thenReturn(Optional.of(new SyncChangeEntry()));
         when(syncVersionService.getCurrentVersion()).thenReturn(5L);
         when(syncChangeRepository
-                .findByServerVersionGreaterThanOrderByServerVersionAsc(5))
+                .findByUserIdAndServerVersionGreaterThanOrderByServerVersionAsc(
+                        null, 5))
                 .thenReturn(Collections.emptyList());
 
         syncService.sync(request);
 
         verify(syncChangeRepository, never()).save(any());
+        verify(placeSyncEntityHandler, never())
+                .applyPushedChange(any(), any(), anyLong());
     }
 
     @Test
@@ -132,10 +163,13 @@ class SyncServiceTest {
 
         when(syncChangeRepository.findByClientChangeId("conflict-1"))
                 .thenReturn(Optional.empty());
+        when(placeSyncEntityHandler.applyPushedChange(any(), any(), anyLong()))
+                .thenReturn(pushed.getPayload());
         when(syncVersionService.getCurrentVersion()).thenReturn(5L);
         when(syncVersionService.nextVersion()).thenReturn(6L);
         when(syncChangeRepository
-                .findByServerVersionGreaterThanOrderByServerVersionAsc(5))
+                .findByUserIdAndServerVersionGreaterThanOrderByServerVersionAsc(
+                        "user1", 5))
                 .thenReturn(Collections.emptyList());
 
         SyncResponse response = syncService.sync(request);
@@ -156,11 +190,13 @@ class SyncServiceTest {
     @Test
     void sync_WhenBaselineNegative_UsesZero() {
         SyncRequest request = new SyncRequest();
+        request.setUserId("user1");
         request.setLastPulledVersion(-2);
         request.setPushedChanges(null);
 
         when(syncChangeRepository
-                .findByServerVersionGreaterThanOrderByServerVersionAsc(0))
+                .findByUserIdAndServerVersionGreaterThanOrderByServerVersionAsc(
+                        "user1", 0))
                 .thenReturn(Collections.emptyList());
         when(syncVersionService.getCurrentVersion()).thenReturn(0L);
 
@@ -187,12 +223,49 @@ class SyncServiceTest {
         when(syncVersionService.getCurrentVersion()).thenReturn(0L);
         when(syncVersionService.nextVersion()).thenReturn(1L);
         when(syncChangeRepository
-                .findByServerVersionGreaterThanOrderByServerVersionAsc(0))
+                .findByUserIdAndServerVersionGreaterThanOrderByServerVersionAsc(
+                        "user1", 0))
                 .thenReturn(Collections.emptyList());
 
         syncService.sync(request);
 
         verify(syncChangeRepository, never()).findByClientChangeId(any());
         verify(syncChangeRepository).save(any());
+    }
+
+    @Test
+        void sync_WhenDeletePlacePush_UsesPlaceHandlerAndStoresPayload() {
+        SyncRequest request = new SyncRequest();
+        request.setUserId("user1");
+        request.setLastPulledVersion(2);
+
+        SyncChange pushed = new SyncChange();
+        pushed.setEntityType("place");
+        pushed.setEntityId("p-del");
+        pushed.setOperation("DELETE");
+        pushed.setClientChangeId("delete-1");
+        request.setPushedChanges(List.of(pushed));
+
+        when(syncChangeRepository.findByClientChangeId("delete-1"))
+                .thenReturn(Optional.empty());
+        when(syncVersionService.getCurrentVersion()).thenReturn(2L);
+        when(syncVersionService.nextVersion()).thenReturn(3L);
+        when(placeSyncEntityHandler.applyPushedChange(any(), any(), anyLong()))
+                .thenReturn("{\"id\":\"p-del\",\"deleted\":true}");
+        when(syncChangeRepository
+                .findByUserIdAndServerVersionGreaterThanOrderByServerVersionAsc(
+                        "user1", 2))
+                .thenReturn(Collections.emptyList());
+
+        syncService.sync(request);
+
+        verify(placeSyncEntityHandler)
+                .applyPushedChange(any(), any(), anyLong());
+
+        ArgumentCaptor<SyncChangeEntry> changeCaptor =
+                ArgumentCaptor.forClass(SyncChangeEntry.class);
+        verify(syncChangeRepository).save(changeCaptor.capture());
+        assertNotNull(changeCaptor.getValue().getPayload());
+        assertTrue(changeCaptor.getValue().getPayload().contains("\"deleted\":true"));
     }
 }

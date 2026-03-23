@@ -10,5 +10,8 @@ public interface SyncChangeRepository extends MongoRepository<SyncChangeEntry, S
     List<SyncChangeEntry> findByServerVersionGreaterThanOrderByServerVersionAsc(
             long version);
 
+    List<SyncChangeEntry> findByUserIdAndServerVersionGreaterThanOrderByServerVersionAsc(
+            String userId, long version);
+
     Optional<SyncChangeEntry> findByClientChangeId(String clientChangeId);
 }

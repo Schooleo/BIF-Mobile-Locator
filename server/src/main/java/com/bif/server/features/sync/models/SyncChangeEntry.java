@@ -16,6 +16,7 @@ public class SyncChangeEntry {
     private String entityId;
     private long serverVersion;
     private String operation;
+    private String payload;
 
     @Indexed(unique = true, sparse = true)
     private String clientChangeId;

@@ -1,12 +1,18 @@
 package com.bif.server.features.sync.services;
 
-import com.bif.server.features.sync.models.*;
+import com.bif.server.features.sync.models.SyncChange;
+import com.bif.server.features.sync.models.SyncChangeEntry;
+import com.bif.server.features.sync.models.SyncConflict;
+import com.bif.server.features.sync.models.SyncRequest;
+import com.bif.server.features.sync.models.SyncResponse;
 import com.bif.server.features.sync.repositories.SyncChangeRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -14,11 +20,18 @@ public class SyncService {
 
     private final SyncVersionService syncVersionService;
     private final SyncChangeRepository syncChangeRepository;
+    private final Map<String, SyncEntityHandler> handlersByEntityType;
 
     public SyncService(SyncVersionService syncVersionService,
-                       SyncChangeRepository syncChangeRepository) {
+                       SyncChangeRepository syncChangeRepository,
+                       List<SyncEntityHandler> handlers) {
         this.syncVersionService = syncVersionService;
         this.syncChangeRepository = syncChangeRepository;
+        this.handlersByEntityType = new HashMap<>();
+        for (SyncEntityHandler handler : handlers) {
+            handlersByEntityType.put(handler.entityType().toLowerCase(),
+                    handler);
+        }
     }
 
     public SyncResponse sync(SyncRequest request) {
@@ -35,7 +48,8 @@ public class SyncService {
         // Phase 2: Pull changes since client's last known version
         long baseline = Math.max(0, request.getLastPulledVersion());
         List<SyncChangeEntry> entries = syncChangeRepository
-                .findByServerVersionGreaterThanOrderByServerVersionAsc(baseline);
+            .findByUserIdAndServerVersionGreaterThanOrderByServerVersionAsc(
+                request.getUserId(), baseline);
 
         List<SyncChange> pulledChanges = new ArrayList<>();
         for (SyncChangeEntry entry : entries) {
@@ -47,6 +61,7 @@ public class SyncService {
             change.setClientChangeId(entry.getClientChangeId());
             change.setTimestamp(entry.getTimestamp() != null
                     ? entry.getTimestamp().toString() : null);
+                change.setPayload(resolvePayload(entry));
             pulledChanges.add(change);
         }
 
@@ -82,16 +97,49 @@ public class SyncService {
             conflicts.add(conflict);
         }
 
-        // Record the change in the change-log
+        // Apply the pushed mutation before recording it in the log.
         long newVersion = syncVersionService.nextVersion();
+        String payload = applyEntityMutation(pushed, userId, newVersion);
+
+        // Record the change in the change-log.
         SyncChangeEntry entry = new SyncChangeEntry();
         entry.setEntityType(pushed.getEntityType());
         entry.setEntityId(pushed.getEntityId());
         entry.setServerVersion(newVersion);
         entry.setOperation(pushed.getOperation());
         entry.setClientChangeId(pushed.getClientChangeId());
+        entry.setPayload(payload);
         entry.setUserId(userId);
         entry.setTimestamp(Instant.now());
         syncChangeRepository.save(entry);
+    }
+
+    private String applyEntityMutation(SyncChange pushed, String userId,
+                                       long newVersion) {
+        if (pushed.getEntityType() == null) {
+            return pushed.getPayload();
+        }
+
+        SyncEntityHandler handler = handlersByEntityType.get(
+                pushed.getEntityType().toLowerCase());
+        if (handler == null) {
+            return pushed.getPayload();
+        }
+
+        return handler.applyPushedChange(pushed, userId, newVersion);
+    }
+
+    private String resolvePayload(SyncChangeEntry entry) {
+        if (entry.getEntityType() == null) {
+            return entry.getPayload();
+        }
+
+        SyncEntityHandler handler = handlersByEntityType.get(
+                entry.getEntityType().toLowerCase());
+        if (handler == null) {
+            return entry.getPayload();
+        }
+
+        return handler.resolvePayload(entry);
     }
 }
