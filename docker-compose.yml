@@ -1,10 +1,50 @@
 services:
   bif-server:
-    image: ghcr.io/schooleo/bif-server:${SERVER_IMAGE_TAG:-latest}
-    container_name: bif-server
-    pull_policy: always
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: bif-server-dev
     ports:
       - "8080:8080"
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      SPRING_MONGODB_URI: mongodb://admin:pass@mongodb:27017/bif_db?authSource=admin
+    depends_on:
+      mongodb:
+        condition: service_healthy
     restart: unless-stopped
+
+  mongodb:
+    image: mongo:latest
+    container_name: bif-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: pass
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok", "mongodb://admin:pass@localhost:27017/admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: mongo-express
+    profiles:
+      - express
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: pass
+      ME_CONFIG_MONGODB_URL: mongodb://admin:pass@mongodb:27017/
+    depends_on:
+      - mongodb
+
+volumes:
+  mongo_data:
