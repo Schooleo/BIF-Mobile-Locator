@@ -81,7 +81,7 @@ jobs:
           min-coverage-changed-files: 70
 
   build:
-    name: build
+    name: Build
     needs: test_and_coverage
     runs-on: ubuntu-latest
     defaults:
