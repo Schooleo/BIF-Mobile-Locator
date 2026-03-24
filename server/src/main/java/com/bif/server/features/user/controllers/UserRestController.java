@@ -3,6 +3,7 @@ package com.bif.server.features.user.controllers;
 import com.bif.server.features.user.dto.rest.AuthStateResponse;
 import com.bif.server.features.user.dto.rest.ProfileMetadataResponse;
 import com.bif.server.features.user.dto.rest.UpdateMyProfileRequest;
+import java.time.Instant;
 import com.bif.server.features.user.models.User;
 import com.bif.server.features.user.services.UserService;
 import org.springframework.security.core.Authentication;
@@ -79,7 +80,7 @@ public class UserRestController {
     }
     
     @PatchMapping("/me/profile")
-    public ResponseEntity<User> updateMyProfile(
+    public ResponseEntity<ProfileMetadataResponse> updateMyProfile(
         Authentication authentication,
         @RequestBody UpdateMyProfileRequest request
     ) {
@@ -94,7 +95,17 @@ public class UserRestController {
                     request.name(),
                     request.avatarLetter(),
                     request.avatarColor()
-            ).map(ResponseEntity::ok)
+            ).map(user -> ResponseEntity.ok(new ProfileMetadataResponse(
+                    user.getId(),
+                    user.getUsername(),
+                    user.getEmail(),
+                    user.getAvatarLetter(),
+                    user.getAvatarColor(),
+                    user.isOnline(),
+                    user.getServerVersion(),
+                    user.getUpdatedAt(),
+                    userService.calculateProfileCompletion(user)
+            )))
                     .orElseGet(() -> ResponseEntity.notFound().build());
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();

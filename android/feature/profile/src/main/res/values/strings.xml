@@ -28,4 +28,6 @@
     <string name="username_required">Username cannot be empty</string>
     <string name="profile_updated">Profile updated successfully</string>
     <string name="avatar_updated">Avatar updated successfully</string>
+    <string name="profile_sync_failed">Could not sync profile. Showing cached data.</string>
+    <string name="profile_update_failed">Could not update profile.</string>
 </resources>

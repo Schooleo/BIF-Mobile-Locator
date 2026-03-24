@@ -196,7 +196,7 @@ class UserRestControllerTest {
     void updateMyProfile_WhenHeaderMissing_ReturnsUnauthorized() {
         UpdateMyProfileRequest request = new UpdateMyProfileRequest("Alex", "A", 123);
 
-        ResponseEntity<User> result = controller.updateMyProfile(null, request);
+        ResponseEntity<ProfileMetadataResponse> result = controller.updateMyProfile(null, request);
 
         assertEquals(HttpStatus.UNAUTHORIZED, result.getStatusCode());
         verify(userService, never()).updateMyProfile(anyString(), any(), any(), any());
@@ -209,7 +209,7 @@ class UserRestControllerTest {
 
         when(userService.updateMyProfile("u1", "Alex", "A", 123)).thenReturn(Optional.empty());
 
-        ResponseEntity<User> result = controller.updateMyProfile(auth, request);
+        ResponseEntity<ProfileMetadataResponse> result = controller.updateMyProfile(auth, request);
 
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
         verify(userService).updateMyProfile("u1", "Alex", "A", 123);
@@ -223,28 +223,38 @@ class UserRestControllerTest {
         when(userService.updateMyProfile("u1", "   ", "A", 123))
                 .thenThrow(new IllegalArgumentException("name must not be blank"));
 
-        ResponseEntity<User> result = controller.updateMyProfile(auth, request);
+        ResponseEntity<ProfileMetadataResponse> result = controller.updateMyProfile(auth, request);
 
         assertEquals(HttpStatus.BAD_REQUEST, result.getStatusCode());
         verify(userService).updateMyProfile("u1", "   ", "A", 123);
     }
 
     @Test
-    void updateMyProfile_WhenValid_ReturnsOk() {
+    void updateMyProfile_WhenValid_ReturnsOkWithMetadata() {
         Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
         User saved = new User();
         saved.setId("u1");
-        saved.setEmail("old@bif.local");
+        saved.setUsername("Alex");
+        saved.setEmail("alex@bif.local");
+        saved.setAvatarLetter("A");
+        saved.setAvatarColor(0xFF1E88E5);
+        saved.setOnline(true);
+        saved.setUpdatedAt(java.time.Instant.parse("2026-03-24T10:30:00Z"));
 
         UpdateMyProfileRequest request = new UpdateMyProfileRequest(" Alex ", " A ", 0xFF1E88E5);
 
         when(userService.updateMyProfile("u1", " Alex ", " A ", 0xFF1E88E5)).thenReturn(Optional.of(saved));
+        when(userService.calculateProfileCompletion(saved)).thenReturn(80);
 
-    ResponseEntity<User> result = controller.updateMyProfile(auth, request);
+        ResponseEntity<ProfileMetadataResponse> result = controller.updateMyProfile(auth, request);
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
         assertNotNull(result.getBody());
-        assertEquals("u1", result.getBody().getId());
+        assertEquals("u1", result.getBody().userId());
+        assertEquals("Alex", result.getBody().displayName());
+        assertEquals("alex@bif.local", result.getBody().email());
+        assertEquals("A", result.getBody().avatarLetter());
+        assertEquals(0xFF1E88E5, result.getBody().avatarColor());
         verify(userService).updateMyProfile("u1", " Alex ", " A ", 0xFF1E88E5);
     }
 }

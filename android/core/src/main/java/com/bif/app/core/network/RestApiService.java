@@ -7,6 +7,8 @@ import com.bif.app.core.network.dto.auth.RefreshTokenRequest;
 import com.bif.app.core.network.dto.auth.RegisterRequest;
 import com.bif.app.core.network.dto.favorite.FavoriteRequestDto;
 import com.bif.app.core.network.dto.favorite.FavoriteResponseDto;
+import com.bif.app.core.network.dto.profile.ProfileMetadataResponse;
+import com.bif.app.core.network.dto.profile.UpdateMyProfileRequest;
 
 import okhttp3.MultipartBody;
 import java.util.List;
@@ -15,6 +17,7 @@ import retrofit2.http.Body;
 import retrofit2.http.DELETE;
 import retrofit2.http.GET;
 import retrofit2.http.Multipart;
+import retrofit2.http.PATCH;
 import retrofit2.http.POST;
 import retrofit2.http.Part;
 import retrofit2.http.Path;
@@ -44,6 +47,12 @@ public interface RestApiService {
 
     @DELETE("favorites/me/{id}")
     Call<Void> deleteMyFavorite(@Path("id") String id);
+
+    @GET("users/me/profile-metadata")
+    Call<ProfileMetadataResponse> getMyProfileMetadata();
+
+    @PATCH("users/me/profile")
+    Call<ProfileMetadataResponse> updateMyProfile(@Body UpdateMyProfileRequest request);
 
     // Example: A multipart POST request for uploading a profile picture
     @Multipart

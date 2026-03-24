@@ -25,13 +25,14 @@ import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.SwitchCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.bif.app.core.auth.AuthSessionManager;
 import com.bif.app.core.utils.DialogUtils;
 import com.bif.app.core.utils.UriUtils;
-import com.bif.app.core.utils.UserPreferences;
 import com.google.android.material.button.MaterialButton;
 
 import javax.inject.Inject;
@@ -42,6 +43,8 @@ import dagger.hilt.android.AndroidEntryPoint;
 public class ProfileFragment extends Fragment {
 
     private NavController navController;
+    private ProfileViewModel viewModel;
+    private SwipeRefreshLayout swipeRefreshLayout;
 
     @Inject
     AuthSessionManager authSessionManager;
@@ -51,14 +54,13 @@ public class ProfileFragment extends Fragment {
                 if (uri == null || !isAdded() || getView() == null) {
                     return;
                 }
-                UserPreferences.setAvatarUri(requireContext(), uri.toString());
-                bindProfileState(getView());
-                Toast.makeText(requireContext(), R.string.avatar_updated, Toast.LENGTH_SHORT).show();
+                viewModel.onAvatarSelected(uri.toString());
             });
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
+        viewModel = new ViewModelProvider(this).get(ProfileViewModel.class);
         return inflater.inflate(R.layout.fragment_profile, container, false);
     }
 
@@ -67,18 +69,55 @@ public class ProfileFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         navController = Navigation.findNavController(view);
 
-        bindProfileState(view);
+        observeViewModel(view);
+        setupSwipeRefresh(view);
         setupSections(view);
         setupMenuItems(view);
         setupDarkModeToggle(view);
         setupLogout(view);
+        viewModel.loadFromLocal();
     }
 
-    private void bindProfileState(View view) {
-        boolean isLoggedIn = UserPreferences.isLoggedIn(requireContext());
-        String username = getStoredValue(UserPreferences.getUsername(requireContext()));
-        String email = getStoredValue(UserPreferences.getEmail(requireContext()));
-        String avatarUri = UserPreferences.getAvatarUri(requireContext());
+    @Override
+    public void onResume() {
+        super.onResume();
+        viewModel.loadFromLocal();
+        viewModel.refreshProfileFromServer(false);
+    }
+
+    private void observeViewModel(@NonNull View view) {
+        viewModel.getProfileState().observe(getViewLifecycleOwner(), state -> {
+            if (state == null) {
+                return;
+            }
+            bindProfileState(view, state);
+        });
+
+        viewModel.getMessageResId().observe(getViewLifecycleOwner(), messageId -> {
+            if (messageId == null || !isAdded()) {
+                return;
+            }
+            Toast.makeText(requireContext(), messageId, Toast.LENGTH_SHORT).show();
+            viewModel.consumeMessage();
+        });
+
+        viewModel.getIsRefreshing().observe(getViewLifecycleOwner(), isRefreshing -> {
+            if (swipeRefreshLayout == null) {
+                return;
+            }
+            swipeRefreshLayout.setRefreshing(Boolean.TRUE.equals(isRefreshing));
+        });
+    }
+
+    private void setupSwipeRefresh(@NonNull View view) {
+        swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout);
+        if (swipeRefreshLayout == null) {
+            return;
+        }
+        swipeRefreshLayout.setOnRefreshListener(() -> viewModel.refreshProfileFromServer(true));
+    }
+
+    private void bindProfileState(View view, ProfileViewModel.ProfileUiState state) {
 
         TextView tvAvatar = view.findViewById(com.bif.app.core.R.id.tvAvatar);
         tvAvatar.setBackgroundTintList(ColorStateList.valueOf(0xFF2B7FFF));
@@ -95,20 +134,20 @@ public class ProfileFragment extends Fragment {
         View menuPrivacySecurity = view.findViewById(R.id.menuPrivacySecurity);
         View logoutButton = view.findViewById(R.id.btnLogout);
 
-        if (isLoggedIn) {
+        if (state.isLoggedIn) {
             btnAvatarCamera.setVisibility(View.VISIBLE);
             btnAvatarCamera.setOnClickListener(v -> pickAvatarLauncher.launch("image/*"));
 
-            tvAvatar.setText(resolveAvatarInitial(username, email));
-            tvName.setText(username);
+            tvAvatar.setText(state.avatarInitial);
+            tvName.setText(state.usernameForDisplay);
             tvEmail.setVisibility(View.VISIBLE);
-            tvEmail.setText(email);
-            bindAvatar(ivAvatarImage, tvAvatar, avatarUri);
+            tvEmail.setText(state.emailForDisplay);
+            bindAvatar(ivAvatarImage, tvAvatar, state.avatarUri);
 
             btnEditProfile.setText(R.string.edit_profile);
             btnEditProfile.setEnabled(true);
             btnEditProfile.setClickable(true);
-            btnEditProfile.setOnClickListener(v -> showEditProfileDialog(username));
+            btnEditProfile.setOnClickListener(v -> showEditProfileDialog(state.usernameForDisplay));
             applyLoggedInButtonStyle(btnEditProfile);
 
             sectionAccount.setVisibility(View.VISIBLE);
@@ -121,6 +160,7 @@ public class ProfileFragment extends Fragment {
         tvAvatar.setText("G");
         tvName.setText(R.string.guest_status);
         tvEmail.setVisibility(View.GONE);
+        ivAvatarImage.setImageURI(null);
         ivAvatarImage.setImageDrawable(null);
         ivAvatarImage.setVisibility(View.GONE);
         tvAvatar.setVisibility(View.VISIBLE);
@@ -216,26 +256,9 @@ public class ProfileFragment extends Fragment {
         });
     }
 
-    private String getStoredValue(String value) {
-        if (value == null) {
-            return getString(R.string.not_available);
-        }
-        String trimmedValue = value.trim();
-        return trimmedValue.isEmpty() ? getString(R.string.not_available) : trimmedValue;
-    }
-
-    private String resolveAvatarInitial(String username, String email) {
-        if (!username.equals(getString(R.string.not_available))) {
-            return username.substring(0, 1).toUpperCase();
-        }
-        if (!email.equals(getString(R.string.not_available))) {
-            return email.substring(0, 1).toUpperCase();
-        }
-        return getString(R.string.guest_status);
-    }
-
     private void bindAvatar(ImageView ivAvatarImage, TextView tvAvatar, String avatarUriString) {
         if (avatarUriString == null || avatarUriString.trim().isEmpty()) {
+            ivAvatarImage.setImageURI(null);
             ivAvatarImage.setImageDrawable(null);
             ivAvatarImage.setVisibility(View.GONE);
             tvAvatar.setVisibility(View.VISIBLE);
@@ -279,11 +302,7 @@ public class ProfileFragment extends Fragment {
                         Toast.makeText(requireContext(), R.string.username_required, Toast.LENGTH_SHORT).show();
                         return;
                     }
-                    UserPreferences.setUsername(requireContext(), updatedUsername);
-                    if (getView() != null) {
-                        bindProfileState(getView());
-                    }
-                    Toast.makeText(requireContext(), R.string.profile_updated, Toast.LENGTH_SHORT).show();
+                    viewModel.updateProfile(updatedUsername);
                 })
                 .setNegativeButton(R.string.cancel, null)
                 .show();

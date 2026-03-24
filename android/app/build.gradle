@@ -21,7 +21,7 @@ android {
     if (localPropertiesFile.exists()) {
         localProperties.load(new FileInputStream(localPropertiesFile))
     }
-    def localApiIp = localProperties.getProperty('LOCAL_API_IP', '"192.168.1.137"')
+    def localApiIp = localProperties.getProperty('LOCAL_API_IP', '"10.0.2.2"')
 
     defaultConfig {
         def buildNumber = project.hasProperty('BUILD_NUMBER') ? project.getProperty('BUILD_NUMBER').toInteger() : 1
