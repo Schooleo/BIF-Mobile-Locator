@@ -6,6 +6,7 @@ import androidx.room.Delete;
 import androidx.room.Insert;
 import androidx.room.OnConflictStrategy;
 import androidx.room.Query;
+import androidx.room.Transaction;
 import androidx.room.Update;
 import com.bif.app.data.source.local.entity.FavoriteEntity;
 
@@ -22,6 +23,9 @@ public interface FavoriteDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insert(FavoriteEntity favorite);
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    void insertAll(List<FavoriteEntity> favorites);
+
     @Delete
     void delete(FavoriteEntity favorite);
 
@@ -30,4 +34,15 @@ public interface FavoriteDao {
 
     @Update
     void updateAll(List<FavoriteEntity> favorites);
+
+    @Query("DELETE FROM favorites")
+    void deleteAll();
+
+    @Transaction
+    default void replaceAll(List<FavoriteEntity> favorites) {
+        deleteAll();
+        if (favorites != null && !favorites.isEmpty()) {
+            insertAll(favorites);
+        }
+    }
 }

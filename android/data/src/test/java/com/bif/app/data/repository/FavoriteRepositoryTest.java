@@ -10,6 +10,7 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.MutableLiveData;
 
 import com.bif.app.data.LiveDataTestUtil;
+import com.bif.app.core.network.RestApiService;
 import com.bif.app.data.source.local.FavoriteDao;
 import com.bif.app.data.source.local.entity.FavoriteEntity;
 import com.bif.app.domain.model.Favorite;
@@ -31,12 +32,15 @@ public class FavoriteRepositoryTest {
     @Mock
     private FavoriteDao mockDao;
 
+    @Mock
+    private RestApiService mockRestApiService;
+
     private FavoriteRepository repository;
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        repository = new FavoriteRepository(mockDao);
+        repository = new FavoriteRepository(mockDao, mockRestApiService);
     }
 
     @Test

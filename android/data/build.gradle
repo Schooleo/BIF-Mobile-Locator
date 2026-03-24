@@ -32,9 +32,11 @@ android {
 dependencies {
     // Module
     implementation project(":domain")
+    implementation project(":core")
 
     implementation libs.appcompat
     implementation libs.material
+    implementation libs.retrofit.core
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core

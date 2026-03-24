@@ -80,6 +80,12 @@ public class MapViewModelInstrumentedTest {
         public void updateAllFavorites(List<Favorite> favorites) {}
         @Override
         public void deleteFavorite(Favorite favorite) {}
+        @Override
+        public void refreshFavorites(SyncCallback callback) {
+            if (callback != null) {
+                callback.onSuccess();
+            }
+        }
     }
 
     @Before

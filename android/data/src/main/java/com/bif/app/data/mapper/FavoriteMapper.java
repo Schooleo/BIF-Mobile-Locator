@@ -1,5 +1,8 @@
 package com.bif.app.data.mapper;
 
+import com.bif.app.core.network.dto.favorite.FavoriteLocationDto;
+import com.bif.app.core.network.dto.favorite.FavoriteRequestDto;
+import com.bif.app.core.network.dto.favorite.FavoriteResponseDto;
 import com.bif.app.data.source.local.entity.FavoriteEntity;
 import com.bif.app.domain.model.Favorite;
 
@@ -58,6 +61,45 @@ public class FavoriteMapper {
         if (domains != null) {
             for (Favorite domain : domains) {
                 list.add(toEntity(domain));
+            }
+        }
+        return list;
+    }
+
+    public static FavoriteRequestDto toRequestDto(Favorite domain) {
+        if (domain == null) return null;
+        FavoriteRequestDto dto = new FavoriteRequestDto();
+        dto.id = domain.id;
+        dto.name = domain.name;
+        dto.location = new FavoriteLocationDto(domain.latitude, domain.longitude);
+        dto.address = domain.address;
+        dto.description = domain.description;
+        dto.notes = domain.notes;
+        dto.rating = domain.rating;
+        dto.imagePath = domain.imagePath;
+        return dto;
+    }
+
+    public static Favorite toDomain(FavoriteResponseDto dto) {
+        if (dto == null) return null;
+        Favorite favorite = new Favorite();
+        favorite.id = dto.id;
+        favorite.name = dto.name;
+        favorite.latitude = dto.location != null ? dto.location.latitude : 0;
+        favorite.longitude = dto.location != null ? dto.location.longitude : 0;
+        favorite.address = dto.address;
+        favorite.description = dto.description;
+        favorite.notes = dto.notes;
+        favorite.rating = dto.rating;
+        favorite.imagePath = dto.imagePath;
+        return favorite;
+    }
+
+    public static List<Favorite> toDomainListFromDto(List<FavoriteResponseDto> dtos) {
+        List<Favorite> list = new ArrayList<>();
+        if (dtos != null) {
+            for (FavoriteResponseDto dto : dtos) {
+                list.add(toDomain(dto));
             }
         }
         return list;

@@ -8,6 +8,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -16,6 +17,7 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.bif.app.core.utils.UriUtils;
 import com.bif.app.domain.model.Favorite;
@@ -30,6 +32,7 @@ public class FavoritesFragment extends Fragment
     private FavoriteAdapter adapter;
     private RecyclerView rvFavorites;
     private TextView tvEmpty;
+    private SwipeRefreshLayout swipeRefreshLayout;
 
     @Nullable
     @Override
@@ -46,11 +49,14 @@ public class FavoritesFragment extends Fragment
 
         rvFavorites = view.findViewById(R.id.rv_favorites);
         tvEmpty = view.findViewById(R.id.tv_empty);
+        swipeRefreshLayout = view.findViewById(R.id.swipe_refresh);
         EditText etSearch = view.findViewById(R.id.et_search);
 
         adapter = new FavoriteAdapter(this);
         rvFavorites.setLayoutManager(new LinearLayoutManager(requireContext()));
         rvFavorites.setAdapter(adapter);
+
+        swipeRefreshLayout.setOnRefreshListener(() -> viewModel.refreshFavorites());
 
         etSearch.addTextChangedListener(new TextWatcher() {
             @Override
@@ -77,6 +83,21 @@ public class FavoritesFragment extends Fragment
                 tvEmpty.setVisibility(View.GONE);
             }
         });
+
+        viewModel.syncMessage.observe(getViewLifecycleOwner(), message -> {
+            if (message != null && !message.trim().isEmpty()) {
+                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        viewModel.isSyncing.observe(getViewLifecycleOwner(), isSyncing ->
+                swipeRefreshLayout.setRefreshing(Boolean.TRUE.equals(isSyncing)));
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        viewModel.refreshFavorites();
     }
 
     @Override
