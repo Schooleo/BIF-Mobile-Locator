@@ -49,7 +49,7 @@ public class FavoriteMapperTest {
 
     @Test
     public void toDomain_NullEntity_ReturnsNull() {
-        assertNull(FavoriteMapper.toDomain(null));
+        assertNull(FavoriteMapper.toDomain((FavoriteEntity)null));
     }
 
     @Test

@@ -3,7 +3,6 @@ package com.bif.server.features.user.controllers;
 import com.bif.server.features.user.dto.rest.AuthStateResponse;
 import com.bif.server.features.user.dto.rest.ProfileMetadataResponse;
 import com.bif.server.features.user.dto.rest.UpdateMyProfileRequest;
-import java.time.Instant;
 import com.bif.server.features.user.models.User;
 import com.bif.server.features.user.services.UserService;
 import org.springframework.security.core.Authentication;
