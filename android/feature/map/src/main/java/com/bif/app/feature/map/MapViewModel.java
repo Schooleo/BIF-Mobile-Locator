@@ -6,10 +6,12 @@ import androidx.lifecycle.Transformations;
 import androidx.lifecycle.ViewModel;
 
 import com.bif.app.domain.model.Favorite;
+import com.bif.app.domain.model.Group;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.MapState;
 import com.bif.app.domain.repository.IFavoriteRepository;
+import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
 
@@ -24,9 +26,10 @@ public class MapViewModel extends ViewModel {
     private final IMapRepository mapRepository;
     private final IPlaceRepository placeRepository;
     private final IFavoriteRepository favoriteRepository;
+    private final IGroupRepository groupRepository;
 
-    private final MutableLiveData<String> _statusText = new MutableLiveData<>();
-    public final LiveData<String> statusText = _statusText;
+    private final MutableLiveData<Event<String>> _statusText = new MutableLiveData<>();
+    public final LiveData<Event<String>> statusText = _statusText;
 
     private final MutableLiveData<String> locationSearchQuery = new MutableLiveData<>();
     public final LiveData<Location> searchResult;
@@ -34,27 +37,43 @@ public class MapViewModel extends ViewModel {
     private final MutableLiveData<String> placesSearchQuery = new MutableLiveData<>();
     public final LiveData<List<Place>> searchResults;
 
+    private final MutableLiveData<String> placesHistoryQuery = new MutableLiveData<>();
+    public final LiveData<List<Place>> historySearchResults;
+
     public final LiveData<List<Favorite>> allFavorites;
+    public final LiveData<List<Group>> allGroups;
+    public final LiveData<List<String>> searchHistory;
+
+    private final java.util.concurrent.atomic.AtomicBoolean activeSearchPending =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
 
     @Inject
     public MapViewModel(
             IMapRepository mapRepository,
             IPlaceRepository placeRepository,
-            IFavoriteRepository favoriteRepository
+            IFavoriteRepository favoriteRepository,
+            IGroupRepository groupRepository
     ) {
         this.mapRepository = mapRepository;
         this.placeRepository = placeRepository;
         this.favoriteRepository = favoriteRepository;
+        this.groupRepository = groupRepository;
 
         this.searchResult = Transformations.switchMap(locationSearchQuery, placeRepository::searchLocation);
 
-        this.searchResults = Transformations.switchMap(placesSearchQuery, placeRepository::searchPlaces);
+        this.searchResults = Transformations.switchMap(
+                placesSearchQuery, placeRepository::searchPlaces);
+
+        this.historySearchResults = Transformations.switchMap(
+                placesHistoryQuery, placeRepository::searchPlacesFromHistory);
 
         this.allFavorites = favoriteRepository.getAllFavorites();
+        this.allGroups = groupRepository.getGroups();
+        this.searchHistory = placeRepository.getSearchHistory();
     }
 
     public void setStatusText(String text) {
-        _statusText.setValue(text);
+        _statusText.setValue(new Event<>(text));
     }
 
     public void searchLocation(String query) {
@@ -62,7 +81,23 @@ public class MapViewModel extends ViewModel {
     }
 
     public void searchForPlaces(String query) {
+        activeSearchPending.set(true);
         placesSearchQuery.setValue(query);
+    }
+
+    public void searchForPlacesFromHistory(String query) {
+        activeSearchPending.set(true);
+        placesHistoryQuery.setValue(query);
+    }
+
+    public void notifySearchDone(int resultCount) {
+        if (activeSearchPending.compareAndSet(true, false)) {
+            if (resultCount > 0) {
+                setStatusText("Found " + resultCount + " places.");
+            } else {
+                setStatusText("No places found.");
+            }
+        }
     }
 
     public void saveMapState(double lat, double lng, float zoom) {
@@ -89,6 +124,7 @@ public class MapViewModel extends ViewModel {
         }
 
         favoriteRepository.addFavorite(favorite);
+        placeRepository.persistPlace(place, "favorite");
     }
 
     public void removeFromFavorites(Favorite favorite) {

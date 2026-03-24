@@ -1,14 +1,18 @@
 package com.bif.server.features.place.services;
 
 import com.bif.server.features.place.models.Place;
+import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.repositories.PlaceRepository;
+import com.bif.server.features.sync.services.SyncVersionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -20,11 +24,14 @@ class PlaceServiceTest {
     @Mock
     private PlaceRepository placeRepository;
 
+    @Mock
+    private SyncVersionService syncVersionService;
+
     private PlaceService placeService;
 
     @BeforeEach
     void setUp() {
-        placeService = new PlaceService(placeRepository);
+        placeService = new PlaceService(placeRepository, syncVersionService);
     }
 
     @Test
@@ -50,33 +57,161 @@ class PlaceServiceTest {
     }
 
     @Test
-    void save_ReturnsSavedEntity() {
+    void save_StampsVersionAndPersists() {
         Place place = new Place();
+        place.setPersistedByUserId("user1");
+        when(syncVersionService.nextVersion()).thenReturn(10L);
         when(placeRepository.save(place)).thenReturn(place);
 
         Place result = placeService.save(place);
 
-        assertSame(place, result);
+        assertEquals(10L, result.getServerVersion());
+        assertEquals("user1", result.getLastModifiedBy());
         verify(placeRepository).save(place);
     }
 
     @Test
-    void deleteById_WhenExists_DeletesAndReturnsTrue() {
-        when(placeRepository.existsById("p1")).thenReturn(true);
+    void saveFromSearch_WhenPlaceDoesNotExist_Persists() {
+        Place place = new Place();
+        place.setId("new1");
+        when(placeRepository.findById("new1")).thenReturn(Optional.empty());
+        when(syncVersionService.nextVersion()).thenReturn(5L);
+        when(placeRepository.save(place)).thenReturn(place);
+
+        Place result = placeService.saveFromSearch(place);
+
+        assertEquals("google_maps", result.getPlaceSource());
+        assertEquals("search_discovered", result.getPersistedByAction());
+        assertEquals(5L, result.getServerVersion());
+        verify(placeRepository).save(place);
+    }
+
+    @Test
+    void saveFromSearch_WhenPlaceExists_ReturnsExisting() {
+        Place existing = new Place();
+        existing.setId("existing1");
+        existing.setName("Already saved");
+        Place input = new Place();
+        input.setId("existing1");
+        when(placeRepository.findById("existing1")).thenReturn(Optional.of(existing));
+
+        Place result = placeService.saveFromSearch(input);
+
+        assertSame(existing, result);
+        verify(placeRepository, never()).save(any());
+    }
+
+    @Test
+    void deleteById_WhenExists_SoftDeletesAndReturnsTrue() {
+        Place place = new Place();
+        place.setId("p1");
+        when(placeRepository.findById("p1")).thenReturn(Optional.of(place));
+        when(syncVersionService.nextVersion()).thenReturn(11L);
+        when(placeRepository.save(place)).thenReturn(place);
 
         boolean result = placeService.deleteById("p1");
 
         assertTrue(result);
-        verify(placeRepository).deleteById("p1");
+        assertTrue(place.isDeleted());
+        assertEquals(11L, place.getServerVersion());
+        verify(placeRepository).save(place);
     }
 
     @Test
     void deleteById_WhenMissing_ReturnsFalse() {
-        when(placeRepository.existsById("p1")).thenReturn(false);
+        when(placeRepository.findById("p1")).thenReturn(Optional.empty());
 
         boolean result = placeService.deleteById("p1");
 
         assertFalse(result);
-        verify(placeRepository, never()).deleteById(anyString());
+        verify(placeRepository, never()).save(any());
+    }
+
+    @Test
+    void search_DelegatesToRepository() {
+        Place place = new Place();
+        when(placeRepository
+                .findByNameContainingIgnoreCaseOrAddressContainingIgnoreCase(
+                        "test", "test"))
+                .thenReturn(List.of(place));
+
+        List<Place> result = placeService.search("test");
+
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void getByTag_DelegatesToRepository() {
+        Place place = new Place();
+        when(placeRepository.findByTagsContaining("church"))
+                .thenReturn(List.of(place));
+
+        List<Place> result = placeService.getByTag("church");
+
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void getByUserId_DelegatesToRepository() {
+        Place place = new Place();
+        when(placeRepository.findByPersistedByUserId("u1"))
+                .thenReturn(List.of(place));
+
+        List<Place> result = placeService.getByUserId("u1");
+
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void addReview_AppendsReviewAndRecalculatesRating() {
+        Place place = new Place();
+        place.setId("p1");
+        place.setReviews(new ArrayList<>());
+        PlaceReview existingReview = new PlaceReview();
+        existingReview.setRating(4);
+        place.getReviews().add(existingReview);
+
+        PlaceReview newReview = new PlaceReview();
+        newReview.setRating(2);
+        newReview.setUserId("u2");
+
+        when(placeRepository.findById("p1")).thenReturn(Optional.of(place));
+        when(syncVersionService.nextVersion()).thenReturn(12L);
+        when(placeRepository.save(place)).thenReturn(place);
+
+        Place result = placeService.addReview("p1", newReview);
+
+        assertEquals(2, result.getReviewCount());
+        assertEquals(3.0, result.getRating(), 0.01);
+        assertNotNull(newReview.getCreatedAt());
+        verify(placeRepository).save(place);
+    }
+
+    @Test
+    void addReview_WhenPlaceNotFound_ThrowsException() {
+        when(placeRepository.findById("missing")).thenReturn(Optional.empty());
+        PlaceReview review = new PlaceReview();
+
+        assertThrows(NoSuchElementException.class,
+                () -> placeService.addReview("missing", review));
+    }
+
+    @Test
+    void addReview_WhenReviewsNull_InitializesListAndAdds() {
+        Place place = new Place();
+        place.setId("p1");
+        place.setReviews(null);
+
+        PlaceReview review = new PlaceReview();
+        review.setRating(5);
+
+        when(placeRepository.findById("p1")).thenReturn(Optional.of(place));
+        when(syncVersionService.nextVersion()).thenReturn(1L);
+        when(placeRepository.save(place)).thenReturn(place);
+
+        Place result = placeService.addReview("p1", review);
+
+        assertEquals(1, result.getReviewCount());
+        assertEquals(5.0, result.getRating(), 0.01);
     }
 }

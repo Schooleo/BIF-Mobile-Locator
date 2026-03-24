@@ -39,9 +39,11 @@
         <argument android:name="favDescription" app:argType="string" android:defaultValue="" />
         <argument android:name="favNotes" app:argType="string" android:defaultValue="" />
         <argument android:name="favRating" app:argType="integer" android:defaultValue="0" />
+        <argument android:name="favLatitude" app:argType="string" android:defaultValue="" />
+        <argument android:name="favLongitude" app:argType="string" android:defaultValue="" />
 
         <deepLink
-            app:uri="app://bif.app/favorites/detail?favId={favId}&amp;favName={favName}&amp;favAddress={favAddress}&amp;favDescription={favDescription}&amp;favNotes={favNotes}&amp;favRating={favRating}" />
+            app:uri="app://bif.app/favorites/detail?favId={favId}&amp;favName={favName}&amp;favAddress={favAddress}&amp;favDescription={favDescription}&amp;favNotes={favNotes}&amp;favRating={favRating}&amp;favLatitude={favLatitude}&amp;favLongitude={favLongitude}" />
     </fragment>
 
     <fragment
@@ -100,9 +102,90 @@
         app:route="/social/group-detail"
         tools:layout="@layout/fragment_group_detail">
 
-        <argument android:name="groupId" app:argType="integer" android:defaultValue="0" />
+        <argument android:name="groupId" app:argType="string" android:defaultValue="" />
 
         <deepLink app:uri="app://bif.app/social/group-detail?groupId={groupId}" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_social_chat"
+        android:name="com.bif.app.feature.social.CommonChatFragment"
+        android:label="Chat"
+        app:route="/social/chat"
+        tools:layout="@layout/fragment_common_chat">
+
+        <argument android:name="chatType" app:argType="string" android:defaultValue="friend" />
+        <argument android:name="chatId" app:argType="string" android:defaultValue="" />
+        <argument android:name="chatName" app:argType="string" android:defaultValue="" />
+        <argument android:name="avatarLetter" app:argType="string" android:defaultValue="?" />
+        <argument android:name="avatarColor" app:argType="integer" android:defaultValue="0" />
+        <argument android:name="memberCount" app:argType="integer" android:defaultValue="0" />
+        <argument android:name="sharedPlaceName" app:argType="string" android:defaultValue="" />
+        <argument android:name="sharedPlaceAddress" app:argType="string" android:defaultValue="" />
+        <argument android:name="sharedPlaceLink" app:argType="string" android:defaultValue="" />
+
+        <deepLink app:uri="app://bif.app/social/chat?chatType={chatType}&amp;chatId={chatId}&amp;chatName={chatName}&amp;avatarLetter={avatarLetter}&amp;avatarColor={avatarColor}&amp;memberCount={memberCount}&amp;sharedPlaceName={sharedPlaceName}&amp;sharedPlaceAddress={sharedPlaceAddress}&amp;sharedPlaceLink={sharedPlaceLink}" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_friend_settings_locations"
+        android:name="com.bif.app.feature.social.FriendSettingsLocationsFragment"
+        android:label="Friend Shared Locations"
+        app:route="/social/friend-settings/locations"
+        tools:layout="@layout/fragment_friend_settings_locations">
+
+        <argument android:name="friendId" app:argType="string" android:defaultValue="" />
+        <argument android:name="friendName" app:argType="string" android:defaultValue="" />
+        <argument android:name="avatarLetter" app:argType="string" android:defaultValue="?" />
+        <argument android:name="avatarColor" app:argType="integer" android:defaultValue="0" />
+        <deepLink app:uri="app://bif.app/social/friend-settings/locations?friendId={friendId}&amp;friendName={friendName}&amp;avatarLetter={avatarLetter}&amp;avatarColor={avatarColor}" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_friend_settings_trips"
+        android:name="com.bif.app.feature.social.FriendSettingsTripsFragment"
+        android:label="Friend Trip Plans"
+        app:route="/social/friend-settings/trips"
+        tools:layout="@layout/fragment_friend_settings_trips">
+
+        <argument android:name="friendId" app:argType="string" android:defaultValue="" />
+        <argument android:name="friendName" app:argType="string" android:defaultValue="" />
+        <argument android:name="avatarLetter" app:argType="string" android:defaultValue="?" />
+        <argument android:name="avatarColor" app:argType="integer" android:defaultValue="0" />
+        <deepLink app:uri="app://bif.app/social/friend-settings/trips?friendId={friendId}&amp;friendName={friendName}&amp;avatarLetter={avatarLetter}&amp;avatarColor={avatarColor}" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_group_settings_plans"
+        android:name="com.bif.app.feature.social.GroupSettingsPlansFragment"
+        android:label="Group Plans"
+        app:route="/social/group-settings/plans"
+        tools:layout="@layout/fragment_group_settings_plans">
+
+        <argument android:name="groupId" app:argType="string" android:defaultValue="" />
+        <deepLink app:uri="app://bif.app/social/group-settings/plans?groupId={groupId}" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_group_settings_locations"
+        android:name="com.bif.app.feature.social.GroupSettingsLocationsFragment"
+        android:label="Group Locations"
+        app:route="/social/group-settings/locations"
+        tools:layout="@layout/fragment_group_settings_locations">
+
+        <argument android:name="groupId" app:argType="string" android:defaultValue="" />
+        <deepLink app:uri="app://bif.app/social/group-settings/locations?groupId={groupId}" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_group_settings_members"
+        android:name="com.bif.app.feature.social.GroupSettingsMembersFragment"
+        android:label="Group Members"
+        app:route="/social/group-settings/members"
+        tools:layout="@layout/fragment_group_settings_members">
+
+        <argument android:name="groupId" app:argType="string" android:defaultValue="" />
+        <deepLink app:uri="app://bif.app/social/group-settings/members?groupId={groupId}" />
     </fragment>
 
 </navigation>

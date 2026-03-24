@@ -4,13 +4,14 @@ import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Bundle;
-import android.text.InputType;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -216,9 +217,9 @@ public class ProfileFragment extends Fragment {
         titleDarkMode.setText(R.string.dark_mode);
         switchDarkMode.setVisibility(View.VISIBLE);
 
-        // Get current theme mode
-        int currentNightMode = AppCompatDelegate.getDefaultNightMode();
-        boolean isDarkMode = currentNightMode == AppCompatDelegate.MODE_NIGHT_YES;
+        // Get current theme mode from actual configuration
+        boolean isDarkMode = (getResources().getConfiguration().uiMode
+                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
         switchDarkMode.setChecked(isDarkMode);
         iconDarkMode.setImageResource(isDarkMode
                 ? com.bif.app.core.R.drawable.ic_moon
@@ -282,30 +283,43 @@ public class ProfileFragment extends Fragment {
     }
 
     private void showEditProfileDialog(String currentUsername) {
-        EditText input = new EditText(requireContext());
-        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
-        input.setHint(R.string.edit_profile_hint);
+        LayoutInflater inflater = LayoutInflater.from(requireContext());
+        View dialogView = inflater.inflate(R.layout.dialog_edit_profile, null);
+
+        EditText etUsername = dialogView.findViewById(R.id.et_username);
+        Button btnSave = dialogView.findViewById(R.id.btn_save);
+        Button btnCancel = dialogView.findViewById(R.id.btn_cancel);
+        ImageButton btnClose = dialogView.findViewById(R.id.btn_close);
+
         if (!currentUsername.equals(getString(R.string.not_available))) {
-            input.setText(currentUsername);
-            input.setSelection(currentUsername.length());
+            etUsername.setText(currentUsername);
+            etUsername.setSelection(currentUsername.length());
         }
 
-        int horizontalPadding = (int) (16 * requireContext().getResources().getDisplayMetrics().density);
-        input.setPadding(horizontalPadding, input.getPaddingTop(), horizontalPadding, input.getPaddingBottom());
+        // Khởi tạo Dialog với giao diện xịn từ nhánh dev
+        AlertDialog dialog = new AlertDialog.Builder(requireContext())
+                .setView(dialogView)
+                .create();
 
-        new AlertDialog.Builder(requireContext())
-                .setTitle(R.string.edit_profile_dialog_title)
-                .setView(input)
-                .setPositiveButton(R.string.save, (dialog, which) -> {
-                    String updatedUsername = input.getText().toString().trim();
-                    if (updatedUsername.isEmpty()) {
-                        Toast.makeText(requireContext(), R.string.username_required, Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    viewModel.updateProfile(updatedUsername);
-                })
-                .setNegativeButton(R.string.cancel, null)
-                .show();
+        dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+
+        // Nút Save với logic gọi Backend API từ nhánh của bạn
+        btnSave.setOnClickListener(v -> {
+            String updatedUsername = etUsername.getText().toString().trim();
+            if (updatedUsername.isEmpty()) {
+                Toast.makeText(requireContext(), R.string.username_required, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            // Logic quan trọng của bạn: Đẩy lên Backend thông qua ViewModel
+            viewModel.updateProfile(updatedUsername);
+            dialog.dismiss();
+        });
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+
+        dialog.show();
     }
 
     private void applyEditProfileButtonTint(MaterialButton button) {

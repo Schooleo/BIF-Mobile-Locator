@@ -8,4 +8,5 @@ import java.util.List;
 public class SyncResponse {
     private long currentServerVersion;
     private List<SyncChange> pulledChanges;
+    private List<SyncConflict> conflicts;
 }

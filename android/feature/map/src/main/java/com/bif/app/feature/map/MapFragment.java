@@ -23,8 +23,11 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.bif.app.domain.model.Favorite;
+import com.bif.app.domain.model.Group;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -57,6 +60,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     private GoogleMap googleMap;
     private MapViewModel viewModel;
     private BottomSheetBehavior<View> bottomSheetBehavior;
+    private Runnable hideHistory;
 
     private List<Favorite> currentFavorites = new ArrayList<>();
     private List<Marker> favoriteMarkers = new ArrayList<>();
@@ -104,14 +108,60 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         }
 
         // Set up the Search Bar
+        View mapRoot = view.findViewById(R.id.map_root);
         SearchView searchView = view.findViewById(R.id.map_search);
+        RecyclerView rvHistory = view.findViewById(R.id.rv_search_history);
+
+        // Helper: hide dropdown and restore full pill
+        hideHistory = () -> {
+            rvHistory.setVisibility(View.GONE);
+            searchView.setBackgroundResource(R.drawable.bg_searchbar);
+            // Dismiss keyboard and clear focus
+            android.view.inputmethod.InputMethodManager imm =
+                    (android.view.inputmethod.InputMethodManager)
+                            requireContext().getSystemService(
+                                    android.content.Context.INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.hideSoftInputFromWindow(
+                        searchView.getWindowToken(), 0);
+            }
+            if (mapRoot != null) {
+                mapRoot.requestFocus();
+            }
+        };
+
+        // Helper: show dropdown and morph search bar bottom corners to match
+        Runnable showHistory = () -> {
+            java.util.List<String> current = viewModel.searchHistory.getValue();
+            if (current != null && !current.isEmpty()) {
+                searchView.setBackgroundResource(R.drawable.bg_searchbar_open);
+                rvHistory.setVisibility(View.VISIBLE);
+            }
+        };
+
+        SearchHistoryAdapter historyAdapter = new SearchHistoryAdapter(query -> {
+            searchView.setQuery(query, false);
+            viewModel.searchForPlacesFromHistory(query);
+            hideHistory.run();
+        });
+        rvHistory.setLayoutManager(new LinearLayoutManager(requireContext()));
+        rvHistory.setAdapter(historyAdapter);
+
         if (searchView != null) {
+            searchView.setOnQueryTextFocusChangeListener((v, hasFocus) -> {
+                if (hasFocus) {
+                    showHistory.run();
+                } else {
+                    hideHistory.run();
+                }
+            });
+
             searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
                 @Override
                 public boolean onQueryTextSubmit(String query) {
                     viewModel.searchForPlaces(query);
                     viewModel.setStatusText("Searching for " + query);
-                    searchView.clearFocus();
+                    hideHistory.run();
                     return true;
                 }
 
@@ -125,7 +175,13 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         // Set up the My Location Button
         ImageButton btnMyLocation = view.findViewById(R.id.btn_my_location);
         if (btnMyLocation != null) {
-            btnMyLocation.setOnClickListener(v -> goToMyLocation());
+            btnMyLocation.setOnClickListener(v -> {
+                // Hide the bottom sheet if it's visible
+                if (bottomSheetBehavior.getState() != BottomSheetBehavior.STATE_HIDDEN) {
+                    bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+                }
+                goToMyLocation();
+            });
         }
 
         // Set up the Hidden Bottom Sheet (Place details)
@@ -133,11 +189,35 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         bottomSheetBehavior = BottomSheetBehavior.from(bottomSheet);
         bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
 
-        // Show Toast for search statuses
-        viewModel.statusText.observe(getViewLifecycleOwner(), text -> {
+        // Float the My Location button above the bottom sheet as it slides up.
+        // Cap the translation at peek height
+        // Hide the button entirely when the sheet is fully expanded.
+        bottomSheetBehavior.addBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
+            @Override
+            public void onSlide(@NonNull View sheet, float slideOffset) {
+                if (btnMyLocation == null) return;
+                float btnNaturalBottom = btnMyLocation.getTop() + btnMyLocation.getHeight();
+                float sheetTop = sheet.getY();
+                float gap = 30f; // in px
+                float neededLift = btnNaturalBottom - sheetTop + gap;
+                // Cap at peekHeight + gap so the button stops rising when the sheet expands
+                float maxLift = bottomSheetBehavior.getPeekHeight();
+                float clampedLift = Math.min(neededLift, maxLift);
+                btnMyLocation.setTranslationY(clampedLift > 0 ? -clampedLift : 0f);
+            }
+
+            @Override
+            public void onStateChanged(@NonNull View sheet, int newState) { }
+        });
+
+
+        // Show Toast for search statuses (Event wrapper prevents re-showing on navigation back)
+        viewModel.statusText.observe(getViewLifecycleOwner(), event -> {
+            if (event == null) return;
+            String text = event.getContentIfNotHandled();
             if (text != null && !text.isEmpty()) {
-                android.widget.Toast.makeText(requireContext(), text, android.widget.Toast.LENGTH_SHORT).show();
-                viewModel.setStatusText(""); // Consume the event so it is not re-shown on navigation
+                android.widget.Toast.makeText(
+                        requireContext(), text, android.widget.Toast.LENGTH_SHORT).show();
             }
         });
 
@@ -147,42 +227,32 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
             updateFavoriteMarkers();
         });
 
-        // Observe the Multiple Places Search Results
+        // Observe search history and refresh the adapter
+        viewModel.searchHistory.observe(getViewLifecycleOwner(), history -> {
+            historyAdapter.submitList(history);
+            if (searchView != null && searchView.hasFocus()
+                    && history != null && !history.isEmpty()) {
+                showHistory.run();
+            } else if (history == null || history.isEmpty()) {
+                // No history — make sure dropdown is hidden and pill is full
+                rvHistory.setVisibility(View.GONE);
+                if (searchView != null) {
+                    searchView.setBackgroundResource(R.drawable.bg_searchbar);
+                }
+            }
+        });
+
+
+        // Observe the Multiple Places Search Results (new searches)
         viewModel.searchResults.observe(getViewLifecycleOwner(), places -> {
             if (googleMap == null) return;
+            renderPlaceResults(places, false);
+        });
 
-            clearTemporaryMarkers();
-
-            if (places != null && !places.isEmpty()) {
-                com.google.android.gms.maps.model.LatLngBounds.Builder boundsBuilder =
-                        new com.google.android.gms.maps.model.LatLngBounds.Builder();
-
-                for (com.bif.app.domain.model.Place place : places) {
-                    if (place.location != null) {
-                        LatLng latLng = new LatLng(place.location.latitude, place.location.longitude);
-
-                        MarkerOptions markerOptions = new MarkerOptions()
-                                .position(latLng)
-                                .title(place.name)
-                                .snippet(place.address); // Shows address under the name
-
-                        Marker marker = googleMap.addMarker(markerOptions);
-                        if (marker != null) {
-                            marker.setTag(place);
-                            temporaryMarkers.add(marker);
-                        }
-                        boundsBuilder.include(latLng);
-                    }
-                }
-
-                // Animate camera to fit all the new markers
-                int padding = 150; // offset from edges of the map in pixels
-                googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), padding));
-                viewModel.setStatusText("Found " + places.size() + " places.");
-
-            } else {
-                viewModel.setStatusText("No places found.");
-            }
+        // Observe History-replayed Search Results
+        viewModel.historySearchResults.observe(getViewLifecycleOwner(), places -> {
+            if (googleMap == null) return;
+            renderPlaceResults(places, true);
         });
 
         // Observe Single Location Search Result
@@ -195,8 +265,8 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
                 MarkerOptions markerOpt = MarkerFactory.createMarker(target);
                 Marker marker = googleMap.addMarker(markerOpt);
 
-                if(marker != null) {
-                    temporaryMarkers.add(marker); // [MỚI] Thêm vào list quản lý
+                if (marker != null) {
+                    temporaryMarkers.add(marker); // Add to managed list
                 }
 
                 googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(target, 15f));
@@ -245,13 +315,20 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         }
 
         // Set up POI Clicks
-        googleMap.setOnPoiClickListener(poi -> fetchAddressAndShowDetails(poi.latLng, poi.name));
+        googleMap.setOnPoiClickListener(poi -> {
+            hideHistory.run();
+            fetchAddressAndShowDetails(poi.latLng, poi.name);
+        });
 
-        // Set up General Map Clicks
-        googleMap.setOnMapClickListener(latLng -> fetchAddressAndShowDetails(latLng, null));
+        // Set up General Map Clicks — also dismisses search bar
+        googleMap.setOnMapClickListener(latLng -> {
+            hideHistory.run();
+            fetchAddressAndShowDetails(latLng, null);
+        });
 
         // Set up Marker Clicks
         googleMap.setOnMarkerClickListener(marker -> {
+            hideHistory.run();
             Object tag = marker.getTag();
             if (tag instanceof com.bif.app.domain.model.Place) {
                 com.bif.app.domain.model.Place clickedPlace = (com.bif.app.domain.model.Place) tag;
@@ -324,11 +401,62 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         });
     }
 
+    /**
+     * Renders place search results onto the map.
+     *
+     * @param places      the result list (null = no emission yet; empty = search returned nothing)
+     * @param fromHistory true when replaying a history query
+     */
+    private void renderPlaceResults(
+            java.util.List<com.bif.app.domain.model.Place> places,
+            boolean fromHistory) {
+
+        if (places == null) return; // Not yet emitted — skip entirely
+
+        clearTemporaryMarkers();
+
+        if (!places.isEmpty()) {
+            com.google.android.gms.maps.model.LatLngBounds.Builder boundsBuilder =
+                    new com.google.android.gms.maps.model.LatLngBounds.Builder();
+
+            for (com.bif.app.domain.model.Place place : places) {
+                if (place.location != null) {
+                    LatLng latLng = new LatLng(
+                            place.location.latitude, place.location.longitude);
+
+                    // Skip adding marker if it is already a favorite
+                    if (findFavoriteForPlace(place) == null) {
+                        MarkerOptions markerOptions = new MarkerOptions()
+                                .position(latLng)
+                                .title(place.name)
+                                .snippet(place.address);
+
+                        Marker marker = googleMap.addMarker(markerOptions);
+                        if (marker != null) {
+                            marker.setTag(place);
+                            temporaryMarkers.add(marker);
+                        }
+                    }
+                    boundsBuilder.include(latLng);
+                }
+            }
+
+            int padding = 150;
+            googleMap.animateCamera(
+                    CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), padding));
+        }
+
+        // Notify ViewModel — only fires a toast if a search was actively submitted
+        viewModel.notifySearchDone(places.size());
+    }
+
     private void showPlaceBottomSheet(com.bif.app.domain.model.Place place, View root) {
         TextView tvName = root.findViewById(R.id.tv_place_name);
         TextView tvAddress = root.findViewById(R.id.tv_place_address);
         TextView tvRating = root.findViewById(R.id.tv_place_rating);
         ImageButton btnAddFavorite = root.findViewById(R.id.btn_add_favorite);
+        com.google.android.material.button.MaterialButton btnSharePlace = root.findViewById(R.id.btn_share_place);
+        com.google.android.material.button.MaterialButton btnNavigatePlace = root.findViewById(R.id.btn_navigate_place);
 
         tvName.setText(place.name);
         tvAddress.setText(place.address);
@@ -370,6 +498,71 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
                 updateFavoriteButtonState(btnAddFavorite, true);
             }
         });
+        
+        btnSharePlace.setOnClickListener(v -> showShareToGroupDialog(place));
+        btnNavigatePlace.setOnClickListener(v -> navigateToPlace(place));
+    }
+
+    private void showShareToGroupDialog(com.bif.app.domain.model.Place place) {
+        List<Group> groups = viewModel.allGroups.getValue();
+        if (groups == null || groups.isEmpty()) {
+            viewModel.setStatusText(getString(R.string.no_group_available));
+            return;
+        }
+
+        String[] groupNames = new String[groups.size()];
+        for (int i = 0; i < groups.size(); i++) {
+            groupNames[i] = groups.get(i).getName();
+        }
+
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle(R.string.select_group_to_share)
+                .setItems(groupNames, (dialog, which) -> navigateToGroupChatWithPlace(groups.get(which), place))
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void navigateToGroupChatWithPlace(Group group, com.bif.app.domain.model.Place place) {
+        String mapLink = buildPlaceMapLink(place);
+
+        android.net.Uri destUri = com.bif.app.core.utils.UriUtils.buildUri(com.bif.app.core.utils.UriUtils.PathTo.SOCIAL_CHAT)
+                .buildUpon()
+                .appendQueryParameter("chatType", "group")
+                .appendQueryParameter("chatId", group.getServerId())
+                .appendQueryParameter("chatName", group.getName())
+                .appendQueryParameter("avatarLetter", group.getAvatarLetter())
+                .appendQueryParameter("avatarColor", String.valueOf(group.getAvatarColor()))
+                .appendQueryParameter("memberCount", String.valueOf(group.getMemberCount()))
+                .appendQueryParameter("sharedPlaceName", place.name != null ? place.name : "")
+                .appendQueryParameter("sharedPlaceAddress", place.address != null ? place.address : "")
+                .appendQueryParameter("sharedPlaceLink", mapLink)
+                .build();
+
+        androidx.navigation.Navigation.findNavController(requireView()).navigate(destUri);
+    }
+  
+    private String buildPlaceMapLink(com.bif.app.domain.model.Place place) {
+        if (place.location != null) {
+            return place.location.latitude + "," + place.location.longitude;
+        }
+        return place.address != null ? place.address : "";
+    }
+
+    private void navigateToPlace(com.bif.app.domain.model.Place place) {
+        String query;
+        if (place.location != null) {
+            query = place.location.latitude + "," + place.location.longitude;
+        } else if (place.address != null && !place.address.isEmpty()) {
+            query = place.address;
+        } else {
+            query = place.name;
+        }
+
+        android.net.Uri mapUri = com.bif.app.core.utils.UriUtils.buildUri(com.bif.app.core.utils.UriUtils.PathTo.MAP)
+                .buildUpon()
+                .appendQueryParameter("location", query)
+                .build();
+        androidx.navigation.Navigation.findNavController(requireView()).navigate(mapUri);
     }
 
     /* Returns the Favorite matching the given place (by address or proximity), or null. */

@@ -110,6 +110,8 @@ public class FavoritesFragment extends Fragment
                 .appendQueryParameter("favDescription", favorite.description != null ? favorite.description : "")
                 .appendQueryParameter("favNotes", favorite.notes != null ? favorite.notes : "")
                 .appendQueryParameter("favRating", String.valueOf(favorite.rating))
+            .appendQueryParameter("favLatitude", String.valueOf(favorite.latitude))
+            .appendQueryParameter("favLongitude", String.valueOf(favorite.longitude))
                 .build();
 
         Navigation.findNavController(requireView()).navigate(destUri);

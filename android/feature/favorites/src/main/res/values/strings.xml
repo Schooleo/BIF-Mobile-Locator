@@ -13,4 +13,9 @@
     <string name="search">Search</string>
     <string name="no_favorite_places">No favorite places found</string>
     <string name="favorite_places">Favorite places</string>
+    <string name="share_place">Share Place</string>
+    <string name="navigate_to_place">Go to Place</string>
+    <string name="no_group_available">No group available to share.</string>
+    <string name="select_group_to_share">Share to group</string>
+    <string name="maps_app_not_found">No map application found.</string>
 </resources>

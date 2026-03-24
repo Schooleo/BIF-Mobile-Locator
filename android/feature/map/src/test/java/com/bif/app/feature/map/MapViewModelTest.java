@@ -12,6 +12,7 @@ import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.repository.IFavoriteRepository;
+import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
 
@@ -44,19 +45,27 @@ public class MapViewModelTest {
     private IFavoriteRepository favoriteRepository;
 
     @Mock
+    private IGroupRepository groupRepository;
+
+    @Mock
     private Observer<Location> searchResultObserver;
 
     @Mock
-    private Observer<String> statusTextObserver;
+    private Observer<Event<String>> statusTextObserver;
 
     private MapViewModel viewModel;
 
     @Before
     public void setUp() {
-        // Stub searchLocation to return a valid LiveData to prevent NullPointerException during switchMap
-        Mockito.when(placeRepository.searchLocation(ArgumentMatchers.anyString())).thenReturn(new MutableLiveData<>());
+        // Lenient: these guard switchMap setup paths but not every test exercises them.
+        Mockito.lenient().when(placeRepository.searchLocation(ArgumentMatchers.anyString()))
+            .thenReturn(new MutableLiveData<>());
+        Mockito.lenient().when(placeRepository.searchPlacesFromHistory(ArgumentMatchers.anyString()))
+            .thenReturn(new MutableLiveData<>());
+        Mockito.lenient().when(groupRepository.getGroups())
+            .thenReturn(new MutableLiveData<>(Collections.emptyList()));
 
-        viewModel = new MapViewModel(mapRepository, placeRepository, favoriteRepository);
+        viewModel = new MapViewModel(mapRepository, placeRepository, favoriteRepository, groupRepository);
         viewModel.searchResult.observeForever(searchResultObserver);
         viewModel.statusText.observeForever(statusTextObserver);
     }
@@ -81,9 +90,10 @@ public class MapViewModelTest {
         // Act
         viewModel.setStatusText(status);
 
-        // Assert
-        Mockito.verify(statusTextObserver).onChanged(status);
-        assertEquals(status, viewModel.statusText.getValue());
+        // Assert — statusText is now LiveData<Event<String>>
+        Event<String> event = viewModel.statusText.getValue();
+        assertNotNull(event);
+        assertEquals(status, event.peekContent());
     }
 
     @Test
@@ -160,6 +170,9 @@ public class MapViewModelTest {
         assertEquals(10.762, saved.latitude, 0.001);
         assertEquals(106.682, saved.longitude, 0.001);
         assertEquals(4, saved.rating); // (int) 4.5 → 4
+
+        // Also verifies the place is persisted locally (new behavior)
+        Mockito.verify(placeRepository).persistPlace(place, "favorite");
     }
 
     @Test
@@ -175,6 +188,9 @@ public class MapViewModelTest {
         Mockito.verify(favoriteRepository).addFavorite(captor.capture());
         assertEquals(0.0, captor.getValue().latitude, 0.0001);
         assertEquals(0.0, captor.getValue().longitude, 0.0001);
+
+        // Also verifies the place is persisted locally even with null location
+        Mockito.verify(placeRepository).persistPlace(place, "favorite");
     }
 
     // ─── removeFromFavorites ─────────────────────────────────────────────────
@@ -183,7 +199,7 @@ public class MapViewModelTest {
     public void removeFromFavorites_validFavorite_callsRepositoryDeleteFavorite() {
         // Arrange
         Favorite fav = new Favorite();
-        fav.id = "fav-10";
+        fav.id = "fav-10"; // Giữ String từ nhánh của bạn để khớp với Backend
         fav.name = "BookCafe";
         fav.address = "District 3";
 
@@ -218,7 +234,8 @@ public class MapViewModelTest {
         // Arrange: create a ViewModel with a properly stubbed favorites LiveData
         MutableLiveData<List<Favorite>> favsLiveData = new MutableLiveData<>();
         Mockito.when(favoriteRepository.getAllFavorites()).thenReturn(favsLiveData);
-        MapViewModel vm = new MapViewModel(mapRepository, placeRepository, favoriteRepository);
+        Mockito.when(groupRepository.getGroups()).thenReturn(new MutableLiveData<>(Collections.emptyList()));
+        MapViewModel vm = new MapViewModel(mapRepository, placeRepository, favoriteRepository, groupRepository);
 
         Observer<List<Favorite>> observer = Mockito.mock(Observer.class);
         vm.allFavorites.observeForever(observer);

@@ -1,0 +1,402 @@
+﻿To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :core:preBuild UP-TO-DATE
+> Task :core:preDebugBuild UP-TO-DATE
+> Task :core:mergeDebugJniLibFolders UP-TO-DATE
+> Task :core:mergeDebugNativeLibs NO-SOURCE
+> Task :core:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :data:preBuild UP-TO-DATE
+> Task :data:preDebugBuild UP-TO-DATE
+> Task :data:mergeDebugJniLibFolders UP-TO-DATE
+> Task :data:mergeDebugNativeLibs NO-SOURCE
+> Task :data:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :domain:preBuild UP-TO-DATE
+> Task :domain:preDebugBuild UP-TO-DATE
+> Task :domain:mergeDebugJniLibFolders UP-TO-DATE
+> Task :domain:mergeDebugNativeLibs NO-SOURCE
+> Task :domain:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :feature:auth:preBuild UP-TO-DATE
+> Task :feature:auth:preDebugBuild UP-TO-DATE
+> Task :feature:auth:mergeDebugJniLibFolders UP-TO-DATE
+> Task :feature:auth:mergeDebugNativeLibs NO-SOURCE
+> Task :feature:auth:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :feature:favorites:preBuild UP-TO-DATE
+> Task :feature:favorites:preDebugBuild UP-TO-DATE
+> Task :feature:favorites:mergeDebugJniLibFolders UP-TO-DATE
+> Task :feature:favorites:mergeDebugNativeLibs NO-SOURCE
+> Task :feature:favorites:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :feature:map:preBuild UP-TO-DATE
+> Task :feature:map:preDebugBuild UP-TO-DATE
+> Task :feature:map:mergeDebugJniLibFolders UP-TO-DATE
+> Task :feature:map:mergeDebugNativeLibs NO-SOURCE
+> Task :feature:map:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :feature:profile:preBuild UP-TO-DATE
+> Task :feature:profile:preDebugBuild UP-TO-DATE
+> Task :feature:profile:mergeDebugJniLibFolders UP-TO-DATE
+> Task :feature:profile:mergeDebugNativeLibs NO-SOURCE
+> Task :feature:profile:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :feature:social:preBuild UP-TO-DATE
+> Task :feature:social:preDebugBuild UP-TO-DATE
+> Task :feature:social:mergeDebugJniLibFolders UP-TO-DATE
+> Task :feature:social:mergeDebugNativeLibs NO-SOURCE
+> Task :feature:social:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:extractDebugNativeDebugMetadata UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:processDebugGoogleServices UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :core:processDebugNavigationResources UP-TO-DATE
+> Task :data:processDebugNavigationResources UP-TO-DATE
+> Task :domain:processDebugNavigationResources UP-TO-DATE
+> Task :feature:auth:processDebugNavigationResources UP-TO-DATE
+> Task :feature:favorites:processDebugNavigationResources UP-TO-DATE
+> Task :feature:map:processDebugNavigationResources UP-TO-DATE
+> Task :feature:profile:processDebugNavigationResources UP-TO-DATE
+> Task :feature:social:processDebugNavigationResources UP-TO-DATE
+> Task :app:processDebugNavigationResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:generateDebugRFile UP-TO-DATE
+> Task :app:generateSafeArgsDebug UP-TO-DATE
+> Task :core:generateDebugResources UP-TO-DATE
+> Task :core:packageDebugResources UP-TO-DATE
+> Task :core:parseDebugLocalResources UP-TO-DATE
+> Task :core:generateDebugRFile UP-TO-DATE
+> Task :core:checkApolloVersions UP-TO-DATE
+> Task :core:generateServiceApolloOptions UP-TO-DATE
+> Task :core:generateServiceApolloSources UP-TO-DATE
+> Task :core:compileDebugKotlin NO-SOURCE
+> Task :core:javaPreCompileDebug UP-TO-DATE
+> Task :core:compileDebugJavaWithJavac UP-TO-DATE
+> Task :core:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :data:generateDebugResources UP-TO-DATE
+> Task :data:packageDebugResources UP-TO-DATE
+> Task :data:parseDebugLocalResources UP-TO-DATE
+> Task :data:generateDebugRFile UP-TO-DATE
+> Task :core:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :domain:generateDebugResources UP-TO-DATE
+> Task :domain:packageDebugResources UP-TO-DATE
+> Task :domain:parseDebugLocalResources UP-TO-DATE
+> Task :domain:generateDebugRFile UP-TO-DATE
+> Task :domain:compileDebugKotlin NO-SOURCE
+> Task :domain:javaPreCompileDebug UP-TO-DATE
+> Task :domain:compileDebugJavaWithJavac UP-TO-DATE
+> Task :domain:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :data:compileDebugKotlin NO-SOURCE
+> Task :data:javaPreCompileDebug UP-TO-DATE
+> Task :data:compileDebugJavaWithJavac UP-TO-DATE
+> Task :domain:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :data:transformDebugClassesWithAsm UP-TO-DATE
+> Task :data:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :feature:auth:generateDebugResources UP-TO-DATE
+> Task :feature:auth:packageDebugResources UP-TO-DATE
+> Task :feature:auth:parseDebugLocalResources UP-TO-DATE
+> Task :feature:auth:generateDebugRFile UP-TO-DATE
+> Task :feature:auth:compileDebugKotlin NO-SOURCE
+> Task :feature:auth:javaPreCompileDebug UP-TO-DATE
+> Task :feature:auth:compileDebugJavaWithJavac UP-TO-DATE
+> Task :feature:auth:transformDebugClassesWithAsm UP-TO-DATE
+> Task :feature:auth:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :feature:favorites:generateDebugResources UP-TO-DATE
+> Task :feature:favorites:packageDebugResources UP-TO-DATE
+> Task :feature:favorites:parseDebugLocalResources UP-TO-DATE
+> Task :feature:favorites:generateDebugRFile UP-TO-DATE
+> Task :feature:favorites:compileDebugKotlin NO-SOURCE
+> Task :feature:favorites:javaPreCompileDebug UP-TO-DATE
+> Task :feature:favorites:compileDebugJavaWithJavac UP-TO-DATE
+> Task :feature:favorites:transformDebugClassesWithAsm UP-TO-DATE
+> Task :feature:favorites:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :feature:map:generateDebugResources UP-TO-DATE
+> Task :feature:map:packageDebugResources UP-TO-DATE
+> Task :feature:map:parseDebugLocalResources UP-TO-DATE
+> Task :feature:map:generateDebugRFile UP-TO-DATE
+> Task :feature:map:generateDebugBuildConfig UP-TO-DATE
+> Task :feature:map:compileDebugKotlin NO-SOURCE
+> Task :feature:map:javaPreCompileDebug UP-TO-DATE
+
+> Task :feature:map:compileDebugJavaWithJavac
+.\gradlew.bat : Note: 
+D:\AndroidProject\BIF-
+Mobile-App\android\fea
+ture\map\src\main\java
+\com\bif\app\feature\m
+ap\MapFragment.java 
+uses or overrides a 
+deprecated API.
+At line:1 char:56
++ ... pp\android; 
+.\gradlew.bat 
+assembleDebug 
+--no-daemon 
+--console=plain 2 ...
++                 ~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (Note: D:\A   
+ ndroi...deprecate    
+d API.:String) []    
+, RemoteException
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+Note: Recompile with 
+-Xlint:deprecation 
+for details.
+
+> Task :feature:profile:generateDebugResources UP-TO-DATE
+> Task :feature:profile:packageDebugResources UP-TO-DATE
+> Task :feature:profile:parseDebugLocalResources UP-TO-DATE
+> Task :feature:profile:generateDebugRFile UP-TO-DATE
+> Task :feature:profile:compileDebugKotlin NO-SOURCE
+> Task :feature:profile:javaPreCompileDebug UP-TO-DATE
+> Task :feature:profile:compileDebugJavaWithJavac UP-TO-DATE
+> Task :feature:profile:transformDebugClassesWithAsm UP-TO-DATE
+> Task :feature:profile:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :feature:social:generateDebugResources UP-TO-DATE
+> Task :feature:social:packageDebugResources UP-TO-DATE
+> Task :feature:social:parseDebugLocalResources UP-TO-DATE
+> Task :feature:social:generateDebugRFile UP-TO-DATE
+> Task :feature:social:compileDebugKotlin NO-SOURCE
+> Task :feature:social:javaPreCompileDebug UP-TO-DATE
+> Task :feature:map:transformDebugClassesWithAsm
+> Task :feature:social:compileDebugJavaWithJavac
+> Task :feature:map:bundleLibCompileToJarDebug
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :core:generateDebugAssets UP-TO-DATE
+> Task :core:mergeDebugAssets UP-TO-DATE
+> Task :data:generateDebugAssets UP-TO-DATE
+> Task :data:mergeDebugAssets UP-TO-DATE
+> Task :domain:generateDebugAssets UP-TO-DATE
+> Task :domain:mergeDebugAssets UP-TO-DATE
+> Task :feature:auth:generateDebugAssets UP-TO-DATE
+> Task :feature:auth:mergeDebugAssets UP-TO-DATE
+> Task :feature:favorites:generateDebugAssets UP-TO-DATE
+> Task :feature:favorites:mergeDebugAssets UP-TO-DATE
+> Task :feature:map:generateDebugAssets UP-TO-DATE
+> Task :feature:map:mergeDebugAssets UP-TO-DATE
+> Task :feature:profile:generateDebugAssets UP-TO-DATE
+> Task :feature:profile:mergeDebugAssets UP-TO-DATE
+> Task :feature:social:generateDebugAssets UP-TO-DATE
+> Task :feature:social:mergeDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :feature:social:transformDebugClassesWithAsm
+> Task :feature:social:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :app:compileDebugKotlin NO-SOURCE
+> Task :app:compileDebugJavaWithJavac
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :core:processDebugJavaRes NO-SOURCE
+> Task :data:processDebugJavaRes UP-TO-DATE
+> Task :domain:processDebugJavaRes UP-TO-DATE
+> Task :feature:auth:processDebugJavaRes UP-TO-DATE
+> Task :feature:favorites:processDebugJavaRes UP-TO-DATE
+> Task :feature:map:processDebugJavaRes UP-TO-DATE
+> Task :feature:profile:processDebugJavaRes UP-TO-DATE
+> Task :feature:social:processDebugJavaRes UP-TO-DATE
+> Task :app:mergeDebugJavaResource UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :feature:auth:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :data:bundleLibRuntimeToDirDebug
+> Task :feature:social:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :feature:favorites:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :feature:profile:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :feature:map:bundleLibRuntimeToDirDebug
+> Task :domain:bundleLibRuntimeToDirDebug
+> Task :core:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :feature:auth:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :feature:social:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :feature:favorites:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :feature:profile:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :app:hiltSyncDebug
+> Task :feature:map:bundleLibRuntimeToJarDebug
+> Task :core:writeDebugAarMetadata UP-TO-DATE
+> Task :data:writeDebugAarMetadata UP-TO-DATE
+> Task :domain:writeDebugAarMetadata UP-TO-DATE
+> Task :feature:auth:writeDebugAarMetadata UP-TO-DATE
+> Task :feature:favorites:writeDebugAarMetadata UP-TO-DATE
+> Task :feature:map:writeDebugAarMetadata UP-TO-DATE
+> Task :feature:profile:writeDebugAarMetadata UP-TO-DATE
+> Task :data:bundleLibRuntimeToJarDebug
+> Task :feature:social:writeDebugAarMetadata UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:mergeLibDexDebug
+> Task :app:hiltAggregateDepsDebug UP-TO-DATE
+> Task :app:hiltJavaCompileDebug
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :core:extractDeepLinksDebug UP-TO-DATE
+> Task :core:processDebugManifest UP-TO-DATE
+> Task :data:extractDeepLinksDebug UP-TO-DATE
+> Task :data:processDebugManifest UP-TO-DATE
+> Task :domain:extractDeepLinksDebug UP-TO-DATE
+> Task :domain:processDebugManifest UP-TO-DATE
+> Task :feature:auth:extractDeepLinksDebug UP-TO-DATE
+> Task :feature:auth:processDebugManifest UP-TO-DATE
+> Task :feature:favorites:extractDeepLinksDebug UP-TO-DATE
+> Task :feature:favorites:processDebugManifest UP-TO-DATE
+> Task :feature:map:extractDeepLinksDebug UP-TO-DATE
+> Task :feature:map:processDebugManifest UP-TO-DATE
+> Task :feature:profile:extractDeepLinksDebug UP-TO-DATE
+> Task :feature:profile:processDebugManifest UP-TO-DATE
+> Task :feature:social:extractDeepLinksDebug UP-TO-DATE
+> Task :feature:social:processDebugManifest UP-TO-DATE
+> Task :app:mergeDebugResources
+> Task :app:processDebugMainManifest
+> Task :app:processDebugManifest
+> Task :core:mapDebugSourceSetPaths UP-TO-DATE
+> Task :core:compileDebugLibraryResources UP-TO-DATE
+> Task :data:mapDebugSourceSetPaths UP-TO-DATE
+> Task :data:compileDebugLibraryResources UP-TO-DATE
+> Task :domain:mapDebugSourceSetPaths UP-TO-DATE
+> Task :domain:compileDebugLibraryResources UP-TO-DATE
+> Task :feature:auth:mapDebugSourceSetPaths UP-TO-DATE
+> Task :feature:auth:compileDebugLibraryResources UP-TO-DATE
+> Task :feature:favorites:mapDebugSourceSetPaths UP-TO-DATE
+> Task :feature:favorites:compileDebugLibraryResources UP-TO-DATE
+> Task :feature:map:mapDebugSourceSetPaths
+> Task :feature:profile:mapDebugSourceSetPaths UP-TO-DATE
+> Task :feature:profile:compileDebugLibraryResources UP-TO-DATE
+> Task :feature:social:mapDebugSourceSetPaths UP-TO-DATE
+> Task :feature:social:compileDebugLibraryResources UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :feature:map:compileDebugLibraryResources
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :core:stripDebugDebugSymbols NO-SOURCE
+> Task :core:checkDebugAarMetadata
+> Task :core:copyDebugJniLibsProjectAndLocalJars
+> Task :core:extractDebugAnnotations
+> Task :core:extractDeepLinksForAarDebug
+> Task :core:mergeDebugGeneratedProguardFiles
+> Task :core:mergeDebugConsumerProguardFiles
+> Task :core:prepareDebugArtProfile
+> Task :core:prepareLintJarForPublish
+> Task :core:mergeDebugJavaResource
+> Task :data:checkDebugAarMetadata
+> Task :core:syncDebugLibJars
+> Task :core:bundleDebugAar
+> Task :core:assembleDebug
+> Task :data:stripDebugDebugSymbols NO-SOURCE
+> Task :data:copyDebugJniLibsProjectAndLocalJars
+> Task :data:extractDebugAnnotations
+> Task :data:extractDeepLinksForAarDebug
+> Task :data:mergeDebugGeneratedProguardFiles
+> Task :data:mergeDebugConsumerProguardFiles
+> Task :data:prepareDebugArtProfile
+> Task :data:prepareLintJarForPublish
+> Task :domain:stripDebugDebugSymbols NO-SOURCE
+> Task :domain:checkDebugAarMetadata
+> Task :domain:copyDebugJniLibsProjectAndLocalJars
+> Task :domain:extractDebugAnnotations
+> Task :data:mergeDebugJavaResource
+> Task :domain:extractDeepLinksForAarDebug
+> Task :data:syncDebugLibJars
+> Task :data:bundleDebugAar
+> Task :data:assembleDebug
+> Task :domain:mergeDebugGeneratedProguardFiles
+> Task :domain:mergeDebugConsumerProguardFiles
+> Task :domain:prepareDebugArtProfile
+> Task :domain:prepareLintJarForPublish
+> Task :domain:mergeDebugJavaResource
+> Task :feature:auth:checkDebugAarMetadata
+> Task :domain:syncDebugLibJars
+> Task :domain:bundleDebugAar
+> Task :domain:assembleDebug
+> Task :feature:auth:stripDebugDebugSymbols NO-SOURCE
+> Task :feature:auth:copyDebugJniLibsProjectAndLocalJars
+> Task :feature:auth:extractDebugAnnotations
+> Task :feature:auth:extractDeepLinksForAarDebug
+> Task :feature:auth:mergeDebugGeneratedProguardFiles
+> Task :feature:auth:mergeDebugConsumerProguardFiles
+> Task :feature:auth:prepareDebugArtProfile
+> Task :feature:auth:prepareLintJarForPublish
+> Task :feature:auth:mergeDebugJavaResource
+> Task :feature:favorites:checkDebugAarMetadata
+> Task :feature:auth:syncDebugLibJars
+> Task :feature:auth:bundleDebugAar
+> Task :feature:auth:assembleDebug
+> Task :feature:favorites:stripDebugDebugSymbols NO-SOURCE
+> Task :feature:favorites:copyDebugJniLibsProjectAndLocalJars
+> Task :feature:favorites:extractDebugAnnotations
+> Task :feature:favorites:extractDeepLinksForAarDebug
+> Task :feature:favorites:mergeDebugGeneratedProguardFiles
+> Task :feature:favorites:mergeDebugConsumerProguardFiles
+> Task :feature:favorites:prepareDebugArtProfile
+> Task :feature:favorites:prepareLintJarForPublish
+> Task :feature:map:stripDebugDebugSymbols NO-SOURCE
+> Task :feature:favorites:mergeDebugJavaResource
+> Task :feature:map:checkDebugAarMetadata
+> Task :feature:map:copyDebugJniLibsProjectAndLocalJars
+> Task :feature:favorites:syncDebugLibJars
+> Task :feature:favorites:bundleDebugAar
+> Task :feature:favorites:assembleDebug
+> Task :feature:map:extractDebugAnnotations
+> Task :feature:map:extractDeepLinksForAarDebug
+> Task :feature:map:mergeDebugGeneratedProguardFiles
+> Task :feature:map:mergeDebugConsumerProguardFiles
+> Task :feature:map:prepareDebugArtProfile
+> Task :feature:map:prepareLintJarForPublish
+> Task :feature:map:mergeDebugJavaResource
+> Task :feature:profile:checkDebugAarMetadata
+> Task :feature:map:syncDebugLibJars
+> Task :feature:map:bundleDebugAar
+> Task :feature:map:assembleDebug
+> Task :feature:profile:stripDebugDebugSymbols NO-SOURCE
+> Task :feature:profile:copyDebugJniLibsProjectAndLocalJars
+> Task :feature:profile:extractDebugAnnotations
+> Task :feature:profile:extractDeepLinksForAarDebug
+> Task :feature:profile:mergeDebugGeneratedProguardFiles
+> Task :feature:profile:mergeDebugConsumerProguardFiles
+> Task :feature:profile:prepareDebugArtProfile
+> Task :feature:profile:prepareLintJarForPublish
+> Task :feature:profile:mergeDebugJavaResource
+> Task :feature:social:stripDebugDebugSymbols NO-SOURCE
+> Task :feature:social:checkDebugAarMetadata
+> Task :feature:profile:syncDebugLibJars
+> Task :feature:profile:bundleDebugAar
+> Task :feature:profile:assembleDebug
+> Task :feature:social:copyDebugJniLibsProjectAndLocalJars
+> Task :feature:social:extractDebugAnnotations
+> Task :feature:social:extractDeepLinksForAarDebug
+> Task :feature:social:mergeDebugGeneratedProguardFiles
+> Task :feature:social:mergeDebugConsumerProguardFiles
+> Task :feature:social:prepareDebugArtProfile
+> Task :feature:social:prepareLintJarForPublish
+> Task :app:processDebugManifestForPackage
+> Task :feature:social:mergeDebugJavaResource
+> Task :feature:social:syncDebugLibJars
+> Task :feature:social:bundleDebugAar
+> Task :feature:social:assembleDebug
+> Task :app:processDebugResources
+> Task :app:transformDebugClassesWithAsm
+> Task :app:dexBuilderDebug
+> Task :app:mergeProjectDexDebug
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect
+> Task :app:assembleDebug
+
+[Incubating] Problems report is available at: file:///D:/AndroidProject/BIF-Mobile-App/android/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 1m 22s
+291 actionable tasks: 113 executed, 178 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.4.1/userguide/configuration_cache_enabling.html
