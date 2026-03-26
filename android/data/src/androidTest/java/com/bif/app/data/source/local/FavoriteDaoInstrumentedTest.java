@@ -48,6 +48,7 @@ public class FavoriteDaoInstrumentedTest {
     public void insert_ValidEntity_SavesItemToDatabase() throws InterruptedException {
         // Arrange
         FavoriteEntity entity = new FavoriteEntity();
+        entity.id = "fav-insert-1";
         entity.name = "My House";
         entity.address = "123 Street";
 
@@ -64,15 +65,12 @@ public class FavoriteDaoInstrumentedTest {
     public void delete_ExistingEntity_RemovesItemFromDatabase() throws InterruptedException {
         // Arrange
         FavoriteEntity entity = new FavoriteEntity();
+        entity.id = "fav-delete-1";
         entity.name = "To Be Deleted";
         favoriteDao.insert(entity);
 
-        // Lấy list ra để lấy được ID (do autoGenerate)
-        List<FavoriteEntity> currentList = LiveDataTestUtil.getOrAwaitValue(favoriteDao.getAll());
-        FavoriteEntity itemToDelete = currentList.get(0);
-
         // Act
-        favoriteDao.delete(itemToDelete);
+        favoriteDao.delete(entity);
         List<FavoriteEntity> result = LiveDataTestUtil.getOrAwaitValue(favoriteDao.getAll());
 
         // Assert
@@ -82,9 +80,9 @@ public class FavoriteDaoInstrumentedTest {
     @Test
     public void searchFavorites_MatchingKeyword_ReturnsMatchedEntities() throws InterruptedException {
         // Arrange
-        FavoriteEntity e1 = new FavoriteEntity(); e1.name = "Highlands Coffee"; e1.address = "Q1";
-        FavoriteEntity e2 = new FavoriteEntity(); e2.name = "Home"; e2.address = "Q2";
-        FavoriteEntity e3 = new FavoriteEntity(); e3.name = "Trung Nguyen Coffee"; e3.address = "Q3";
+        FavoriteEntity e1 = new FavoriteEntity(); e1.id = "fav-search-1"; e1.name = "Highlands Coffee"; e1.address = "Q1";
+        FavoriteEntity e2 = new FavoriteEntity(); e2.id = "fav-search-2"; e2.name = "Home"; e2.address = "Q2";
+        FavoriteEntity e3 = new FavoriteEntity(); e3.id = "fav-search-3"; e3.name = "Trung Nguyen Coffee"; e3.address = "Q3";
 
         favoriteDao.insert(e1);
         favoriteDao.insert(e2);
@@ -100,8 +98,8 @@ public class FavoriteDaoInstrumentedTest {
     @Test
     public void updateAll_ModifiedEntities_UpdatesAllInDatabase() throws InterruptedException {
         // Arrange
-        FavoriteEntity e1 = new FavoriteEntity(); e1.name = "A";
-        FavoriteEntity e2 = new FavoriteEntity(); e2.name = "B";
+        FavoriteEntity e1 = new FavoriteEntity(); e1.id = "fav-update-1"; e1.name = "A";
+        FavoriteEntity e2 = new FavoriteEntity(); e2.id = "fav-update-2"; e2.name = "B";
         favoriteDao.insert(e1);
         favoriteDao.insert(e2);
 

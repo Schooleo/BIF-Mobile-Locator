@@ -4,6 +4,7 @@ import android.content.Context;
 
 import androidx.room.Room;
 
+import com.bif.app.core.auth.LocalSessionDataCleaner;
 import com.bif.app.data.source.local.AppDatabase;
 import com.bif.app.data.source.local.FavoriteDao;
 import com.bif.app.data.source.local.FriendDao;
@@ -15,6 +16,9 @@ import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 
 import javax.inject.Singleton;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import dagger.Module;
 import dagger.Provides;
@@ -78,5 +82,21 @@ public class AppModule {
     @Singleton
     public SyncQueueDao provideSyncQueueDao(AppDatabase database) {
       return database.syncQueueDao();
+    }
+
+    @Provides
+    @Singleton
+    public LocalSessionDataCleaner provideLocalSessionDataCleaner(AppDatabase appDatabase) {
+      return () -> {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        executor.execute(() -> {
+          try {
+            appDatabase.clearAllTables();
+          } catch (Exception ignored) {
+            // Keep logout flow resilient even if local cleanup fails.
+          }
+        });
+        executor.shutdown();
+      };
     }
 }

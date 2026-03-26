@@ -7,10 +7,16 @@ import com.bif.app.domain.model.Favorite;
 import java.util.List;
 
 public interface IFavoriteRepository {
+    interface SyncCallback {
+        void onSuccess();
+        void onError(String message);
+    }
+
     LiveData<List<Favorite>> getAllFavorites();
     LiveData<List<Favorite>> searchFavorites(String query);
     void addFavorite(Favorite favorite);
     void updateFavorite(Favorite favorite);
     void updateAllFavorites(List<Favorite> favorites);
     void deleteFavorite(Favorite favorite);
+    void refreshFavorites(SyncCallback callback);
 }

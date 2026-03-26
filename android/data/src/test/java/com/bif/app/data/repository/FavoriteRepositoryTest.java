@@ -10,6 +10,7 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.MutableLiveData;
 
 import com.bif.app.data.LiveDataTestUtil;
+import com.bif.app.core.network.RestApiService;
 import com.bif.app.data.source.local.FavoriteDao;
 import com.bif.app.data.source.local.entity.FavoriteEntity;
 import com.bif.app.domain.model.Favorite;
@@ -31,12 +32,15 @@ public class FavoriteRepositoryTest {
     @Mock
     private FavoriteDao mockDao;
 
+    @Mock
+    private RestApiService mockRestApiService;
+
     private FavoriteRepository repository;
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        repository = new FavoriteRepository(mockDao);
+        repository = new FavoriteRepository(mockDao, mockRestApiService);
     }
 
     @Test
@@ -44,7 +48,7 @@ public class FavoriteRepositoryTest {
         // Arrange
         List<FavoriteEntity> mockEntities = new ArrayList<>();
         FavoriteEntity entity = new FavoriteEntity();
-        entity.id = 1;
+        entity.id = "fav-1";
         entity.name = "Test Place";
         mockEntities.add(entity);
 
@@ -59,14 +63,14 @@ public class FavoriteRepositoryTest {
         // Assert
         assertEquals(1, result.size());
         assertEquals("Test Place", result.get(0).name);
-        assertEquals(1, result.get(0).id);
+        assertEquals("fav-1", result.get(0).id);
     }
 
     @Test
     public void addFavorite_ValidFavorite_CallsDaoInsert() {
         // Arrange
         Favorite domainItem = new Favorite();
-        domainItem.id = 10;
+        domainItem.id = "fav-10";
         domainItem.name = "Cafe";
 
         // Act

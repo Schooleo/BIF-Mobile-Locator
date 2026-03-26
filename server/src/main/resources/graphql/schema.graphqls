@@ -1,6 +1,8 @@
 type Query {
   users: [User!]!
   user(id: ID!): User
+  myAuthState(userId: ID): AuthState!
+  myProfileMetadata(userId: ID!): ProfileMetadata
   groups: [Group!]!
   group(id: ID!): Group
   places: [Place!]!
@@ -11,6 +13,7 @@ type Query {
   favorites: [Favorite!]!
   favorite(id: ID!): Favorite
   favoritesByUser(userId: ID!): [Favorite!]!
+  myFavorites(userId: ID): [Favorite!]!
   chatMessages: [ChatMessage!]!
   chatMessage(id: ID!): ChatMessage
   chatMessagesByGroup(groupId: ID!): [ChatMessage!]!
@@ -23,6 +26,7 @@ type Query {
 type Mutation {
   upsertUser(input: UserInput!): User!
   deleteUser(id: ID!): Boolean!
+  updateMyProfile(userId: ID!, input: UpdateMyProfileInput!): User
   upsertGroup(input: GroupInput!): Group!
   deleteGroup(id: ID!): Boolean!
   upsertPlace(input: PlaceInput!): Place!
@@ -31,6 +35,8 @@ type Mutation {
   addPlaceReview(placeId: ID!, input: PlaceReviewInput!): Place!
   upsertFavorite(input: FavoriteInput!): Favorite!
   deleteFavorite(id: ID!): Boolean!
+  upsertMyFavorite(userId: ID, input: FavoriteInput!): Favorite!
+  deleteMyFavorite(userId: ID, id: ID!): DeleteMyFavoriteResult!
   upsertChatMessage(input: ChatMessageInput!): ChatMessage!
   deleteChatMessage(id: ID!): Boolean!
   upsertTripPlan(input: TripPlanInput!): TripPlan!
@@ -149,6 +155,12 @@ type SyncConflict {
   resolution: String
 }
 
+enum DeleteMyFavoriteResult {
+  DELETED
+  FORBIDDEN
+  NOT_FOUND
+}
+
 input UserInput {
   id: ID
   name: String
@@ -231,6 +243,30 @@ input TripStopInput {
 input LocationInput {
   latitude: Float
   longitude: Float
+}
+
+type AuthState {
+  authenticated: Boolean!
+  userId: ID
+  hasProfile: Boolean!
+}
+
+type ProfileMetadata {
+  userId: ID
+  displayName: String
+  email: String
+  avatarLetter: String
+  avatarColor: Int
+  online: Boolean
+  serverVersion: Int
+  updatedAt: String
+  profileCompletionPercent: Int!
+}
+
+input UpdateMyProfileInput {
+  name: String
+  avatarLetter: String
+  avatarColor: Int
 }
 
 input SyncRequestInput {

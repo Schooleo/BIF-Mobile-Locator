@@ -57,7 +57,7 @@ public class MapFragmentInstrumentedTest {
         // Arrange
         MapFragment fragment = new MapFragment();
         Bundle args = new Bundle();
-        args.putInt("favId", 42);
+        args.putString("favId", "fav-42");
         args.putString("favName", "Café Central");
 
         // Act
@@ -65,7 +65,7 @@ public class MapFragmentInstrumentedTest {
 
         // Assert
         assertNotNull(fragment.getArguments());
-        assertEquals(42, fragment.getArguments().getInt("favId"));
+        assertEquals("fav-42", fragment.getArguments().getString("favId"));
         assertEquals("Café Central", fragment.getArguments().getString("favName"));
     }
 

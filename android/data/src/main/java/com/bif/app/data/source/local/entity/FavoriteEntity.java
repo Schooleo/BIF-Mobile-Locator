@@ -1,12 +1,14 @@
 package com.bif.app.data.source.local.entity;
 
+import androidx.annotation.NonNull;
 import androidx.room.Entity;
 import androidx.room.PrimaryKey;
 
 @Entity(tableName = "favorites")
 public class FavoriteEntity {
-    @PrimaryKey(autoGenerate = true)
-    public int id;
+    @NonNull
+    @PrimaryKey
+    public String id;
     public String name;
     public double latitude;
     public double longitude;

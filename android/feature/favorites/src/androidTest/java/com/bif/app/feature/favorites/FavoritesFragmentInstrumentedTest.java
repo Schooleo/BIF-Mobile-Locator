@@ -116,9 +116,9 @@ public class FavoritesFragmentInstrumentedTest {
         // Arrange
         FavoriteAdapter adapter = new FavoriteAdapter(NO_OP_LISTENER);
         List<Favorite> list = Arrays.asList(
-                makeFavorite(1, "Home",    "123 Main St"),
-                makeFavorite(2, "Work",    "456 Corp Blvd"),
-                makeFavorite(3, "Gym",     "789 Fitness Ave")
+            makeFavorite("fav-1", "Home",    "123 Main St"),
+            makeFavorite("fav-2", "Work",    "456 Corp Blvd"),
+            makeFavorite("fav-3", "Gym",     "789 Fitness Ave")
         );
 
         // Act
@@ -132,10 +132,10 @@ public class FavoritesFragmentInstrumentedTest {
     public void favoriteAdapter_submitListTwice_itemCountReflectsLatestList() {
         // Arrange
         FavoriteAdapter adapter = new FavoriteAdapter(NO_OP_LISTENER);
-        List<Favorite> first  = Collections.singletonList(makeFavorite(1, "Home", "123 Main St"));
+        List<Favorite> first  = Collections.singletonList(makeFavorite("fav-1", "Home", "123 Main St"));
         List<Favorite> second = Arrays.asList(
-                makeFavorite(2, "Cafe A", "Addr 1"),
-                makeFavorite(3, "Cafe B", "Addr 2")
+            makeFavorite("fav-2", "Cafe A", "Addr 1"),
+            makeFavorite("fav-3", "Cafe B", "Addr 2")
         );
 
         // Act
@@ -153,8 +153,8 @@ public class FavoritesFragmentInstrumentedTest {
         // Arrange
         FavoriteAdapter adapter = new FavoriteAdapter(NO_OP_LISTENER);
         adapter.submitList(Arrays.asList(
-                makeFavorite(1, "Place A", "Addr A"),
-                makeFavorite(2, "Place B", "Addr B")
+            makeFavorite("fav-1", "Place A", "Addr A"),
+            makeFavorite("fav-2", "Place B", "Addr B")
         ));
         assertEquals(2, adapter.getItemCount());
 
@@ -167,7 +167,7 @@ public class FavoritesFragmentInstrumentedTest {
 
     // ─── helpers ──────────────────────────────────────────────────────────────
 
-    private Favorite makeFavorite(int id, String name, String address) {
+    private Favorite makeFavorite(String id, String name, String address) {
         Favorite f = new Favorite();
         f.id = id;
         f.name = name;

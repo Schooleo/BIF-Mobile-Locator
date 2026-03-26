@@ -21,6 +21,10 @@ public class FavoritesViewModel extends ViewModel {
     private final MutableLiveData<String> searchQuery = new MutableLiveData<>("");
     private final MediatorLiveData<List<Favorite>> _favorites = new MediatorLiveData<>();
     public final LiveData<List<Favorite>> favorites = _favorites;
+    private final MutableLiveData<Boolean> _isSyncing = new MutableLiveData<>(false);
+    public final LiveData<Boolean> isSyncing = _isSyncing;
+    private final MutableLiveData<String> _syncMessage = new MutableLiveData<>();
+    public final LiveData<String> syncMessage = _syncMessage;
 
     @Inject
     public FavoritesViewModel(IFavoriteRepository favoriteRepository) {
@@ -40,6 +44,7 @@ public class FavoritesViewModel extends ViewModel {
         );
 
         _favorites.addSource(searchResultsLiveData, _favorites::setValue);
+        refreshFavorites();
     }
 
     public void removeFavoriteItem(Favorite favorite) {
@@ -48,6 +53,23 @@ public class FavoritesViewModel extends ViewModel {
 
     public void filterFavorites(String query) {
         searchQuery.setValue(query);
+    }
+
+    public void refreshFavorites() {
+        _isSyncing.setValue(true);
+        favoriteRepository.refreshFavorites(new IFavoriteRepository.SyncCallback() {
+            @Override
+            public void onSuccess() {
+                _isSyncing.postValue(false);
+                _syncMessage.postValue("");
+            }
+
+            @Override
+            public void onError(String message) {
+                _isSyncing.postValue(false);
+                _syncMessage.postValue(message);
+            }
+        });
     }
 
 }

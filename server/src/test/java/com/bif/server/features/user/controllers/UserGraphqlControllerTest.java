@@ -1,5 +1,8 @@
 package com.bif.server.features.user.controllers;
 
+import com.bif.server.features.user.dto.graphql.AuthStateResponse;
+import com.bif.server.features.user.dto.graphql.ProfileMetadataResponse;
+import com.bif.server.features.user.dto.graphql.UpdateMyProfileInput;
 import com.bif.server.features.user.models.User;
 import com.bif.server.features.user.services.UserService;
 import org.junit.jupiter.api.BeforeEach;
@@ -75,5 +78,91 @@ class UserGraphqlControllerTest {
 
         assertTrue(result);
         verify(userService).deleteById("u1");
+    }
+
+    @Test
+    void myAuthState_WhenUserIdMissing_ReturnsUnauthenticated() {
+        AuthStateResponse result = controller.myAuthState(null);
+
+        assertFalse(result.authenticated());
+        assertNull(result.userId());
+        assertFalse(result.hasProfile());
+        verify(userService, never()).getById(anyString());
+    }
+
+    @Test
+    void myAuthState_WhenUserExists_ReturnsAuthenticatedWithProfile() {
+        when(userService.getById("u1")).thenReturn(Optional.of(new User()));
+
+        AuthStateResponse result = controller.myAuthState("u1");
+
+        assertTrue(result.authenticated());
+        assertEquals("u1", result.userId());
+        assertTrue(result.hasProfile());
+        verify(userService).getById("u1");
+    }
+
+    @Test
+    void myProfileMetadata_WhenUserFound_ReturnsCompletionPercent() {
+        User user = new User();
+        user.setId("u1");
+        user.setUsername("Alex");
+        user.setEmail("alex@bif.local");
+        user.setAvatarLetter("A");
+        user.setAvatarColor(0xFF1E88E5);
+        user.setOnline(true);
+        user.setServerVersion(9);
+
+        when(userService.getById("u1")).thenReturn(Optional.of(user));
+        when(userService.calculateProfileCompletion(user)).thenReturn(100);
+
+        ProfileMetadataResponse result = controller.myProfileMetadata("u1");
+
+        assertNotNull(result);
+        assertEquals("u1", result.userId());
+        assertEquals("Alex", result.displayName());
+        assertEquals("alex@bif.local", result.email());
+        assertEquals(100, result.profileCompletionPercent());
+        verify(userService).getById("u1");
+        verify(userService).calculateProfileCompletion(user);
+    }
+
+    @Test
+    void updateMyProfile_WhenUserIdMissing_ReturnsNull() {
+        UpdateMyProfileInput input = new UpdateMyProfileInput("Alex", "A", 123);
+
+        User result = controller.updateMyProfile(null, input);
+
+        assertNull(result);
+        verify(userService, never()).updateMyProfile(anyString(), any(), any(), any());
+    }
+
+    @Test
+    void updateMyProfile_WhenUserNotFound_ReturnsNull() {
+        UpdateMyProfileInput input = new UpdateMyProfileInput("Alex", "A", 123);
+
+        when(userService.updateMyProfile("u1", "Alex", "A", 123)).thenReturn(Optional.empty());
+
+        User result = controller.updateMyProfile("u1", input);
+
+        assertNull(result);
+        verify(userService).updateMyProfile("u1", "Alex", "A", 123);
+    }
+
+    @Test
+    void updateMyProfile_WhenValidInput_ReturnsSavedUser() {
+        User saved = new User();
+        saved.setId("u1");
+        saved.setEmail("old@bif.local");
+
+        UpdateMyProfileInput input = new UpdateMyProfileInput("Alex", "A", 123);
+
+        when(userService.updateMyProfile("u1", "Alex", "A", 123)).thenReturn(Optional.of(saved));
+
+        User result = controller.updateMyProfile("u1", input);
+
+        assertNotNull(result);
+        assertEquals("u1", result.getId());
+        verify(userService).updateMyProfile("u1", "Alex", "A", 123);
     }
 }
