@@ -50,7 +50,7 @@ public abstract class RepositoryModule {
 
     @Binds
     @Singleton
-    public abstract IGroupRepository bindGroupRepository(GroupRepository repository);
+    public abstract IGroupRepository bindGroupRepository(GroupRepositoryMock repository);
 
     @Binds
     @Singleton
