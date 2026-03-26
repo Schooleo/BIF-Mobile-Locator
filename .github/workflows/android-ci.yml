@@ -101,7 +101,7 @@ jobs:
         run: ./gradlew :app:checkstyleMain :app:checkstyleTest
 
   build:
-    name: Build & Artifact
+    name: Build
     needs: [lint, unit_test, checkstyle]
     runs-on: ubuntu-latest
     defaults:

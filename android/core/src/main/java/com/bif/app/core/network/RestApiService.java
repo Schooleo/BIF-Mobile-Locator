@@ -67,6 +67,7 @@ public interface RestApiService {
     @PATCH("users/me/profile")
     Call<ProfileMetadataResponse> updateMyProfile(@Body UpdateMyProfileRequest request);
 
+    // Example: A multipart POST request for uploading a profile picture
     @Multipart
     @POST("users/avatar")
     Call<Void> uploadAvatar(@Part MultipartBody.Part image);
@@ -103,6 +104,9 @@ public interface RestApiService {
             @Query("actorId") String actorId
     );
 
+    // @GET("config/features")
+    // Call<FeatureConfig> getFeatureConfig();
+    // Places
     @GET("places/search")
     Call<List<PlaceDto>> searchServerPlaces(@Query("q") String query);
 

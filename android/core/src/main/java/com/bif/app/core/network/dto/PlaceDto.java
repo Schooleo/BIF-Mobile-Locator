@@ -15,4 +15,5 @@ public class PlaceDto {
     public String persistedByUserId;
     public int reviewCount;
     public long serverVersion;
+    public boolean deleted;
 }

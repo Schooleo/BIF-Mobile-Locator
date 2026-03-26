@@ -1,5 +1,8 @@
 package com.bif.server.features.user.controllers;
 
+import com.bif.server.features.user.dto.graphql.AuthStateResponse;
+import com.bif.server.features.user.dto.graphql.ProfileMetadataResponse;
+import com.bif.server.features.user.dto.graphql.UpdateMyProfileInput;
 import com.bif.server.features.user.models.User;
 import com.bif.server.features.user.services.UserService;
 import org.springframework.graphql.data.method.annotation.Argument;
@@ -35,5 +38,48 @@ public class UserGraphqlController {
     @MutationMapping
     public Boolean deleteUser(@Argument String id) {
         return userService.deleteById(id);
+    }
+
+    @QueryMapping
+    public AuthStateResponse myAuthState(@Argument String userId) {
+        if (userId == null || userId.isBlank()) {
+            return new AuthStateResponse(false, null, false);
+        }
+        boolean hasProfile = userService.getById(userId).isPresent();
+        return new AuthStateResponse(true, userId, hasProfile);
+    }
+
+    @QueryMapping
+    public ProfileMetadataResponse myProfileMetadata(@Argument String userId) {
+        if (userId == null || userId.isBlank()) {
+            return null;
+        }
+        return userService.getById(userId)
+                .map(user -> new ProfileMetadataResponse(
+                        user.getId(),
+                        user.getUsername(),
+                        user.getEmail(),
+                        user.getAvatarLetter(),
+                        user.getAvatarColor(),
+                        user.isOnline(),
+                        user.getServerVersion(),
+                        user.getUpdatedAt(),
+                        userService.calculateProfileCompletion(user)
+                ))
+                .orElse(null);
+    }
+
+    @MutationMapping
+    public User updateMyProfile(@Argument String userId, @Argument UpdateMyProfileInput input) {
+        if (userId == null || userId.isBlank()) {
+            return null;
+        }
+
+        return userService.updateMyProfile(
+                userId,
+                input.name(),
+                input.avatarLetter(),
+                input.avatarColor()
+        ).orElse(null);
     }
 }

@@ -34,4 +34,54 @@ public class UserService {
         userRepository.deleteById(id);
         return true;
     }
+
+    public Optional<User> updateMyProfile(
+            String userId,
+            String username,
+            String avatarLetter,
+            Integer avatarColor
+    ) {
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("userId must not be blank");
+        }
+        if (username != null && username.isBlank()) {
+            throw new IllegalArgumentException("name must not be blank");
+        }
+        if (avatarLetter != null && avatarLetter.isBlank()) {
+            throw new IllegalArgumentException("avatarLetter must not be blank");
+        }
+
+        return userRepository.findById(userId).map(user -> {
+            if (username != null) {
+                user.setUsername(username.trim());
+            }
+            if (avatarLetter != null) {
+                user.setAvatarLetter(avatarLetter.trim());
+            }
+            if (avatarColor != null) {
+                user.setAvatarColor(avatarColor);
+            }
+            return userRepository.save(user);
+        });
+    }
+
+    public int calculateProfileCompletion(User user) {
+        int completed = 0;
+        int total = 4;
+
+        if (user.getUsername() != null && !user.getUsername().isBlank()) {
+            completed++;
+        }
+        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+            completed++;
+        }
+        if (user.getAvatarLetter() != null && !user.getAvatarLetter().isBlank()) {
+            completed++;
+        }
+        if (user.getAvatarColor() != 0) {
+            completed++;
+        }
+
+        return (completed * 100) / total;
+    }
 }

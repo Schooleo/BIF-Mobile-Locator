@@ -3,6 +3,7 @@ package com.bif.app.di;
 import com.apollographql.java.client.ApolloClient;
 import com.bif.app.core.network.AuthInterceptor;
 import com.bif.app.core.network.RestApiService;
+import com.bif.app.network.TokenRefreshAuthenticator;
 
 import javax.inject.Singleton;
 
@@ -21,7 +22,10 @@ public class NetworkModule {
 
     @Provides
     @Singleton
-    public OkHttpClient provideOkHttpClient(AuthInterceptor authInterceptor) {
+    public OkHttpClient provideOkHttpClient(
+            AuthInterceptor authInterceptor,
+            TokenRefreshAuthenticator tokenRefreshAuthenticator
+    ) {
 
         // Prints network traffic to Logcat
         HttpLoggingInterceptor loggingInterceptor = new HttpLoggingInterceptor();
@@ -29,6 +33,7 @@ public class NetworkModule {
 
         return new OkHttpClient.Builder()
                 .addInterceptor(authInterceptor) // Attaches JWT
+                .authenticator(tokenRefreshAuthenticator)
                 .addInterceptor(loggingInterceptor) // Prints the logs
                 .build();
     }

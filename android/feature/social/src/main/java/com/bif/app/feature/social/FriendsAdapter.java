@@ -26,6 +26,7 @@ public class FriendsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
     public interface OnFriendActionListener {
         void onAddFriendClick();
+        void onFriendClick(Friend friend);
         void onDeleteFriendClick(Friend friend, int position);
     }
 
@@ -107,6 +108,12 @@ public class FriendsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             tvFriendName.setText(friend.getName());
             tvStatus.setText(friend.isOnline() ? R.string.online : R.string.offline);
             viewStatus.setVisibility(friend.isOnline() ? View.VISIBLE : View.GONE);
+
+            itemView.setOnClickListener(v -> {
+                if (listener != null) {
+                    listener.onFriendClick(friend);
+                }
+            });
 
             btnDelete.setOnClickListener(v -> {
                 if (listener != null) {

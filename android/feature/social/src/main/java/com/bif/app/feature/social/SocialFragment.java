@@ -6,6 +6,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -32,6 +35,10 @@ public class SocialFragment extends Fragment {
 
     private TabLayout tabLayout;
     private RecyclerView recyclerView;
+    private ProgressBar progressLoading;
+    private LinearLayout stateLayout;
+    private TextView tvStateMessage;
+    private Button btnRetry;
     private FriendsAdapter friendsAdapter;
     private GroupsAdapter groupsAdapter;
     private SocialViewModel viewModel;
@@ -50,6 +57,19 @@ public class SocialFragment extends Fragment {
 
         tabLayout = view.findViewById(R.id.tab_layout);
         recyclerView = view.findViewById(R.id.recycler_view);
+        progressLoading = view.findViewById(R.id.progress_loading);
+        stateLayout = view.findViewById(R.id.layout_state);
+        tvStateMessage = view.findViewById(R.id.tv_state_message);
+        btnRetry = view.findViewById(R.id.btn_retry);
+
+        btnRetry.setOnClickListener(v -> {
+            if (tabLayout.getSelectedTabPosition() == 0) {
+                viewModel.retryFriends();
+            } else {
+                viewModel.retryGroups();
+            }
+            renderCurrentTabState();
+        });
 
         setupRecyclerView();
         setupTabs();
@@ -77,6 +97,11 @@ public class SocialFragment extends Fragment {
             }
 
             @Override
+            public void onFriendClick(Friend friend) {
+                navigateToChatFromFriend(friend);
+            }
+
+            @Override
             public void onDeleteFriendClick(Friend friend, int position) {
                 DialogUtils.showConfirmDialog(requireContext(),
                         "Delete " + friend.getName(),
@@ -99,7 +124,7 @@ public class SocialFragment extends Fragment {
 
             @Override
             public void onGroupClick(Group group) {
-                navigateToGroupDetail(group);
+                navigateToChatFromGroup(group);
             }
 
             @Override
@@ -112,15 +137,15 @@ public class SocialFragment extends Fragment {
     }
 
     private void observeViewModel() {
-        viewModel.getFriends().observe(getViewLifecycleOwner(), friends -> {
+        viewModel.getFriendUiState().observe(getViewLifecycleOwner(), state -> {
             if (tabLayout.getSelectedTabPosition() == 0) {
-                friendsAdapter.setFriends(friends);
+                renderFriendState(state);
             }
         });
 
-        viewModel.getGroups().observe(getViewLifecycleOwner(), groups -> {
+        viewModel.getGroupUiState().observe(getViewLifecycleOwner(), state -> {
             if (tabLayout.getSelectedTabPosition() == 1) {
-                groupsAdapter.setGroups(groups);
+                renderGroupState(state);
             }
         });
     }
@@ -129,15 +154,7 @@ public class SocialFragment extends Fragment {
         tabLayout.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
             @Override
             public void onTabSelected(TabLayout.Tab tab) {
-                if (tab.getPosition() == 0) {
-                    // Friends Tab
-                    friendsAdapter.setFriends(viewModel.getFriends().getValue());
-                    recyclerView.setAdapter(friendsAdapter);
-                } else {
-                    // Groups Tab
-                    groupsAdapter.setGroups(viewModel.getGroups().getValue());
-                    recyclerView.setAdapter(groupsAdapter);
-                }
+                renderCurrentTabState();
             }
 
             @Override
@@ -148,6 +165,79 @@ public class SocialFragment extends Fragment {
             public void onTabReselected(TabLayout.Tab tab) {
             }
         });
+
+        renderCurrentTabState();
+    }
+
+    private void renderCurrentTabState() {
+        if (tabLayout.getSelectedTabPosition() == 0) {
+            renderFriendState(viewModel.getFriendUiState().getValue());
+        } else {
+            renderGroupState(viewModel.getGroupUiState().getValue());
+        }
+    }
+
+    private void renderFriendState(UiState<List<Friend>> state) {
+        if (state == null || state instanceof UiState.Loading) {
+            showLoading();
+            return;
+        }
+        if (state instanceof UiState.Empty) {
+            UiState.Empty<List<Friend>> empty = (UiState.Empty<List<Friend>>) state;
+            showState(empty.getMessage(), false);
+            return;
+        }
+        if (state instanceof UiState.Error) {
+            UiState.Error<List<Friend>> error = (UiState.Error<List<Friend>>) state;
+            showState(error.getMessage(), true);
+            return;
+        }
+
+        UiState.Success<List<Friend>> success = (UiState.Success<List<Friend>>) state;
+        friendsAdapter.setFriends(success.getData());
+        showList(friendsAdapter);
+    }
+
+    private void renderGroupState(UiState<List<Group>> state) {
+        if (state == null || state instanceof UiState.Loading) {
+            showLoading();
+            return;
+        }
+        if (state instanceof UiState.Empty) {
+            UiState.Empty<List<Group>> empty = (UiState.Empty<List<Group>>) state;
+            showState(empty.getMessage(), false);
+            return;
+        }
+        if (state instanceof UiState.Error) {
+            UiState.Error<List<Group>> error = (UiState.Error<List<Group>>) state;
+            showState(error.getMessage(), true);
+            return;
+        }
+
+        UiState.Success<List<Group>> success = (UiState.Success<List<Group>>) state;
+        groupsAdapter.setGroups(success.getData());
+        showList(groupsAdapter);
+    }
+
+    private void showLoading() {
+        recyclerView.setVisibility(View.GONE);
+        stateLayout.setVisibility(View.GONE);
+        progressLoading.setVisibility(View.VISIBLE);
+    }
+
+    private void showState(String message, boolean showRetry) {
+        recyclerView.setVisibility(View.GONE);
+        progressLoading.setVisibility(View.GONE);
+        stateLayout.setVisibility(View.VISIBLE);
+        tvStateMessage.setText(message);
+        btnRetry.setVisibility(showRetry ? View.VISIBLE : View.GONE);
+    }
+
+    private void showList(RecyclerView.Adapter<?> adapter) {
+        progressLoading.setVisibility(View.GONE);
+        stateLayout.setVisibility(View.GONE);
+        recyclerView.setVisibility(View.VISIBLE);
+        recyclerView.setAdapter(adapter);
     }
 
     private void showAddFriendDialog() {
@@ -225,9 +315,26 @@ public class SocialFragment extends Fragment {
                 });
     }
 
-    private void navigateToGroupDetail(Group group) {
-        android.net.Uri destUri = UriUtils.buildUri(UriUtils.PathTo.GROUP_DETAIL).buildUpon()
-                .appendQueryParameter("groupId", String.valueOf(group.getId()))
+    private void navigateToChatFromFriend(Friend friend) {
+        android.net.Uri destUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL_CHAT).buildUpon()
+                .appendQueryParameter("chatType", "friend")
+                .appendQueryParameter("chatId", String.valueOf(friend.getId()))
+                .appendQueryParameter("chatName", friend.getName())
+                .appendQueryParameter("avatarLetter", friend.getAvatarLetter())
+                .appendQueryParameter("avatarColor", String.valueOf(friend.getAvatarColor()))
+                .appendQueryParameter("memberCount", "0")
+                .build();
+        Navigation.findNavController(requireView()).navigate(destUri);
+    }
+
+    private void navigateToChatFromGroup(Group group) {
+        android.net.Uri destUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL_CHAT).buildUpon()
+                .appendQueryParameter("chatType", "group")
+                .appendQueryParameter("chatId", group.getServerId())
+                .appendQueryParameter("chatName", group.getName())
+                .appendQueryParameter("avatarLetter", group.getAvatarLetter())
+                .appendQueryParameter("avatarColor", String.valueOf(group.getAvatarColor()))
+                .appendQueryParameter("memberCount", String.valueOf(group.getMemberCount()))
                 .build();
         Navigation.findNavController(requireView()).navigate(destUri);
     }

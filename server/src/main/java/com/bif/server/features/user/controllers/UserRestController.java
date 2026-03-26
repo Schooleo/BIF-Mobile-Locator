@@ -1,7 +1,11 @@
 package com.bif.server.features.user.controllers;
 
+import com.bif.server.features.user.dto.rest.AuthStateResponse;
+import com.bif.server.features.user.dto.rest.ProfileMetadataResponse;
+import com.bif.server.features.user.dto.rest.UpdateMyProfileRequest;
 import com.bif.server.features.user.models.User;
 import com.bif.server.features.user.services.UserService;
+import org.springframework.security.core.Authentication;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -34,5 +38,83 @@ public class UserRestController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteUser(@PathVariable String id) {
         return userService.deleteById(id) ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
+    }
+
+    @GetMapping("/me/auth-state")
+    public ResponseEntity<AuthStateResponse> getMyAuthState(
+        Authentication authentication
+    ) {
+        String userId = currentUserId(authentication);
+        if (userId == null || userId.isBlank()) {
+            return ResponseEntity.status(401)
+            .body(new AuthStateResponse(false, null, false));
+        }
+
+        boolean hasProfile = userService.getById(userId).isPresent();
+        return ResponseEntity.ok(new AuthStateResponse(true, userId, hasProfile));
+    }
+
+    @GetMapping("/me/profile-metadata")
+    public ResponseEntity<ProfileMetadataResponse> getMyProfileMetadata(
+            Authentication authentication
+    ) {
+        String userId = currentUserId(authentication);
+        if (userId == null || userId.isBlank()) {
+            return ResponseEntity.status(401).build();
+        }
+
+        return userService.getById(userId)
+                .map(user -> ResponseEntity.ok(new ProfileMetadataResponse(
+                        user.getId(),
+                        user.getUsername(),
+                        user.getEmail(),
+                        user.getAvatarLetter(),
+                        user.getAvatarColor(),
+                        user.isOnline(),
+                        user.getServerVersion(),
+                        user.getUpdatedAt(),
+                        userService.calculateProfileCompletion(user)
+                )))
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+    
+    @PatchMapping("/me/profile")
+    public ResponseEntity<ProfileMetadataResponse> updateMyProfile(
+        Authentication authentication,
+        @RequestBody UpdateMyProfileRequest request
+    ) {
+        String userId = currentUserId(authentication);
+        if (userId == null || userId.isBlank()) {
+            return ResponseEntity.status(401).build();
+        }
+
+        try {
+            return userService.updateMyProfile(
+                    userId,
+                    request.name(),
+                    request.avatarLetter(),
+                    request.avatarColor()
+            ).map(user -> ResponseEntity.ok(new ProfileMetadataResponse(
+                    user.getId(),
+                    user.getUsername(),
+                    user.getEmail(),
+                    user.getAvatarLetter(),
+                    user.getAvatarColor(),
+                    user.isOnline(),
+                    user.getServerVersion(),
+                    user.getUpdatedAt(),
+                    userService.calculateProfileCompletion(user)
+            )))
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    private String currentUserId(Authentication authentication) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return null;
+        }
+        return authentication.getPrincipal().toString();
     }
 }

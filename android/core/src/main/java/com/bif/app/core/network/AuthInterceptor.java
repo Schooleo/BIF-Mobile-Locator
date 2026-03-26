@@ -27,13 +27,15 @@ public class AuthInterceptor implements Interceptor {
     @NonNull
     @Override
     public Response intercept(@NonNull Chain chain) throws IOException {
-        // Grab the outgoing request
         Request originalRequest = chain.request();
+        String path = originalRequest.url().encodedPath();
 
-        // Fetch token
+        if (isAuthEndpoint(path)) {
+            return chain.proceed(originalRequest);
+        }
+
         String token = UserPreferences.getAuthToken(context);
 
-        // If the user is logged in, attach the Authorization header
         if (!token.isEmpty()) {
             Request newRequest = originalRequest.newBuilder()
                     .header("Authorization", "Bearer " + token)
@@ -45,5 +47,12 @@ public class AuthInterceptor implements Interceptor {
 
         // If no token, send the original request without headers.
         return chain.proceed(originalRequest);
+    }
+
+    private boolean isAuthEndpoint(String path) {
+        return path.contains("/api/auth/login")
+                || path.contains("/api/auth/register")
+                || path.contains("/api/auth/refresh")
+                || path.contains("/api/auth/logout");
     }
 }

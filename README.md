@@ -124,11 +124,13 @@ This project uses split CI and CD workflows with security as a prerequisite.
 
 ## Setup & Installation
 
-1.  **Clone the repository**:
+1. **Clone the repository**:
+
     ```bash
     git clone https://github.com/Schooleo/bif-mobile-locator.git
     ```
-2.  **Android app setup**:
+
+2. **Android app setup**:
     - Launch Android Studio.
     - Open the `android` folder.
     - Configure local secrets and keys (`google-services.json`, maps/places API keys).
@@ -139,7 +141,7 @@ This project uses split CI and CD workflows with security as a prerequisite.
     ./gradlew assembleDebug
     ```
 
-3.  **Server setup**:
+3. **Server setup**:
     - Ensure Docker is available for local MongoDB compose setup.
     - Run the Spring Boot server from the `server` folder.
 
@@ -148,16 +150,33 @@ This project uses split CI and CD workflows with security as a prerequisite.
     ./gradlew bootRun
     ```
 
-4.  **Run server container from registry (root compose)**:
-    - Use the root `docker-compose.yml` to pull and run the published server image.
-    - Optional: set `SERVER_IMAGE_TAG` (default: `latest`) before running.
+4. **Run server stack in development mode (local build)**:
+
+    - Use `docker-compose.yml` to build the local `server` source and run MongoDB.
+
+    - Quick start (no Express UI):
 
     ```bash
-    docker compose pull
-    docker compose up -d
+    docker compose up -d --build
     ```
 
-5.  **Run tests locally**:
+    - Start with mongo-express UI for database inspection:
+
+    ```bash
+    docker compose --profile express up -d --build
+    ```
+
+5. **Run server container from registry (root compose)**:
+
+    - Use the root `docker-compose.image.yml` to pull and run the published server image.
+    - Optional: set `SERVER_IMAGE_TAG` (default: `latest`) before running.
+
+        ```bash
+        docker compose -f docker-compose.image.yml pull
+        docker compose -f docker-compose.image.yml up -d
+        ```
+
+6. **Run tests locally**:
 
     ```bash
     cd android

@@ -69,7 +69,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./server
-          file: ./server/Dockerfile
+          file: ./server/Dockerfile.deploy
           push: true
           tags: |
             ghcr.io/${{ steps.image_meta.outputs.owner }}/bif-server:${{ steps.image_meta.outputs.version }}

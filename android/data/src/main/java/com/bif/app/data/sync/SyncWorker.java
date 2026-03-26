@@ -4,6 +4,7 @@ import android.content.Context;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
+import androidx.hilt.work.HiltWorker;
 import androidx.work.Constraints;
 import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.NetworkType;
@@ -14,25 +15,38 @@ import androidx.work.WorkerParameters;
 
 import java.util.concurrent.TimeUnit;
 
+import dagger.assisted.Assisted;
+import dagger.assisted.AssistedInject;
+
+@HiltWorker
 public class SyncWorker extends Worker {
 
     private static final String TAG = "SyncWorker";
     private static final String WORK_NAME = "periodic_sync";
 
-    public SyncWorker(@NonNull Context context,
-                      @NonNull WorkerParameters params) {
+    private final SyncManager syncManager;
+
+    @AssistedInject
+    public SyncWorker(
+            @Assisted @NonNull Context context,
+            @Assisted @NonNull WorkerParameters params,
+            SyncManager syncManager) {
         super(context, params);
+        this.syncManager = syncManager;
     }
 
     @NonNull
     @Override
     public Result doWork() {
         Log.d(TAG, "Periodic sync started");
-        // SyncManager should be obtained via the application component
-        // in a production app. This worker is schedulable by the code below.
-        // The actual sync logic in doWork depends on DI availability.
-        // For HiltWorker integration, extend HiltWorker and inject SyncManager.
-        return Result.success();
+        try {
+            syncManager.sync();
+            Log.d(TAG, "Periodic sync completed");
+            return Result.success();
+        } catch (Exception e) {
+            Log.e(TAG, "Periodic sync failed", e);
+            return Result.retry();
+        }
     }
 
     /**

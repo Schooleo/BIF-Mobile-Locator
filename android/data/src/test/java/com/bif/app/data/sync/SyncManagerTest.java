@@ -9,8 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.bif.app.core.network.RestApiService;
+import com.bif.app.core.network.dto.PlaceDto;
 import com.bif.app.core.network.dto.SyncChangeDto;
-import com.bif.app.core.network.dto.SyncConflictDto;
 import com.bif.app.core.network.dto.SyncRequestDto;
 import com.bif.app.core.network.dto.SyncResponseDto;
 import com.bif.app.data.source.local.SyncQueueDao;
@@ -224,6 +224,67 @@ public class SyncManagerTest {
         assertEquals("uuid-1", saved.clientChangeId);
         assertEquals("PENDING", saved.status);
         assertEquals(0, saved.retryCount);
+    }
+
+    @Test
+    public void enqueueChange_withPayload_serializesPayload() {
+        PlaceDto payload = new PlaceDto();
+        payload.id = "p1";
+        payload.name = "Cafe";
+
+        syncManager.enqueueChange("place", "p1", "UPDATE",
+                "uuid-2", payload);
+
+        ArgumentCaptor<SyncQueueEntity> captor =
+                ArgumentCaptor.forClass(SyncQueueEntity.class);
+        verify(mockSyncQueueDao).enqueue(captor.capture());
+
+        SyncQueueEntity saved = captor.getValue();
+        assertNotNull(saved.payload);
+        org.junit.Assert.assertTrue(saved.payload.contains("\"id\":\"p1\""));
+        org.junit.Assert.assertTrue(saved.payload.contains("\"name\":\"Cafe\""));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void sync_whenPendingHasPayload_includesPayloadInRequest()
+            throws IOException {
+        when(mockNetworkMonitor.isOnline()).thenReturn(true);
+                syncManager.setLastPulledVersion(7);
+
+        SyncQueueEntity entry = new SyncQueueEntity();
+        entry.id = 10;
+        entry.entityType = "place";
+        entry.entityId = "p10";
+        entry.operation = "UPDATE";
+        entry.clientChangeId = "cid-10";
+        entry.payload = "{\"id\":\"p10\",\"name\":\"Updated\"}";
+        entry.status = "PENDING";
+        when(mockSyncQueueDao.getPending())
+                .thenReturn(Collections.singletonList(entry));
+
+        SyncResponseDto serverResponse = new SyncResponseDto();
+        serverResponse.currentServerVersion = 11;
+        serverResponse.pulledChanges = new ArrayList<>();
+
+        Call<SyncResponseDto> mockCall =
+                (Call<SyncResponseDto>) org.mockito.Mockito.mock(Call.class);
+        when(mockCall.execute())
+                .thenReturn(Response.success(serverResponse));
+        when(mockRestApiService.sync(any(SyncRequestDto.class)))
+                .thenReturn(mockCall);
+
+        syncManager.sync();
+
+        ArgumentCaptor<SyncRequestDto> requestCaptor =
+                ArgumentCaptor.forClass(SyncRequestDto.class);
+        verify(mockRestApiService).sync(requestCaptor.capture());
+
+        SyncRequestDto sent = requestCaptor.getValue();
+        assertNotNull(sent.pushedChanges);
+        assertEquals(1, sent.pushedChanges.size());
+        assertEquals(entry.payload, sent.pushedChanges.get(0).payload);
+                assertEquals(7, sent.pushedChanges.get(0).serverVersion);
     }
 
     @Test

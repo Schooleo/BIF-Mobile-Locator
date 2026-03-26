@@ -123,6 +123,7 @@ dependencies {
     androidTestImplementation libs.espresso.core
 
     // Hilt
+    implementation libs.hilt.work
     implementation libs.hilt.android
     annotationProcessor libs.hilt.compiler
 
@@ -149,6 +150,10 @@ dependencies {
     // Room
     implementation libs.room.runtime
     annotationProcessor libs.room.compiler
+
+    // WorkManager / Startup
+    implementation libs.work.runtime
+    implementation libs.startup.runtime
 
 }
 

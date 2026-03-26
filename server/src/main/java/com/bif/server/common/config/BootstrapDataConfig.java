@@ -18,6 +18,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Instant;
 import java.util.List;
@@ -33,7 +34,8 @@ public class BootstrapDataConfig {
             PlaceRepository placeRepository,
             FavoriteRepository favoriteRepository,
             TripPlanRepository tripPlanRepository,
-            ChatMessageRepository chatMessageRepository
+            ChatMessageRepository chatMessageRepository,
+            PasswordEncoder passwordEncoder
     ) {
         return args -> {
             if (userRepository.count() > 0) {
@@ -41,8 +43,9 @@ public class BootstrapDataConfig {
             }
 
             User user = new User();
-            user.setName("Alex");
+            user.setUsername("alex");
             user.setEmail("alex@bif.local");
+            user.setPasswordHash(passwordEncoder.encode("Password123!"));
             user.setAvatarLetter("A");
             user.setAvatarColor(0xFF1E88E5);
             user.setOnline(true);
