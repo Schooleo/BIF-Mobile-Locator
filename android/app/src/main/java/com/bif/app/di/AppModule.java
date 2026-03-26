@@ -90,7 +90,9 @@ public class AppModule {
     public ChatMessageDao provideChatMessageDao(AppDatabase database) {
       return database.chatMessageDao();
     }
-      
+
+    @Provides
+    @Singleton
     public LocalSessionDataCleaner provideLocalSessionDataCleaner(AppDatabase appDatabase) {
       return () -> {
         ExecutorService executor = Executors.newSingleThreadExecutor();
