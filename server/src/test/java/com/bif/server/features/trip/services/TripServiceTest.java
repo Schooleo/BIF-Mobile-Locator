@@ -6,7 +6,6 @@ import com.bif.server.features.trip.repositories.TripPlanRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -89,8 +88,8 @@ class TripServiceTest {
 
         assertTrue(result.isPresent());
         assertEquals(1, result.get().getStops().size());
-        assertEquals(0, result.get().getStops().get(0).getOrderIndex());
-        assertEquals("Central Park", result.get().getStops().get(0).getTitle());
+        assertEquals(0, result.get().getStops().getFirst().getOrderIndex());
+        assertEquals("Central Park", result.get().getStops().getFirst().getTitle());
         verify(tripPlanRepository).save(plan);
     }
 
@@ -121,7 +120,7 @@ class TripServiceTest {
     }
 
     @Test
-    void removeStop_WhenFound_RemovesAndReindexes() {
+    void removeStop_WhenFound_RemovesAndReindex() {
         TripStop stop0 = new TripStop();
         stop0.setTitle("A");
         stop0.setOrderIndex(0);
@@ -157,7 +156,7 @@ class TripServiceTest {
     }
 
     @Test
-    void rearrangeStops_WhenFound_ReplacesAndReindexes() {
+    void rearrangeStops_WhenFound_ReplacesAndReindex() {
         TripPlan plan = new TripPlan();
         plan.setStops(new ArrayList<>());
         when(tripPlanRepository.findById("t1")).thenReturn(Optional.of(plan));
