@@ -40,6 +40,9 @@ type Mutation {
   upsertChatMessage(input: ChatMessageInput!): ChatMessage!
   deleteChatMessage(id: ID!): Boolean!
   upsertTripPlan(input: TripPlanInput!): TripPlan!
+  addTripStop(tripId: ID!, input: TripStopInput!): TripPlan
+  removeTripStop(tripId: ID!, orderIndex: Int!): TripPlan
+  rearrangeTripStops(tripId: ID!, stops: [TripStopInput!]!): TripPlan
   deleteTripPlan(id: ID!): Boolean!
   sync(input: SyncRequestInput!): SyncResponse!
 }
@@ -104,6 +107,10 @@ type ChatMessage {
   content: String
   sentAt: String
   clientMessageId: String
+  type: String
+  sharedLocation: Location
+  sharedAddress: String
+  confirmed: Boolean
 }
 
 type TripPlan {
@@ -218,6 +225,10 @@ input ChatMessageInput {
   content: String
   sentAt: String
   clientMessageId: String
+  type: String
+  sharedLocation: LocationInput
+  sharedAddress: String
+  confirmed: Boolean
 }
 
 input TripPlanInput {

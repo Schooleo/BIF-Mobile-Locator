@@ -1,6 +1,7 @@
 package com.bif.server.features.trip.controllers;
 
 import com.bif.server.features.trip.models.TripPlan;
+import com.bif.server.features.trip.models.TripStop;
 import com.bif.server.features.trip.services.TripService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -72,6 +73,60 @@ class TripGraphqlControllerTest {
         TripPlan result = controller.upsertTripPlan(input);
 
         assertSame(input, result);
+    }
+
+    @Test
+    void addTripStop_WhenFound_ReturnsResult() {
+        TripPlan plan = new TripPlan();
+        TripStop stop = new TripStop();
+        stop.setTitle("Park");
+        when(tripService.addStop("t1", stop)).thenReturn(Optional.of(plan));
+
+        TripPlan result = controller.addTripStop("t1", stop);
+
+        assertSame(plan, result);
+    }
+
+    @Test
+    void addTripStop_WhenMissing_ReturnsNull() {
+        when(tripService.addStop(eq("t1"), any())).thenReturn(Optional.empty());
+
+        assertNull(controller.addTripStop("t1", new TripStop()));
+    }
+
+    @Test
+    void removeTripStop_WhenFound_ReturnsResult() {
+        TripPlan plan = new TripPlan();
+        when(tripService.removeStop("t1", 0)).thenReturn(Optional.of(plan));
+
+        TripPlan result = controller.removeTripStop("t1", 0);
+
+        assertSame(plan, result);
+    }
+
+    @Test
+    void removeTripStop_WhenMissing_ReturnsNull() {
+        when(tripService.removeStop("t1", 0)).thenReturn(Optional.empty());
+
+        assertNull(controller.removeTripStop("t1", 0));
+    }
+
+    @Test
+    void rearrangeTripStops_WhenFound_ReturnsResult() {
+        TripPlan plan = new TripPlan();
+        List<TripStop> stops = List.of(new TripStop());
+        when(tripService.rearrangeStops("t1", stops)).thenReturn(Optional.of(plan));
+
+        TripPlan result = controller.rearrangeTripStops("t1", stops);
+
+        assertSame(plan, result);
+    }
+
+    @Test
+    void rearrangeTripStops_WhenMissing_ReturnsNull() {
+        when(tripService.rearrangeStops(eq("t1"), any())).thenReturn(Optional.empty());
+
+        assertNull(controller.rearrangeTripStops("t1", List.of()));
     }
 
     @Test

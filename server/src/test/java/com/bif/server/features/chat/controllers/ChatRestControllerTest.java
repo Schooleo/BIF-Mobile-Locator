@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -70,6 +72,17 @@ class ChatRestControllerTest {
     }
 
     @Test
+    void getMessagesByGroupPaged_ReturnsPage() {
+        ChatMessage msg = new ChatMessage();
+        Page<ChatMessage> page = new PageImpl<>(List.of(msg));
+        when(chatService.getByGroupIdPaginated("g1", 0, 20)).thenReturn(page);
+
+        Page<ChatMessage> result = controller.getMessagesByGroupPaged("g1", 0, 20);
+
+        assertEquals(1, result.getTotalElements());
+    }
+
+    @Test
     void upsertMessage_DelegatesToService() {
         ChatMessage input = new ChatMessage();
         when(chatService.save(input)).thenReturn(input);
@@ -77,6 +90,29 @@ class ChatRestControllerTest {
         ChatMessage result = controller.upsertMessage(input);
 
         assertSame(input, result);
+    }
+
+    @Test
+    void confirmMessage_WhenFound_ReturnsOk() {
+        ChatMessage msg = new ChatMessage();
+        msg.setConfirmed(true);
+        when(chatService.confirmMessage("client-1"))
+                .thenReturn(Optional.of(msg));
+
+        ResponseEntity<ChatMessage> result = controller.confirmMessage("client-1");
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertTrue(result.getBody().isConfirmed());
+    }
+
+    @Test
+    void confirmMessage_WhenMissing_ReturnsNotFound() {
+        when(chatService.confirmMessage("client-x"))
+                .thenReturn(Optional.empty());
+
+        ResponseEntity<ChatMessage> result = controller.confirmMessage("client-x");
+
+        assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
     }
 
     @Test

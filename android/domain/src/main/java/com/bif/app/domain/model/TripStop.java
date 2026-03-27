@@ -1,0 +1,30 @@
+package com.bif.app.domain.model;
+
+public class TripStop {
+    private final String title;
+    private final String note;
+    private final double latitude;
+    private final double longitude;
+    private final long arrivalTime;
+    private final long departureTime;
+    private final int orderIndex;
+
+    public TripStop(String title, String note, double latitude, double longitude,
+                    long arrivalTime, long departureTime, int orderIndex) {
+        this.title = title;
+        this.note = note;
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.arrivalTime = arrivalTime;
+        this.departureTime = departureTime;
+        this.orderIndex = orderIndex;
+    }
+
+    public String getTitle() { return title; }
+    public String getNote() { return note; }
+    public double getLatitude() { return latitude; }
+    public double getLongitude() { return longitude; }
+    public long getArrivalTime() { return arrivalTime; }
+    public long getDepartureTime() { return departureTime; }
+    public int getOrderIndex() { return orderIndex; }
+}

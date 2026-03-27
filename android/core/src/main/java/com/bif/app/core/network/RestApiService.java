@@ -13,6 +13,9 @@ import com.bif.app.core.network.dto.CreateGroupRequestDto;
 import com.bif.app.core.network.dto.GroupApiModel;
 import com.bif.app.core.network.dto.UserApiModel;
 import com.bif.app.core.network.dto.UpdateGroupRequestDto;
+import com.bif.app.core.network.dto.ChatMessageDto;
+import com.bif.app.core.network.dto.TripPlanDto;
+import com.bif.app.core.network.dto.TripStopDto;
 import com.bif.app.core.network.dto.PlaceDto;
 import com.bif.app.core.network.dto.PlaceReviewDto;
 import com.bif.app.core.network.dto.SyncRequestDto;
@@ -120,7 +123,22 @@ public interface RestApiService {
     Call<PlaceDto> addReview(@Path("id") String placeId,
                              @Body PlaceReviewDto review);
 
-    // Sync
+    @GET("chat/group/{groupId}")
+    Call<List<ChatMessageDto>> getChatMessages(@Path("groupId") String groupId);
+
+    @POST("chat")
+    Call<ChatMessageDto> postChatMessage(@Body ChatMessageDto message);
+
+    @PATCH("chat/{id}/confirm")
+    Call<ChatMessageDto> confirmMessage(@Path("id") String id);
+
+    @GET("trips/group/{groupId}")
+    Call<List<TripPlanDto>> getTripsByGroup(@Path("groupId") String groupId);
+
+    @POST("trips/{tripId}/stops")
+    Call<TripPlanDto> addTripStop(@Path("tripId") String tripId,
+                                  @Body TripStopDto stop);
+
     @POST("sync")
     Call<SyncResponseDto> sync(@Body SyncRequestDto request);
 }
