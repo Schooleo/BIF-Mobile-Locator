@@ -4,7 +4,7 @@ import com.bif.app.data.repository.ChatRepository;
 import com.bif.app.data.repository.FavoriteRepository;
 import com.bif.app.data.repository.FriendRepository;
 import com.bif.app.data.repository.FriendshipRepository;
-import com.bif.app.data.repository.GroupRepositoryMock;
+import com.bif.app.data.repository.GroupRepository;
 import com.bif.app.data.repository.LocationRepository;
 import com.bif.app.data.repository.MapRepository;
 import com.bif.app.data.repository.PlaceRepository;
@@ -56,7 +56,7 @@ public abstract class RepositoryModule {
 
     @Binds
     @Singleton
-    public abstract IGroupRepository bindGroupRepository(GroupRepositoryMock repository);
+    public abstract IGroupRepository bindGroupRepository(GroupRepository repository);
 
     @Binds
     @Singleton

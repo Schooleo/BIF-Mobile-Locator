@@ -283,8 +283,9 @@ public class SocialFragment extends Fragment {
             return;
         }
         if (state instanceof UiState.Empty) {
-            UiState.Empty<List<Group>> empty = (UiState.Empty<List<Group>>) state;
-            showState(empty.getMessage(), false);
+            // Keep list visible so the action row (Create New Group) is always accessible.
+            groupsAdapter.setGroups(new ArrayList<>());
+            showList(groupsAdapter);
             return;
         }
         if (state instanceof UiState.Error) {
