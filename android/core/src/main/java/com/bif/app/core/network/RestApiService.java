@@ -7,6 +7,9 @@ import com.bif.app.core.network.dto.auth.RefreshTokenRequest;
 import com.bif.app.core.network.dto.auth.RegisterRequest;
 import com.bif.app.core.network.dto.favorite.FavoriteRequestDto;
 import com.bif.app.core.network.dto.favorite.FavoriteResponseDto;
+import com.bif.app.core.network.dto.friendship.CreateFriendRequestDto;
+import com.bif.app.core.network.dto.friendship.FriendshipApiModel;
+import com.bif.app.core.network.dto.friendship.UpdateFriendRequestStatusDto;
 import com.bif.app.core.network.dto.profile.ProfileMetadataResponse;
 import com.bif.app.core.network.dto.profile.UpdateMyProfileRequest;
 import com.bif.app.core.network.dto.CreateGroupRequestDto;
@@ -74,6 +77,21 @@ public interface RestApiService {
 
     @GET("users")
     Call<List<UserApiModel>> getUsers();
+
+    @GET("friends")
+    Call<List<UserApiModel>> getFriends();
+
+    @GET("friends/requests/pending")
+    Call<List<FriendshipApiModel>> getPendingFriendRequests();
+
+    @POST("friends/requests")
+    Call<FriendshipApiModel> sendFriendRequest(@Body CreateFriendRequestDto request);
+
+    @PATCH("friends/requests/{friendshipId}")
+    Call<FriendshipApiModel> updateFriendRequestStatus(
+            @Path("friendshipId") String friendshipId,
+            @Body UpdateFriendRequestStatusDto request
+    );
 
     @GET("groups/user/{userId}")
     Call<List<GroupApiModel>> getGroupsByUser(@Path("userId") String userId);

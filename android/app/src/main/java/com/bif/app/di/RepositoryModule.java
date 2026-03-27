@@ -3,6 +3,7 @@ package com.bif.app.di;
 import com.bif.app.data.repository.ChatRepository;
 import com.bif.app.data.repository.FavoriteRepository;
 import com.bif.app.data.repository.FriendRepository;
+import com.bif.app.data.repository.FriendshipRepository;
 import com.bif.app.data.repository.GroupRepositoryMock;
 import com.bif.app.data.repository.LocationRepository;
 import com.bif.app.data.repository.MapRepository;
@@ -11,6 +12,7 @@ import com.bif.app.data.repository.TripRepository;
 import com.bif.app.domain.repository.IChatRepository;
 import com.bif.app.domain.repository.IFavoriteRepository;
 import com.bif.app.domain.repository.IFriendRepository;
+import com.bif.app.domain.repository.IFriendshipRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.ILocationRepository;
 import com.bif.app.domain.repository.IMapRepository;
@@ -47,6 +49,10 @@ public abstract class RepositoryModule {
     @Binds
     @Singleton
     public abstract IFriendRepository bindFriendRepository(FriendRepository repository);
+
+    @Binds
+    @Singleton
+    public abstract IFriendshipRepository bindFriendshipRepository(FriendshipRepository repository);
 
     @Binds
     @Singleton
