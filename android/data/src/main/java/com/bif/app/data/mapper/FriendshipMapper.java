@@ -13,10 +13,13 @@ public final class FriendshipMapper {
     private FriendshipMapper() {
     }
 
+
     public static Friendship toDomain(FriendshipEntity entity) {
         return new Friendship(
                 entity.id,
+                entity.serverId,
                 entity.requesterId,
+                entity.requesterName,
                 entity.receiverId,
                 toDomainStatus(entity.status != null ? entity.status.name() : null),
                 entity.createdAt,
@@ -38,7 +41,9 @@ public final class FriendshipMapper {
     public static FriendshipEntity fromApi(FriendshipApiModel apiModel) {
         FriendshipEntity entity = new FriendshipEntity();
         entity.id = stableId(apiModel != null ? apiModel.id : null);
+        entity.serverId = apiModel != null ? apiModel.id : null;
         entity.requesterId = apiModel != null ? apiModel.requesterId : null;
+        entity.requesterName = apiModel != null ? apiModel.requesterName : null;
         entity.receiverId = apiModel != null ? apiModel.receiverId : null;
         entity.status = toLocalStatus(apiModel != null ? apiModel.status : null);
         entity.createdAt = parseInstantToMillis(apiModel != null ? apiModel.createdAt : null);

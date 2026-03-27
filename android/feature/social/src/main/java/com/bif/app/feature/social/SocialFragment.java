@@ -22,6 +22,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.bif.app.core.utils.DialogUtils;
 import com.bif.app.core.utils.UriUtils;
 import com.bif.app.domain.model.Friend;
+import com.bif.app.domain.model.Friendship;
 import com.bif.app.domain.model.Group;
 import com.google.android.material.tabs.TabLayout;
 
@@ -42,11 +43,32 @@ public class SocialFragment extends Fragment {
     private FriendsAdapter friendsAdapter;
     private GroupsAdapter groupsAdapter;
     private SocialViewModel viewModel;
+    private boolean isFriendActionLoading = false;
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         return inflater.inflate(R.layout.fragment_social, container, false);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (viewModel != null) {
+            viewModel.retryFriends();
+            viewModel.refreshRequestsOnly();
+            viewModel.retryGroups();
+        }
+    }
+
+    @Override
+    public void onHiddenChanged(boolean hidden) {
+        super.onHiddenChanged(hidden);
+        if (!hidden && viewModel != null) {
+            viewModel.retryFriends();
+            viewModel.refreshRequestsOnly();
+            viewModel.retryGroups();
+        }
     }
 
     @Override
@@ -97,6 +119,18 @@ public class SocialFragment extends Fragment {
             }
 
             @Override
+            public void onAcceptRequestClick(Friendship friendship) {
+                friendsAdapter.removePendingRequestOptimistically(friendship.getId());
+                viewModel.acceptFriendRequest(friendship.getId());
+            }
+
+            @Override
+            public void onRejectRequestClick(Friendship friendship) {
+                friendsAdapter.removePendingRequestOptimistically(friendship.getId());
+                viewModel.rejectFriendRequest(friendship.getId());
+            }
+
+            @Override
             public void onFriendClick(Friend friend) {
                 navigateToChatFromFriend(friend);
             }
@@ -104,13 +138,13 @@ public class SocialFragment extends Fragment {
             @Override
             public void onDeleteFriendClick(Friend friend, int position) {
                 DialogUtils.showConfirmDialog(requireContext(),
-                        "Delete " + friend.getName(),
-                        "Are you sure you want to delete " + friend.getName() + "?",
-                        "Delete",
-                        "Cancel",
+                        getString(R.string.unfriend_title),
+                        getString(R.string.unfriend_confirm_message, friend.getName()),
+                        getString(R.string.unfriend_action),
+                        getString(R.string.cancel),
                         () -> {
+                            friendsAdapter.removeFriendOptimistically(friend.getId());
                             viewModel.deleteFriend(friend);
-                            Toast.makeText(requireContext(), "Delete " + friend.getName(), Toast.LENGTH_SHORT).show();
                         });
             }
         });
@@ -137,6 +171,50 @@ public class SocialFragment extends Fragment {
     }
 
     private void observeViewModel() {
+        viewModel.getFriendActionMessage().observe(getViewLifecycleOwner(), message -> {
+            if (message != null && !message.isEmpty()) {
+                String toastMessage = message;
+                if ("__MSG_USER_NOT_FOUND__".equals(message)) {
+                    toastMessage = getString(R.string.user_not_found);
+                } else if ("__MSG_FRIEND_REQUEST_SENT__".equals(message)) {
+                    toastMessage = getString(R.string.friend_request_sent);
+                } else if ("__MSG_FRIEND_REQUEST_SELF__".equals(message)) {
+                    toastMessage = getString(R.string.friend_request_self_not_allowed);
+                } else if ("__MSG_FRIEND_REQUEST_PENDING__".equals(message)) {
+                    toastMessage = getString(R.string.friend_request_pending_exists);
+                } else if ("__MSG_FRIEND_REQUEST_ALREADY_FRIENDS__".equals(message)) {
+                    toastMessage = getString(R.string.friend_request_already_friends);
+                } else if ("__MSG_FRIEND_REQUEST_SEND_FAILED__".equals(message)) {
+                    toastMessage = getString(R.string.friend_request_send_failed);
+                } else if ("__MSG_FRIEND_REQUEST_ACCEPT_SUCCESS__".equals(message)) {
+                    toastMessage = getString(R.string.friend_request_accepted);
+                } else if ("__MSG_FRIEND_REQUEST_REJECT_SUCCESS__".equals(message)) {
+                    toastMessage = getString(R.string.friend_request_rejected);
+                } else if ("__MSG_FRIEND_REQUEST_ACCEPT_FAILED__".equals(message)) {
+                    toastMessage = getString(R.string.friend_request_accept_failed);
+                    viewModel.refreshRequestsOnly();
+                } else if ("__MSG_FRIEND_REQUEST_REJECT_FAILED__".equals(message)) {
+                    toastMessage = getString(R.string.friend_request_reject_failed);
+                    viewModel.refreshRequestsOnly();
+                } else if ("__MSG_UNFRIEND_SUCCESS__".equals(message)) {
+                    toastMessage = getString(R.string.unfriend_success);
+                } else if ("__MSG_UNFRIEND_FAILED__".equals(message)) {
+                    toastMessage = getString(R.string.unfriend_failed);
+                    viewModel.retryFriends();
+                }
+                Toast.makeText(requireContext(), toastMessage, Toast.LENGTH_SHORT).show();
+                viewModel.clearFriendActionMessage();
+            }
+        });
+
+        viewModel.getFriendActionLoading().observe(getViewLifecycleOwner(), isLoading -> {
+            isFriendActionLoading = isLoading != null && isLoading;
+            updateFriendActionLoadingUi();
+        });
+
+        viewModel.getPendingRequests().observe(getViewLifecycleOwner(), requests ->
+                friendsAdapter.setPendingRequests(requests != null ? requests : new ArrayList<>()));
+
         viewModel.getFriendUiState().observe(getViewLifecycleOwner(), state -> {
             if (tabLayout.getSelectedTabPosition() == 0) {
                 renderFriendState(state);
@@ -183,8 +261,9 @@ public class SocialFragment extends Fragment {
             return;
         }
         if (state instanceof UiState.Empty) {
-            UiState.Empty<List<Friend>> empty = (UiState.Empty<List<Friend>>) state;
-            showState(empty.getMessage(), false);
+            // Keep list visible so the first action row (Add New Friend) is always accessible.
+            friendsAdapter.setFriends(new ArrayList<>());
+            showList(friendsAdapter);
             return;
         }
         if (state instanceof UiState.Error) {
@@ -223,6 +302,8 @@ public class SocialFragment extends Fragment {
         recyclerView.setVisibility(View.GONE);
         stateLayout.setVisibility(View.GONE);
         progressLoading.setVisibility(View.VISIBLE);
+        recyclerView.setOnTouchListener(null);
+        recyclerView.setAlpha(1f);
     }
 
     private void showState(String message, boolean showRetry) {
@@ -231,6 +312,8 @@ public class SocialFragment extends Fragment {
         stateLayout.setVisibility(View.VISIBLE);
         tvStateMessage.setText(message);
         btnRetry.setVisibility(showRetry ? View.VISIBLE : View.GONE);
+        recyclerView.setOnTouchListener(null);
+        recyclerView.setAlpha(1f);
     }
 
     private void showList(RecyclerView.Adapter<?> adapter) {
@@ -238,6 +321,24 @@ public class SocialFragment extends Fragment {
         stateLayout.setVisibility(View.GONE);
         recyclerView.setVisibility(View.VISIBLE);
         recyclerView.setAdapter(adapter);
+        updateFriendActionLoadingUi();
+    }
+
+    private void updateFriendActionLoadingUi() {
+        boolean isFriendTab = tabLayout != null && tabLayout.getSelectedTabPosition() == 0;
+        boolean canOverlay = isFriendTab && recyclerView.getVisibility() == View.VISIBLE;
+
+        if (canOverlay && isFriendActionLoading) {
+            progressLoading.setVisibility(View.VISIBLE);
+            recyclerView.setAlpha(0.5f);
+            recyclerView.setOnTouchListener((v, event) -> true);
+        } else {
+            if (canOverlay) {
+                progressLoading.setVisibility(View.GONE);
+            }
+            recyclerView.setAlpha(1f);
+            recyclerView.setOnTouchListener(null);
+        }
     }
 
     private void showAddFriendDialog() {
@@ -249,9 +350,7 @@ public class SocialFragment extends Fragment {
                 R.id.btn_close,
                 inputText -> {
                     if (!inputText.isEmpty()) {
-                        int color = getResources().getColor(com.bif.app.core.R.color.avatar_purple, null);
-                        viewModel.addFriend(inputText, inputText.substring(0, 1).toUpperCase(), color);
-                        Toast.makeText(requireContext(), "Added friend: " + inputText, Toast.LENGTH_SHORT).show();
+                        viewModel.addFriend(inputText);
                     } else {
                         Toast.makeText(requireContext(), "Please enter a name", Toast.LENGTH_SHORT).show();
                     }

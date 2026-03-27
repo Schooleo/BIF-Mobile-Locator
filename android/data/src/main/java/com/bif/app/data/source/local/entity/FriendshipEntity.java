@@ -16,7 +16,9 @@ public class FriendshipEntity {
     @PrimaryKey(autoGenerate = true)
     public int id;
 
+    public String serverId;
     public String requesterId;
+    public String requesterName;
     public String receiverId;
     public FriendshipStatus status;
     public long createdAt;

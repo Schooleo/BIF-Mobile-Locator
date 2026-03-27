@@ -9,7 +9,6 @@ import com.bif.app.core.network.dto.favorite.FavoriteRequestDto;
 import com.bif.app.core.network.dto.favorite.FavoriteResponseDto;
 import com.bif.app.core.network.dto.friendship.CreateFriendRequestDto;
 import com.bif.app.core.network.dto.friendship.FriendshipApiModel;
-import com.bif.app.core.network.dto.friendship.UpdateFriendRequestStatusDto;
 import com.bif.app.core.network.dto.profile.ProfileMetadataResponse;
 import com.bif.app.core.network.dto.profile.UpdateMyProfileRequest;
 import com.bif.app.core.network.dto.CreateGroupRequestDto;
@@ -81,17 +80,23 @@ public interface RestApiService {
     @GET("friends")
     Call<List<UserApiModel>> getFriends();
 
-    @GET("friends/requests/pending")
-    Call<List<FriendshipApiModel>> getPendingFriendRequests();
+        @DELETE("friends/{id}")
+        Call<Void> unfriend(@Path("id") String id);
+
+        @GET("friends/requests/incoming")
+        Call<List<FriendshipApiModel>> getIncomingFriendRequests();
+
+        @GET("friends/requests/outgoing")
+        Call<List<FriendshipApiModel>> getOutgoingFriendRequests();
 
     @POST("friends/requests")
     Call<FriendshipApiModel> sendFriendRequest(@Body CreateFriendRequestDto request);
 
-    @PATCH("friends/requests/{friendshipId}")
-    Call<FriendshipApiModel> updateFriendRequestStatus(
-            @Path("friendshipId") String friendshipId,
-            @Body UpdateFriendRequestStatusDto request
-    );
+    @POST("friends/{id}/accept")
+    Call<FriendshipApiModel> acceptFriendRequest(@Path("id") String id);
+
+    @POST("friends/{id}/reject")
+    Call<FriendshipApiModel> rejectFriendRequest(@Path("id") String id);
 
     @GET("groups/user/{userId}")
     Call<List<GroupApiModel>> getGroupsByUser(@Path("userId") String userId);

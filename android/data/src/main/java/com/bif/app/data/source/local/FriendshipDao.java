@@ -14,6 +14,9 @@ import java.util.List;
 
 @Dao
 public interface FriendshipDao {
+    @Query("SELECT * FROM friendships WHERE id = :id LIMIT 1")
+    FriendshipEntity getById(int id);
+
     @Query("SELECT * FROM friendships WHERE status = :status ORDER BY updatedAt DESC")
     List<FriendshipEntity> getByStatus(FriendshipStatus status);
 
@@ -29,6 +32,9 @@ public interface FriendshipDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     long insert(FriendshipEntity friendship);
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    long insertIgnore(FriendshipEntity friendship);
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insertAll(List<FriendshipEntity> friendships);
 
@@ -38,11 +44,35 @@ public interface FriendshipDao {
     @Query("DELETE FROM friendships")
     void clearAll();
 
+    @Query("DELETE FROM friendships WHERE ((requesterId = :userA AND receiverId = :userB) OR (requesterId = :userB AND receiverId = :userA))")
+    void deleteBetweenUsers(String userA, String userB);
+
     @Transaction
     default void replaceAll(List<FriendshipEntity> friendships) {
         clearAll();
         if (friendships != null && !friendships.isEmpty()) {
             insertAll(friendships);
         }
+    }
+
+    @Transaction
+    default boolean reservePendingIfAbsent(String requesterId, String receiverId, long nowMillis) {
+        FriendshipEntity existing = findBetweenUsers(requesterId, receiverId);
+        if (existing != null) {
+            return false;
+        }
+
+        FriendshipEntity pending = new FriendshipEntity();
+        pending.requesterId = requesterId;
+        pending.receiverId = receiverId;
+        pending.status = FriendshipStatus.PENDING;
+        pending.createdAt = nowMillis;
+        pending.updatedAt = nowMillis;
+        return insertIgnore(pending) != -1L;
+    }
+
+    @Transaction
+    default void rollbackReservedPending(String requesterId, String receiverId) {
+        deleteBetweenUsers(requesterId, receiverId);
     }
 }
