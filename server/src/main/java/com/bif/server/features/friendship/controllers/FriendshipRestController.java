@@ -34,7 +34,9 @@ public class FriendshipRestController {
     @GetMapping
     public ResponseEntity<List<User>> getFriends(Authentication authentication) {
         String userId = currentUserId(authentication);
-        if (userId == null) return ResponseEntity.status(401).build();
+        if (userId == null) {
+            return ResponseEntity.status(401).build();
+        }
 
         List<Friendship> friendships = friendshipService.getFriends(userId);
         List<String> friendIds = friendships.stream()
@@ -52,7 +54,9 @@ public class FriendshipRestController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> unfriend(@PathVariable String id, Authentication authentication) {
         String userId = currentUserId(authentication);
-        if (userId == null) return ResponseEntity.status(401).build();
+        if (userId == null) {
+            return ResponseEntity.status(401).build();
+        }
         
         friendshipService.removeFriendship(id, userId);
         return ResponseEntity.ok().build();
@@ -61,7 +65,9 @@ public class FriendshipRestController {
     @GetMapping("/requests/incoming")
     public ResponseEntity<List<FriendshipApiModel>> getIncomingRequests(Authentication authentication) {
         String userId = currentUserId(authentication);
-        if (userId == null) return ResponseEntity.status(401).build();
+        if (userId == null) {
+            return ResponseEntity.status(401).build();
+        }
         
         List<FriendshipApiModel> requests = friendshipService.getIncomingRequests(userId).stream()
                 .map(this::mapToApiModel)
@@ -72,7 +78,9 @@ public class FriendshipRestController {
     @GetMapping("/requests/outgoing")
     public ResponseEntity<List<FriendshipApiModel>> getOutgoingRequests(Authentication authentication) {
         String userId = currentUserId(authentication);
-        if (userId == null) return ResponseEntity.status(401).build();
+        if (userId == null) {
+            return ResponseEntity.status(401).build();
+        }
         
         List<FriendshipApiModel> requests = friendshipService.getOutgoingRequests(userId).stream()
                 .map(this::mapToApiModel)
@@ -83,7 +91,9 @@ public class FriendshipRestController {
     @PostMapping("/requests")
     public ResponseEntity<FriendshipApiModel> sendFriendRequest(@RequestBody CreateFriendRequestDto request, Authentication authentication) {
         String userId = currentUserId(authentication);
-        if (userId == null) return ResponseEntity.status(401).build();
+        if (userId == null) {
+            return ResponseEntity.status(401).build();
+        }
         
         try {
             Friendship friendship = friendshipService.sendRequest(userId, request.getReceiverId());
@@ -96,7 +106,9 @@ public class FriendshipRestController {
     @PostMapping("/{id}/accept")
     public ResponseEntity<FriendshipApiModel> acceptFriendRequest(@PathVariable String id, Authentication authentication) {
         String userId = currentUserId(authentication);
-        if (userId == null) return ResponseEntity.status(401).build();
+        if (userId == null) {
+            return ResponseEntity.status(401).build();
+        }
 
         try {
             Friendship friendship = friendshipService.acceptRequest(id, userId);
@@ -109,7 +121,9 @@ public class FriendshipRestController {
     @PostMapping("/{id}/reject")
     public ResponseEntity<FriendshipApiModel> rejectFriendRequest(@PathVariable String id, Authentication authentication) {
         String userId = currentUserId(authentication);
-        if (userId == null) return ResponseEntity.status(401).build();
+        if (userId == null) {
+            return ResponseEntity.status(401).build();
+        }
 
         try {
             Friendship friendship = friendshipService.rejectRequest(id, userId);
