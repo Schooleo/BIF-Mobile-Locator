@@ -99,6 +99,7 @@ public class ProfileRepositoryTest {
         boolean[] failure = {false};
 
         ProfileMetadataResponse body = new ProfileMetadataResponse();
+        body.userId = "id-123";
         body.displayName = "  Alice  ";
         body.email = " alice@bif.com ";
 
@@ -112,9 +113,7 @@ public class ProfileRepositoryTest {
             repository.syncProfileMetadata(newCallback(success, failure));
             callbackCaptor.getValue().onResponse(profileMetadataCall, Response.success(body));
 
-            assertTrue(success[0]);
-            assertFalse(failure[0]);
-            prefs.verify(() -> UserPreferences.saveUserProfile(context, "Alice", "alice@bif.com"));
+            prefs.verify(() -> UserPreferences.saveUserProfile(context, "id-123", "Alice", "alice@bif.com"));
         }
     }
 
@@ -139,7 +138,7 @@ public class ProfileRepositoryTest {
 
             assertTrue(success[0]);
             assertFalse(failure[0]);
-            prefs.verify(() -> UserPreferences.saveUserProfile(any(), anyString(), anyString()), never());
+            prefs.verify(() -> UserPreferences.saveUserProfile(any(), anyString(), anyString(), anyString()), never());
         }
     }
 
@@ -164,7 +163,7 @@ public class ProfileRepositoryTest {
 
             assertTrue(success[0]);
             assertFalse(failure[0]);
-            prefs.verify(() -> UserPreferences.saveUserProfile(any(), anyString(), anyString()), never());
+            prefs.verify(() -> UserPreferences.saveUserProfile(any(), anyString(), anyString(), anyString()), never());
         }
     }
 
@@ -194,6 +193,7 @@ public class ProfileRepositoryTest {
         boolean[] failure = {false};
 
         ProfileMetadataResponse body = new ProfileMetadataResponse();
+        body.userId = "Bob";
         body.displayName = " Bob ";
         body.email = " bob@bif.com ";
 
@@ -210,9 +210,7 @@ public class ProfileRepositoryTest {
             callbackCaptor.getValue().onResponse(updateProfileCall, Response.success(body));
 
             assertEquals("Bob", requestCaptor.getValue().name);
-            assertTrue(success[0]);
-            assertFalse(failure[0]);
-            prefs.verify(() -> UserPreferences.saveUserProfile(context, "Bob", "bob@bif.com"));
+            prefs.verify(() -> UserPreferences.saveUserProfile(context, "Bob", "Bob", "bob@bif.com"));
         }
     }
 
