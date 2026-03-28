@@ -4,7 +4,8 @@ import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.place.services.PlaceAddressEnrichmentService;
-import com.bif.server.features.place.services.search.PlaceSearchProvider;
+import com.bif.server.features.search.services.PlaceSearchIndexSyncService;
+import com.bif.server.features.search.services.PlaceSearchProvider;
 import com.bif.server.features.sync.services.SyncVersionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,9 @@ class PlaceServiceTest {
     @Mock
     private PlaceSearchProvider placeSearchProvider;
 
+    @Mock
+    private PlaceSearchIndexSyncService placeSearchIndexSyncService;
+
     private PlaceService placeService;
 
     @BeforeEach
@@ -43,6 +47,7 @@ class PlaceServiceTest {
                 syncVersionService,
             placeAddressEnrichmentService,
             placeSearchProvider,
+            placeSearchIndexSyncService,
             "osm_geocoder");
     }
 
@@ -83,6 +88,7 @@ class PlaceServiceTest {
         assertEquals("user1", result.getLastModifiedBy());
         assertEquals("123 Main St", result.getAddress());
         verify(placeRepository).save(place);
+        verify(placeSearchIndexSyncService).upsert(place);
     }
 
     @Test
@@ -102,6 +108,7 @@ class PlaceServiceTest {
         assertEquals("456 Search Rd", result.getAddress());
         assertEquals(5L, result.getServerVersion());
         verify(placeRepository).save(place);
+        verify(placeSearchIndexSyncService).upsert(place);
     }
 
     @Test
@@ -117,6 +124,7 @@ class PlaceServiceTest {
 
         assertSame(existing, result);
         verify(placeRepository, never()).save(any());
+        verifyNoInteractions(placeSearchIndexSyncService);
     }
 
     @Test
@@ -133,6 +141,7 @@ class PlaceServiceTest {
         assertTrue(place.isDeleted());
         assertEquals(11L, place.getServerVersion());
         verify(placeRepository).save(place);
+        verify(placeSearchIndexSyncService).deleteById("p1");
     }
 
     @Test
@@ -143,6 +152,7 @@ class PlaceServiceTest {
 
         assertFalse(result);
         verify(placeRepository, never()).save(any());
+        verifyNoInteractions(placeSearchIndexSyncService);
     }
 
     @Test
@@ -202,6 +212,7 @@ class PlaceServiceTest {
         assertEquals(3.0, result.getRating(), 0.01);
         assertNotNull(newReview.getCreatedAt());
         verify(placeRepository).save(place);
+        verify(placeSearchIndexSyncService).upsert(place);
     }
 
     @Test
@@ -230,5 +241,6 @@ class PlaceServiceTest {
 
         assertEquals(1, result.getReviewCount());
         assertEquals(5.0, result.getRating(), 0.01);
+        verify(placeSearchIndexSyncService).upsert(place);
     }
 }

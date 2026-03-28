@@ -154,10 +154,10 @@ public class PlaceRepositoryTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void searchPlaces_online_combinesServerAndGoogleResults()
+        public void searchPlaces_online_combinesServerAndGeocoderResults()
             throws IOException, InterruptedException {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
-        // Stub local cache (doSearch now queries this first)
+                // Local SQLite query now runs last and can still contribute more results.
         when(mockPlaceDao.searchByName(anyString(), anyString()))
                 .thenReturn(new ArrayList<>());
 
@@ -176,16 +176,16 @@ public class PlaceRepositoryTest {
         when(mockRestApiService.searchServerPlaces("test"))
                 .thenReturn(mockCall);
 
-        // Google returns one additional place
+        // Geocoder returns one additional place
         Address googleAddr = mock(Address.class);
         when(googleAddr.getLatitude()).thenReturn(30.0);
         when(googleAddr.getLongitude()).thenReturn(40.0);
-        when(googleAddr.getFeatureName()).thenReturn("Google Place");
-        when(googleAddr.getAddressLine(0)).thenReturn("456 Google Ave");
+        when(googleAddr.getFeatureName()).thenReturn("OSM Place");
+        when(googleAddr.getAddressLine(0)).thenReturn("456 OSM Ave");
         when(mockGeocodingDataSource.geocodeLocation("test"))
                 .thenReturn(Collections.singletonList(googleAddr));
 
-        // Mock the saveFromSearch call for Google-discovered place
+        // Mock saveFromSearch call for geocoder-discovered place
         Call<PlaceDto> saveCall = mock(Call.class);
         when(saveCall.execute())
                 .thenReturn(Response.success(new PlaceDto()));
@@ -202,6 +202,61 @@ public class PlaceRepositoryTest {
         assertNotNull(result.getValue());
         assertEquals(2, result.getValue().size());
         assertEquals("server1", result.getValue().get(0).id);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void searchPlaces_online_prioritizesServerThenGeocoderThenLocal()
+            throws IOException, InterruptedException {
+        when(mockNetworkMonitor.isOnline()).thenReturn(true);
+
+        PlaceDto serverDto = new PlaceDto();
+        serverDto.id = "server1";
+        serverDto.name = "Server Place";
+        serverDto.address = "123 Server St";
+        serverDto.latitude = 10.0;
+        serverDto.longitude = 20.0;
+
+        Call<List<PlaceDto>> searchCall = mock(Call.class);
+        when(searchCall.execute())
+                .thenReturn(Response.success(Collections.singletonList(serverDto)));
+        when(mockRestApiService.searchServerPlaces("museum"))
+                .thenReturn(searchCall);
+
+        Address osmAddr = mock(Address.class);
+        when(osmAddr.getLatitude()).thenReturn(30.0);
+        when(osmAddr.getLongitude()).thenReturn(40.0);
+        when(osmAddr.getFeatureName()).thenReturn("OSM Place");
+        when(osmAddr.getAddressLine(0)).thenReturn("456 OSM Ave");
+        when(mockGeocodingDataSource.geocodeLocation("museum"))
+                .thenReturn(Collections.singletonList(osmAddr));
+
+        PlaceEntity local = new PlaceEntity();
+        local.ownerUserId = "anonymous";
+        local.id = "local1";
+        local.name = "Local Place";
+        local.address = "789 Local St";
+        local.latitude = 50.0;
+        local.longitude = 60.0;
+        local.deleted = false;
+        when(mockPlaceDao.searchByName(anyString(), anyString()))
+                .thenReturn(Collections.singletonList(local));
+
+        Call<PlaceDto> saveCall = mock(Call.class);
+        when(saveCall.execute()).thenReturn(Response.success(new PlaceDto()));
+        when(mockRestApiService.saveFromSearch(any(PlaceDto.class)))
+                .thenReturn(saveCall);
+
+        when(mockPlaceDao.count(anyString())).thenReturn(3);
+
+        LiveData<List<Place>> result = placeRepository.searchPlaces("museum");
+        Thread.sleep(600);
+
+        assertNotNull(result.getValue());
+        assertEquals(3, result.getValue().size());
+        assertEquals("server1", result.getValue().get(0).id);
+        assertEquals("geocode_30.0_40.0", result.getValue().get(1).id);
+        assertEquals("local1", result.getValue().get(2).id);
     }
 
     @Test

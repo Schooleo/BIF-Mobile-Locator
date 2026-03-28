@@ -7,18 +7,20 @@ services:
       - "8080:8080"
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      TYPESENSE_ENABLED: "true"
+      PLACE_SEARCH_PROVIDER: ${PLACE_SEARCH_PROVIDER:-mongo}
+      TYPESENSE_ENABLED: ${TYPESENSE_ENABLED:-false}
       TYPESENSE_PROTOCOL: http
       TYPESENSE_HOST: typesense
       TYPESENSE_PORT: 8108
       TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-dev-typesense-key}
-    depends_on:
-      - typesense
+      TYPESENSE_BOOTSTRAP_REINDEX_ON_STARTUP: ${TYPESENSE_BOOTSTRAP_REINDEX_ON_STARTUP:-false}
     restart: unless-stopped
 
   typesense:
     image: typesense/typesense:30.1
     container_name: bif-typesense
+    profiles:
+      - typesense
     restart: unless-stopped
     ports:
       - "8108:8108"

@@ -1,4 +1,4 @@
-package com.bif.server.common.config;
+package com.bif.server.features.search.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -15,6 +15,7 @@ public class TypesenseProperties {
     private String placesCollection = "places";
     private int connectTimeoutMs = 3000;
     private int readTimeoutMs = 5000;
+    private boolean bootstrapReindexOnStartup = false;
 
     public boolean isEnabled() {
         return enabled;
@@ -78,5 +79,13 @@ public class TypesenseProperties {
 
     public void setReadTimeoutMs(int readTimeoutMs) {
         this.readTimeoutMs = readTimeoutMs;
+    }
+
+    public boolean isBootstrapReindexOnStartup() {
+        return bootstrapReindexOnStartup;
+    }
+
+    public void setBootstrapReindexOnStartup(boolean bootstrapReindexOnStartup) {
+        this.bootstrapReindexOnStartup = bootstrapReindexOnStartup;
     }
 }

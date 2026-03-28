@@ -3,7 +3,8 @@ package com.bif.server.features.place.services;
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.repositories.PlaceRepository;
-import com.bif.server.features.place.services.search.PlaceSearchProvider;
+import com.bif.server.features.search.services.PlaceSearchIndexSyncService;
+import com.bif.server.features.search.services.PlaceSearchProvider;
 import com.bif.server.features.sync.services.SyncVersionService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -20,18 +21,21 @@ public class PlaceService {
     private final SyncVersionService syncVersionService;
     private final PlaceAddressEnrichmentService placeAddressEnrichmentService;
     private final PlaceSearchProvider placeSearchProvider;
+    private final PlaceSearchIndexSyncService placeSearchIndexSyncService;
     private final String defaultSearchPlaceSource;
 
     public PlaceService(PlaceRepository placeRepository,
                         SyncVersionService syncVersionService,
                         PlaceAddressEnrichmentService placeAddressEnrichmentService,
                         PlaceSearchProvider placeSearchProvider,
+                        PlaceSearchIndexSyncService placeSearchIndexSyncService,
                         @Value("${place.search.default-source:osm_geocoder}")
                         String defaultSearchPlaceSource) {
         this.placeRepository = placeRepository;
         this.syncVersionService = syncVersionService;
         this.placeAddressEnrichmentService = placeAddressEnrichmentService;
         this.placeSearchProvider = placeSearchProvider;
+        this.placeSearchIndexSyncService = placeSearchIndexSyncService;
         this.defaultSearchPlaceSource = defaultSearchPlaceSource;
     }
 
@@ -47,7 +51,9 @@ public class PlaceService {
         enrichPlaceAddress(place);
         place.setServerVersion(syncVersionService.nextVersion());
         place.setLastModifiedBy(place.getPersistedByUserId());
-        return placeRepository.save(place);
+        Place saved = placeRepository.save(place);
+        placeSearchIndexSyncService.upsert(saved);
+        return saved;
     }
 
     public Place saveFromSearch(Place place) {
@@ -56,7 +62,9 @@ public class PlaceService {
             place.setPlaceSource(defaultSearchPlaceSource);
             place.setPersistedByAction("search_discovered");
             place.setServerVersion(syncVersionService.nextVersion());
-            return placeRepository.save(place);
+            Place saved = placeRepository.save(place);
+            placeSearchIndexSyncService.upsert(saved);
+            return saved;
         });
     }
 
@@ -81,6 +89,7 @@ public class PlaceService {
             place.setDeleted(true);
             place.setServerVersion(syncVersionService.nextVersion());
             placeRepository.save(place);
+            placeSearchIndexSyncService.deleteById(id);
             return true;
         }).orElse(false);
     }
@@ -110,7 +119,9 @@ public class PlaceService {
                     .average()
                     .orElse(0));
             place.setServerVersion(syncVersionService.nextVersion());
-            return placeRepository.save(place);
+                Place saved = placeRepository.save(place);
+                placeSearchIndexSyncService.upsert(saved);
+                return saved;
         }).orElseThrow(() -> new NoSuchElementException(
                 "Place not found: " + placeId));
     }

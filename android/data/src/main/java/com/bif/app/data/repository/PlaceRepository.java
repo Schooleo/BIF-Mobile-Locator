@@ -131,18 +131,7 @@ public class PlaceRepository implements IPlaceRepository {
             List<Place> combinedResults = new ArrayList<>();
             Set<String> seenIds = new HashSet<>();
 
-            // Step 1: Always search local Room cache first (includes favorites, persisted places)
-            String queryLower = query.toLowerCase(java.util.Locale.getDefault());
-            List<PlaceEntity> localMatches = placeDao.searchByName(
-                    queryLower, activeUserId);
-            if (localMatches != null) {
-                for (PlaceEntity entity : localMatches) {
-                    combinedResults.add(PlaceMapper.toDomain(entity));
-                    seenIds.add(entity.id);
-                }
-            }
-
-            // Step 2: Query server + geocoder when online, deduplicating against local results
+            // Step 1: Query server first when online.
             if (networkMonitor.isOnline()) {
                 try {
                     Response<List<PlaceDto>> response = restApiService
@@ -162,7 +151,7 @@ public class PlaceRepository implements IPlaceRepository {
                     Log.e(TAG, "Server search failed", e);
                 }
 
-                // Step 3: Geocoder to fill any remaining gaps
+                // Step 2: Query OSM geocoding next to enrich UX beyond server index.
                 try {
                     List<Address> geocoderResults =
                             geocodingDataSource.geocodeLocation(query);
@@ -193,7 +182,19 @@ public class PlaceRepository implements IPlaceRepository {
                     Log.e(TAG, "Geocoder search failed", e);
                 }
             }
-            // Offline: local cache results (Step 1) are already included above
+
+            // Step 3: Append local SQLite cache results last.
+            String queryLower = query.toLowerCase(java.util.Locale.getDefault());
+            List<PlaceEntity> localMatches = placeDao.searchByName(
+                    queryLower, activeUserId);
+            if (localMatches != null) {
+                for (PlaceEntity entity : localMatches) {
+                    if (!seenIds.contains(entity.id)) {
+                        combinedResults.add(PlaceMapper.toDomain(entity));
+                        seenIds.add(entity.id);
+                    }
+                }
+            }
 
             if (saveToHistory) {
                 saveSearchHistory(query);

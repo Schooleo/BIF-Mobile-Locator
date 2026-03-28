@@ -1,4 +1,4 @@
-package com.bif.server.features.place.services.search;
+package com.bif.server.features.search.services;
 
 import com.bif.server.features.place.models.Place;
 
