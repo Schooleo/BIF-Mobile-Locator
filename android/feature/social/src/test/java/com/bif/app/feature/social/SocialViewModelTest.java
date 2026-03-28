@@ -155,7 +155,8 @@ public class SocialViewModelTest {
         viewModel.createGroup("DevTeam", members);
 
         // Assert
-        verify(mockGroupRepository).createGroup(eq("DevTeam"), eq(members));
+        verify(mockGroupRepository, timeout(1000)).createGroup(eq("DevTeam"), eq(members));
+        verify(mockGroupRepository, timeout(1000)).refreshGroups();
     }
 
     @Test
@@ -167,7 +168,8 @@ public class SocialViewModelTest {
         viewModel.handleGroupAction(ownedGroup);
 
         // Assert
-        verify(mockGroupRepository).disbandGroup(ownedGroup);
+        verify(mockGroupRepository, timeout(1000)).disbandGroup(ownedGroup);
+        verify(mockGroupRepository, timeout(1000)).refreshGroups();
     }
 
     @Test
@@ -179,6 +181,7 @@ public class SocialViewModelTest {
         viewModel.handleGroupAction(otherGroup);
 
         // Assert
-        verify(mockGroupRepository).leaveGroup(otherGroup);
+        verify(mockGroupRepository, timeout(1000)).leaveGroup(otherGroup);
+        verify(mockGroupRepository, timeout(1000)).refreshGroups();
     }
 }
