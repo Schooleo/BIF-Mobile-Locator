@@ -1,211 +1,235 @@
 package com.bif.app.data.repository;
 
 import androidx.lifecycle.LiveData;
-import androidx.lifecycle.MutableLiveData;
+import androidx.lifecycle.Transformations;
 
-import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.ChatMessageDto;
-import com.bif.app.core.network.dto.TripPlanDto;
 import com.bif.app.core.network.dto.TripStopDto;
+import com.bif.app.data.source.local.TripDao;
+import com.bif.app.data.source.local.entity.TripStopEntity;
+import com.bif.app.data.sync.SyncManager;
 import com.bif.app.domain.model.TripPlan;
 import com.bif.app.domain.model.TripStop;
 import com.bif.app.domain.repository.ITripRepository;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
-
 @Singleton
 public class TripRepository implements ITripRepository {
 
-    private final RestApiService restApiService;
-    private final MutableLiveData<List<TripPlan>> tripsLiveData = new MutableLiveData<>(new ArrayList<>());
+    private final TripDao tripDao;
+    private final SyncManager syncManager;
+    private final ExecutorService executorService;
 
     @Inject
-    public TripRepository(RestApiService restApiService) {
-        this.restApiService = restApiService;
+    public TripRepository(TripDao tripDao, SyncManager syncManager) {
+        this.tripDao = tripDao;
+        this.syncManager = syncManager;
+        this.executorService = Executors.newSingleThreadExecutor();
     }
 
     @Override
     public LiveData<List<TripPlan>> getTripsByGroup(String groupId) {
         refreshTrips(groupId);
-        return tripsLiveData;
+        return Transformations.map(tripDao.getTripsWithStopsByGroup(groupId),
+                this::mapToDomain);
     }
 
     @Override
     public void addStopToTrip(String tripId, TripStop stop) {
-        TripStopDto dto = new TripStopDto();
-        dto.id = stop.getId();
-        dto.title = stop.getTitle();
-        dto.note = stop.getNote();
-        dto.orderIndex = stop.getOrderIndex();
-        
-        ChatMessageDto.LocationDto loc = new ChatMessageDto.LocationDto();
-        loc.latitude = stop.getLatitude();
-        loc.longitude = stop.getLongitude();
-        dto.location = loc;
+        executorService.execute(() -> {
+            TripStopEntity entity = toStopEntity(tripId, stop);
+            List<TripStopEntity> existing = tripDao.getActiveStopsByTripSync(tripId);
+            int nextOrder = existing != null ? existing.size() : 0;
+            entity.orderIndex = nextOrder;
+            entity.deleted = false;
 
-        restApiService.addTripStop(tripId, dto).enqueue(new Callback<>() {
-            @Override
-            public void onResponse(@androidx.annotation.NonNull Call<TripPlanDto> call, 
-                                   @androidx.annotation.NonNull Response<TripPlanDto> response) {
-                if (response.isSuccessful() && response.body() != null) {
-                    updateLocalList(tripId, mapToDomain(response.body()));
-                }
-            }
-
-            @Override
-            public void onFailure(@androidx.annotation.NonNull Call<TripPlanDto> call, 
-                                  @androidx.annotation.NonNull Throwable t) {
-                // Handle failure
-            }
+            tripDao.upsertStop(entity);
+            enqueueStopUpdate(entity);
+            syncManager.syncIfOnline();
         });
     }
 
     @Override
     public void removeStopFromTrip(String tripId, String stopId) {
-        restApiService.removeTripStop(tripId, stopId).enqueue(new Callback<>() {
-            @Override
-            public void onResponse(@androidx.annotation.NonNull Call<TripPlanDto> call, 
-                                   @androidx.annotation.NonNull Response<TripPlanDto> response) {
-                if (response.isSuccessful() && response.body() != null) {
-                    updateLocalList(tripId, mapToDomain(response.body()));
-                }
+        executorService.execute(() -> {
+            TripStopEntity entity = tripDao.getStopByIdSync(stopId);
+            if (entity == null) {
+                entity = new TripStopEntity();
+                entity.id = stopId;
+                entity.tripId = tripId;
             }
 
-            @Override
-            public void onFailure(@androidx.annotation.NonNull Call<TripPlanDto> call, 
-                                  @androidx.annotation.NonNull Throwable t) {
-                // Handle failure
-            }
+            entity.deleted = true;
+            tripDao.upsertStop(entity);
+            enqueueStopUpdate(entity);
+
+            normalizeActiveOrderIndexes(tripId, true);
+            syncManager.syncIfOnline();
         });
     }
 
     @Override
     public void rearrangeStopsInTrip(String tripId, List<TripStop> newStops) {
-        List<TripStopDto> dtos = new ArrayList<>();
-        for (TripStop stop : newStops) {
-            TripStopDto dto = new TripStopDto();
-            dto.id = stop.getId();
-            dto.title = stop.getTitle();
-            dto.note = stop.getNote();
-            dto.orderIndex = stop.getOrderIndex();
-            ChatMessageDto.LocationDto loc = new ChatMessageDto.LocationDto();
-            loc.latitude = stop.getLatitude();
-            loc.longitude = stop.getLongitude();
-            dto.location = loc;
-            dtos.add(dto);
-        }
-
-        restApiService.rearrangeTripStops(tripId, dtos).enqueue(new Callback<>() {
-            @Override
-            public void onResponse(@androidx.annotation.NonNull Call<TripPlanDto> call, 
-                                   @androidx.annotation.NonNull Response<TripPlanDto> response) {
-                if (response.isSuccessful() && response.body() != null) {
-                    updateLocalList(tripId, mapToDomain(response.body()));
-                }
+        executorService.execute(() -> {
+            if (newStops == null) {
+                return;
             }
 
-            @Override
-            public void onFailure(@androidx.annotation.NonNull Call<TripPlanDto> call, 
-                                  @androidx.annotation.NonNull Throwable t) {
-                // Handle failure
+            for (int i = 0; i < newStops.size(); i++) {
+                TripStopEntity entity = toStopEntity(tripId, newStops.get(i));
+                entity.orderIndex = i;
+                entity.deleted = false;
+                tripDao.upsertStop(entity);
+                enqueueStopUpdate(entity);
             }
+
+            syncManager.syncIfOnline();
         });
-    }
-
-    private void updateLocalList(String tripId, TripPlan updatedPlan) {
-        List<TripPlan> currentList = tripsLiveData.getValue();
-        if (currentList != null) {
-            List<TripPlan> updatedList = new ArrayList<>();
-            for (TripPlan p : currentList) {
-                if (p.getId().equals(tripId)) {
-                    updatedList.add(updatedPlan);
-                } else {
-                    updatedList.add(p);
-                }
-            }
-            tripsLiveData.postValue(updatedList);
-        }
     }
 
     @Override
     public void refreshTrips(String groupId) {
-        restApiService.getTripsByGroup(groupId).enqueue(new Callback<>() {
-            @Override
-            public void onResponse(@androidx.annotation.NonNull Call<List<TripPlanDto>> call, 
-                                   @androidx.annotation.NonNull Response<List<TripPlanDto>> response) {
-                if (response.isSuccessful() && response.body() != null) {
-                    List<TripPlan> domainList = new ArrayList<>();
-                    for (TripPlanDto dto : response.body()) {
-                        domainList.add(mapToDomain(dto));
-                    }
-                    tripsLiveData.postValue(domainList);
-                }
-            }
-
-            @Override
-            public void onFailure(@androidx.annotation.NonNull Call<List<TripPlanDto>> call, 
-                                  @androidx.annotation.NonNull Throwable t) {
-                // Handle failure
-            }
-        });
+        executorService.execute(syncManager::syncIfOnline);
     }
 
-    private TripPlan mapToDomain(TripPlanDto dto) {
-        List<TripStop> domainStops = new ArrayList<>();
-        if (dto.stops != null) {
-            for (TripStopDto sDto : dto.stops) {
-                double lat = sDto.location != null ? sDto.location.latitude : 0;
-                double lng = sDto.location != null ? sDto.location.longitude : 0;
-                long arrival = 0;
-                if (sDto.arrivalTime != null) {
-                    try {
-                        arrival = java.time.Instant.parse(sDto.arrivalTime).toEpochMilli();
-                    } catch (Exception e) {
-                        arrival = System.currentTimeMillis();
-                    }
-                }
-                long departure = 0;
-                if (sDto.departureTime != null) {
-                    try {
-                        departure = java.time.Instant.parse(sDto.departureTime).toEpochMilli();
-                    } catch (Exception e) {
-                        departure = System.currentTimeMillis();
-                    }
-                }
-
-                domainStops.add(new TripStop(
-                        sDto.id, sDto.title, sDto.note, lat, lng, arrival, departure, sDto.orderIndex
-                ));
-            }
-        }
-        long start = 0;
-        if (dto.startAt != null) {
-            try {
-                start = java.time.Instant.parse(dto.startAt).toEpochMilli();
-            } catch (Exception e) {
-                start = System.currentTimeMillis();
-            }
-        }
-        long end = 0;
-        if (dto.endAt != null) {
-            try {
-                end = java.time.Instant.parse(dto.endAt).toEpochMilli();
-            } catch (Exception e) {
-                end = System.currentTimeMillis();
-            }
+    private List<TripPlan> mapToDomain(List<TripDao.TripPlanWithStops> items) {
+        List<TripPlan> result = new ArrayList<>();
+        if (items == null) {
+            return result;
         }
 
-        return new TripPlan(
-                dto.id, dto.groupId, dto.title, dto.description,
-                start, end, domainStops, dto.participantIds
+        for (TripDao.TripPlanWithStops item : items) {
+            if (item == null || item.trip == null || item.trip.deleted) {
+                continue;
+            }
+
+            List<TripStop> stops = new ArrayList<>();
+            if (item.stops != null) {
+                List<TripStopEntity> stopEntities = new ArrayList<>(item.stops);
+                stopEntities.sort((left, right) -> Integer.compare(
+                        left != null ? left.orderIndex : Integer.MAX_VALUE,
+                        right != null ? right.orderIndex : Integer.MAX_VALUE));
+                for (TripStopEntity stop : stopEntities) {
+                    if (stop == null || stop.deleted) {
+                        continue;
+                    }
+                    stops.add(new TripStop(
+                            stop.id,
+                            stop.title,
+                            stop.note,
+                            stop.latitude,
+                            stop.longitude,
+                            stop.arrivalTime,
+                            stop.departureTime,
+                            stop.orderIndex
+                    ));
+                }
+            }
+
+            result.add(new TripPlan(
+                    item.trip.id,
+                    item.trip.groupId,
+                    item.trip.title,
+                    item.trip.description,
+                    item.trip.startAt,
+                    item.trip.endAt,
+                    stops,
+                    new ArrayList<>()
+            ));
+        }
+
+        return result;
+    }
+
+    private void normalizeActiveOrderIndexes(String tripId,
+                                             boolean enqueueChanges) {
+        List<TripStopEntity> activeStops = tripDao.getActiveStopsByTripSync(tripId);
+        if (activeStops == null || activeStops.isEmpty()) {
+            return;
+        }
+
+        for (int i = 0; i < activeStops.size(); i++) {
+            TripStopEntity stop = activeStops.get(i);
+            if (stop.orderIndex != i) {
+                stop.orderIndex = i;
+                tripDao.upsertStop(stop);
+                if (enqueueChanges) {
+                    enqueueStopUpdate(stop);
+                }
+            }
+        }
+    }
+
+    private void enqueueStopUpdate(TripStopEntity entity) {
+        syncManager.enqueueChange(
+                "trip_stop",
+                entity.id,
+                "UPDATE",
+                UUID.randomUUID().toString(),
+                toStopDto(entity)
         );
+    }
+
+    private TripStopEntity toStopEntity(String tripId, TripStop stop) {
+        String stopId = stop.getId();
+        if (stopId == null || stopId.trim().isEmpty()) {
+            stopId = UUID.randomUUID().toString();
+        }
+
+        TripStopEntity existing = tripDao.getStopByIdSync(stopId);
+        TripStopEntity entity = existing != null ? existing : new TripStopEntity();
+        entity.id = stopId;
+        entity.tripId = tripId;
+        entity.title = stop.getTitle();
+        entity.note = stop.getNote();
+        entity.latitude = stop.getLatitude();
+        entity.longitude = stop.getLongitude();
+        entity.arrivalTime = stop.getArrivalTime();
+        entity.departureTime = stop.getDepartureTime();
+        entity.orderIndex = stop.getOrderIndex();
+        if (existing == null) {
+            entity.serverVersion = 0L;
+            entity.deleted = false;
+        }
+        return entity;
+    }
+
+    private TripStopDto toStopDto(TripStopEntity entity) {
+        TripStopDto dto = new TripStopDto();
+        dto.id = entity.id;
+        dto.tripId = entity.tripId;
+        dto.title = entity.title;
+        dto.note = entity.note;
+        dto.orderIndex = entity.orderIndex;
+        dto.arrivalTime = formatInstant(entity.arrivalTime);
+        dto.departureTime = formatInstant(entity.departureTime);
+        dto.serverVersion = entity.serverVersion;
+        dto.deleted = entity.deleted;
+
+        ChatMessageDto.LocationDto location = new ChatMessageDto.LocationDto();
+        location.latitude = entity.latitude;
+        location.longitude = entity.longitude;
+        dto.location = location;
+
+        return dto;
+    }
+
+    private String formatInstant(long value) {
+        if (value <= 0L) {
+            return null;
+        }
+        try {
+            return java.time.Instant.ofEpochMilli(value).toString();
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 }

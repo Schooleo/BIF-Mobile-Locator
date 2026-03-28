@@ -1,5 +1,6 @@
 package com.bif.server.features.trip.services;
 
+import com.bif.server.features.trip.exceptions.TripLimitExceededException;
 import com.bif.server.features.trip.models.TripPlan;
 import com.bif.server.features.trip.models.TripStop;
 import com.bif.server.features.trip.repositories.TripPlanRepository;
@@ -12,6 +13,8 @@ import java.util.Optional;
 
 @Service
 public class TripService {
+    private static final int MAX_TRIPS_PER_GROUP = 30;
+
     private final TripPlanRepository tripPlanRepository;
 
     public TripService(TripPlanRepository tripPlanRepository) {
@@ -31,7 +34,27 @@ public class TripService {
     }
 
     public TripPlan save(TripPlan tripPlan) {
+        if (isCreateOperation(tripPlan)
+                && tripPlan.getGroupId() != null
+                && !tripPlan.getGroupId().isBlank()) {
+            long groupTripCount = tripPlanRepository
+                    .countByGroupIdAndDeletedFalse(tripPlan.getGroupId());
+            if (groupTripCount >= MAX_TRIPS_PER_GROUP) {
+                throw new TripLimitExceededException(
+                        "Maximum 30 trips per group is reached");
+            }
+        }
         return tripPlanRepository.save(tripPlan);
+    }
+
+    private boolean isCreateOperation(TripPlan tripPlan) {
+        if (tripPlan == null) {
+            return false;
+        }
+        if (tripPlan.getId() == null || tripPlan.getId().isBlank()) {
+            return true;
+        }
+        return !tripPlanRepository.existsById(tripPlan.getId());
     }
 
     public Optional<TripPlan> addStop(String tripId, TripStop stop) {

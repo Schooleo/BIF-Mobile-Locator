@@ -1,5 +1,6 @@
 package com.bif.server.features.trip.services;
 
+import com.bif.server.features.trip.exceptions.TripLimitExceededException;
 import com.bif.server.features.trip.models.TripPlan;
 import com.bif.server.features.trip.models.TripStop;
 import com.bif.server.features.trip.repositories.TripPlanRepository;
@@ -72,6 +73,21 @@ class TripServiceTest {
 
         assertSame(plan, result);
         verify(tripPlanRepository).save(plan);
+    }
+
+    @Test
+    void save_WhenCreatingAndGroupAtLimit_Throws() {
+        TripPlan plan = new TripPlan();
+        plan.setId(null);
+        plan.setGroupId("g1");
+
+        when(tripPlanRepository
+                .countByGroupIdAndDeletedFalse("g1"))
+                .thenReturn(30L);
+
+        assertThrows(TripLimitExceededException.class,
+                () -> tripService.save(plan));
+        verify(tripPlanRepository, never()).save(any(TripPlan.class));
     }
 
     @Test

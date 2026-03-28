@@ -16,4 +16,6 @@ public class TripStop {
     private Instant arrivalTime;
     private Instant departureTime;
     private int orderIndex;
+    private long serverVersion;
+    private boolean deleted;
 }

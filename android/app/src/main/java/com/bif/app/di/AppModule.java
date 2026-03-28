@@ -13,6 +13,7 @@ import com.bif.app.data.source.local.GroupDao;
 import com.bif.app.data.source.local.PlaceDao;
 import com.bif.app.data.source.local.SearchHistoryDao;
 import com.bif.app.data.source.local.SyncQueueDao;
+import com.bif.app.data.source.local.TripDao;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 
@@ -89,6 +90,12 @@ public class AppModule {
     @Singleton
     public ChatMessageDao provideChatMessageDao(AppDatabase database) {
       return database.chatMessageDao();
+    }
+
+    @Provides
+    @Singleton
+    public TripDao provideTripDao(AppDatabase database) {
+      return database.tripDao();
     }
 
     @Provides

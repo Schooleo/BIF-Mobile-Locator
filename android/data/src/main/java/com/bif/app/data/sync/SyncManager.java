@@ -10,6 +10,7 @@ import com.bif.app.core.network.dto.SyncRequestDto;
 import com.bif.app.core.network.dto.SyncResponseDto;
 import com.bif.app.data.source.local.PlaceDao;
 import com.bif.app.data.source.local.SyncQueueDao;
+import com.bif.app.data.source.local.TripDao;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 import com.google.gson.Gson;
 
@@ -52,6 +53,7 @@ public class SyncManager {
     public SyncManager(RestApiService restApiService,
                        SyncQueueDao syncQueueDao,
                        PlaceDao placeDao,
+                       TripDao tripDao,
                        NetworkMonitor networkMonitor,
                        @ApplicationContext Context appContext) {
         this.restApiService = restApiService;
@@ -63,6 +65,8 @@ public class SyncManager {
         this.appContext = appContext;
         this.handlersByEntityType = new HashMap<>();
         registerHandler(new PlaceSyncEntityHandler(placeDao, gson));
+        registerHandler(new TripSyncEntityHandler(tripDao, gson));
+        registerHandler(new TripStopSyncEntityHandler(tripDao, gson));
         loadPersistedSyncState();
     }
 

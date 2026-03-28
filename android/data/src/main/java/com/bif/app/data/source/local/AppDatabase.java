@@ -10,6 +10,8 @@ import com.bif.app.data.source.local.entity.GroupFriendCrossRef;
 import com.bif.app.data.source.local.entity.PlaceEntity;
 import com.bif.app.data.source.local.entity.SearchHistoryEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
+import com.bif.app.data.source.local.entity.TripPlanEntity;
+import com.bif.app.data.source.local.entity.TripStopEntity;
 
 @Database(entities = {
         FriendEntity.class,
@@ -19,8 +21,10 @@ import com.bif.app.data.source.local.entity.SyncQueueEntity;
         PlaceEntity.class,
         SyncQueueEntity.class,
         SearchHistoryEntity.class,
-        ChatMessageEntity.class
-}, version = 7, exportSchema = false)
+        ChatMessageEntity.class,
+        TripPlanEntity.class,
+        TripStopEntity.class
+    }, version = 8, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
     public abstract FriendDao friendDao();
     public abstract FavoriteDao favoriteDao();
@@ -29,5 +33,6 @@ public abstract class AppDatabase extends RoomDatabase {
     public abstract SyncQueueDao syncQueueDao();
     public abstract SearchHistoryDao searchHistoryDao();
     public abstract ChatMessageDao chatMessageDao();
+    public abstract TripDao tripDao();
 }
 
