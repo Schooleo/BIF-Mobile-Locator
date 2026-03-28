@@ -31,6 +31,8 @@ public class SocialViewModel extends ViewModel {
     private final MediatorLiveData<UiState<List<Group>>> groupUiState = new MediatorLiveData<>();
     private final MutableLiveData<String> friendActionMessage = new MutableLiveData<>();
     private final MutableLiveData<Boolean> friendActionLoading = new MutableLiveData<>(false);
+    private final MutableLiveData<String> groupActionMessage = new MutableLiveData<>();
+    private final MutableLiveData<Boolean> groupActionLoading = new MutableLiveData<>(false);
     private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
 
     @Inject
@@ -79,6 +81,18 @@ public class SocialViewModel extends ViewModel {
         friendActionMessage.setValue(null);
     }
 
+    public void clearGroupActionMessage() {
+        groupActionMessage.setValue(null);
+    }
+
+    public LiveData<String> getGroupActionMessage() {
+        return groupActionMessage;
+    }
+
+    public LiveData<Boolean> getGroupActionLoading() {
+        return groupActionLoading;
+    }
+
     public void retryFriends() {
         mapFriendState(friends.getValue());
         friendshipRepository.refreshFriends();
@@ -91,6 +105,7 @@ public class SocialViewModel extends ViewModel {
 
     public void retryGroups() {
         mapGroupState(groups.getValue());
+        groupRepository.refreshGroups();
     }
 
     public void addFriend(String receiverId) {
@@ -138,23 +153,45 @@ public class SocialViewModel extends ViewModel {
     }
 
     public void createGroup(String groupName, List<Friend> selectedMembers) {
-        try {
+        runGroupAction(() -> {
             groupRepository.createGroup(groupName, selectedMembers);
-        } catch (RuntimeException exception) {
-            groupUiState.setValue(UiState.error("Unable to create group."));
-        }
+            groupRepository.refreshGroups();
+            return "__MSG_GROUP_CREATE_SUCCESS__";
+        }, "__MSG_GROUP_CREATE_FAILED__");
     }
 
     public void handleGroupAction(Group group) {
-        try {
+        if (group == null) return;
+        
+        runGroupAction(() -> {
             if (group.isOwner()) {
                 groupRepository.disbandGroup(group);
             } else {
                 groupRepository.leaveGroup(group);
             }
-        } catch (RuntimeException exception) {
-            groupUiState.setValue(UiState.error("Unable to update group."));
-        }
+            groupRepository.refreshGroups();
+            return group.isOwner() ? "__MSG_GROUP_DISBAND_SUCCESS__" : "__MSG_GROUP_LEAVE_SUCCESS__";
+        }, group.isOwner() ? "__MSG_GROUP_DISBAND_FAILED__" : "__MSG_GROUP_LEAVE_FAILED__");
+    }
+
+    private void runGroupAction(GroupAction action, String fallbackErrorCode) {
+        groupActionLoading.postValue(true);
+        ioExecutor.execute(() -> {
+            try {
+                String successMessageCode = action.run();
+                if (successMessageCode != null && !successMessageCode.isEmpty()) {
+                    groupActionMessage.postValue(successMessageCode);
+                }
+            } catch (Exception exception) {
+                groupActionMessage.postValue(fallbackErrorCode);
+            } finally {
+                groupActionLoading.postValue(false);
+            }
+        });
+    }
+
+    private interface GroupAction {
+        String run();
     }
 
     private void mapFriendState(List<Friend> friendList) {

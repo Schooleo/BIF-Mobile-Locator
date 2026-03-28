@@ -43,7 +43,7 @@ public class SocialFragment extends Fragment {
     private FriendsAdapter friendsAdapter;
     private GroupsAdapter groupsAdapter;
     private SocialViewModel viewModel;
-    private boolean isFriendActionLoading = false;
+    private boolean isActionLoading = false;
 
     @Nullable
     @Override
@@ -208,8 +208,34 @@ public class SocialFragment extends Fragment {
         });
 
         viewModel.getFriendActionLoading().observe(getViewLifecycleOwner(), isLoading -> {
-            isFriendActionLoading = isLoading != null && isLoading;
-            updateFriendActionLoadingUi();
+            isActionLoading = isLoading != null && isLoading;
+            updateActionLoadingUi();
+        });
+
+        viewModel.getGroupActionLoading().observe(getViewLifecycleOwner(), isLoading -> {
+            isActionLoading = isLoading != null && isLoading;
+            updateActionLoadingUi();
+        });
+
+        viewModel.getGroupActionMessage().observe(getViewLifecycleOwner(), message -> {
+            if (message != null && !message.isEmpty()) {
+                String toastMessage = message;
+                if ("__MSG_GROUP_CREATE_SUCCESS__".equals(message)) {
+                    toastMessage = "Group created successfully";
+                } else if ("__MSG_GROUP_CREATE_FAILED__".equals(message)) {
+                    toastMessage = "Failed to create group";
+                } else if ("__MSG_GROUP_DISBAND_SUCCESS__".equals(message)) {
+                    toastMessage = "Group disbanded";
+                } else if ("__MSG_GROUP_DISBAND_FAILED__".equals(message)) {
+                    toastMessage = "Failed to disband group";
+                } else if ("__MSG_GROUP_LEAVE_SUCCESS__".equals(message)) {
+                    toastMessage = "Left group";
+                } else if ("__MSG_GROUP_LEAVE_FAILED__".equals(message)) {
+                    toastMessage = "Failed to leave group";
+                }
+                Toast.makeText(requireContext(), toastMessage, Toast.LENGTH_SHORT).show();
+                viewModel.clearGroupActionMessage();
+            }
         });
 
         viewModel.getPendingRequests().observe(getViewLifecycleOwner(), requests ->
@@ -322,14 +348,15 @@ public class SocialFragment extends Fragment {
         stateLayout.setVisibility(View.GONE);
         recyclerView.setVisibility(View.VISIBLE);
         recyclerView.setAdapter(adapter);
-        updateFriendActionLoadingUi();
+        updateActionLoadingUi();
     }
 
-    private void updateFriendActionLoadingUi() {
+    private void updateActionLoadingUi() {
         boolean isFriendTab = tabLayout != null && tabLayout.getSelectedTabPosition() == 0;
-        boolean canOverlay = isFriendTab && recyclerView.getVisibility() == View.VISIBLE;
+        boolean isGroupTab = tabLayout != null && tabLayout.getSelectedTabPosition() == 1;
+        boolean canOverlay = (isFriendTab || isGroupTab) && recyclerView.getVisibility() == View.VISIBLE;
 
-        if (canOverlay && isFriendActionLoading) {
+        if (canOverlay && isActionLoading) {
             progressLoading.setVisibility(View.VISIBLE);
             recyclerView.setAlpha(0.5f);
             recyclerView.setOnTouchListener((v, event) -> true);
@@ -390,7 +417,6 @@ public class SocialFragment extends Fragment {
                         }
 
                         viewModel.createGroup(groupName, selectedFriends);
-                        Toast.makeText(requireContext(), "Group created: " + groupName, Toast.LENGTH_SHORT).show();
                         dialog.dismiss();
                     });
                 }
@@ -411,7 +437,6 @@ public class SocialFragment extends Fragment {
                 "Cancel",
                 () -> {
                     viewModel.handleGroupAction(group);
-                    Toast.makeText(requireContext(), group.isOwner() ? "Disbanded" : "Left", Toast.LENGTH_SHORT).show();
                 });
     }
 
