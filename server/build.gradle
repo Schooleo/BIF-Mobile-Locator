@@ -23,6 +23,7 @@ configurations {
 }
 
 configurations.configureEach {
+	exclude group: 'org.codehaus.plexus', module: 'plexus-utils'
 	resolutionStrategy {
 		force 'com.fasterxml.jackson.core:jackson-core:2.21.1'
 		force 'com.fasterxml.jackson.core:jackson-databind:2.21.1'
@@ -30,6 +31,12 @@ configurations.configureEach {
 		force 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.21.1'
 		force 'tools.jackson.core:jackson-core:3.1.0'
 		force 'tools.jackson.core:jackson-databind:3.1.0'
+
+		force 'io.netty:netty-codec-http2:4.1.132.Final'
+		force 'io.netty:netty-codec-http:4.1.132.Final'
+		force 'io.netty:netty-handler:4.1.132.Final'
+		force 'io.netty:netty-common:4.1.132.Final'
+		force 'com.google.guava:guava:32.0.0-jre'
 	}
 }
 

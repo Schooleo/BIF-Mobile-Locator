@@ -9,12 +9,17 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import java.time.Instant;
 import java.util.List;
 
+import org.springframework.data.annotation.Version;
+
 @Data
 @EqualsAndHashCode(callSuper = true)
 @Document(collection = "trip_plans")
 public class TripPlan extends SyncDocument {
     @Id
     private String id;
+    
+    @Version
+    private Long version;
 
     private String groupId;
     private String title;

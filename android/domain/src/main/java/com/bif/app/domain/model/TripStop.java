@@ -1,6 +1,7 @@
 package com.bif.app.domain.model;
 
 public class TripStop {
+    private final String id;
     private final String title;
     private final String note;
     private final double latitude;
@@ -9,8 +10,9 @@ public class TripStop {
     private final long departureTime;
     private final int orderIndex;
 
-    public TripStop(String title, String note, double latitude, double longitude,
+    public TripStop(String id, String title, String note, double latitude, double longitude,
                     long arrivalTime, long departureTime, int orderIndex) {
+        this.id = id;
         this.title = title;
         this.note = note;
         this.latitude = latitude;
@@ -20,6 +22,7 @@ public class TripStop {
         this.orderIndex = orderIndex;
     }
 
+    public String getId() { return id; }
     public String getTitle() { return title; }
     public String getNote() { return note; }
     public double getLatitude() { return latitude; }

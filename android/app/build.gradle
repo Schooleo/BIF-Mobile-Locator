@@ -38,11 +38,6 @@ android {
             debugSymbolLevel 'FULL'
         }
 
-        manifestPlaceholders = [
-            MAPS_API_KEY: localProperties.getProperty('MAPS_API_KEY', ""),
-            PLACES_API_KEY: localProperties.getProperty('PLACES_API_KEY', "")
-        ]
-
         buildConfigField "String", "GRAPHQL_URL", "\"http://${localApiIp.replaceAll('"', '')}:8080/graphql\""
         buildConfigField "String", "REST_BASE_URL", "\"http://${localApiIp.replaceAll('"', '')}:8080/api/\""
     }
@@ -109,11 +104,8 @@ dependencies {
     implementation libs.material
     implementation libs.activity
     implementation libs.constraintlayout
-    implementation libs.play.services.maps
-    implementation libs.play.services.location
     implementation libs.navigation.fragment.ktx
     implementation libs.navigation.ui.ktx
-    implementation libs.places
     implementation libs.navigation.runtime
     testImplementation libs.junit
     testImplementation libs.mockito.core

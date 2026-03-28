@@ -118,7 +118,10 @@ public class ProfileRepository {
         String remoteEmail = sanitizeProfileValue(profileMetadata.email);
 
         if (!remoteDisplayName.isEmpty() || !remoteEmail.isEmpty()) {
-            UserPreferences.saveUserProfile(appContext, remoteDisplayName, remoteEmail);
+            String idToSave = (profileMetadata.userId != null && !profileMetadata.userId.isBlank())
+                    ? profileMetadata.userId
+                    : UserPreferences.getId(appContext);
+            UserPreferences.saveUserProfile(appContext, idToSave, remoteDisplayName, remoteEmail);
         }
     }
 

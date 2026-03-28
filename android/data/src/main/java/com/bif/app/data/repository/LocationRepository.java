@@ -1,24 +1,20 @@
 package com.bif.app.data.repository;
 
-import com.bif.app.data.source.GoogleMapsDataSource;
 import com.bif.app.data.source.GpsSensorDataSource;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.repository.ILocationRepository;
-import com.google.android.gms.location.LocationResult;
 
-import androidx.annotation.NonNull;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
+
 import javax.inject.Inject;
 
 public class LocationRepository implements ILocationRepository {
 
     private final GpsSensorDataSource gpsSensorDataSource;
-    private com.google.android.gms.location.LocationCallback mappedFusedCallback;
 
     @Inject
-    public LocationRepository(GpsSensorDataSource gpsSensorDataSource,
-                              GoogleMapsDataSource googleMapsDataSource) {
+    public LocationRepository(GpsSensorDataSource gpsSensorDataSource) {
         this.gpsSensorDataSource = gpsSensorDataSource;
     }
 
@@ -26,45 +22,44 @@ public class LocationRepository implements ILocationRepository {
     public LiveData<Location> getCurrentLocation() {
         MutableLiveData<Location> result = new MutableLiveData<>();
 
-        gpsSensorDataSource.getCurrentLocation()
-                .addOnSuccessListener(location -> {
-                    if (location != null) {
-                        Location currentLocation = new Location();
-                        currentLocation.latitude = location.getLatitude();
-                        currentLocation.longitude = location.getLongitude();
-                        result.postValue(currentLocation);
-                    } else {
-                        result.postValue(null);
-                    }
-                })
-                .addOnFailureListener(e -> result.postValue(null));
+        android.location.Location location = gpsSensorDataSource
+                .getCurrentLocation();
+        if (location == null) {
+            result.postValue(null);
+            return result;
+        }
+
+        Location currentLocation = new Location();
+        currentLocation.latitude = location.getLatitude();
+        currentLocation.longitude = location.getLongitude();
+        result.postValue(currentLocation);
 
         return result;
     }
 
     @Override
     public void requestLocationUpdates(com.bif.app.domain.repository.LocationCallback callback) {
-        mappedFusedCallback = new com.google.android.gms.location.LocationCallback() {
+        gpsSensorDataSource.requestLocationUpdates(
+                new GpsSensorDataSource.LocationUpdateListener() {
             @Override
-            public void onLocationResult(@NonNull LocationResult locationResult) {
-                android.location.Location lastLocation = locationResult.getLastLocation();
-                if (lastLocation != null) {
+            public void onLocation(android.location.Location location) {
+                if (location != null) {
                     Location domainLocation = new Location();
-                    domainLocation.latitude = lastLocation.getLatitude();
-                    domainLocation.longitude = lastLocation.getLongitude();
+                    domainLocation.latitude = location.getLatitude();
+                    domainLocation.longitude = location.getLongitude();
                     callback.onLocationResult(domainLocation);
                 }
             }
-        };
 
-        gpsSensorDataSource.requestLocationUpdates(mappedFusedCallback);
+            @Override
+            public void onError(String message) {
+                callback.onError(message);
+            }
+        });
     }
 
     @Override
     public void removeLocationUpdates(com.bif.app.domain.repository.LocationCallback callback) {
-        if (mappedFusedCallback != null) {
-            gpsSensorDataSource.removeLocationUpdates(mappedFusedCallback);
-            mappedFusedCallback = null;
-        }
+        gpsSensorDataSource.removeLocationUpdates();
     }
 }

@@ -3,6 +3,7 @@ package com.bif.server.features.sync.services;
 import com.bif.server.common.models.Location;
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.repositories.PlaceRepository;
+import com.bif.server.features.place.services.PlaceAddressEnrichmentService;
 import com.bif.server.features.sync.models.SyncChange;
 import com.bif.server.features.sync.models.SyncChangeEntry;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,10 +17,14 @@ import java.util.Optional;
 public class PlaceSyncEntityHandler implements SyncEntityHandler {
 
     private final PlaceRepository placeRepository;
+    private final PlaceAddressEnrichmentService placeAddressEnrichmentService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public PlaceSyncEntityHandler(PlaceRepository placeRepository) {
+    public PlaceSyncEntityHandler(
+            PlaceRepository placeRepository,
+            PlaceAddressEnrichmentService placeAddressEnrichmentService) {
         this.placeRepository = placeRepository;
+        this.placeAddressEnrichmentService = placeAddressEnrichmentService;
     }
 
     @Override
@@ -66,23 +71,43 @@ public class PlaceSyncEntityHandler implements SyncEntityHandler {
             return pushed.getPayload();
         }
 
-        Place place = placeRepository.findById(payload.id)
-                .orElseGet(Place::new);
-        place.setId(payload.id);
+        Place place = placeRepository.findById(payload.id).orElse(null);
+        boolean isDuplicate = false;
+
+        if (place == null) {
+            List<Place> existingPlaces = placeRepository.findByNameAndLocationLatitudeAndLocationLongitude(
+                    payload.name, payload.latitude, payload.longitude);
+            if (!existingPlaces.isEmpty()) {
+                place = existingPlaces.get(0);
+                isDuplicate = true;
+            } else {
+                place = new Place();
+                place.setId(payload.id);
+            }
+        }
+
         place.setName(payload.name);
-        place.setAddress(payload.address);
+        place.setAddress(placeAddressEnrichmentService.enrichAddress(
+            payload.address, payload.latitude, payload.longitude));
         place.setRating(payload.rating);
         place.setLocation(new Location(payload.latitude, payload.longitude));
         place.setTags(payload.tags);
         place.setPlaceSource(payload.placeSource);
         place.setPersistedByAction(payload.persistedByAction);
-        place.setPersistedByUserId(payload.persistedByUserId != null
-                ? payload.persistedByUserId : userId);
+        place.setPersistedByUserId(userId);
         place.setReviewCount(payload.reviewCount);
         place.setDeleted(payload.deleted);
         place.setServerVersion(newVersion);
         place.setLastModifiedBy(userId);
         placeRepository.save(place);
+
+        if (isDuplicate) {
+            PlacePayload responsePayload = new PlacePayload();
+            responsePayload.id = payload.id;
+            responsePayload.deleted = true;
+            responsePayload.serverVersion = newVersion;
+            return writePayload(responsePayload);
+        }
 
         PlacePayload responsePayload = toPayload(place);
         responsePayload.serverVersion = newVersion;

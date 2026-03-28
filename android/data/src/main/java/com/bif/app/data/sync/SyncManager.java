@@ -10,6 +10,7 @@ import com.bif.app.core.network.dto.SyncRequestDto;
 import com.bif.app.core.network.dto.SyncResponseDto;
 import com.bif.app.data.source.local.PlaceDao;
 import com.bif.app.data.source.local.SyncQueueDao;
+import com.bif.app.data.source.local.TripDao;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 import com.google.gson.Gson;
 
@@ -42,6 +43,7 @@ public class SyncManager {
     private final SharedPreferences syncPrefs;
     private final Gson gson;
     private final Map<String, SyncEntityHandler> handlersByEntityType;
+    private final Context appContext;
 
     private String userId;
     private String deviceId;
@@ -51,6 +53,7 @@ public class SyncManager {
     public SyncManager(RestApiService restApiService,
                        SyncQueueDao syncQueueDao,
                        PlaceDao placeDao,
+                       TripDao tripDao,
                        NetworkMonitor networkMonitor,
                        @ApplicationContext Context appContext) {
         this.restApiService = restApiService;
@@ -59,8 +62,11 @@ public class SyncManager {
         this.syncPrefs = appContext.getSharedPreferences(PREF_NAME,
                 Context.MODE_PRIVATE);
         this.gson = new Gson();
+        this.appContext = appContext;
         this.handlersByEntityType = new HashMap<>();
         registerHandler(new PlaceSyncEntityHandler(placeDao, gson));
+        registerHandler(new TripSyncEntityHandler(tripDao, gson));
+        registerHandler(new TripStopSyncEntityHandler(tripDao, gson));
         loadPersistedSyncState();
     }
 
@@ -72,6 +78,7 @@ public class SyncManager {
         this.syncQueueDao = syncQueueDao;
         this.networkMonitor = networkMonitor;
         this.syncPrefs = null;
+        this.appContext = null;
         this.gson = new Gson();
         this.handlersByEntityType = new HashMap<>();
     }
@@ -254,6 +261,18 @@ public class SyncManager {
     }
 
     private void ensureSyncContext() {
+        if (appContext != null) {
+            String currentUserId = com.bif.app.core.utils.UserPreferences.getId(appContext);
+            if (currentUserId == null || currentUserId.trim().isEmpty()) {
+                currentUserId = com.bif.app.core.utils.UserPreferences.getUsername(appContext);
+            }
+            if (com.bif.app.core.utils.UserPreferences.isLoggedIn(appContext) && currentUserId != null && !currentUserId.trim().isEmpty()) {
+                userId = currentUserId;
+            } else {
+                userId = null; 
+            }
+        }
+
         if (userId == null || userId.isEmpty()) {
             loadPersistedSyncState();
         }

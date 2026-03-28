@@ -29,11 +29,14 @@ class SyncControllerTest {
     void sync_DelegatesToService() {
         SyncRequest request = new SyncRequest();
         SyncResponse response = new SyncResponse();
+        java.security.Principal principal = mock(java.security.Principal.class);
+        when(principal.getName()).thenReturn("test-user-id");
         when(syncService.sync(request)).thenReturn(response);
 
-        SyncResponse result = controller.sync(request);
+        SyncResponse result = controller.sync(request, principal);
 
         assertSame(response, result);
+        assertEquals("test-user-id", request.getUserId());
         verify(syncService).sync(request);
     }
 }

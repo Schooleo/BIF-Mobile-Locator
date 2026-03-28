@@ -1,6 +1,5 @@
 package com.bif.server.features.sync.services;
 
-import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.sync.models.*;
 import com.bif.server.features.sync.repositories.SyncChangeRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,19 +27,26 @@ class SyncServiceTest {
     private SyncChangeRepository syncChangeRepository;
 
         @Mock
-        private PlaceRepository placeRepository;
+        private SyncEntityHandler placeSyncEntityHandler;
 
         @Mock
-        private SyncEntityHandler placeSyncEntityHandler;
+        private SyncEntityHandler tripSyncEntityHandler;
+
+        @Mock
+        private SyncEntityHandler tripStopSyncEntityHandler;
 
     private SyncService syncService;
 
     @BeforeEach
     void setUp() {
         when(placeSyncEntityHandler.entityType()).thenReturn("place");
-                syncService = new SyncService(syncVersionService,
-                                syncChangeRepository,
-                List.of(placeSyncEntityHandler));
+        when(tripSyncEntityHandler.entityType()).thenReturn("trip_plan");
+        when(tripStopSyncEntityHandler.entityType()).thenReturn("trip_stop");
+        syncService = new SyncService(syncVersionService,
+                syncChangeRepository,
+                List.of(placeSyncEntityHandler,
+                        tripSyncEntityHandler,
+                        tripStopSyncEntityHandler));
     }
 
     @Test
@@ -354,5 +360,57 @@ class SyncServiceTest {
         verify(syncChangeRepository).save(changeCaptor.capture());
         assertNotNull(changeCaptor.getValue().getPayload());
         assertTrue(changeCaptor.getValue().getPayload().contains("\"deleted\":true"));
+    }
+
+    @Test
+    void sync_WhenTripEntitiesPushed_UsesMatchingHandlers() {
+        SyncRequest request = new SyncRequest();
+        request.setUserId("user1");
+        request.setLastPulledVersion(20);
+
+        SyncChange tripPush = new SyncChange();
+        tripPush.setEntityType("trip_plan");
+        tripPush.setEntityId("trip-1");
+        tripPush.setOperation("UPDATE");
+        tripPush.setClientChangeId("trip-change");
+
+        SyncChange stopPush = new SyncChange();
+        stopPush.setEntityType("trip_stop");
+        stopPush.setEntityId("stop-1");
+        stopPush.setOperation("UPDATE");
+        stopPush.setClientChangeId("stop-change");
+
+        request.setPushedChanges(List.of(tripPush, stopPush));
+
+        when(syncChangeRepository.findByClientChangeId("trip-change"))
+                .thenReturn(Optional.empty());
+        when(syncChangeRepository.findByClientChangeId("stop-change"))
+                .thenReturn(Optional.empty());
+        when(syncChangeRepository
+                .findTopByUserIdAndEntityTypeAndEntityIdOrderByServerVersionDesc(
+                        "user1", "trip_plan", "trip-1"))
+                .thenReturn(Optional.empty());
+        when(syncChangeRepository
+                .findTopByUserIdAndEntityTypeAndEntityIdOrderByServerVersionDesc(
+                        "user1", "trip_stop", "stop-1"))
+                .thenReturn(Optional.empty());
+
+        when(tripSyncEntityHandler.applyPushedChange(any(), any(), anyLong()))
+                .thenReturn("{\"id\":\"trip-1\"}");
+        when(tripStopSyncEntityHandler.applyPushedChange(any(), any(), anyLong()))
+                .thenReturn("{\"id\":\"stop-1\"}");
+
+        when(syncVersionService.nextVersion()).thenReturn(21L, 22L);
+        when(syncVersionService.getCurrentVersion()).thenReturn(22L);
+        when(syncChangeRepository
+                .findByUserIdAndServerVersionGreaterThanOrderByServerVersionAsc(
+                        "user1", 20))
+                .thenReturn(Collections.emptyList());
+
+        SyncResponse response = syncService.sync(request);
+
+        assertNotNull(response);
+        verify(tripSyncEntityHandler).applyPushedChange(any(), eq("user1"), eq(21L));
+        verify(tripStopSyncEntityHandler).applyPushedChange(any(), eq("user1"), eq(22L));
     }
 }

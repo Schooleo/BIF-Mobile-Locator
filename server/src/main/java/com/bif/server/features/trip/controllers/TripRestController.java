@@ -63,14 +63,14 @@ public class TripRestController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    @DeleteMapping("/{tripId}/stops/{orderIndex}")
+    @DeleteMapping("/{tripId}/stops/{stopId}")
     public ResponseEntity<TripPlan> removeStop(
             @PathVariable String tripId,
-            @PathVariable int orderIndex,
+            @PathVariable String stopId,
             @RequestParam(required = false) String userId) {
-        return tripService.removeStop(tripId, orderIndex)
+        return tripService.removeStop(tripId, stopId)
                 .map(plan -> {
-                    tripActivityService.postStopRemoved(plan, orderIndex, userId);
+                    tripActivityService.postStopRemoved(plan, stopId, userId);
                     return ResponseEntity.ok(plan);
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());

@@ -1,5 +1,6 @@
 package com.bif.server.features.trip.services;
 
+import com.bif.server.features.trip.exceptions.TripLimitExceededException;
 import com.bif.server.features.trip.models.TripPlan;
 import com.bif.server.features.trip.models.TripStop;
 import com.bif.server.features.trip.repositories.TripPlanRepository;
@@ -75,6 +76,21 @@ class TripServiceTest {
     }
 
     @Test
+    void save_WhenCreatingAndGroupAtLimit_Throws() {
+        TripPlan plan = new TripPlan();
+        plan.setId(null);
+        plan.setGroupId("g1");
+
+        when(tripPlanRepository
+                .countByGroupIdAndDeletedFalse("g1"))
+                .thenReturn(30L);
+
+        assertThrows(TripLimitExceededException.class,
+                () -> tripService.save(plan));
+        verify(tripPlanRepository, never()).save(any(TripPlan.class));
+    }
+
+    @Test
     void addStop_WhenPlanFound_AddsStopAndSaves() {
         TripPlan plan = new TripPlan();
         plan.setStops(new ArrayList<>());
@@ -122,12 +138,15 @@ class TripServiceTest {
     @Test
     void removeStop_WhenFound_RemovesAndReindex() {
         TripStop stop0 = new TripStop();
+        stop0.setId("s0");
         stop0.setTitle("A");
         stop0.setOrderIndex(0);
         TripStop stop1 = new TripStop();
+        stop1.setId("s1");
         stop1.setTitle("B");
         stop1.setOrderIndex(1);
         TripStop stop2 = new TripStop();
+        stop2.setId("s2");
         stop2.setTitle("C");
         stop2.setOrderIndex(2);
 
@@ -136,7 +155,7 @@ class TripServiceTest {
         when(tripPlanRepository.findById("t1")).thenReturn(Optional.of(plan));
         when(tripPlanRepository.save(any(TripPlan.class))).thenAnswer(i -> i.getArgument(0));
 
-        Optional<TripPlan> result = tripService.removeStop("t1", 1);
+        Optional<TripPlan> result = tripService.removeStop("t1", "s1");
 
         assertTrue(result.isPresent());
         assertEquals(2, result.get().getStops().size());
@@ -150,7 +169,7 @@ class TripServiceTest {
     void removeStop_WhenPlanMissing_ReturnsEmpty() {
         when(tripPlanRepository.findById("t1")).thenReturn(Optional.empty());
 
-        Optional<TripPlan> result = tripService.removeStop("t1", 0);
+        Optional<TripPlan> result = tripService.removeStop("t1", "s1");
 
         assertTrue(result.isEmpty());
     }

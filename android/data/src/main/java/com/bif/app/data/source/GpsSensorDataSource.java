@@ -2,55 +2,95 @@ package com.bif.app.data.source;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.location.Criteria;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Looper;
 
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationCallback;
-import com.google.android.gms.location.LocationRequest;
-import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.location.Priority;
-import com.google.android.gms.tasks.CancellationTokenSource;
-import com.google.android.gms.tasks.Task;
-
 import javax.inject.Inject;
+
 import dagger.hilt.android.qualifiers.ApplicationContext;
 
 public class GpsSensorDataSource {
 
-    private final FusedLocationProviderClient fusedLocationClient;
-    private CancellationTokenSource cancellationTokenSource;
+    public interface LocationUpdateListener {
+        void onLocation(Location location);
+        void onError(String message);
+    }
+
+    private final LocationManager locationManager;
+    private LocationListener activeListener;
 
     @Inject
     public GpsSensorDataSource(@ApplicationContext Context context) {
-        this.fusedLocationClient = LocationServices.getFusedLocationProviderClient(context);
+        this.locationManager = context.getSystemService(LocationManager.class);
     }
 
     @SuppressLint("MissingPermission")
-    public Task<android.location.Location> getCurrentLocation() {
-        if (cancellationTokenSource != null) {
-            cancellationTokenSource.cancel();
+    public Location getCurrentLocation() {
+        if (locationManager == null) {
+            return null;
         }
-        cancellationTokenSource = new CancellationTokenSource();
-        return fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cancellationTokenSource.getToken());
+
+        String provider = resolveBestProvider();
+        if (provider == null) {
+            return null;
+        }
+
+        return locationManager.getLastKnownLocation(provider);
     }
 
     @SuppressLint("MissingPermission")
-    public void requestLocationUpdates(LocationCallback callback) {
-        LocationRequest locationRequest = new LocationRequest.Builder(
-                Priority.PRIORITY_HIGH_ACCURACY, 10000)
-                .setMinUpdateIntervalMillis(5000)
-                .build();
+    public void requestLocationUpdates(LocationUpdateListener callback) {
+        if (locationManager == null) {
+            callback.onError("Location service unavailable");
+            return;
+        }
 
-        fusedLocationClient.requestLocationUpdates(locationRequest, callback, Looper.getMainLooper());
+        String provider = resolveBestProvider();
+        if (provider == null) {
+            callback.onError("No location provider available");
+            return;
+        }
+
+        removeLocationUpdates();
+        activeListener = new LocationListener() {
+            @Override
+            public void onLocationChanged(Location location) {
+                callback.onLocation(location);
+            }
+        };
+
+        locationManager.requestLocationUpdates(provider, 5000L, 5f,
+                activeListener, Looper.getMainLooper());
     }
 
-    public void removeLocationUpdates(LocationCallback callback) {
-        if (callback != null) {
-            fusedLocationClient.removeLocationUpdates(callback);
+    public void removeLocationUpdates() {
+        if (locationManager != null && activeListener != null) {
+            locationManager.removeUpdates(activeListener);
+            activeListener = null;
         }
-        if (cancellationTokenSource != null) {
-            cancellationTokenSource.cancel();
-            cancellationTokenSource = null;
+    }
+
+    private String resolveBestProvider() {
+        if (locationManager == null) {
+            return null;
         }
+
+        Criteria criteria = new Criteria();
+        criteria.setAccuracy(Criteria.ACCURACY_FINE);
+        String bestProvider = locationManager.getBestProvider(criteria, true);
+        if (bestProvider != null) {
+            return bestProvider;
+        }
+
+        if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            return LocationManager.GPS_PROVIDER;
+        }
+        if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+            return LocationManager.NETWORK_PROVIDER;
+        }
+        return null;
     }
 }

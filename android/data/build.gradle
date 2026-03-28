@@ -45,9 +45,7 @@ dependencies {
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
     implementation libs.retrofit.core
-
-    // Google
-    implementation libs.places
+    implementation libs.retrofit.gson
 
     // Room
     implementation libs.room.runtime
