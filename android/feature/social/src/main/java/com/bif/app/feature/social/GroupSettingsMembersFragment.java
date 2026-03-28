@@ -28,6 +28,7 @@ import com.google.android.material.tabs.TabLayout;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import dagger.hilt.android.AndroidEntryPoint;
@@ -72,7 +73,7 @@ public class GroupSettingsMembersFragment extends Fragment {
 
         setupTabs(tabLayout, 2, view);
 
-        membersAdapter = new GroupSettingsMembersAdapter(this::confirmRemoveMember);
+        membersAdapter = new GroupSettingsMembersAdapter(this::confirmRemoveMember, this::showUpdateRoleDialog);
         rvMembers.setLayoutManager(new LinearLayoutManager(requireContext()));
         rvMembers.setAdapter(membersAdapter);
         showMembersLoading(rvMembers);
@@ -88,7 +89,7 @@ public class GroupSettingsMembersFragment extends Fragment {
             tvAvatar.setBackgroundTintList(ColorStateList.valueOf(group.getAvatarColor()));
             tvName.setText(group.getName());
             tvMemberCount.setText(getString(R.string.chat_member_count, group.getMemberCount()));
-            membersAdapter.submit(group.getMembers(), group.isOwner());
+            membersAdapter.submit(group.getMembers(), group.isOwner(), group.getMemberRoles());
 
             if (group.getMembers() == null || group.getMembers().isEmpty()) {
                 showMembersEmpty(rvMembers, getString(R.string.group_members_empty));
@@ -97,6 +98,52 @@ public class GroupSettingsMembersFragment extends Fragment {
 
             showMembersList(rvMembers);
         });
+    }
+
+    private void showUpdateRoleDialog(Friend member, int position) {
+        if (currentGroup == null || member == null || !currentGroup.isOwner()) {
+            return;
+        }
+
+        if (position == 0) {
+            Toast.makeText(requireContext(), R.string.group_role_owner_fixed, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Map<Integer, String> roleMap = currentGroup.getMemberRoles();
+        String currentRole = roleMap != null ? roleMap.get(member.getId()) : null;
+        String normalizedCurrentRole = "ADMIN".equalsIgnoreCase(currentRole) ? "ADMIN" : "MEMBER";
+
+        String[] roleItems = new String[]{
+                getString(R.string.member_admin),
+                getString(R.string.member_role)
+        };
+        int checkedItem = "ADMIN".equals(normalizedCurrentRole) ? 0 : 1;
+        final int[] selectedItem = new int[]{checkedItem};
+
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle(getString(R.string.group_role_dialog_title, member.getName()))
+                .setSingleChoiceItems(roleItems, checkedItem, (dialog, which) -> selectedItem[0] = which)
+                .setNegativeButton(R.string.cancel, (dialog, which) -> dialog.dismiss())
+                .setPositiveButton(R.string.save, (dialog, which) -> {
+                    String newRole = selectedItem[0] == 0 ? "ADMIN" : "MEMBER";
+                    if (newRole.equals(normalizedCurrentRole)) {
+                        return;
+                    }
+
+                    viewModel.updateMemberRole(member, newRole);
+                    membersAdapter.updateMemberRole(member.getId(), newRole);
+                    if (currentGroup.getMemberRoles() != null) {
+                        currentGroup.getMemberRoles().put(member.getId(), newRole);
+                    }
+
+                    Toast.makeText(
+                            requireContext(),
+                            getString(R.string.group_role_updated, member.getName(), roleItems[selectedItem[0]]),
+                            Toast.LENGTH_SHORT
+                    ).show();
+                })
+                .show();
     }
 
     private void showAddMembersDialog() {

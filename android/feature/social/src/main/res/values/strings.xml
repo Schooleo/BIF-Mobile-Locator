@@ -78,6 +78,9 @@
     <string name="social_retry">Retry</string>
     <string name="group_members_empty">No members found.</string>
     <string name="group_members_error">Unable to load members.</string>
+    <string name="group_role_dialog_title">Update role for: %1$s</string>
+    <string name="group_role_updated">Updated %1$s to %2$s</string>
+    <string name="group_role_owner_fixed">Owner role cannot be changed.</string>
     <string name="rename_group">Rename Group</string>
     <string name="friend_request_from">Friend Request From</string>
     <string name="friend_request_accept">Accept friend request</string>

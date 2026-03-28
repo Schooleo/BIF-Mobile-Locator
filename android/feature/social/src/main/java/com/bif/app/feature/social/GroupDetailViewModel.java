@@ -10,6 +10,7 @@ import com.bif.app.domain.model.Group;
 import com.bif.app.domain.repository.IFriendshipRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 
+import java.util.HashMap;
 import java.util.List;
 
 import javax.inject.Inject;
@@ -53,12 +54,13 @@ public class GroupDetailViewModel extends ViewModel {
 
         Group updatedGroup = new Group(
                 currentGroup.getId(),
-            currentGroup.getServerId(),
+                currentGroup.getServerId(),
                 newName,
                 newName.substring(0, 1).toUpperCase(),
                 currentGroup.getAvatarColor(),
                 currentGroup.getMembers(),
-                currentGroup.isOwner()
+                currentGroup.isOwner(),
+                currentGroup.getMemberRoles() != null ? new HashMap<>(currentGroup.getMemberRoles()) : null
         );
         groupRepository.updateGroup(updatedGroup);
     }
@@ -81,6 +83,14 @@ public class GroupDetailViewModel extends ViewModel {
             }
             groupRepository.addMemberByServerId(currentGroup.getServerId(), friend.getId());
         }
+    }
+
+    public void updateMemberRole(Friend member, String role) {
+        Group currentGroup = group.getValue();
+        if (currentGroup == null || member == null) {
+            return;
+        }
+        groupRepository.updateMemberRoleByServerId(currentGroup.getServerId(), member.getId(), role);
     }
 
     public void disbandGroup() {

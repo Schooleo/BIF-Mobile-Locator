@@ -24,6 +24,13 @@ public interface IGroupRepository {
     default void removeMemberByServerId(String groupId, int friendId) {
         removeMember(Integer.parseInt(groupId), friendId);
     }
+    void updateMemberRole(int groupId, int friendId, String role);
+    default void updateMemberRoleByServerId(String groupId, int friendId, String role) {
+        try {
+            updateMemberRole(Integer.parseInt(groupId), friendId, role);
+        } catch (NumberFormatException ignored) {
+        }
+    }
     void leaveGroup(Group group);
     void disbandGroup(Group group);
     void refreshGroups();

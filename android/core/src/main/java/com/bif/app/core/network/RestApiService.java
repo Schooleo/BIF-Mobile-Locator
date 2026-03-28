@@ -16,6 +16,7 @@ import com.bif.app.core.network.dto.CreateGroupRequestDto;
 import com.bif.app.core.network.dto.GroupApiModel;
 import com.bif.app.core.network.dto.UserApiModel;
 import com.bif.app.core.network.dto.UpdateGroupRequestDto;
+import com.bif.app.core.network.dto.UpdateMemberRoleRequestDto;
 import com.bif.app.core.network.dto.ChatMessageDto;
 import com.bif.app.core.network.dto.TripPlanDto;
 import com.bif.app.core.network.dto.TripStopDto;
@@ -140,6 +141,14 @@ public interface RestApiService {
             @Path("groupId") String groupId,
             @Query("actorId") String actorId,
             @Body AddMemberRequestDto request
+    );
+
+    @PATCH("groups/{groupId}/members/{memberId}/role")
+    Call<GroupApiModel> updateMemberRole(
+            @Path("groupId") String groupId,
+            @Path("memberId") String memberId,
+            @Query("actorId") String actorId,
+            @Body UpdateMemberRoleRequestDto request
     );
 
     // @GET("config/features")
