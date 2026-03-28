@@ -7,4 +7,27 @@ services:
       - "8080:8080"
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      TYPESENSE_ENABLED: "true"
+      TYPESENSE_PROTOCOL: http
+      TYPESENSE_HOST: typesense
+      TYPESENSE_PORT: 8108
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-dev-typesense-key}
+    depends_on:
+      - typesense
     restart: unless-stopped
+
+  typesense:
+    image: typesense/typesense:30.1
+    container_name: bif-typesense
+    restart: unless-stopped
+    ports:
+      - "8108:8108"
+    command: >
+      --data-dir /data
+      --api-key=${TYPESENSE_API_KEY:-dev-typesense-key}
+      --enable-cors
+    volumes:
+      - typesense_data:/data
+
+volumes:
+  typesense_data:

@@ -4,6 +4,7 @@ import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.place.services.PlaceAddressEnrichmentService;
+import com.bif.server.features.place.services.search.PlaceSearchProvider;
 import com.bif.server.features.sync.services.SyncVersionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,13 +32,18 @@ class PlaceServiceTest {
     @Mock
     private PlaceAddressEnrichmentService placeAddressEnrichmentService;
 
+    @Mock
+    private PlaceSearchProvider placeSearchProvider;
+
     private PlaceService placeService;
 
     @BeforeEach
     void setUp() {
         placeService = new PlaceService(placeRepository,
                 syncVersionService,
-                placeAddressEnrichmentService);
+            placeAddressEnrichmentService,
+            placeSearchProvider,
+            "osm_geocoder");
     }
 
     @Test
@@ -91,7 +97,7 @@ class PlaceServiceTest {
 
         Place result = placeService.saveFromSearch(place);
 
-        assertEquals("google_maps", result.getPlaceSource());
+        assertEquals("osm_geocoder", result.getPlaceSource());
         assertEquals("search_discovered", result.getPersistedByAction());
         assertEquals("456 Search Rd", result.getAddress());
         assertEquals(5L, result.getServerVersion());
@@ -142,14 +148,13 @@ class PlaceServiceTest {
     @Test
     void search_DelegatesToRepository() {
         Place place = new Place();
-        when(placeRepository
-                .findByNameContainingIgnoreCaseOrAddressContainingIgnoreCase(
-                        "test", "test"))
+        when(placeSearchProvider.search("test"))
                 .thenReturn(List.of(place));
 
         List<Place> result = placeService.search("test");
 
         assertEquals(1, result.size());
+        verify(placeSearchProvider).search("test");
     }
 
     @Test

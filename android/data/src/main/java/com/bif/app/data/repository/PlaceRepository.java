@@ -12,7 +12,7 @@ import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.PlaceDto;
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.PlaceMapper;
-import com.bif.app.data.source.GoogleMapsDataSource;
+import com.bif.app.data.source.AndroidGeocodingDataSource;
 import com.bif.app.data.source.local.PlaceDao;
 import com.bif.app.data.source.local.SearchHistoryDao;
 import com.bif.app.data.source.local.entity.PlaceEntity;
@@ -44,7 +44,7 @@ public class PlaceRepository implements IPlaceRepository {
     private static final int MAX_LOCAL_PLACES = 500;
     private static final String ADDRESS_UNAVAILABLE = "Address unavailable";
 
-    private final GoogleMapsDataSource googleMapsDataSource;
+    private final AndroidGeocodingDataSource geocodingDataSource;
     private final RestApiService restApiService;
     private final PlaceDao placeDao;
     private final SearchHistoryDao searchHistoryDao;
@@ -54,14 +54,14 @@ public class PlaceRepository implements IPlaceRepository {
     private final String activeUserId;
 
     @Inject
-    public PlaceRepository(GoogleMapsDataSource googleMapsDataSource,
+    public PlaceRepository(AndroidGeocodingDataSource geocodingDataSource,
                            RestApiService restApiService,
                            PlaceDao placeDao,
                            SearchHistoryDao searchHistoryDao,
                            SyncManager syncManager,
                            NetworkMonitor networkMonitor,
                            @ApplicationContext Context appContext) {
-        this.googleMapsDataSource = googleMapsDataSource;
+        this.geocodingDataSource = geocodingDataSource;
         this.restApiService = restApiService;
         this.placeDao = placeDao;
         this.searchHistoryDao = searchHistoryDao;
@@ -76,13 +76,13 @@ public class PlaceRepository implements IPlaceRepository {
     }
 
     // Backward-compatible constructor used by tests.
-    public PlaceRepository(GoogleMapsDataSource googleMapsDataSource,
+    public PlaceRepository(AndroidGeocodingDataSource geocodingDataSource,
                            RestApiService restApiService,
                            PlaceDao placeDao,
                            SearchHistoryDao searchHistoryDao,
                            SyncManager syncManager,
                            NetworkMonitor networkMonitor) {
-        this(googleMapsDataSource, restApiService, placeDao,
+        this(geocodingDataSource, restApiService, placeDao,
                 searchHistoryDao, syncManager, networkMonitor, null);
     }
 
@@ -92,7 +92,7 @@ public class PlaceRepository implements IPlaceRepository {
         executorService.execute(() -> {
             try {
                 List<Address> results =
-                        googleMapsDataSource.geocodeLocation(query);
+                    geocodingDataSource.geocodeLocation(query);
                 if (results != null && !results.isEmpty()) {
                     Address address = results.get(0);
                     Location location = new Location();
@@ -142,7 +142,7 @@ public class PlaceRepository implements IPlaceRepository {
                 }
             }
 
-            // Step 2: Query server + Google when online, deduplicating against local results
+            // Step 2: Query server + geocoder when online, deduplicating against local results
             if (networkMonitor.isOnline()) {
                 try {
                     Response<List<PlaceDto>> response = restApiService
@@ -162,13 +162,13 @@ public class PlaceRepository implements IPlaceRepository {
                     Log.e(TAG, "Server search failed", e);
                 }
 
-                // Step 3: Google Places API to fill any remaining gaps
+                // Step 3: Geocoder to fill any remaining gaps
                 try {
-                    List<Address> googleResults =
-                            googleMapsDataSource.geocodeLocation(query);
-                    if (googleResults != null) {
-                        for (Address address : googleResults) {
-                            String id = "google_"
+                    List<Address> geocoderResults =
+                            geocodingDataSource.geocodeLocation(query);
+                    if (geocoderResults != null) {
+                        for (Address address : geocoderResults) {
+                            String id = "geocode_"
                                     + address.getLatitude() + "_"
                                     + address.getLongitude();
                             if (!seenIds.contains(id)) {
@@ -190,7 +190,7 @@ public class PlaceRepository implements IPlaceRepository {
                         }
                     }
                 } catch (IOException e) {
-                    Log.e(TAG, "Google search failed", e);
+                    Log.e(TAG, "Geocoder search failed", e);
                 }
             }
             // Offline: local cache results (Step 1) are already included above
@@ -313,7 +313,7 @@ public class PlaceRepository implements IPlaceRepository {
             }
             try {
                 PlaceDto dto = PlaceMapper.toDto(place, activeUserId);
-                dto.placeSource = "google_maps";
+                dto.placeSource = "osm_geocoder";
                 dto.persistedByAction = "search_discovered";
                 dto.persistedByUserId = activeUserId;
                 Response<PlaceDto> response = restApiService

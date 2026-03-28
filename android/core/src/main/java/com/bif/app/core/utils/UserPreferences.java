@@ -13,6 +13,7 @@ public class UserPreferences {
     private static final String KEY_AUTH_TOKEN = "auth_token";
     private static final String KEY_REFRESH_TOKEN = "refresh_token";
     private static final String KEY_IS_LOGGED_IN = "is_logged_in";
+    private static final String KEY_MAP_ENGINE = "map_engine";
 
     private static SharedPreferences getPrefs(Context context) {
         return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
@@ -95,6 +96,19 @@ public class UserPreferences {
     public static void clearUser(Context context){
         getPrefs(context).edit()
                 .clear()
+                .apply();
+    }
+
+    public static MapEngine getMapEngine(Context context) {
+        String raw = getPrefs(context).getString(KEY_MAP_ENGINE,
+                MapEngine.GOOGLE.name());
+        return MapEngine.fromValue(raw);
+    }
+
+    public static void setMapEngine(Context context, MapEngine engine) {
+        MapEngine safeEngine = engine != null ? engine : MapEngine.GOOGLE;
+        getPrefs(context).edit()
+                .putString(KEY_MAP_ENGINE, safeEngine.name())
                 .apply();
     }
 }

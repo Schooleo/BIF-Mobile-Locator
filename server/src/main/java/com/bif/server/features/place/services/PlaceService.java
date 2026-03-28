@@ -3,7 +3,9 @@ package com.bif.server.features.place.services;
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.repositories.PlaceRepository;
+import com.bif.server.features.place.services.search.PlaceSearchProvider;
 import com.bif.server.features.sync.services.SyncVersionService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -17,13 +19,20 @@ public class PlaceService {
     private final PlaceRepository placeRepository;
     private final SyncVersionService syncVersionService;
     private final PlaceAddressEnrichmentService placeAddressEnrichmentService;
+    private final PlaceSearchProvider placeSearchProvider;
+    private final String defaultSearchPlaceSource;
 
     public PlaceService(PlaceRepository placeRepository,
                         SyncVersionService syncVersionService,
-                        PlaceAddressEnrichmentService placeAddressEnrichmentService) {
+                        PlaceAddressEnrichmentService placeAddressEnrichmentService,
+                        PlaceSearchProvider placeSearchProvider,
+                        @Value("${place.search.default-source:osm_geocoder}")
+                        String defaultSearchPlaceSource) {
         this.placeRepository = placeRepository;
         this.syncVersionService = syncVersionService;
         this.placeAddressEnrichmentService = placeAddressEnrichmentService;
+        this.placeSearchProvider = placeSearchProvider;
+        this.defaultSearchPlaceSource = defaultSearchPlaceSource;
     }
 
     public List<Place> getAll() {
@@ -44,7 +53,7 @@ public class PlaceService {
     public Place saveFromSearch(Place place) {
         return placeRepository.findById(place.getId()).orElseGet(() -> {
             enrichPlaceAddress(place);
-            place.setPlaceSource("google_maps");
+            place.setPlaceSource(defaultSearchPlaceSource);
             place.setPersistedByAction("search_discovered");
             place.setServerVersion(syncVersionService.nextVersion());
             return placeRepository.save(place);
@@ -77,9 +86,7 @@ public class PlaceService {
     }
 
     public List<Place> search(String query) {
-        return placeRepository
-                .findByNameContainingIgnoreCaseOrAddressContainingIgnoreCase(
-                        query, query);
+        return placeSearchProvider.search(query);
     }
 
     public List<Place> getByTag(String tag) {

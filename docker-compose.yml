@@ -24,9 +24,16 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_MONGODB_URI: mongodb://admin:pass@mongodb:27017/bif_db?authSource=admin
+      TYPESENSE_ENABLED: "true"
+      TYPESENSE_PROTOCOL: http
+      TYPESENSE_HOST: typesense
+      TYPESENSE_PORT: 8108
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-dev-typesense-key}
     depends_on:
       mongodb:
         condition: service_healthy
+      typesense:
+        condition: service_started
     restart: unless-stopped
 
   mongodb:
@@ -69,5 +76,19 @@ services:
     depends_on:
       - mongodb
 
+  typesense:
+    image: typesense/typesense:30.1
+    container_name: bif-typesense
+    restart: unless-stopped
+    ports:
+      - "8108:8108"
+    command: >
+      --data-dir /data
+      --api-key=${TYPESENSE_API_KEY:-dev-typesense-key}
+      --enable-cors
+    volumes:
+      - typesense_data:/data
+
 volumes:
   mongo_data:
+  typesense_data:
