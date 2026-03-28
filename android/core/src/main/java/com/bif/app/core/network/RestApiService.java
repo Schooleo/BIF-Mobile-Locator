@@ -139,6 +139,14 @@ public interface RestApiService {
     Call<TripPlanDto> addTripStop(@Path("tripId") String tripId,
                                   @Body TripStopDto stop);
 
+    @DELETE("trips/{tripId}/stops/{stopId}")
+    Call<TripPlanDto> removeTripStop(@Path("tripId") String tripId,
+                                     @Path("stopId") String stopId);
+
+    @PUT("trips/{tripId}/stops/reorder")
+    Call<TripPlanDto> rearrangeTripStops(@Path("tripId") String tripId,
+                                         @Body List<TripStopDto> stops);
+
     @POST("sync")
     Call<SyncResponseDto> sync(@Body SyncRequestDto request);
 }

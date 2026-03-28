@@ -101,7 +101,7 @@ class TripActivityServiceTest {
 
         when(chatService.save(any(ChatMessage.class))).thenAnswer(i -> i.getArgument(0));
 
-        tripActivityService.postStopRemoved(plan, 0, "u1");
+        tripActivityService.postStopRemoved(plan, "s1", "u1");
 
         ArgumentCaptor<ChatMessage> captor = ArgumentCaptor.forClass(ChatMessage.class);
         verify(chatService).save(captor.capture());

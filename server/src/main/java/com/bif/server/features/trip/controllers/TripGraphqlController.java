@@ -46,8 +46,8 @@ public class TripGraphqlController {
 
     @MutationMapping
     public TripPlan removeTripStop(@Argument String tripId,
-                                   @Argument int orderIndex) {
-        return tripService.removeStop(tripId, orderIndex).orElse(null);
+                                   @Argument String stopId) {
+        return tripService.removeStop(tripId, stopId).orElse(null);
     }
 
     @MutationMapping

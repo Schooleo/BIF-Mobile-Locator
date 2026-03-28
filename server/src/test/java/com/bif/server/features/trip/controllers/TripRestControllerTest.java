@@ -135,19 +135,19 @@ class TripRestControllerTest {
     @Test
     void removeStop_WhenFound_ReturnsOk() {
         TripPlan plan = new TripPlan();
-        when(tripService.removeStop("t1", 0)).thenReturn(Optional.of(plan));
+        when(tripService.removeStop("t1", "s1")).thenReturn(Optional.of(plan));
 
-        ResponseEntity<TripPlan> result = controller.removeStop("t1", 0, "u1");
+        ResponseEntity<TripPlan> result = controller.removeStop("t1", "s1", "u1");
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
-        verify(tripActivityService).postStopRemoved(plan, 0, "u1");
+        verify(tripActivityService).postStopRemoved(plan, "s1", "u1");
     }
 
     @Test
     void removeStop_WhenMissing_ReturnsNotFound() {
-        when(tripService.removeStop("t1", 0)).thenReturn(Optional.empty());
+        when(tripService.removeStop("t1", "s1")).thenReturn(Optional.empty());
 
-        ResponseEntity<TripPlan> result = controller.removeStop("t1", 0, "u1");
+        ResponseEntity<TripPlan> result = controller.removeStop("t1", "s1", "u1");
 
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
     }

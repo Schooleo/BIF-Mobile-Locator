@@ -50,10 +50,14 @@ public class AuthSessionManager {
         String refreshToken = authResponse.refreshToken != null ? authResponse.refreshToken : "";
         UserPreferences.saveAuthSession(context, accessToken, refreshToken);
 
+        String id = "";
         String username = fallbackUsername != null ? fallbackUsername : "";
         String email = fallbackEmail != null ? fallbackEmail : "";
 
         if (authResponse.user != null) {
+            if (authResponse.user.id != null && !authResponse.user.id.isBlank()) {
+                id = authResponse.user.id;
+            }
             if (authResponse.user.username != null && !authResponse.user.username.isBlank()) {
                 username = authResponse.user.username;
             }
@@ -62,8 +66,8 @@ public class AuthSessionManager {
             }
         }
 
-        if (!username.isBlank() || !email.isBlank()) {
-            UserPreferences.saveUserProfile(context, username, email);
+        if (!id.isBlank() || !username.isBlank() || !email.isBlank()) {
+            UserPreferences.saveUserProfile(context, id, username, email);
         }
     }
 

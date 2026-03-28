@@ -416,6 +416,10 @@ public class GroupRepository implements IGroupRepository {
         if (context == null) {
             return null;
         }
+        String id = UserPreferences.getId(context);
+        if (!isBlank(id)) {
+            return id;
+        }
         String username = UserPreferences.getUsername(context);
         if (!isBlank(username)) {
             return username;

@@ -97,18 +97,18 @@ class TripGraphqlControllerTest {
     @Test
     void removeTripStop_WhenFound_ReturnsResult() {
         TripPlan plan = new TripPlan();
-        when(tripService.removeStop("t1", 0)).thenReturn(Optional.of(plan));
+        when(tripService.removeStop("t1", "s1")).thenReturn(Optional.of(plan));
 
-        TripPlan result = controller.removeTripStop("t1", 0);
+        TripPlan result = controller.removeTripStop("t1", "s1");
 
         assertSame(plan, result);
     }
 
     @Test
     void removeTripStop_WhenMissing_ReturnsNull() {
-        when(tripService.removeStop("t1", 0)).thenReturn(Optional.empty());
+        when(tripService.removeStop("t1", "s1")).thenReturn(Optional.empty());
 
-        assertNull(controller.removeTripStop("t1", 0));
+        assertNull(controller.removeTripStop("t1", "s1"));
     }
 
     @Test

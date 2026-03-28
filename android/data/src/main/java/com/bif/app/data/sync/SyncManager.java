@@ -42,6 +42,7 @@ public class SyncManager {
     private final SharedPreferences syncPrefs;
     private final Gson gson;
     private final Map<String, SyncEntityHandler> handlersByEntityType;
+    private final Context appContext;
 
     private String userId;
     private String deviceId;
@@ -59,6 +60,7 @@ public class SyncManager {
         this.syncPrefs = appContext.getSharedPreferences(PREF_NAME,
                 Context.MODE_PRIVATE);
         this.gson = new Gson();
+        this.appContext = appContext;
         this.handlersByEntityType = new HashMap<>();
         registerHandler(new PlaceSyncEntityHandler(placeDao, gson));
         loadPersistedSyncState();
@@ -72,6 +74,7 @@ public class SyncManager {
         this.syncQueueDao = syncQueueDao;
         this.networkMonitor = networkMonitor;
         this.syncPrefs = null;
+        this.appContext = null;
         this.gson = new Gson();
         this.handlersByEntityType = new HashMap<>();
     }
@@ -254,6 +257,18 @@ public class SyncManager {
     }
 
     private void ensureSyncContext() {
+        if (appContext != null) {
+            String currentUserId = com.bif.app.core.utils.UserPreferences.getId(appContext);
+            if (currentUserId == null || currentUserId.trim().isEmpty()) {
+                currentUserId = com.bif.app.core.utils.UserPreferences.getUsername(appContext);
+            }
+            if (com.bif.app.core.utils.UserPreferences.isLoggedIn(appContext) && currentUserId != null && !currentUserId.trim().isEmpty()) {
+                userId = currentUserId;
+            } else {
+                userId = null; 
+            }
+        }
+
         if (userId == null || userId.isEmpty()) {
             loadPersistedSyncState();
         }

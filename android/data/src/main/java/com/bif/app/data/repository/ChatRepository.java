@@ -51,7 +51,11 @@ public class ChatRepository implements IChatRepository {
 
     @Override
     public LiveData<List<ChatMessage>> getMessagesByGroup(String groupId) {
-        String currentUserId = UserPreferences.getUsername(context);
+        String resolvedId = UserPreferences.getId(context);
+        if (resolvedId == null || resolvedId.isEmpty()) {
+            resolvedId = UserPreferences.getUsername(context);
+        }
+        final String currentUserId = resolvedId;
         return Transformations.map(
                 chatMessageDao.getByGroupId(groupId),
                 entities -> chatMapper.mapToDomainList(entities, currentUserId)

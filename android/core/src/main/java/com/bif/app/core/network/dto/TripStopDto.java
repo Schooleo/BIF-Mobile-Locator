@@ -1,6 +1,7 @@
 package com.bif.app.core.network.dto;
 
 public class TripStopDto {
+    public String id;
     public String title;
     public String note;
     public ChatMessageDto.LocationDto location;

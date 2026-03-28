@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 public class UserPreferences {
     private static final String PREF_NAME = "USER_PREF";
 
+    private static final String KEY_ID = "user_id";
     private static final String KEY_USERNAME = "username";
     private static final String KEY_EMAIL = "email";
     private static final String KEY_AVATAR_URI = "avatar_uri";
@@ -17,11 +18,16 @@ public class UserPreferences {
         return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
     }
 
-    public static void saveUserProfile(Context context, String username, String email) {
+    public static void saveUserProfile(Context context, String id, String username, String email) {
         getPrefs(context).edit()
+                .putString(KEY_ID, id)
                 .putString(KEY_USERNAME, username)
                 .putString(KEY_EMAIL, email)
                 .apply();
+    }
+
+    public static String getId(Context context) {
+        return getPrefs(context).getString(KEY_ID, "");
     }
 
     public static String getUsername(Context context) {

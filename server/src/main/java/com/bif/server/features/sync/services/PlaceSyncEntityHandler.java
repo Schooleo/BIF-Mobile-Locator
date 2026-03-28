@@ -66,9 +66,21 @@ public class PlaceSyncEntityHandler implements SyncEntityHandler {
             return pushed.getPayload();
         }
 
-        Place place = placeRepository.findById(payload.id)
-                .orElseGet(Place::new);
-        place.setId(payload.id);
+        Place place = placeRepository.findById(payload.id).orElse(null);
+        boolean isDuplicate = false;
+
+        if (place == null) {
+            List<Place> existingPlaces = placeRepository.findByNameAndLocationLatitudeAndLocationLongitude(
+                    payload.name, payload.latitude, payload.longitude);
+            if (!existingPlaces.isEmpty()) {
+                place = existingPlaces.get(0);
+                isDuplicate = true;
+            } else {
+                place = new Place();
+                place.setId(payload.id);
+            }
+        }
+
         place.setName(payload.name);
         place.setAddress(payload.address);
         place.setRating(payload.rating);
@@ -76,13 +88,20 @@ public class PlaceSyncEntityHandler implements SyncEntityHandler {
         place.setTags(payload.tags);
         place.setPlaceSource(payload.placeSource);
         place.setPersistedByAction(payload.persistedByAction);
-        place.setPersistedByUserId(payload.persistedByUserId != null
-                ? payload.persistedByUserId : userId);
+        place.setPersistedByUserId(userId);
         place.setReviewCount(payload.reviewCount);
         place.setDeleted(payload.deleted);
         place.setServerVersion(newVersion);
         place.setLastModifiedBy(userId);
         placeRepository.save(place);
+
+        if (isDuplicate) {
+            PlacePayload responsePayload = new PlacePayload();
+            responsePayload.id = payload.id;
+            responsePayload.deleted = true;
+            responsePayload.serverVersion = newVersion;
+            return writePayload(responsePayload);
+        }
 
         PlacePayload responsePayload = toPayload(place);
         responsePayload.serverVersion = newVersion;

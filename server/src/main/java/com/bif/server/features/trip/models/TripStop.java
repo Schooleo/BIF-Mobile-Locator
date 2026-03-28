@@ -5,8 +5,11 @@ import lombok.Data;
 
 import java.time.Instant;
 
+import java.util.UUID;
+
 @Data
 public class TripStop {
+    private String id = UUID.randomUUID().toString();
     private String title;
     private String note;
     private Location location;

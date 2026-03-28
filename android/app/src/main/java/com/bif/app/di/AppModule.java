@@ -93,12 +93,13 @@ public class AppModule {
 
     @Provides
     @Singleton
-    public LocalSessionDataCleaner provideLocalSessionDataCleaner(AppDatabase appDatabase) {
+    public LocalSessionDataCleaner provideLocalSessionDataCleaner(AppDatabase appDatabase, @ApplicationContext Context context) {
       return () -> {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         executor.execute(() -> {
           try {
             appDatabase.clearAllTables();
+            context.getSharedPreferences("SYNC_PREF", Context.MODE_PRIVATE).edit().clear().apply();
           } catch (Exception ignored) {
             // Keep logout flow resilient even if local cleanup fails.
           }

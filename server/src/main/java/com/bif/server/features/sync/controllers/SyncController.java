@@ -18,7 +18,10 @@ public class SyncController {
     }
 
     @PostMapping
-    public SyncResponse sync(@RequestBody SyncRequest request) {
+    public SyncResponse sync(@RequestBody SyncRequest request, java.security.Principal principal) {
+        if (principal != null) {
+            request.setUserId(principal.getName());
+        }
         return syncService.sync(request);
     }
 }

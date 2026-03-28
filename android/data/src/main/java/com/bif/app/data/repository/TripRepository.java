@@ -41,6 +41,7 @@ public class TripRepository implements ITripRepository {
     @Override
     public void addStopToTrip(String tripId, TripStop stop) {
         TripStopDto dto = new TripStopDto();
+        dto.id = stop.getId();
         dto.title = stop.getTitle();
         dto.note = stop.getNote();
         dto.orderIndex = stop.getOrderIndex();
@@ -55,19 +56,7 @@ public class TripRepository implements ITripRepository {
             public void onResponse(@androidx.annotation.NonNull Call<TripPlanDto> call, 
                                    @androidx.annotation.NonNull Response<TripPlanDto> response) {
                 if (response.isSuccessful() && response.body() != null) {
-                    TripPlan updatedPlan = mapToDomain(response.body());
-                    List<TripPlan> currentList = tripsLiveData.getValue();
-                    if (currentList != null) {
-                        List<TripPlan> updatedList = new ArrayList<>();
-                        for (TripPlan p : currentList) {
-                            if (p.getId().equals(tripId)) {
-                                updatedList.add(updatedPlan);
-                            } else {
-                                updatedList.add(p);
-                            }
-                        }
-                        tripsLiveData.postValue(updatedList);
-                    }
+                    updateLocalList(tripId, mapToDomain(response.body()));
                 }
             }
 
@@ -77,6 +66,73 @@ public class TripRepository implements ITripRepository {
                 // Handle failure
             }
         });
+    }
+
+    @Override
+    public void removeStopFromTrip(String tripId, String stopId) {
+        restApiService.removeTripStop(tripId, stopId).enqueue(new Callback<>() {
+            @Override
+            public void onResponse(@androidx.annotation.NonNull Call<TripPlanDto> call, 
+                                   @androidx.annotation.NonNull Response<TripPlanDto> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    updateLocalList(tripId, mapToDomain(response.body()));
+                }
+            }
+
+            @Override
+            public void onFailure(@androidx.annotation.NonNull Call<TripPlanDto> call, 
+                                  @androidx.annotation.NonNull Throwable t) {
+                // Handle failure
+            }
+        });
+    }
+
+    @Override
+    public void rearrangeStopsInTrip(String tripId, List<TripStop> newStops) {
+        List<TripStopDto> dtos = new ArrayList<>();
+        for (TripStop stop : newStops) {
+            TripStopDto dto = new TripStopDto();
+            dto.id = stop.getId();
+            dto.title = stop.getTitle();
+            dto.note = stop.getNote();
+            dto.orderIndex = stop.getOrderIndex();
+            ChatMessageDto.LocationDto loc = new ChatMessageDto.LocationDto();
+            loc.latitude = stop.getLatitude();
+            loc.longitude = stop.getLongitude();
+            dto.location = loc;
+            dtos.add(dto);
+        }
+
+        restApiService.rearrangeTripStops(tripId, dtos).enqueue(new Callback<>() {
+            @Override
+            public void onResponse(@androidx.annotation.NonNull Call<TripPlanDto> call, 
+                                   @androidx.annotation.NonNull Response<TripPlanDto> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    updateLocalList(tripId, mapToDomain(response.body()));
+                }
+            }
+
+            @Override
+            public void onFailure(@androidx.annotation.NonNull Call<TripPlanDto> call, 
+                                  @androidx.annotation.NonNull Throwable t) {
+                // Handle failure
+            }
+        });
+    }
+
+    private void updateLocalList(String tripId, TripPlan updatedPlan) {
+        List<TripPlan> currentList = tripsLiveData.getValue();
+        if (currentList != null) {
+            List<TripPlan> updatedList = new ArrayList<>();
+            for (TripPlan p : currentList) {
+                if (p.getId().equals(tripId)) {
+                    updatedList.add(updatedPlan);
+                } else {
+                    updatedList.add(p);
+                }
+            }
+            tripsLiveData.postValue(updatedList);
+        }
     }
 
     @Override
@@ -126,7 +182,7 @@ public class TripRepository implements ITripRepository {
                 }
 
                 domainStops.add(new TripStop(
-                        sDto.title, sDto.note, lat, lng, arrival, departure, sDto.orderIndex
+                        sDto.id, sDto.title, sDto.note, lat, lng, arrival, departure, sDto.orderIndex
                 ));
             }
         }
