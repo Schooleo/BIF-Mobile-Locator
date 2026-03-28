@@ -59,7 +59,12 @@
     <string name="member_you">You</string>
     <string name="member_admin">Admin</string>
     <string name="member_role">Member</string>
-    <string name="member_add_placeholder">Add member action will be connected to API next.</string>
+    <string name="group_add_member_dialog_title">Add members</string>
+    <string name="group_add_member_confirm">Add</string>
+    <string name="group_add_member_pick_one">Please choose at least 1 member</string>
+    <string name="group_add_member_success_count">Added %1$d member(s)</string>
+    <string name="group_add_member_no_friends">No friends available to add.</string>
+    <string name="group_add_member_none_available">All your friends are already in this group.</string>
     <string name="friend_chat_settings">Chat Settings</string>
     <string name="friend_tab_shared_locations">Shared Locations</string>
     <string name="friend_tab_trip_plans">Trip Plans</string>

@@ -7,7 +7,10 @@ import androidx.lifecycle.ViewModel;
 
 import com.bif.app.domain.model.Friend;
 import com.bif.app.domain.model.Group;
+import com.bif.app.domain.repository.IFriendshipRepository;
 import com.bif.app.domain.repository.IGroupRepository;
+
+import java.util.List;
 
 import javax.inject.Inject;
 
@@ -16,12 +19,15 @@ import dagger.hilt.android.lifecycle.HiltViewModel;
 @HiltViewModel
 public class GroupDetailViewModel extends ViewModel {
     private final IGroupRepository groupRepository;
+    private final LiveData<List<Friend>> friends;
     private final MutableLiveData<String> groupIdLiveData = new MutableLiveData<>();
     private final LiveData<Group> group;
 
     @Inject
-    public GroupDetailViewModel(IGroupRepository groupRepository) {
+    public GroupDetailViewModel(IGroupRepository groupRepository,
+                                IFriendshipRepository friendshipRepository) {
         this.groupRepository = groupRepository;
+        this.friends = friendshipRepository.getFriends();
         this.group = Transformations.switchMap(groupIdLiveData, groupRepository::getGroupByServerId);
     }
 
@@ -35,6 +41,10 @@ public class GroupDetailViewModel extends ViewModel {
 
     public LiveData<Group> getGroup() {
         return group;
+    }
+
+    public LiveData<List<Friend>> getFriends() {
+        return friends;
     }
 
     public void updateGroupName(String newName) {
@@ -57,6 +67,20 @@ public class GroupDetailViewModel extends ViewModel {
         Group currentGroup = group.getValue();
         if (currentGroup == null) return;
         groupRepository.removeMemberByServerId(currentGroup.getServerId(), member.getId());
+    }
+
+    public void addMembers(List<Friend> selectedFriends) {
+        Group currentGroup = group.getValue();
+        if (currentGroup == null || selectedFriends == null || selectedFriends.isEmpty()) {
+            return;
+        }
+
+        for (Friend friend : selectedFriends) {
+            if (friend == null) {
+                continue;
+            }
+            groupRepository.addMemberByServerId(currentGroup.getServerId(), friend.getId());
+        }
     }
 
     public void disbandGroup() {

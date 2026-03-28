@@ -11,6 +11,7 @@ import com.bif.app.core.network.dto.friendship.CreateFriendRequestDto;
 import com.bif.app.core.network.dto.friendship.FriendshipApiModel;
 import com.bif.app.core.network.dto.profile.ProfileMetadataResponse;
 import com.bif.app.core.network.dto.profile.UpdateMyProfileRequest;
+import com.bif.app.core.network.dto.AddMemberRequestDto;
 import com.bif.app.core.network.dto.CreateGroupRequestDto;
 import com.bif.app.core.network.dto.GroupApiModel;
 import com.bif.app.core.network.dto.UserApiModel;
@@ -125,6 +126,13 @@ public interface RestApiService {
             @Path("groupId") String groupId,
             @Path("memberId") String memberId,
             @Query("actorId") String actorId
+    );
+
+    @POST("groups/{groupId}/members")
+    Call<GroupApiModel> addMember(
+            @Path("groupId") String groupId,
+            @Query("actorId") String actorId,
+            @Body AddMemberRequestDto request
     );
 
     // @GET("config/features")

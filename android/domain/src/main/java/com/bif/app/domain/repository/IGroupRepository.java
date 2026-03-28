@@ -13,6 +13,13 @@ public interface IGroupRepository {
     }
     void createGroup(String name, List<Friend> selectedFriends);
     void updateGroup(Group group);
+    void addMember(int groupId, int friendId);
+    default void addMemberByServerId(String groupId, int friendId) {
+        try {
+            addMember(Integer.parseInt(groupId), friendId);
+        } catch (NumberFormatException ignored) {
+        }
+    }
     void removeMember(int groupId, int friendId);
     default void removeMemberByServerId(String groupId, int friendId) {
         removeMember(Integer.parseInt(groupId), friendId);

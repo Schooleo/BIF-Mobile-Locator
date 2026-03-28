@@ -190,6 +190,63 @@ public class GroupRepository implements IGroupRepository {
     }
 
     @Override
+    public void addMember(int groupId, int friendId) {
+        if (!useApi) {
+            executorService.execute(() -> groupDao.insertGroupFriendCrossRefs(
+                    Collections.singletonList(new GroupFriendCrossRef(groupId, friendId))
+            ));
+            return;
+        }
+
+        executorService.execute(() -> {
+            String groupServerId = groupServerIdByLocalId.get(groupId);
+            String memberServerId = userServerIdByLocalId.get(friendId);
+            String actorId = resolveActorId();
+            if (isBlank(groupServerId) || isBlank(memberServerId) || isBlank(actorId)) {
+                return;
+            }
+
+            AddMemberRequestDto request = new AddMemberRequestDto();
+            request.memberId = memberServerId;
+            request.role = "MEMBER";
+
+            try {
+                restApiService.addMember(groupServerId, actorId, request).execute();
+            } catch (Exception ignored) {
+                return;
+            }
+            refreshGroupsSync();
+        });
+    }
+
+    @Override
+    public void addMemberByServerId(String groupId, int friendId) {
+        if (!useApi) {
+            IGroupRepository.super.addMemberByServerId(groupId, friendId);
+            return;
+        }
+
+        executorService.execute(() -> {
+            String memberServerId = userServerIdByLocalId.get(friendId);
+            String actorId = resolveActorId();
+            if (isBlank(groupId) || isBlank(memberServerId) || isBlank(actorId)) {
+                return;
+            }
+
+            AddMemberRequestDto request = new AddMemberRequestDto();
+            request.memberId = memberServerId;
+            request.role = "MEMBER";
+
+            try {
+                restApiService.addMember(groupId, actorId, request).execute();
+            } catch (Exception ignored) {
+                return;
+            }
+            refreshGroupsSync();
+        });
+    }
+
+    @Override
     public void removeMember(int groupId, int friendId) {
         if (!useApi) {
             executorService.execute(() -> groupDao.deleteGroupFriendCrossRef(groupId, friendId));
