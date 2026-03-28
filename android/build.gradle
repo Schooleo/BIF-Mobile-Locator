@@ -12,6 +12,7 @@ plugins {
 
 subprojects {
     configurations.configureEach {
+        exclude group: 'org.codehaus.plexus', module: 'plexus-utils'
         resolutionStrategy {
             force 'com.google.protobuf:protobuf-java-util:3.25.5'
             force 'com.google.protobuf:protobuf-java:3.25.5'
