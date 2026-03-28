@@ -23,9 +23,12 @@ public class FriendsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     private static final int VIEW_TYPE_ACTION = 0;
     private static final int VIEW_TYPE_REQUEST = 1;
     private static final int VIEW_TYPE_FRIEND = 2;
+    private static final int VIEW_TYPE_HEADER = 3;
 
     private List<Friend> friends = new ArrayList<>();
     private List<Friendship> pendingRequests = new ArrayList<>();
+    private boolean isFriendRequestExpanded = true;
+    private boolean isFriendListExpanded = true;
     private OnFriendActionListener listener;
 
     public interface OnFriendActionListener {
@@ -86,7 +89,11 @@ public class FriendsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             return VIEW_TYPE_ACTION;
         }
 
-        if (position <= pendingRequests.size()) {
+        if (position == 1 || position == getFriendListHeaderPosition()) {
+            return VIEW_TYPE_HEADER;
+        }
+
+        if (position < getFriendListHeaderPosition()) {
             return VIEW_TYPE_REQUEST;
         }
 
@@ -100,6 +107,10 @@ public class FriendsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             View view = LayoutInflater.from(parent.getContext())
                     .inflate(com.bif.app.core.R.layout.component_action_list_item, parent, false);
             return new ActionViewHolder(view);
+        } else if (viewType == VIEW_TYPE_HEADER) {
+            View view = LayoutInflater.from(parent.getContext())
+                .inflate(com.bif.app.core.R.layout.component_section_header, parent, false);
+            return new HeaderViewHolder(view);
         } else if (viewType == VIEW_TYPE_REQUEST) {
             View view = LayoutInflater.from(parent.getContext())
                     .inflate(com.bif.app.core.R.layout.component_friend_request_list_item, parent, false);
@@ -115,11 +126,13 @@ public class FriendsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
         if (holder instanceof ActionViewHolder) {
             ((ActionViewHolder) holder).bind();
+        } else if (holder instanceof HeaderViewHolder) {
+            ((HeaderViewHolder) holder).bind(position == 1);
         } else if (holder instanceof RequestViewHolder) {
-            Friendship request = pendingRequests.get(position - 1);
+            Friendship request = pendingRequests.get(position - 2);
             ((RequestViewHolder) holder).bind(request);
         } else if (holder instanceof FriendViewHolder) {
-            int friendIndex = position - pendingRequests.size() - 1;
+            int friendIndex = position - getFriendListHeaderPosition() - 1;
             Friend friend = friends.get(friendIndex);
             ((FriendViewHolder) holder).bind(friend, position);
         }
@@ -127,7 +140,14 @@ public class FriendsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
     @Override
     public int getItemCount() {
-        return 1 + pendingRequests.size() + friends.size();
+        int requestCount = isFriendRequestExpanded ? pendingRequests.size() : 0;
+        int friendCount = isFriendListExpanded ? friends.size() : 0;
+        return 3 + requestCount + friendCount;
+    }
+
+    private int getFriendListHeaderPosition() {
+        int requestCount = isFriendRequestExpanded ? pendingRequests.size() : 0;
+        return 2 + requestCount;
     }
 
     class ActionViewHolder extends RecyclerView.ViewHolder {
@@ -142,6 +162,38 @@ public class FriendsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
         void bind() {
             // Default action item content in XML is Add New Friend.
+        }
+    }
+
+    class HeaderViewHolder extends RecyclerView.ViewHolder {
+        TextView tvSectionHeader;
+
+        HeaderViewHolder(View itemView) {
+            super(itemView);
+            tvSectionHeader = itemView.findViewById(com.bif.app.core.R.id.tvSectionHeader);
+        }
+
+        void bind(boolean isRequestHeader) {
+            boolean isExpanded = isRequestHeader ? isFriendRequestExpanded : isFriendListExpanded;
+            int total = isRequestHeader ? pendingRequests.size() : friends.size();
+
+            if (isExpanded) {
+                tvSectionHeader.setText(isRequestHeader ? R.string.friend_request_header : R.string.friend_list_header);
+            } else {
+                tvSectionHeader.setText(itemView.getContext().getString(
+                        isRequestHeader ? R.string.friend_request_header_with_total : R.string.friend_list_header_with_total,
+                        total
+                ));
+            }
+
+            tvSectionHeader.setOnClickListener(v -> {
+                if (isRequestHeader) {
+                    isFriendRequestExpanded = !isFriendRequestExpanded;
+                } else {
+                    isFriendListExpanded = !isFriendListExpanded;
+                }
+                notifyDataSetChanged();
+            });
         }
     }
 

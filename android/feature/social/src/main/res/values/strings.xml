@@ -83,6 +83,10 @@
     <string name="group_role_owner_fixed">Owner role cannot be changed.</string>
     <string name="rename_group">Rename Group</string>
     <string name="friend_request_from">Friend Request From</string>
+    <string name="friend_request_header">Friend request</string>
+    <string name="friend_list_header">Friend list</string>
+    <string name="friend_request_header_with_total">Friend request (%d)</string>
+    <string name="friend_list_header_with_total">Friend list (%d)</string>
     <string name="friend_request_accept">Accept friend request</string>
     <string name="friend_request_reject">Reject friend request</string>
     <string name="friend_request_accepted">Friend request accepted</string>
