@@ -41,7 +41,8 @@ import retrofit2.Response;
 public class PlaceRepository implements IPlaceRepository {
 
     private static final String TAG = "PlaceRepository";
-    private static final int MAX_LOCAL_PLACES = 100;
+    private static final int MAX_LOCAL_PLACES = 500;
+    private static final String ADDRESS_UNAVAILABLE = "Address unavailable";
 
     private final GoogleMapsDataSource googleMapsDataSource;
     private final RestApiService restApiService;
@@ -208,11 +209,12 @@ public class PlaceRepository implements IPlaceRepository {
     @Override
     public void persistPlace(Place place, String action) {
         executorService.execute(() -> {
-            PlaceEntity existing = placeDao.getByIdSync(place.id,
+            Place normalizedPlace = normalizePlaceForCache(place);
+            PlaceEntity existing = placeDao.getByIdSync(normalizedPlace.id,
                     activeUserId);
 
             // Cache locally
-            PlaceEntity entity = PlaceMapper.toEntity(place,
+            PlaceEntity entity = PlaceMapper.toEntity(normalizedPlace,
                     activeUserId);
             entity.persistedByAction = action;
             if (existing != null) {
@@ -240,20 +242,22 @@ public class PlaceRepository implements IPlaceRepository {
                 operation = "UPDATE";
             }
 
-            PlaceDto payload = PlaceMapper.toDto(place, activeUserId);
+            PlaceDto payload = PlaceMapper.toDto(normalizedPlace, activeUserId);
             payload.placeSource = entity.placeSource;
             payload.persistedByAction = action;
             payload.persistedByUserId = activeUserId;
             payload.serverVersion = entity.serverVersion;
             payload.deleted = entity.deleted;
 
-            syncManager.enqueueChange(
-                    "place",
-                    place.id,
-                    operation,
-                    UUID.randomUUID().toString(),
-                    payload);
-            syncManager.syncIfOnline();
+            if (shouldEnqueueChange(existing, entity, operation)) {
+                syncManager.enqueueChange(
+                        "place",
+                        normalizedPlace.id,
+                        operation,
+                        UUID.randomUUID().toString(),
+                        payload);
+                syncManager.syncIfOnline();
+            }
         });
     }
 
@@ -336,5 +340,65 @@ public class PlaceRepository implements IPlaceRepository {
             return "anonymous";
         }
         return userId.trim();
+    }
+
+    private Place normalizePlaceForCache(Place place) {
+        if (place == null) {
+            return new Place(UUID.randomUUID().toString(), "",
+                    ADDRESS_UNAVAILABLE, 0.0,
+                    new Location(0, 0));
+        }
+
+        String placeId = place.id;
+        if (placeId == null || placeId.trim().isEmpty()) {
+            placeId = UUID.randomUUID().toString();
+        }
+
+        String normalizedAddress = place.address;
+        if (normalizedAddress == null || normalizedAddress.trim().isEmpty()
+                || "Unknown Address".equalsIgnoreCase(normalizedAddress)) {
+            normalizedAddress = ADDRESS_UNAVAILABLE;
+        }
+
+        return new Place(
+                placeId,
+                place.name != null ? place.name : "",
+                normalizedAddress,
+                place.rating,
+                place.location != null ? place.location
+                        : new Location(0, 0)
+        );
+    }
+
+    private boolean shouldEnqueueChange(PlaceEntity existing,
+                                        PlaceEntity updated,
+                                        String operation) {
+        if (existing == null) {
+            return true;
+        }
+        if ("DELETE".equalsIgnoreCase(operation)) {
+            return !existing.deleted;
+        }
+        if (!safeEquals(existing.name, updated.name)) {
+            return true;
+        }
+        if (!safeEquals(existing.address, updated.address)) {
+            return true;
+        }
+        if (Double.compare(existing.latitude, updated.latitude) != 0
+                || Double.compare(existing.longitude, updated.longitude) != 0) {
+            return true;
+        }
+        if (Double.compare(existing.rating, updated.rating) != 0) {
+            return true;
+        }
+        return existing.deleted != updated.deleted;
+    }
+
+    private boolean safeEquals(String left, String right) {
+        if (left == null) {
+            return right == null;
+        }
+        return left.equals(right);
     }
 }

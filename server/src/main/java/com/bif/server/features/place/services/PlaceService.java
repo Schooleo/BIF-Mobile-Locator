@@ -16,11 +16,14 @@ import java.util.Optional;
 public class PlaceService {
     private final PlaceRepository placeRepository;
     private final SyncVersionService syncVersionService;
+    private final PlaceAddressEnrichmentService placeAddressEnrichmentService;
 
     public PlaceService(PlaceRepository placeRepository,
-                        SyncVersionService syncVersionService) {
+                        SyncVersionService syncVersionService,
+                        PlaceAddressEnrichmentService placeAddressEnrichmentService) {
         this.placeRepository = placeRepository;
         this.syncVersionService = syncVersionService;
+        this.placeAddressEnrichmentService = placeAddressEnrichmentService;
     }
 
     public List<Place> getAll() {
@@ -32,6 +35,7 @@ public class PlaceService {
     }
 
     public Place save(Place place) {
+        enrichPlaceAddress(place);
         place.setServerVersion(syncVersionService.nextVersion());
         place.setLastModifiedBy(place.getPersistedByUserId());
         return placeRepository.save(place);
@@ -39,11 +43,28 @@ public class PlaceService {
 
     public Place saveFromSearch(Place place) {
         return placeRepository.findById(place.getId()).orElseGet(() -> {
+            enrichPlaceAddress(place);
             place.setPlaceSource("google_maps");
             place.setPersistedByAction("search_discovered");
             place.setServerVersion(syncVersionService.nextVersion());
             return placeRepository.save(place);
         });
+    }
+
+    private void enrichPlaceAddress(Place place) {
+        if (place == null) {
+            return;
+        }
+
+        Double latitude = null;
+        Double longitude = null;
+        if (place.getLocation() != null) {
+            latitude = place.getLocation().getLatitude();
+            longitude = place.getLocation().getLongitude();
+        }
+
+        place.setAddress(placeAddressEnrichmentService.enrichAddress(
+                place.getAddress(), latitude, longitude));
     }
 
     public boolean deleteById(String id) {

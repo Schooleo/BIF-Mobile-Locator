@@ -3,6 +3,7 @@ package com.bif.server.features.sync.services;
 import com.bif.server.common.models.Location;
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.repositories.PlaceRepository;
+import com.bif.server.features.place.services.PlaceAddressEnrichmentService;
 import com.bif.server.features.sync.models.SyncChange;
 import com.bif.server.features.sync.models.SyncChangeEntry;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,10 +17,14 @@ import java.util.Optional;
 public class PlaceSyncEntityHandler implements SyncEntityHandler {
 
     private final PlaceRepository placeRepository;
+    private final PlaceAddressEnrichmentService placeAddressEnrichmentService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public PlaceSyncEntityHandler(PlaceRepository placeRepository) {
+    public PlaceSyncEntityHandler(
+            PlaceRepository placeRepository,
+            PlaceAddressEnrichmentService placeAddressEnrichmentService) {
         this.placeRepository = placeRepository;
+        this.placeAddressEnrichmentService = placeAddressEnrichmentService;
     }
 
     @Override
@@ -82,7 +87,8 @@ public class PlaceSyncEntityHandler implements SyncEntityHandler {
         }
 
         place.setName(payload.name);
-        place.setAddress(payload.address);
+        place.setAddress(placeAddressEnrichmentService.enrichAddress(
+            payload.address, payload.latitude, payload.longitude));
         place.setRating(payload.rating);
         place.setLocation(new Location(payload.latitude, payload.longitude));
         place.setTags(payload.tags);

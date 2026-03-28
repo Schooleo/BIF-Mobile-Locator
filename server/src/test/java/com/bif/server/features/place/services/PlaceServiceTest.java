@@ -3,6 +3,7 @@ package com.bif.server.features.place.services;
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.repositories.PlaceRepository;
+import com.bif.server.features.place.services.PlaceAddressEnrichmentService;
 import com.bif.server.features.sync.services.SyncVersionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,11 +28,16 @@ class PlaceServiceTest {
     @Mock
     private SyncVersionService syncVersionService;
 
+    @Mock
+    private PlaceAddressEnrichmentService placeAddressEnrichmentService;
+
     private PlaceService placeService;
 
     @BeforeEach
     void setUp() {
-        placeService = new PlaceService(placeRepository, syncVersionService);
+        placeService = new PlaceService(placeRepository,
+                syncVersionService,
+                placeAddressEnrichmentService);
     }
 
     @Test
@@ -60,6 +66,8 @@ class PlaceServiceTest {
     void save_StampsVersionAndPersists() {
         Place place = new Place();
         place.setPersistedByUserId("user1");
+        when(placeAddressEnrichmentService.enrichAddress(any(), any(), any()))
+            .thenReturn("123 Main St");
         when(syncVersionService.nextVersion()).thenReturn(10L);
         when(placeRepository.save(place)).thenReturn(place);
 
@@ -67,6 +75,7 @@ class PlaceServiceTest {
 
         assertEquals(10L, result.getServerVersion());
         assertEquals("user1", result.getLastModifiedBy());
+        assertEquals("123 Main St", result.getAddress());
         verify(placeRepository).save(place);
     }
 
@@ -74,6 +83,8 @@ class PlaceServiceTest {
     void saveFromSearch_WhenPlaceDoesNotExist_Persists() {
         Place place = new Place();
         place.setId("new1");
+        when(placeAddressEnrichmentService.enrichAddress(any(), any(), any()))
+            .thenReturn("456 Search Rd");
         when(placeRepository.findById("new1")).thenReturn(Optional.empty());
         when(syncVersionService.nextVersion()).thenReturn(5L);
         when(placeRepository.save(place)).thenReturn(place);
@@ -82,6 +93,7 @@ class PlaceServiceTest {
 
         assertEquals("google_maps", result.getPlaceSource());
         assertEquals("search_discovered", result.getPersistedByAction());
+        assertEquals("456 Search Rd", result.getAddress());
         assertEquals(5L, result.getServerVersion());
         verify(placeRepository).save(place);
     }

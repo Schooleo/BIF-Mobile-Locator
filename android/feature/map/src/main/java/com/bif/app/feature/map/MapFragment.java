@@ -451,6 +451,8 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     }
 
     private void showPlaceBottomSheet(com.bif.app.domain.model.Place place, View root) {
+        viewModel.cacheViewedPlace(place);
+
         TextView tvName = root.findViewById(R.id.tv_place_name);
         TextView tvAddress = root.findViewById(R.id.tv_place_address);
         TextView tvRating = root.findViewById(R.id.tv_place_rating);

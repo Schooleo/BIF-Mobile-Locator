@@ -127,6 +127,10 @@ public class MapViewModel extends ViewModel {
         placeRepository.persistPlace(place, "favorite");
     }
 
+    public void cacheViewedPlace(Place place) {
+        placeRepository.persistPlace(place, "viewed");
+    }
+
     public void removeFromFavorites(Favorite favorite) {
         favoriteRepository.deleteFavorite(favorite);
     }

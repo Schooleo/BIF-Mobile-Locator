@@ -311,4 +311,23 @@ public class PlaceRepositoryTest {
 
         verify(mockPlaceDao).evictOldest(eq(10), anyString());
     }
+
+    @Test
+    public void persistPlace_viewedWithMissingAddress_usesPlaceholderAndQueuesSync()
+            throws InterruptedException {
+        Place place = new Place("p2", "Clicked Place", "", 0,
+                new Location(1.23, 4.56));
+        when(mockPlaceDao.count(anyString())).thenReturn(10);
+
+        placeRepository.persistPlace(place, "viewed");
+        Thread.sleep(300);
+
+        ArgumentCaptor<PlaceEntity> entityCaptor =
+                ArgumentCaptor.forClass(PlaceEntity.class);
+        verify(mockPlaceDao).upsert(entityCaptor.capture());
+        assertEquals("Address unavailable", entityCaptor.getValue().address);
+
+        verify(mockSyncManager).enqueueChange(eq("place"), eq("p2"),
+                anyString(), anyString(), any());
+    }
 }
