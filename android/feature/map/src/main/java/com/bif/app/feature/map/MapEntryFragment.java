@@ -9,12 +9,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
-import com.bif.app.core.utils.MapEngine;
-import com.bif.app.core.utils.UserPreferences;
-
 public class MapEntryFragment extends Fragment {
 
-    private MapEngine renderedEngine;
+    private boolean hasRendered;
 
     @Nullable
     @Override
@@ -39,21 +36,18 @@ public class MapEntryFragment extends Fragment {
     }
 
     private void renderEngineIfNeeded() {
-        MapEngine selectedEngine = UserPreferences.getMapEngine(requireContext());
-        if (renderedEngine == selectedEngine && getChildFragmentManager()
+        if (hasRendered && getChildFragmentManager()
                 .findFragmentById(R.id.map_engine_container) != null) {
             return;
         }
 
-        Fragment targetFragment = selectedEngine == MapEngine.OSM
-            ? new MapLibreFragment()
-                : new MapFragment();
+        Fragment targetFragment = new MapLibreFragment();
 
         getChildFragmentManager()
                 .beginTransaction()
                 .replace(R.id.map_engine_container, targetFragment)
                 .commit();
 
-        renderedEngine = selectedEngine;
+        hasRendered = true;
     }
 }

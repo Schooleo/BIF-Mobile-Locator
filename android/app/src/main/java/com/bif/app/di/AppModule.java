@@ -14,8 +14,6 @@ import com.bif.app.data.source.local.PlaceDao;
 import com.bif.app.data.source.local.SearchHistoryDao;
 import com.bif.app.data.source.local.SyncQueueDao;
 import com.bif.app.data.source.local.TripDao;
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationServices;
 
 import javax.inject.Singleton;
 
@@ -31,12 +29,6 @@ import dagger.hilt.components.SingletonComponent;
 @Module
 @InstallIn(SingletonComponent.class)
 public class AppModule {
-
-    @Provides
-    @Singleton
-    public FusedLocationProviderClient provideLocationClient(@ApplicationContext Context context) {
-        return LocationServices.getFusedLocationProviderClient(context);
-    }
 
     @Provides
     @Singleton
@@ -59,13 +51,13 @@ public class AppModule {
     @Provides
     @Singleton
     public FriendDao provideFriendDao(AppDatabase database) {
-      return database.friendDao();
+        return database.friendDao();
     }
 
     @Provides
     @Singleton
     public GroupDao provideGroupDao(AppDatabase database) {
-      return database.groupDao();
+        return database.groupDao();
     }
 
     @Provides
@@ -83,35 +75,40 @@ public class AppModule {
     @Provides
     @Singleton
     public SyncQueueDao provideSyncQueueDao(AppDatabase database) {
-      return database.syncQueueDao();
+        return database.syncQueueDao();
     }
 
     @Provides
     @Singleton
     public ChatMessageDao provideChatMessageDao(AppDatabase database) {
-      return database.chatMessageDao();
+        return database.chatMessageDao();
     }
 
     @Provides
     @Singleton
     public TripDao provideTripDao(AppDatabase database) {
-      return database.tripDao();
+        return database.tripDao();
     }
 
     @Provides
     @Singleton
-    public LocalSessionDataCleaner provideLocalSessionDataCleaner(AppDatabase appDatabase, @ApplicationContext Context context) {
-      return () -> {
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        executor.execute(() -> {
-          try {
-            appDatabase.clearAllTables();
-            context.getSharedPreferences("SYNC_PREF", Context.MODE_PRIVATE).edit().clear().apply();
-          } catch (Exception ignored) {
-            // Keep logout flow resilient even if local cleanup fails.
-          }
-        });
-        executor.shutdown();
-      };
+    public LocalSessionDataCleaner provideLocalSessionDataCleaner(
+            AppDatabase appDatabase,
+            @ApplicationContext Context context) {
+        return () -> {
+            ExecutorService executor = Executors.newSingleThreadExecutor();
+            executor.execute(() -> {
+                try {
+                    appDatabase.clearAllTables();
+                    context.getSharedPreferences("SYNC_PREF", Context.MODE_PRIVATE)
+                            .edit()
+                            .clear()
+                            .apply();
+                } catch (Exception ignored) {
+                    // Keep logout flow resilient even if local cleanup fails.
+                }
+            });
+            executor.shutdown();
+        };
     }
 }

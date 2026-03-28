@@ -24,11 +24,6 @@ android {
             }
         }
 
-        manifestPlaceholders = [
-            MAPS_API_KEY: localProperties.getProperty('MAPS_API_KEY', ""),
-        ]
-
-        buildConfigField "String", "PLACES_API_KEY", "\"${localProperties.getProperty('PLACES_API_KEY', "")}\""
         buildConfigField "String", "MAPLIBRE_STYLE_URL", "\"${localProperties.getProperty('MAPLIBRE_STYLE_URL', "https://demotiles.maplibre.org/style.json")}\""
     }
 
@@ -55,9 +50,6 @@ dependencies {
     implementation libs.navigation.runtime
     implementation libs.navigation.fragment.ktx
     implementation libs.navigation.ui.ktx
-    implementation libs.play.services.maps
-    implementation libs.play.services.location
-    implementation libs.places
     implementation libs.maplibre.android.sdk
 
     testImplementation libs.mockito.core

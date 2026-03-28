@@ -9,8 +9,9 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
 import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -54,7 +55,9 @@ public class AndroidGeocodingDataSource {
                     + "/search?format=jsonv2&addressdetails=1&limit="
                     + MAX_RESULTS + "&q=" + encodedQuery;
 
-            connection = (HttpURLConnection) new URL(requestUrl).openConnection();
+                connection = (HttpURLConnection) URI.create(requestUrl)
+                    .toURL()
+                    .openConnection();
             connection.setRequestMethod("GET");
             connection.setRequestProperty("User-Agent", USER_AGENT);
             connection.setConnectTimeout(4000);
@@ -66,7 +69,7 @@ public class AndroidGeocodingDataSource {
             }
 
             try (InputStream inputStream = connection.getInputStream()) {
-                String json = new String(inputStream.readAllBytes(),
+                String json = new String(readAllBytesCompat(inputStream),
                         StandardCharsets.UTF_8);
                 JSONArray arr = new JSONArray(json);
                 List<Address> addresses = new ArrayList<>();
@@ -100,5 +103,15 @@ public class AndroidGeocodingDataSource {
                 connection.disconnect();
             }
         }
+    }
+
+    private byte[] readAllBytesCompat(InputStream inputStream) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[4096];
+        int read;
+        while ((read = inputStream.read(buffer)) != -1) {
+            output.write(buffer, 0, read);
+        }
+        return output.toByteArray();
     }
 }

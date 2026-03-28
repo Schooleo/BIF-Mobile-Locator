@@ -101,12 +101,12 @@ public class UserPreferences {
 
     public static MapEngine getMapEngine(Context context) {
         String raw = getPrefs(context).getString(KEY_MAP_ENGINE,
-                MapEngine.GOOGLE.name());
+                MapEngine.OSM.name());
         return MapEngine.fromValue(raw);
     }
 
     public static void setMapEngine(Context context, MapEngine engine) {
-        MapEngine safeEngine = engine != null ? engine : MapEngine.GOOGLE;
+        MapEngine safeEngine = engine != null ? engine : MapEngine.OSM;
         getPrefs(context).edit()
                 .putString(KEY_MAP_ENGINE, safeEngine.name())
                 .apply();
