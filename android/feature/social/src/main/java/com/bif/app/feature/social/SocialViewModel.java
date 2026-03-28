@@ -174,6 +174,33 @@ public class SocialViewModel extends ViewModel {
         }, group.isOwner() ? "__MSG_GROUP_DISBAND_FAILED__" : "__MSG_GROUP_LEAVE_FAILED__");
     }
 
+    public void renameGroup(Group group, String newName) {
+        if (group == null || newName == null) {
+            return;
+        }
+
+        String trimmedName = newName.trim();
+        if (trimmedName.isEmpty()) {
+            return;
+        }
+
+        Group updatedGroup = new Group(
+                group.getId(),
+                group.getServerId(),
+                trimmedName,
+                trimmedName.substring(0, 1).toUpperCase(),
+                group.getAvatarColor(),
+                group.getMembers(),
+                group.isOwner()
+        );
+
+        runGroupAction(() -> {
+            groupRepository.updateGroup(updatedGroup);
+            groupRepository.refreshGroups();
+            return "__MSG_GROUP_RENAME_SUCCESS__";
+        }, "__MSG_GROUP_RENAME_FAILED__");
+    }
+
     private void runGroupAction(GroupAction action, String fallbackErrorCode) {
         groupActionLoading.postValue(true);
         ioExecutor.execute(() -> {

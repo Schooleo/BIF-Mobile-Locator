@@ -24,6 +24,7 @@
     <string name="cancel">Cancel</string>
     <string name="member_removed">%s has been removed</string>
     <string name="group_updated">Group updated</string>
+    <string name="group_update_failed">Failed to update group</string>
     <string name="enter_group_name">Please enter a group name</string>
     <string name="disband_group">Disband Group</string>
     <string name="disband_group_confirm">Are you sure you want to disband the group \'%s\'? This action cannot be undone.</string>
@@ -77,6 +78,7 @@
     <string name="social_retry">Retry</string>
     <string name="group_members_empty">No members found.</string>
     <string name="group_members_error">Unable to load members.</string>
+    <string name="rename_group">Rename Group</string>
     <string name="friend_request_from">Friend Request From</string>
     <string name="friend_request_accept">Accept friend request</string>
     <string name="friend_request_reject">Reject friend request</string>

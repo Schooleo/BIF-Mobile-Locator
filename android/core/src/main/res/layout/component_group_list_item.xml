@@ -49,6 +49,16 @@
 
     <!-- More Button -->
     <ImageButton
+        android:id="@+id/btn_rename_group"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginEnd="12dp"
+        android:src="@drawable/ic_edit"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/more_options"
+        android:visibility="gone" />
+
+    <ImageButton
         android:id="@+id/btn_more"
         android:layout_width="24dp"
         android:layout_height="24dp"

@@ -162,6 +162,11 @@ public class SocialFragment extends Fragment {
             }
 
             @Override
+            public void onRenameGroupClick(Group group) {
+                showRenameGroupDialog(group);
+            }
+
+            @Override
             public void onGroupOptionsClick(Group group, int position) {
                 handleGroupOptions(group);
             }
@@ -232,6 +237,10 @@ public class SocialFragment extends Fragment {
                     toastMessage = "Left group";
                 } else if ("__MSG_GROUP_LEAVE_FAILED__".equals(message)) {
                     toastMessage = "Failed to leave group";
+                } else if ("__MSG_GROUP_RENAME_SUCCESS__".equals(message)) {
+                    toastMessage = getString(R.string.group_updated);
+                } else if ("__MSG_GROUP_RENAME_FAILED__".equals(message)) {
+                    toastMessage = getString(R.string.group_update_failed);
                 }
                 Toast.makeText(requireContext(), toastMessage, Toast.LENGTH_SHORT).show();
                 viewModel.clearGroupActionMessage();
@@ -438,6 +447,35 @@ public class SocialFragment extends Fragment {
                 () -> {
                     viewModel.handleGroupAction(group);
                 });
+    }
+
+    private void showRenameGroupDialog(Group group) {
+        if (group == null || !group.isOwner()) {
+            return;
+        }
+
+        EditText input = new EditText(requireContext());
+        input.setText(group.getName());
+        input.setSelection(input.getText().length());
+        input.setHint(R.string.group_name);
+        input.setSingleLine(true);
+
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle(R.string.rename_group)
+                .setView(input)
+                .setNegativeButton(R.string.cancel, (dialog, which) -> dialog.dismiss())
+                .setPositiveButton(R.string.save, (dialog, which) -> {
+                    String newName = input.getText().toString().trim();
+                    if (newName.isEmpty()) {
+                        Toast.makeText(requireContext(), R.string.enter_group_name, Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (newName.equals(group.getName())) {
+                        return;
+                    }
+                    viewModel.renameGroup(group, newName);
+                })
+                .show();
     }
 
     private void navigateToChatFromFriend(Friend friend) {

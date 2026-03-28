@@ -115,6 +115,13 @@ public interface RestApiService {
             @Body UpdateGroupRequestDto request
     );
 
+    @PATCH("groups/{groupId}")
+    Call<GroupApiModel> patchGroup(
+            @Path("groupId") String groupId,
+            @Query("actorId") String actorId,
+            @Body UpdateGroupRequestDto request
+    );
+
     @DELETE("groups/{groupId}")
     Call<Void> deleteGroup(
             @Path("groupId") String groupId,

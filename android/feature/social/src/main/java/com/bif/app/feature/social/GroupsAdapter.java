@@ -27,6 +27,7 @@ public class GroupsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
     public interface OnGroupActionListener {
         void onCreateGroupClick();
         void onGroupClick(Group group);
+        void onRenameGroupClick(Group group);
         void onGroupOptionsClick(Group group, int position);
     }
 
@@ -98,6 +99,7 @@ public class GroupsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
 
     class GroupViewHolder extends RecyclerView.ViewHolder {
         TextView tvAvatar, tvGroupName, tvMembers;
+        ImageButton btnRename;
         ImageButton btnMore;
 
         GroupViewHolder(View itemView) {
@@ -105,6 +107,7 @@ public class GroupsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
             tvAvatar = itemView.findViewById(com.bif.app.core.R.id.tv_avatar);
             tvGroupName = itemView.findViewById(com.bif.app.core.R.id.tv_group_name);
             tvMembers = itemView.findViewById(com.bif.app.core.R.id.tv_members);
+            btnRename = itemView.findViewById(com.bif.app.core.R.id.btn_rename_group);
             btnMore = itemView.findViewById(com.bif.app.core.R.id.btn_more);
         }
 
@@ -117,6 +120,18 @@ public class GroupsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
             itemView.setOnClickListener(v -> {
                 if (listener != null) {
                     listener.onGroupClick(group);
+                }
+            });
+
+            if (group.isOwner()) {
+                btnRename.setVisibility(View.VISIBLE);
+            } else {
+                btnRename.setVisibility(View.GONE);
+            }
+
+            btnRename.setOnClickListener(v -> {
+                if (listener != null) {
+                    listener.onRenameGroupClick(group);
                 }
             });
 

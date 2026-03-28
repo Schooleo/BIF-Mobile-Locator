@@ -77,6 +77,23 @@ public class GroupRestController {
         }
     }
 
+    @PatchMapping("/{id}")
+    public ResponseEntity<Group> patchGroup(
+            @PathVariable String id,
+            @RequestParam String actorId,
+            @RequestBody UpdateGroupRequest request
+    ) {
+        try {
+            return groupService.update(id, actorId, request)
+                    .map(ResponseEntity::ok)
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (SecurityException ex) {
+            throw new ResponseStatusException(FORBIDDEN, ex.getMessage());
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(BAD_REQUEST, ex.getMessage());
+        }
+    }
+
     @GetMapping("/{id}/members")
     public ResponseEntity<List<GroupMemberResponse>> getGroupMembers(
             @PathVariable String id,
