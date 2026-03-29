@@ -37,6 +37,7 @@ public class GroupDetailFragment extends Fragment {
     private Button btnSave;
     private TextView tvMembersHeader;
     private RecyclerView rvMembers;
+    private ImageButton btnRenameGroup;
     private ImageButton btnDisband;
 
     @Nullable
@@ -60,6 +61,7 @@ public class GroupDetailFragment extends Fragment {
         btnSave = view.findViewById(R.id.btn_save);
         tvMembersHeader = view.findViewById(R.id.tv_members_header);
         rvMembers = view.findViewById(R.id.rv_members);
+        btnRenameGroup = view.findViewById(R.id.btn_rename_group);
         btnDisband = view.findViewById(R.id.btn_disband);
 
         ImageButton btnBack = view.findViewById(R.id.btn_back);
@@ -104,9 +106,12 @@ public class GroupDetailFragment extends Fragment {
 
             // Show disband button only for owners
             if (group.isOwner()) {
+                btnRenameGroup.setVisibility(View.VISIBLE);
+                btnRenameGroup.setOnClickListener(v -> showRenameGroupDialog(group));
                 btnDisband.setVisibility(View.VISIBLE);
                 btnDisband.setOnClickListener(v -> confirmDisbandGroup(group));
             } else {
+                btnRenameGroup.setVisibility(View.GONE);
                 btnDisband.setVisibility(View.GONE);
             }
 
@@ -167,5 +172,39 @@ public class GroupDetailFragment extends Fragment {
                             Toast.LENGTH_SHORT).show();
                     navigateBackToGroups();
                 });
+    }
+
+    private void showRenameGroupDialog(Group group) {
+        if (group == null) {
+            return;
+        }
+
+        EditText input = new EditText(requireContext());
+        input.setText(group.getName());
+        input.setSelection(input.getText().length());
+        input.setSingleLine(true);
+        input.setHint(R.string.group_name);
+
+        int horizontalPadding = (int) (20 * requireContext().getResources().getDisplayMetrics().density);
+        int verticalPadding = (int) (12 * requireContext().getResources().getDisplayMetrics().density);
+        input.setPadding(horizontalPadding, verticalPadding, horizontalPadding, verticalPadding);
+
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle(R.string.rename_group)
+                .setView(input)
+                .setNegativeButton(R.string.cancel, (dialog, which) -> dialog.dismiss())
+                .setPositiveButton(R.string.save, (dialog, which) -> {
+                    String newName = input.getText().toString().trim();
+                    if (newName.isEmpty()) {
+                        Toast.makeText(requireContext(), R.string.enter_group_name, Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (newName.equals(group.getName())) {
+                        return;
+                    }
+                    viewModel.updateGroupName(newName);
+                    Toast.makeText(requireContext(), R.string.group_updated, Toast.LENGTH_SHORT).show();
+                })
+                .show();
     }
 }

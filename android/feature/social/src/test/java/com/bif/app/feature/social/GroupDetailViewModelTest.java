@@ -13,6 +13,7 @@ import androidx.lifecycle.MutableLiveData;
 
 import com.bif.app.domain.model.Friend;
 import com.bif.app.domain.model.Group;
+import com.bif.app.domain.repository.IFriendshipRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 
 import org.junit.Before;
@@ -33,6 +34,9 @@ public class GroupDetailViewModelTest {
     @Mock
     private IGroupRepository mockGroupRepository;
 
+    @Mock
+    private IFriendshipRepository mockFriendshipRepository;
+
     private GroupDetailViewModel viewModel;
     private MutableLiveData<Group> groupLiveData;
 
@@ -42,7 +46,8 @@ public class GroupDetailViewModelTest {
         groupLiveData = new MutableLiveData<>();
         // Return groupLiveData for any server group id
         when(mockGroupRepository.getGroupByServerId(anyString())).thenReturn(groupLiveData);
-        viewModel = new GroupDetailViewModel(mockGroupRepository);
+        when(mockFriendshipRepository.getFriends()).thenReturn(new MutableLiveData<>());
+        viewModel = new GroupDetailViewModel(mockGroupRepository, mockFriendshipRepository);
     }
 
     /**

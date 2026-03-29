@@ -7,12 +7,16 @@ import com.bif.app.core.network.dto.auth.RefreshTokenRequest;
 import com.bif.app.core.network.dto.auth.RegisterRequest;
 import com.bif.app.core.network.dto.favorite.FavoriteRequestDto;
 import com.bif.app.core.network.dto.favorite.FavoriteResponseDto;
+import com.bif.app.core.network.dto.friendship.CreateFriendRequestDto;
+import com.bif.app.core.network.dto.friendship.FriendshipApiModel;
 import com.bif.app.core.network.dto.profile.ProfileMetadataResponse;
 import com.bif.app.core.network.dto.profile.UpdateMyProfileRequest;
+import com.bif.app.core.network.dto.AddMemberRequestDto;
 import com.bif.app.core.network.dto.CreateGroupRequestDto;
 import com.bif.app.core.network.dto.GroupApiModel;
 import com.bif.app.core.network.dto.UserApiModel;
 import com.bif.app.core.network.dto.UpdateGroupRequestDto;
+import com.bif.app.core.network.dto.UpdateMemberRoleRequestDto;
 import com.bif.app.core.network.dto.ChatMessageDto;
 import com.bif.app.core.network.dto.TripPlanDto;
 import com.bif.app.core.network.dto.TripStopDto;
@@ -75,6 +79,27 @@ public interface RestApiService {
     @GET("users")
     Call<List<UserApiModel>> getUsers();
 
+    @GET("friends")
+    Call<List<UserApiModel>> getFriends();
+
+        @DELETE("friends/{id}")
+        Call<Void> unfriend(@Path("id") String id);
+
+        @GET("friends/requests/incoming")
+        Call<List<FriendshipApiModel>> getIncomingFriendRequests();
+
+        @GET("friends/requests/outgoing")
+        Call<List<FriendshipApiModel>> getOutgoingFriendRequests();
+
+    @POST("friends/requests")
+    Call<FriendshipApiModel> sendFriendRequest(@Body CreateFriendRequestDto request);
+
+    @POST("friends/{id}/accept")
+    Call<FriendshipApiModel> acceptFriendRequest(@Path("id") String id);
+
+    @POST("friends/{id}/reject")
+    Call<FriendshipApiModel> rejectFriendRequest(@Path("id") String id);
+
     @GET("groups/user/{userId}")
     Call<List<GroupApiModel>> getGroupsByUser(@Path("userId") String userId);
 
@@ -91,6 +116,13 @@ public interface RestApiService {
             @Body UpdateGroupRequestDto request
     );
 
+    @PATCH("groups/{groupId}")
+    Call<GroupApiModel> patchGroup(
+            @Path("groupId") String groupId,
+            @Query("actorId") String actorId,
+            @Body UpdateGroupRequestDto request
+    );
+
     @DELETE("groups/{groupId}")
     Call<Void> deleteGroup(
             @Path("groupId") String groupId,
@@ -102,6 +134,21 @@ public interface RestApiService {
             @Path("groupId") String groupId,
             @Path("memberId") String memberId,
             @Query("actorId") String actorId
+    );
+
+    @POST("groups/{groupId}/members")
+    Call<GroupApiModel> addMember(
+            @Path("groupId") String groupId,
+            @Query("actorId") String actorId,
+            @Body AddMemberRequestDto request
+    );
+
+    @PATCH("groups/{groupId}/members/{memberId}/role")
+    Call<GroupApiModel> updateMemberRole(
+            @Path("groupId") String groupId,
+            @Path("memberId") String memberId,
+            @Query("actorId") String actorId,
+            @Body UpdateMemberRoleRequestDto request
     );
 
     // @GET("config/features")

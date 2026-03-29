@@ -9,6 +9,7 @@ import com.bif.app.data.source.local.AppDatabase;
 import com.bif.app.data.source.local.ChatMessageDao;
 import com.bif.app.data.source.local.FavoriteDao;
 import com.bif.app.data.source.local.FriendDao;
+import com.bif.app.data.source.local.FriendshipDao;
 import com.bif.app.data.source.local.GroupDao;
 import com.bif.app.data.source.local.PlaceDao;
 import com.bif.app.data.source.local.SearchHistoryDao;
@@ -52,6 +53,12 @@ public class AppModule {
     @Singleton
     public FriendDao provideFriendDao(AppDatabase database) {
         return database.friendDao();
+    }
+
+    @Provides
+    @Singleton
+    public FriendshipDao provideFriendshipDao(AppDatabase database) {
+      return database.friendshipDao();
     }
 
     @Provides
