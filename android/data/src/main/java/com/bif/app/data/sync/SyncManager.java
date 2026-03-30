@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 import android.util.Log;
 
 import com.bif.app.core.network.RestApiService;
+import com.bif.app.core.network.dto.ChatMessageDto;
 import com.bif.app.core.network.dto.SyncChangeDto;
 import com.bif.app.core.network.dto.SyncRequestDto;
 import com.bif.app.core.network.dto.SyncResponseDto;
@@ -15,10 +16,13 @@ import com.bif.app.data.source.local.GroupDao;
 import com.bif.app.data.source.local.PlaceDao;
 import com.bif.app.data.source.local.SyncQueueDao;
 import com.bif.app.data.source.local.TripDao;
+import com.bif.app.data.source.local.entity.ChatMessageEntity;
+import com.bif.app.data.source.local.entity.GroupEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 import com.google.gson.Gson;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -42,9 +46,12 @@ public class SyncManager {
     private static final String KEY_USER_ID = "sync_user_id";
     private static final String KEY_DEVICE_ID = "sync_device_id";
     private static final String KEY_LAST_PULLED_VERSION = "last_pulled_version";
+    private static final int MAX_CACHED_MESSAGES_PER_GROUP = 30;
 
     private final RestApiService restApiService;
     private final SyncQueueDao syncQueueDao;
+    private final ChatMessageDao chatMessageDao;
+    private final GroupDao groupDao;
     private final NetworkMonitor networkMonitor;
     private final SharedPreferences syncPrefs;
     private final Gson gson;
@@ -69,6 +76,8 @@ public class SyncManager {
                        @ApplicationContext Context appContext) {
         this.restApiService = restApiService;
         this.syncQueueDao = syncQueueDao;
+        this.chatMessageDao = chatMessageDao;
+        this.groupDao = groupDao;
         this.networkMonitor = networkMonitor;
         this.syncPrefs = appContext.getSharedPreferences(PREF_NAME,
                 Context.MODE_PRIVATE);
@@ -92,6 +101,8 @@ public class SyncManager {
                 NetworkMonitor networkMonitor) {
         this.restApiService = restApiService;
         this.syncQueueDao = syncQueueDao;
+        this.chatMessageDao = null;
+        this.groupDao = null;
         this.networkMonitor = networkMonitor;
         this.syncPrefs = null;
         this.appContext = null;
@@ -184,6 +195,7 @@ public class SyncManager {
                 }
 
                 applyPulledChanges(syncResponse.pulledChanges);
+                hydrateChatCachesForAllGroups();
 
                 // Update last pulled version
                 setLastPulledVersion(syncResponse.currentServerVersion);
@@ -277,6 +289,93 @@ public class SyncManager {
             }
             handler.applyPulledChange(change, userId);
         }
+    }
+
+    private void hydrateChatCachesForAllGroups() {
+        if (chatMessageDao == null || groupDao == null || !networkMonitor.isOnline()) {
+            return;
+        }
+
+        List<GroupEntity> groups;
+        try {
+            groups = groupDao.getAllGroupsSync();
+        } catch (Exception ignored) {
+            return;
+        }
+
+        if (groups == null || groups.isEmpty()) {
+            return;
+        }
+
+        for (GroupEntity group : groups) {
+            if (group == null || group.isDeleted()) {
+                continue;
+            }
+
+            String serverId = group.getServerId();
+            if (serverId == null || serverId.trim().isEmpty()) {
+                continue;
+            }
+
+            try {
+                Response<List<ChatMessageDto>> response = restApiService.getChatMessages(serverId).execute();
+                if (!response.isSuccessful() || response.body() == null) {
+                    continue;
+                }
+
+                List<ChatMessageEntity> mapped = new ArrayList<>();
+                for (ChatMessageDto dto : response.body()) {
+                    ChatMessageEntity entity = mapChatDtoToEntity(dto);
+                    if (entity != null) {
+                        mapped.add(entity);
+                    }
+                }
+
+                chatMessageDao.deleteByGroupId(serverId);
+                if (!mapped.isEmpty()) {
+                    chatMessageDao.insertAll(mapped);
+                    chatMessageDao.pruneGroupToLimit(serverId,
+                            MAX_CACHED_MESSAGES_PER_GROUP);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private ChatMessageEntity mapChatDtoToEntity(ChatMessageDto dto) {
+        if (dto == null || dto.groupId == null || dto.groupId.trim().isEmpty()) {
+            return null;
+        }
+
+        double lat = 0;
+        double lng = 0;
+        if (dto.sharedLocation != null) {
+            lat = dto.sharedLocation.latitude;
+            lng = dto.sharedLocation.longitude;
+        }
+
+        long sentAt = System.currentTimeMillis();
+        if (dto.sentAt != null && !dto.sentAt.trim().isEmpty()) {
+            try {
+                sentAt = Instant.parse(dto.sentAt).toEpochMilli();
+            } catch (Exception ignored) {
+            }
+        }
+
+        return new ChatMessageEntity(
+                dto.id != null ? dto.id : UUID.randomUUID().toString(),
+                dto.groupId,
+                dto.senderUserId,
+                dto.senderName,
+                dto.content,
+                dto.type,
+                sentAt,
+                dto.clientMessageId,
+                lat,
+                lng,
+                dto.sharedAddress,
+                dto.confirmed
+        );
     }
 
     private void ensureSyncContext() {

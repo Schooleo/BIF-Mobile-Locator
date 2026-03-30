@@ -1,5 +1,7 @@
 package com.bif.app.data.repository;
 
+import android.util.Log;
+
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Transformations;
@@ -12,8 +14,11 @@ import com.bif.app.core.network.dto.UpdateGroupRequestDto;
 import com.bif.app.core.network.dto.UpdateMemberRoleRequestDto;
 import com.bif.app.core.network.dto.UserApiModel;
 import com.bif.app.data.mapper.GroupMapper;
+import com.bif.app.data.sync.NetworkMonitor;
 import com.bif.app.data.sync.SyncManager;
+import com.bif.app.data.source.local.FriendDao;
 import com.bif.app.data.source.local.GroupDao;
+import com.bif.app.data.source.local.entity.FriendEntity;
 import com.bif.app.data.source.local.entity.GroupEntity;
 import com.bif.app.data.source.local.entity.GroupFriendCrossRef;
 import com.bif.app.domain.model.Friend;
@@ -41,10 +46,14 @@ import retrofit2.Response;
 @Singleton
 public class GroupRepository implements IGroupRepository {
 
+    private static final String TAG = "GroupRepository";
+
     private final RestApiService restApiService;
     private final SyncManager syncManager;
+    private final NetworkMonitor networkMonitor;
 
     private final GroupDao groupDao;
+    private final FriendDao friendDao;
     private final GroupMapper groupMapper;
     private final Gson gson;
     private final ExecutorService executorService;
@@ -58,11 +67,15 @@ public class GroupRepository implements IGroupRepository {
     @Inject
     public GroupRepository(RestApiService restApiService,
                            GroupDao groupDao,
-                           SyncManager syncManager) {
+                           SyncManager syncManager,
+                           NetworkMonitor networkMonitor,
+                           FriendDao friendDao) {
         this.restApiService = restApiService;
         this.syncManager = syncManager;
+        this.networkMonitor = networkMonitor;
 
         this.groupDao = groupDao;
+        this.friendDao = friendDao;
         this.groupMapper = null;
         this.gson = new Gson();
         this.executorService = Executors.newSingleThreadExecutor();
@@ -78,8 +91,10 @@ public class GroupRepository implements IGroupRepository {
     public GroupRepository(GroupDao groupDao, GroupMapper groupMapper) {
         this.restApiService = null;
         this.syncManager = null;
+        this.networkMonitor = null;
 
         this.groupDao = groupDao;
+        this.friendDao = null;
         this.groupMapper = groupMapper;
         this.gson = null;
         this.executorService = Executors.newSingleThreadExecutor();
@@ -215,20 +230,22 @@ public class GroupRepository implements IGroupRepository {
             return;
         }
 
-        executorService.execute(() -> {
-            String groupServerId = groupServerIdByLocalId.get(groupId);
-            String memberServerId = resolveMemberServerId(friendId);
-            String actorId = resolveActorId();
-            if (isBlank(groupServerId) || isBlank(memberServerId) || isBlank(actorId)) {
-                return;
-            }
+        requireOnlineForPolicy("GROUP_REMOVE_MEMBER_REQUIRES_ONLINE");
 
+        executorService.execute(() -> {
             try {
+                String groupServerId = groupServerIdByLocalId.get(groupId);
+                String memberServerId = resolveMemberServerId(friendId);
+                String actorId = resolveActorId();
+                if (isBlank(groupServerId) || isBlank(memberServerId) || isBlank(actorId)) {
+                    return;
+                }
+
                 restApiService.removeMember(groupServerId, memberServerId, actorId).execute();
             } catch (Exception ignored) {
-                Map<String, String> payload = new HashMap<>();
-                payload.put("memberId", memberServerId);
-                enqueueGroupChange("REMOVE_MEMBER", groupServerId, payload);
+                // Online-only by policy; do not enqueue destructive member removal.
+            } catch (Throwable throwable) {
+                Log.e(TAG, "removeMember failed unexpectedly", throwable);
                 return;
             }
             refreshGroupsSync();
@@ -242,19 +259,21 @@ public class GroupRepository implements IGroupRepository {
             return;
         }
 
-        executorService.execute(() -> {
-            String memberServerId = resolveMemberServerId(friendId);
-            String actorId = resolveActorId();
-            if (isBlank(groupId) || isBlank(memberServerId) || isBlank(actorId)) {
-                return;
-            }
+        requireOnlineForPolicy("GROUP_REMOVE_MEMBER_REQUIRES_ONLINE");
 
+        executorService.execute(() -> {
             try {
+                String memberServerId = resolveMemberServerId(friendId);
+                String actorId = resolveActorId();
+                if (isBlank(groupId) || isBlank(memberServerId) || isBlank(actorId)) {
+                    return;
+                }
+
                 restApiService.removeMember(groupId, memberServerId, actorId).execute();
             } catch (Exception ignored) {
-                Map<String, String> payload = new HashMap<>();
-                payload.put("memberId", memberServerId);
-                enqueueGroupChange("REMOVE_MEMBER", groupId, payload);
+                // Online-only by policy; do not enqueue destructive member removal.
+            } catch (Throwable throwable) {
+                Log.e(TAG, "removeMemberByServerId failed unexpectedly", throwable);
                 return;
             }
             refreshGroupsSync();
@@ -367,6 +386,8 @@ public class GroupRepository implements IGroupRepository {
             return;
         }
 
+        requireOnlineForPolicy("GROUP_CREATE_REQUIRES_ONLINE");
+
         executorService.execute(() -> {
             String actorId = resolveActorId();
             if (isBlank(actorId) || isBlank(name)) {
@@ -459,6 +480,8 @@ public class GroupRepository implements IGroupRepository {
     }
 
     private void deleteGroupByServerId(Group group) {
+        requireOnlineForPolicy("GROUP_DELETE_REQUIRES_ONLINE");
+
         executorService.execute(() -> {
             String groupId = resolveGroupServerId(group);
             String actorId = resolveActorId();
@@ -567,6 +590,7 @@ public class GroupRepository implements IGroupRepository {
 
     private List<Group> mapCachedGroups(List<GroupEntity> cachedEntities) {
         List<Group> cachedGroups = new ArrayList<>();
+        populateUsersFromFriendCache();
         groupServerIdByLocalId.clear();
 
         for (GroupEntity entity : cachedEntities) {
@@ -662,6 +686,7 @@ public class GroupRepository implements IGroupRepository {
         try {
             Response<List<UserApiModel>> response = restApiService.getUsers().execute();
             if (!response.isSuccessful() || response.body() == null) {
+                populateUsersFromFriendCache();
                 return;
             }
 
@@ -675,6 +700,7 @@ public class GroupRepository implements IGroupRepository {
                 userServerIdByLocalId.put(stableId(user.id), user.id);
             }
         } catch (Exception ignored) {
+            populateUsersFromFriendCache();
         }
     }
 
@@ -786,8 +812,68 @@ public class GroupRepository implements IGroupRepository {
             return memberServerId;
         }
 
+        memberServerId = resolveMemberServerIdFromUsers(friendId);
+        if (!isBlank(memberServerId)) {
+            return memberServerId;
+        }
+
         refreshUsersCache();
-        return userServerIdByLocalId.get(friendId);
+        memberServerId = userServerIdByLocalId.get(friendId);
+        if (!isBlank(memberServerId)) {
+            return memberServerId;
+        }
+        return resolveMemberServerIdFromUsers(friendId);
+    }
+
+    private String resolveMemberServerIdFromUsers(int friendId) {
+        for (Map.Entry<String, UserApiModel> entry : usersById.entrySet()) {
+            String serverId = entry.getKey();
+            if (!isBlank(serverId) && stableId(serverId) == friendId) {
+                return serverId;
+            }
+        }
+        return null;
+    }
+
+    private void populateUsersFromFriendCache() {
+        if (friendDao == null) {
+            return;
+        }
+
+        List<FriendEntity> cachedFriends;
+        try {
+            cachedFriends = friendDao.getAllFriendsSync();
+        } catch (Exception ignored) {
+            return;
+        }
+
+        if (cachedFriends == null || cachedFriends.isEmpty()) {
+            return;
+        }
+
+        for (FriendEntity friend : cachedFriends) {
+            if (friend == null || isBlank(friend.serverUserId)) {
+                continue;
+            }
+
+            String serverId = friend.serverUserId.trim();
+            UserApiModel cachedUser = usersById.get(serverId);
+            if (cachedUser == null) {
+                cachedUser = new UserApiModel();
+                cachedUser.id = serverId;
+            }
+
+            cachedUser.name = !isBlank(friend.name) ? friend.name : serverId;
+            cachedUser.avatarLetter = !isBlank(friend.avatarLetter)
+                    ? friend.avatarLetter
+                    : safeAvatarLetter(cachedUser.name);
+            cachedUser.avatarColor = friend.avatarColor;
+            cachedUser.isOnline = friend.isOnline;
+
+            usersById.put(serverId, cachedUser);
+            userServerIdByLocalId.put(stableId(serverId), serverId);
+            userServerIdByLocalId.put(friend.id, serverId);
+        }
     }
 
     private String resolveGroupServerId(Group group) {
@@ -846,6 +932,12 @@ public class GroupRepository implements IGroupRepository {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private void requireOnlineForPolicy(String errorCode) {
+        if (networkMonitor != null && !networkMonitor.isOnline()) {
+            throw new IllegalStateException(errorCode);
+        }
     }
 
     private void enqueueGroupChange(String operation, String entityId,

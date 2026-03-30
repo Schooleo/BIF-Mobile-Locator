@@ -9,6 +9,7 @@ import com.bif.app.core.network.dto.friendship.CreateFriendRequestDto;
 import com.bif.app.core.network.dto.friendship.FriendshipApiModel;
 import com.bif.app.data.mapper.FriendMapper;
 import com.bif.app.data.mapper.FriendshipMapper;
+import com.bif.app.data.sync.NetworkMonitor;
 import com.bif.app.data.sync.SyncManager;
 import com.bif.app.data.source.local.FriendDao;
 import com.bif.app.data.source.local.FriendshipDao;
@@ -42,6 +43,7 @@ public class FriendshipRepository implements IFriendshipRepository {
     private final FriendshipDao friendshipDao;
     private final FriendDao friendDao;
     private final SyncManager syncManager;
+    private final NetworkMonitor networkMonitor;
     private final ExecutorService executorService;
     private final MutableLiveData<List<Friendship>> pendingRequestsLiveData;
     private final MutableLiveData<List<Friendship>> outgoingRequestsLiveData;
@@ -53,11 +55,13 @@ public class FriendshipRepository implements IFriendshipRepository {
     public FriendshipRepository(RestApiService restApiService,
                                 FriendshipDao friendshipDao,
                                 FriendDao friendDao,
-                                SyncManager syncManager) {
+                                SyncManager syncManager,
+                                NetworkMonitor networkMonitor) {
         this.restApiService = restApiService;
         this.friendshipDao = friendshipDao;
         this.friendDao = friendDao;
         this.syncManager = syncManager;
+        this.networkMonitor = networkMonitor;
         this.executorService = Executors.newSingleThreadExecutor();
         this.pendingRequestsLiveData = new MutableLiveData<>(new ArrayList<>());
         this.outgoingRequestsLiveData = new MutableLiveData<>(new ArrayList<>());
@@ -119,6 +123,7 @@ public class FriendshipRepository implements IFriendshipRepository {
         if (isBlank(receiverId)) {
             return;
         }
+        requireOnlineForPolicy("SEND_REQUEST_REQUIRES_ONLINE");
         String normalizedReceiverId = receiverId.trim();
         String currentUserId = fetchCurrentUserId();
         if (isBlank(currentUserId)) {
@@ -177,10 +182,10 @@ public class FriendshipRepository implements IFriendshipRepository {
             }
             throw illegalState;
         } catch (IOException ioException) {
-            enqueueFriendshipChange("SEND_REQUEST", null,
-                    buildSendRequestPayload(currentUserId.trim(),
-                            normalizedReceiverId));
-            refreshRequestCachesSync();
+            if (reserved) {
+                friendshipDao.rollbackReservedPending(currentUserId.trim(), normalizedReceiverId);
+            }
+            throw new IllegalStateException("SEND_REQUEST_REQUIRES_ONLINE");
         } catch (Exception ignored) {
             if (reserved) {
                 friendshipDao.rollbackReservedPending(currentUserId.trim(), normalizedReceiverId);
@@ -201,6 +206,7 @@ public class FriendshipRepository implements IFriendshipRepository {
         if (isBlank(friendId)) {
             return;
         }
+        requireOnlineForPolicy("UNFRIEND_REQUIRES_ONLINE");
 
         try {
             Response<Void> response = restApiService.unfriend(friendId.trim()).execute();
@@ -208,17 +214,7 @@ public class FriendshipRepository implements IFriendshipRepository {
                 throw new IllegalStateException("UNFRIEND_FAILED");
             }
         } catch (IOException ioException) {
-            String currentUserId = fetchCurrentUserId();
-            if (!isBlank(currentUserId)) {
-                friendshipDao.deleteBetweenUsers(currentUserId.trim(),
-                        friendId.trim());
-            }
-            friendDao.deleteByServerUserId(friendId.trim());
-            enqueueFriendshipChange("UNFRIEND", friendId.trim(),
-                    Collections.singletonMap("friendId", friendId.trim()));
-            refreshFriendsSync();
-            refreshRequestCachesSync();
-            return;
+            throw new IllegalStateException("UNFRIEND_REQUIRES_ONLINE");
         } catch (IllegalStateException stateException) {
             throw stateException;
         } catch (Exception ignored) {
@@ -481,6 +477,12 @@ public class FriendshipRepository implements IFriendshipRepository {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private void requireOnlineForPolicy(String errorCode) {
+        if (networkMonitor != null && !networkMonitor.isOnline()) {
+            throw new IllegalStateException(errorCode);
+        }
     }
 
     private void enqueueFriendshipChange(String operation, String entityId,
