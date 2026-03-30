@@ -7,4 +7,6 @@ import java.util.List;
 
 public interface TripPlanRepository extends MongoRepository<TripPlan, String> {
     List<TripPlan> findByGroupId(String groupId);
+
+    long countByGroupIdAndDeletedFalse(String groupId);
 }

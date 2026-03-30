@@ -9,11 +9,13 @@ import com.bif.app.data.source.local.AppDatabase;
 import com.bif.app.data.source.local.ChatMessageDao;
 import com.bif.app.data.source.local.FavoriteDao;
 import com.bif.app.data.source.local.FriendDao;
+import com.bif.app.data.source.local.FriendshipDao;
 import com.bif.app.data.source.local.GroupDao;
 import com.bif.app.data.source.local.PlaceDao;
 import com.bif.app.data.source.local.ProfileDao;
 import com.bif.app.data.source.local.SearchHistoryDao;
 import com.bif.app.data.source.local.SyncQueueDao;
+import com.bif.app.data.source.local.TripDao;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 
@@ -65,13 +67,19 @@ public class AppModule {
     @Provides
     @Singleton
     public FriendDao provideFriendDao(AppDatabase database) {
-      return database.friendDao();
+        return database.friendDao();
+    }
+
+    @Provides
+    @Singleton
+    public FriendshipDao provideFriendshipDao(AppDatabase database) {
+      return database.friendshipDao();
     }
 
     @Provides
     @Singleton
     public GroupDao provideGroupDao(AppDatabase database) {
-      return database.groupDao();
+        return database.groupDao();
     }
 
     @Provides
@@ -95,28 +103,39 @@ public class AppModule {
     @Provides
     @Singleton
     public SyncQueueDao provideSyncQueueDao(AppDatabase database) {
-      return database.syncQueueDao();
+        return database.syncQueueDao();
     }
 
     @Provides
     @Singleton
     public ChatMessageDao provideChatMessageDao(AppDatabase database) {
-      return database.chatMessageDao();
+        return database.chatMessageDao();
     }
 
     @Provides
     @Singleton
-    public LocalSessionDataCleaner provideLocalSessionDataCleaner(AppDatabase appDatabase) {
-      return () -> {
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        executor.execute(() -> {
-          try {
-            appDatabase.clearAllTables();
-          } catch (Exception ignored) {
-            // Keep logout flow resilient even if local cleanup fails.
-          }
-        });
-        executor.shutdown();
-      };
+    public TripDao provideTripDao(AppDatabase database) {
+        return database.tripDao();
+    }
+
+    @Provides
+    @Singleton
+    public LocalSessionDataCleaner provideLocalSessionDataCleaner(
+            AppDatabase appDatabase,
+            @ApplicationContext Context context) {
+        return () -> {
+            ExecutorService executor = Executors.newSingleThreadExecutor();
+            executor.execute(() -> {
+                try {
+                    appDatabase.clearAllTables();
+                    context.getSharedPreferences("SYNC_PREF", Context.MODE_PRIVATE)
+                            .edit()
+                            .clear()
+                            .apply();
+                } catch (Exception ignored) {
+                }
+            });
+            executor.shutdown();
+        };
     }
 }

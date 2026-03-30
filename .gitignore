@@ -1,7 +1,11 @@
 # Root .gitignore
 .DS_Store
 Thumbs.db
+.env
 
 # VS Code / IDEs
 .vscode/
 .idea/
+
+# Tailscale
+tailscale-state/

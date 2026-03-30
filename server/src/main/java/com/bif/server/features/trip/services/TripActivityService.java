@@ -39,7 +39,7 @@ public class TripActivityService {
                 userId);
     }
 
-    public void postStopRemoved(TripPlan plan, int orderIndex, String userId) {
+    public void postStopRemoved(TripPlan plan, String stopId, String userId) {
         postSystemMessage(plan.getGroupId(),
                 String.format("\u274C A stop was removed from trip '%s'",
                         plan.getTitle()),

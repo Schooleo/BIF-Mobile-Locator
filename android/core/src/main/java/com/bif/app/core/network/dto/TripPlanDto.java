@@ -9,6 +9,8 @@ public class TripPlanDto {
     public String description;
     public String startAt;
     public String endAt;
+    public long serverVersion;
+    public boolean deleted;
     public List<TripStopDto> stops;
     public List<String> participantIds;
 }

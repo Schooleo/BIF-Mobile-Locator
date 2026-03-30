@@ -14,6 +14,7 @@ import com.bif.app.data.source.local.FavoriteDao;
 import com.bif.app.data.source.local.PlaceDao;
 import com.bif.app.data.source.local.ProfileDao;
 import com.bif.app.data.source.local.SyncQueueDao;
+import com.bif.app.data.source.local.TripDao;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 import com.google.gson.Gson;
 
@@ -48,6 +49,7 @@ public class SyncManager {
     private final SharedPreferences syncPrefs;
     private final Gson gson;
     private final Map<String, SyncEntityHandler> handlersByEntityType;
+    private final Context appContext;
     private final ExecutorService reconnectSyncExecutor;
 
     private String userId;
@@ -59,6 +61,7 @@ public class SyncManager {
     public SyncManager(RestApiService restApiService,
                        SyncQueueDao syncQueueDao,
                        PlaceDao placeDao,
+                       TripDao tripDao,
                        FavoriteDao favoriteDao,
                        ProfileDao profileDao,
                        NetworkMonitor networkMonitor,
@@ -69,18 +72,21 @@ public class SyncManager {
         this.syncPrefs = appContext.getSharedPreferences(PREF_NAME,
                 Context.MODE_PRIVATE);
         this.gson = new Gson();
+        this.appContext = appContext;
         this.handlersByEntityType = new HashMap<>();
         this.reconnectSyncExecutor = Executors.newSingleThreadExecutor();
         this.lastObservedOnline = networkMonitor.isOnline();
+        
         registerHandler(new PlaceSyncEntityHandler(placeDao, gson));
+        registerHandler(new TripSyncEntityHandler(tripDao, gson));
+        registerHandler(new TripStopSyncEntityHandler(tripDao, gson));
         registerHandler(new FavoriteSyncEntityHandler(favoriteDao, gson));
-        registerHandler(new ProfileSyncEntityHandler(profileDao, gson,
-            appContext));
+        registerHandler(new ProfileSyncEntityHandler(profileDao, gson, appContext));
+        
         loadPersistedSyncState();
         registerReconnectAutoSync();
     }
 
-    // Backward-compatible constructor used by unit tests.
     SyncManager(RestApiService restApiService,
                 SyncQueueDao syncQueueDao,
                 NetworkMonitor networkMonitor) {
@@ -88,6 +94,7 @@ public class SyncManager {
         this.syncQueueDao = syncQueueDao;
         this.networkMonitor = networkMonitor;
         this.syncPrefs = null;
+        this.appContext = null;
         this.gson = new Gson();
         this.handlersByEntityType = new HashMap<>();
         this.reconnectSyncExecutor = Executors.newSingleThreadExecutor();
@@ -131,11 +138,6 @@ public class SyncManager {
         return lastPulledVersion;
     }
 
-    /**
-     * Execute a full sync cycle: push pending changes, then pull updates.
-     *
-     * @return the SyncResponseDto if successful, null if offline or failed
-     */
     public SyncResponseDto sync() {
         ensureSyncContext();
         if (userId == null || userId.isEmpty()) {
@@ -148,16 +150,13 @@ public class SyncManager {
             return null;
         }
 
-        // Reset any in-flight entries from a previous crashed sync
         syncQueueDao.resetInFlight();
 
-        // Build the request
         SyncRequestDto request = new SyncRequestDto();
         request.userId = userId;
         request.deviceId = deviceId;
         request.lastPulledVersion = lastPulledVersion;
 
-        // Phase 1: Gather pending changes to push
         List<SyncQueueEntity> pending = syncQueueDao.getPending();
         List<SyncChangeDto> pushedChanges = new ArrayList<>();
         for (SyncQueueEntity entry : pending) {
@@ -176,7 +175,6 @@ public class SyncManager {
         request.pushedChanges = pushedChanges.isEmpty()
                 ? null : pushedChanges;
 
-        // Phase 2: Execute sync request
         try {
             Response<SyncResponseDto> response = restApiService
                     .sync(request).execute();
@@ -184,17 +182,14 @@ public class SyncManager {
             if (response.isSuccessful() && response.body() != null) {
                 SyncResponseDto syncResponse = response.body();
 
-                // Mark pushed changes as completed
                 for (SyncQueueEntity entry : pending) {
                     syncQueueDao.remove(entry.id);
                 }
 
                 applyPulledChanges(syncResponse.pulledChanges);
 
-                // Update last pulled version
                 setLastPulledVersion(syncResponse.currentServerVersion);
 
-                // Log conflicts if any
                 if (syncResponse.conflicts != null) {
                     Log.w(TAG, "Sync conflicts detected: "
                             + syncResponse.conflicts.size());
@@ -214,18 +209,12 @@ public class SyncManager {
         }
     }
 
-    /**
-     * Enqueue a change for later sync.
-     */
     public void enqueueChange(String entityType, String entityId,
                                String operation, String clientChangeId) {
         enqueueChange(entityType, entityId, operation,
                 clientChangeId, null);
     }
 
-    /**
-     * Enqueue a change with optional payload for later sync.
-     */
     public void enqueueChange(String entityType, String entityId,
                               String operation, String clientChangeId,
                               Object payload) {
@@ -241,18 +230,12 @@ public class SyncManager {
         syncQueueDao.enqueue(entry);
     }
 
-    /**
-     * Attempt immediate sync if online, otherwise changes stay queued.
-     */
     public void syncIfOnline() {
         if (networkMonitor.isOnline()) {
             sync();
         }
     }
 
-    /**
-     * Expose current connectivity status for repository-layer decisions.
-     */
     public boolean isOnline() {
         return networkMonitor.isOnline();
     }
@@ -291,6 +274,18 @@ public class SyncManager {
     }
 
     private void ensureSyncContext() {
+        if (appContext != null) {
+            String currentUserId = com.bif.app.core.utils.UserPreferences.getId(appContext);
+            if (currentUserId == null || currentUserId.trim().isEmpty()) {
+                currentUserId = com.bif.app.core.utils.UserPreferences.getUsername(appContext);
+            }
+            if (com.bif.app.core.utils.UserPreferences.isLoggedIn(appContext) && currentUserId != null && !currentUserId.trim().isEmpty()) {
+                userId = currentUserId;
+            } else {
+                userId = null; 
+            }
+        }
+
         if (userId == null || userId.isEmpty()) {
             loadPersistedSyncState();
         }

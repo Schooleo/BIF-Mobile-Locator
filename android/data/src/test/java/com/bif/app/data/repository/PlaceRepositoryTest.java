@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -19,7 +20,7 @@ import androidx.lifecycle.LiveData;
 
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.PlaceDto;
-import com.bif.app.data.source.GoogleMapsDataSource;
+import com.bif.app.data.source.AndroidGeocodingDataSource;
 import com.bif.app.data.source.local.PlaceDao;
 import com.bif.app.data.source.local.SearchHistoryDao;
 import com.bif.app.data.source.local.entity.PlaceEntity;
@@ -50,8 +51,8 @@ public class PlaceRepositoryTest {
     public InstantTaskExecutorRule instantTaskExecutorRule =
             new InstantTaskExecutorRule();
 
-    @Mock
-    private GoogleMapsDataSource mockGoogleMapsDataSource;
+        @Mock
+        private AndroidGeocodingDataSource mockGeocodingDataSource;
     @Mock
     private RestApiService mockRestApiService;
     @Mock
@@ -70,7 +71,7 @@ public class PlaceRepositoryTest {
     public void setUp() {
         closeable = MockitoAnnotations.openMocks(this);
         placeRepository = new PlaceRepository(
-                mockGoogleMapsDataSource,
+                mockGeocodingDataSource,
                 mockRestApiService,
                 mockPlaceDao,
                 mockSearchHistoryDao,
@@ -93,7 +94,7 @@ public class PlaceRepositoryTest {
         Address mockAddress = mock(Address.class);
         when(mockAddress.getLatitude()).thenReturn(40.7128);
         when(mockAddress.getLongitude()).thenReturn(-74.0060);
-        when(mockGoogleMapsDataSource.geocodeLocation("New York"))
+        when(mockGeocodingDataSource.geocodeLocation("New York"))
                 .thenReturn(Collections.singletonList(mockAddress));
 
         LiveData<Location> result =
@@ -110,7 +111,7 @@ public class PlaceRepositoryTest {
     @Test
     public void searchLocation_emptyResults_returnsNull()
             throws IOException, InterruptedException {
-        when(mockGoogleMapsDataSource.geocodeLocation("Unknown"))
+        when(mockGeocodingDataSource.geocodeLocation("Unknown"))
                 .thenReturn(new ArrayList<>());
 
         LiveData<Location> result =
@@ -123,7 +124,7 @@ public class PlaceRepositoryTest {
     @Test
     public void searchLocation_ioException_returnsNull()
             throws IOException, InterruptedException {
-        when(mockGoogleMapsDataSource.geocodeLocation("Error"))
+        when(mockGeocodingDataSource.geocodeLocation("Error"))
                 .thenThrow(new IOException("Geocode failed"));
 
         LiveData<Location> result =
@@ -153,10 +154,10 @@ public class PlaceRepositoryTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void searchPlaces_online_combinesServerAndGoogleResults()
+        public void searchPlaces_online_combinesServerAndGeocoderResults()
             throws IOException, InterruptedException {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
-        // Stub local cache (doSearch now queries this first)
+                // Local SQLite query now runs last and can still contribute more results.
         when(mockPlaceDao.searchByName(anyString(), anyString()))
                 .thenReturn(new ArrayList<>());
 
@@ -175,16 +176,16 @@ public class PlaceRepositoryTest {
         when(mockRestApiService.searchServerPlaces("test"))
                 .thenReturn(mockCall);
 
-        // Google returns one additional place
+        // Geocoder returns one additional place
         Address googleAddr = mock(Address.class);
         when(googleAddr.getLatitude()).thenReturn(30.0);
         when(googleAddr.getLongitude()).thenReturn(40.0);
-        when(googleAddr.getFeatureName()).thenReturn("Google Place");
-        when(googleAddr.getAddressLine(0)).thenReturn("456 Google Ave");
-        when(mockGoogleMapsDataSource.geocodeLocation("test"))
+        when(googleAddr.getFeatureName()).thenReturn("OSM Place");
+        when(googleAddr.getAddressLine(0)).thenReturn("456 OSM Ave");
+        when(mockGeocodingDataSource.geocodeLocation("test"))
                 .thenReturn(Collections.singletonList(googleAddr));
 
-        // Mock the saveFromSearch call for Google-discovered place
+        // Mock saveFromSearch call for geocoder-discovered place
         Call<PlaceDto> saveCall = mock(Call.class);
         when(saveCall.execute())
                 .thenReturn(Response.success(new PlaceDto()));
@@ -205,6 +206,61 @@ public class PlaceRepositoryTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    public void searchPlaces_online_prioritizesServerThenGeocoderThenLocal()
+            throws IOException, InterruptedException {
+        when(mockNetworkMonitor.isOnline()).thenReturn(true);
+
+        PlaceDto serverDto = new PlaceDto();
+        serverDto.id = "server1";
+        serverDto.name = "Server Place";
+        serverDto.address = "123 Server St";
+        serverDto.latitude = 10.0;
+        serverDto.longitude = 20.0;
+
+        Call<List<PlaceDto>> searchCall = mock(Call.class);
+        when(searchCall.execute())
+                .thenReturn(Response.success(Collections.singletonList(serverDto)));
+        when(mockRestApiService.searchServerPlaces("museum"))
+                .thenReturn(searchCall);
+
+        Address osmAddr = mock(Address.class);
+        when(osmAddr.getLatitude()).thenReturn(30.0);
+        when(osmAddr.getLongitude()).thenReturn(40.0);
+        when(osmAddr.getFeatureName()).thenReturn("OSM Place");
+        when(osmAddr.getAddressLine(0)).thenReturn("456 OSM Ave");
+        when(mockGeocodingDataSource.geocodeLocation("museum"))
+                .thenReturn(Collections.singletonList(osmAddr));
+
+        PlaceEntity local = new PlaceEntity();
+        local.ownerUserId = "anonymous";
+        local.id = "local1";
+        local.name = "Local Place";
+        local.address = "789 Local St";
+        local.latitude = 50.0;
+        local.longitude = 60.0;
+        local.deleted = false;
+        when(mockPlaceDao.searchByName(anyString(), anyString()))
+                .thenReturn(Collections.singletonList(local));
+
+        Call<PlaceDto> saveCall = mock(Call.class);
+        when(saveCall.execute()).thenReturn(Response.success(new PlaceDto()));
+        when(mockRestApiService.saveFromSearch(any(PlaceDto.class)))
+                .thenReturn(saveCall);
+
+        when(mockPlaceDao.count(anyString())).thenReturn(3);
+
+        LiveData<List<Place>> result = placeRepository.searchPlaces("museum");
+        Thread.sleep(600);
+
+        assertNotNull(result.getValue());
+        assertEquals(3, result.getValue().size());
+        assertEquals("server1", result.getValue().get(0).id);
+        assertEquals("geocode_30.0_40.0", result.getValue().get(1).id);
+        assertEquals("local1", result.getValue().get(2).id);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     public void searchPlaces_online_savesSearchHistory()
             throws IOException, InterruptedException {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
@@ -216,7 +272,7 @@ public class PlaceRepositoryTest {
                 .thenReturn(Response.success(new ArrayList<>()));
         when(mockRestApiService.searchServerPlaces("cafe"))
                 .thenReturn(mockCall);
-        when(mockGoogleMapsDataSource.geocodeLocation("cafe"))
+        when(mockGeocodingDataSource.geocodeLocation("cafe"))
                 .thenReturn(new ArrayList<>());
         when(mockPlaceDao.count(anyString())).thenReturn(0);
 
@@ -240,7 +296,7 @@ public class PlaceRepositoryTest {
                 .thenReturn(Response.success(new ArrayList<>()));
         when(mockRestApiService.searchServerPlaces("cafe"))
                 .thenReturn(mockCall);
-        when(mockGoogleMapsDataSource.geocodeLocation("cafe"))
+        when(mockGeocodingDataSource.geocodeLocation("cafe"))
                 .thenReturn(new ArrayList<>());
         when(mockPlaceDao.count(anyString())).thenReturn(0);
 
@@ -265,16 +321,16 @@ public class PlaceRepositoryTest {
                 .thenReturn(Response.success(new ArrayList<>()));
         when(mockRestApiService.searchServerPlaces("test"))
                 .thenReturn(mockCall);
-        when(mockGoogleMapsDataSource.geocodeLocation("test"))
+        when(mockGeocodingDataSource.geocodeLocation("test"))
                 .thenReturn(new ArrayList<>());
 
-        // Simulate 105 places in local cache
-        when(mockPlaceDao.count(anyString())).thenReturn(105);
+        // Simulate 505 places in local cache
+        when(mockPlaceDao.count(anyString())).thenReturn(505);
 
         placeRepository.searchPlaces("test");
         Thread.sleep(300);
 
-        verify(mockPlaceDao).evictOldest(eq(5), anyString());
+        verify(mockPlaceDao, timeout(1500)).evictOldest(eq(5), anyString());
     }
 
     // --- persistPlace Tests ---
@@ -304,11 +360,30 @@ public class PlaceRepositoryTest {
             throws InterruptedException {
         Place place = new Place("p1", "Test", "Addr", 4.5,
                 new Location(10.0, 20.0));
-        when(mockPlaceDao.count(anyString())).thenReturn(110);
+        when(mockPlaceDao.count(anyString())).thenReturn(510);
 
         placeRepository.persistPlace(place, "review");
         Thread.sleep(300);
 
-        verify(mockPlaceDao).evictOldest(eq(10), anyString());
+        verify(mockPlaceDao, timeout(1500)).evictOldest(eq(10), anyString());
+    }
+
+    @Test
+    public void persistPlace_viewedWithMissingAddress_usesPlaceholderAndQueuesSync()
+            throws InterruptedException {
+        Place place = new Place("p2", "Clicked Place", "", 0,
+                new Location(1.23, 4.56));
+        when(mockPlaceDao.count(anyString())).thenReturn(10);
+
+        placeRepository.persistPlace(place, "viewed");
+        Thread.sleep(300);
+
+        ArgumentCaptor<PlaceEntity> entityCaptor =
+                ArgumentCaptor.forClass(PlaceEntity.class);
+        verify(mockPlaceDao).upsert(entityCaptor.capture());
+        assertEquals("Address unavailable", entityCaptor.getValue().address);
+
+        verify(mockSyncManager).enqueueChange(eq("place"), eq("p2"),
+                anyString(), anyString(), any());
     }
 }

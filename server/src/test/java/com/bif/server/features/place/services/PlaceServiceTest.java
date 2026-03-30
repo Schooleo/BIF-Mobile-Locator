@@ -3,6 +3,9 @@ package com.bif.server.features.place.services;
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.repositories.PlaceRepository;
+import com.bif.server.features.place.services.PlaceAddressEnrichmentService;
+import com.bif.server.features.search.services.PlaceSearchIndexSyncService;
+import com.bif.server.features.search.services.PlaceSearchProvider;
 import com.bif.server.features.sync.services.SyncVersionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,11 +30,25 @@ class PlaceServiceTest {
     @Mock
     private SyncVersionService syncVersionService;
 
+    @Mock
+    private PlaceAddressEnrichmentService placeAddressEnrichmentService;
+
+    @Mock
+    private PlaceSearchProvider placeSearchProvider;
+
+    @Mock
+    private PlaceSearchIndexSyncService placeSearchIndexSyncService;
+
     private PlaceService placeService;
 
     @BeforeEach
     void setUp() {
-        placeService = new PlaceService(placeRepository, syncVersionService);
+        placeService = new PlaceService(placeRepository,
+                syncVersionService,
+            placeAddressEnrichmentService,
+            placeSearchProvider,
+            placeSearchIndexSyncService,
+            "osm_geocoder");
     }
 
     @Test
@@ -60,6 +77,8 @@ class PlaceServiceTest {
     void save_StampsVersionAndPersists() {
         Place place = new Place();
         place.setPersistedByUserId("user1");
+        when(placeAddressEnrichmentService.enrichAddress(any(), any(), any()))
+            .thenReturn("123 Main St");
         when(syncVersionService.nextVersion()).thenReturn(10L);
         when(placeRepository.save(place)).thenReturn(place);
 
@@ -67,23 +86,29 @@ class PlaceServiceTest {
 
         assertEquals(10L, result.getServerVersion());
         assertEquals("user1", result.getLastModifiedBy());
+        assertEquals("123 Main St", result.getAddress());
         verify(placeRepository).save(place);
+        verify(placeSearchIndexSyncService).upsert(place);
     }
 
     @Test
     void saveFromSearch_WhenPlaceDoesNotExist_Persists() {
         Place place = new Place();
         place.setId("new1");
+        when(placeAddressEnrichmentService.enrichAddress(any(), any(), any()))
+            .thenReturn("456 Search Rd");
         when(placeRepository.findById("new1")).thenReturn(Optional.empty());
         when(syncVersionService.nextVersion()).thenReturn(5L);
         when(placeRepository.save(place)).thenReturn(place);
 
         Place result = placeService.saveFromSearch(place);
 
-        assertEquals("google_maps", result.getPlaceSource());
+        assertEquals("osm_geocoder", result.getPlaceSource());
         assertEquals("search_discovered", result.getPersistedByAction());
+        assertEquals("456 Search Rd", result.getAddress());
         assertEquals(5L, result.getServerVersion());
         verify(placeRepository).save(place);
+        verify(placeSearchIndexSyncService).upsert(place);
     }
 
     @Test
@@ -99,6 +124,7 @@ class PlaceServiceTest {
 
         assertSame(existing, result);
         verify(placeRepository, never()).save(any());
+        verifyNoInteractions(placeSearchIndexSyncService);
     }
 
     @Test
@@ -115,6 +141,7 @@ class PlaceServiceTest {
         assertTrue(place.isDeleted());
         assertEquals(11L, place.getServerVersion());
         verify(placeRepository).save(place);
+        verify(placeSearchIndexSyncService).deleteById("p1");
     }
 
     @Test
@@ -125,19 +152,19 @@ class PlaceServiceTest {
 
         assertFalse(result);
         verify(placeRepository, never()).save(any());
+        verifyNoInteractions(placeSearchIndexSyncService);
     }
 
     @Test
     void search_DelegatesToRepository() {
         Place place = new Place();
-        when(placeRepository
-                .findByNameContainingIgnoreCaseOrAddressContainingIgnoreCase(
-                        "test", "test"))
+        when(placeSearchProvider.search("test"))
                 .thenReturn(List.of(place));
 
         List<Place> result = placeService.search("test");
 
         assertEquals(1, result.size());
+        verify(placeSearchProvider).search("test");
     }
 
     @Test
@@ -185,6 +212,7 @@ class PlaceServiceTest {
         assertEquals(3.0, result.getRating(), 0.01);
         assertNotNull(newReview.getCreatedAt());
         verify(placeRepository).save(place);
+        verify(placeSearchIndexSyncService).upsert(place);
     }
 
     @Test
@@ -213,5 +241,6 @@ class PlaceServiceTest {
 
         assertEquals(1, result.getReviewCount());
         assertEquals(5.0, result.getRating(), 0.01);
+        verify(placeSearchIndexSyncService).upsert(place);
     }
 }

@@ -8,10 +8,10 @@
 
     <fragment
         android:id="@+id/nav_map"
-        android:name="com.bif.app.feature.map.MapFragment"
+        android:name="com.bif.app.feature.map.MapEntryFragment"
         android:label="Map"
         app:route="/map"
-        tools:layout="fragment_map">
+        tools:layout="@layout/fragment_map_entry">
 
         <deepLink app:uri="app://bif.app/map" />
     </fragment>

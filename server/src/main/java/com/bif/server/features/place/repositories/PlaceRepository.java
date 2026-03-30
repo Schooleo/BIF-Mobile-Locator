@@ -8,6 +8,9 @@ import java.util.List;
 
 public interface PlaceRepository extends MongoRepository<Place, String> {
 
+    @Query("{ 'name': ?0, 'location.latitude': ?1, 'location.longitude': ?2 }")
+    List<Place> findByNameAndLocationLatitudeAndLocationLongitude(String name, double latitude, double longitude);
+
     List<Place> findByNameContainingIgnoreCaseOrAddressContainingIgnoreCase(
             String name, String address);
 

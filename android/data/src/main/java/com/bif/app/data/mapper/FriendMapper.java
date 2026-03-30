@@ -8,12 +8,20 @@ import java.util.List;
 
 public class FriendMapper {
     public static Friend toDomain(FriendEntity entity) {
-        return new Friend(entity.id, entity.name, entity.avatarLetter, entity.avatarColor, entity.isOnline);
+        return new Friend(
+                entity.id,
+                entity.serverUserId,
+                entity.name,
+                entity.avatarLetter,
+                entity.avatarColor,
+                entity.isOnline
+        );
     }
 
     public static FriendEntity toEntity(Friend domain) {
         FriendEntity entity = new FriendEntity();
         entity.id = domain.getId();
+        entity.serverUserId = domain.getServerUserId();
         entity.name = domain.getName();
         entity.avatarLetter = domain.getAvatarLetter();
         entity.avatarColor = domain.getAvatarColor();

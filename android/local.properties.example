@@ -1,5 +1,15 @@
+# Example local.properties for local development
 sdk.dir=YOUR_SDK_DIR
 
-MAPS_API_KEY=YOUR_API_KEY
+# Local API host used by build (default for Android emulator)
+LOCAL_API_IP=10.0.2.2
 
-PLACES_API_KEY=YOUR_API_KEY
+# Map style
+MAPLIBRE_STYLE_URL=https://demotiles.maplibre.org/style.json
+
+# Optional overrides (uncomment if needed)
+# LOCAL_API_PORT=8080
+# LOCAL_API_PROTOCOL=http
+
+# NOTE: Release signing uses environment variables (not this file):
+# SIGNING_STORE_PASSWORD, SIGNING_KEY_ALIAS, SIGNING_KEY_PASSWORD

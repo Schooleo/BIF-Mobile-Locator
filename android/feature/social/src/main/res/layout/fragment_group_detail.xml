@@ -36,6 +36,15 @@
             android:ellipsize="end" />
 
         <ImageButton
+            android:id="@+id/btn_rename_group"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/ic_edit"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/rename_group"
+            android:visibility="gone" />
+
+        <ImageButton
             android:id="@+id/btn_disband"
             android:layout_width="48dp"
             android:layout_height="48dp"

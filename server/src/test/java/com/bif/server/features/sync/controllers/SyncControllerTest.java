@@ -31,15 +31,17 @@ class SyncControllerTest {
 
     @Test
     void sync_DelegatesToServiceAndOverridesUserId() {
+        // Arrange
         SyncRequest request = new SyncRequest();
         request.setUserId("spoofed-user");
-        Authentication auth = new UsernamePasswordAuthenticationToken(
-                "user-1", null);
+        Authentication auth = new UsernamePasswordAuthenticationToken("user-1", null);
         SyncResponse response = new SyncResponse();
         when(syncService.sync(request)).thenReturn(response);
 
+        // Act
         SyncResponse result = controller.sync(request, auth);
 
+        // Assert
         assertSame(response, result);
         assertEquals("user-1", request.getUserId());
         verify(syncService).sync(request);
@@ -47,8 +49,10 @@ class SyncControllerTest {
 
     @Test
     void sync_WhenAuthenticationMissing_ThrowsUnauthorized() {
+        // Arrange
         SyncRequest request = new SyncRequest();
 
+        // Act & Assert
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
                 () -> controller.sync(request, null));
 
