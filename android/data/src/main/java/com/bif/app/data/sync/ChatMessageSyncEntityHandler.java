@@ -17,6 +17,7 @@ import java.time.Instant;
 public class ChatMessageSyncEntityHandler implements SyncEntityHandler {
 
     private static final String TAG = "ChatMsgSyncHandler";
+    private static final int MAX_CACHED_MESSAGES_PER_GROUP = 30;
 
     private final ChatMessageDao chatMessageDao;
     private final Gson gson;
@@ -83,6 +84,10 @@ public class ChatMessageSyncEntityHandler implements SyncEntityHandler {
                     dto.confirmed
             );
             chatMessageDao.insert(entity);
+            if (dto.groupId != null && !dto.groupId.trim().isEmpty()) {
+                chatMessageDao.pruneGroupToLimit(dto.groupId,
+                        MAX_CACHED_MESSAGES_PER_GROUP);
+            }
         } catch (Exception e) {
             Log.e(TAG, "Failed applying pulled chat message change", e);
         }

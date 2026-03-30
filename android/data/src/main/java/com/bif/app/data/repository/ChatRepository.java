@@ -13,6 +13,7 @@ import com.bif.app.core.network.dto.ChatMessageDto;
 import com.bif.app.core.network.dto.UserApiModel;
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.ChatMapper;
+import com.bif.app.data.sync.NetworkMonitor;
 import com.bif.app.data.source.local.ChatMessageDao;
 import com.bif.app.data.source.local.entity.ChatMessageEntity;
 import com.bif.app.data.sync.SyncManager;
@@ -53,9 +54,11 @@ public class ChatRepository implements IChatRepository {
     private final ChatMapper chatMapper;
     private final RestApiService restApiService;
     private final SyncManager syncManager;
+    private final NetworkMonitor networkMonitor;
     private final Context context;
     private final String wsBaseUrl;
-    private final ExecutorService executorService;
+    private final ExecutorService dbExecutor;
+    private final ExecutorService backgroundExecutor;
     private final Gson gson;
 
     // WebSocket
@@ -71,21 +74,25 @@ public class ChatRepository implements IChatRepository {
     private static final String WS_URL_TEMPLATE = "ws://%s:8080/ws/websocket";
     private static final long USER_NAME_CACHE_TTL_MS = 5 * 60 * 1000;
     private static final long WS_RECONNECT_DELAY_MS = 1500;
+    private static final int MAX_CACHED_MESSAGES_PER_GROUP = 30;
 
     @Inject
     public ChatRepository(ChatMessageDao chatMessageDao,
                           ChatMapper chatMapper,
                           RestApiService restApiService,
                           SyncManager syncManager,
+                          NetworkMonitor networkMonitor,
                           @ApplicationContext Context context,
                           @Named("wsBaseUrl") String wsBaseUrl) {
         this.chatMessageDao = chatMessageDao;
         this.chatMapper = chatMapper;
         this.restApiService = restApiService;
         this.syncManager = syncManager;
+        this.networkMonitor = networkMonitor;
         this.context = context;
         this.wsBaseUrl = wsBaseUrl;
-        this.executorService = Executors.newSingleThreadExecutor();
+        this.dbExecutor = Executors.newSingleThreadExecutor();
+        this.backgroundExecutor = Executors.newSingleThreadExecutor();
         this.gson = new Gson();
     }
 
@@ -106,10 +113,11 @@ public class ChatRepository implements IChatRepository {
 
     @Override
     public void sendMessage(ChatMessage message) {
-        executorService.execute(() -> {
+        dbExecutor.execute(() -> {
             // 1. Persist locally first (optimistic insert).
             ChatMessageEntity entity = chatMapper.mapToEntity(message);
             chatMessageDao.insert(entity);
+            pruneMessageCache(message.getGroupId());
 
             // 2. Try to send via STOMP (real-time).
             if (stompClient != null && stompClient.isConnected()) {
@@ -141,7 +149,7 @@ public class ChatRepository implements IChatRepository {
             public void onResponse(@NonNull Call<List<ChatMessageDto>> call,
                                    @NonNull Response<List<ChatMessageDto>> response) {
                 if (response.isSuccessful() && response.body() != null) {
-                    executorService.execute(() -> {
+                    dbExecutor.execute(() -> {
                         refreshUserNameCache(false);
                         List<ChatMessageEntity> entities = new ArrayList<>();
                         for (ChatMessageDto dto : response.body()) {
@@ -149,6 +157,7 @@ public class ChatRepository implements IChatRepository {
                         }
                         chatMessageDao.deleteByGroupId(groupId);
                         chatMessageDao.insertAll(entities);
+                        pruneMessageCache(groupId);
                     });
                 }
             }
@@ -174,7 +183,7 @@ public class ChatRepository implements IChatRepository {
             ? wsBaseUrl.trim()
             : String.format(WS_URL_TEMPLATE, resolveHost());
         stompClient = Stomp.over(Stomp.ConnectionProvider.OKHTTP, wsUrl);
-        executorService.execute(() -> refreshUserNameCache(false));
+        backgroundExecutor.execute(() -> refreshUserNameCache(false));
 
         // Lifecycle events for logging.
         wsDisposables.add(
@@ -243,7 +252,10 @@ public class ChatRepository implements IChatRepository {
             // Determine current user's ID to tag isOutgoing; the entity stores
             // everything, the mapper derives isOutgoing at query time.
             ChatMessageEntity entity = dtoToEntity(dto);
-            executorService.execute(() -> chatMessageDao.insert(entity));
+            dbExecutor.execute(() -> {
+                chatMessageDao.insert(entity);
+                pruneMessageCache(entity.groupId);
+            });
         } catch (Exception e) {
             Log.e(TAG, "Failed to parse incoming STOMP message", e);
         }
@@ -274,6 +286,17 @@ public class ChatRepository implements IChatRepository {
 
     /** Send via REST and enqueue for offline retry if it also fails. */
     private void sendViaRest(ChatMessage message) {
+        if (!networkMonitor.isOnline()) {
+            syncManager.enqueueChange(
+                    "chatMessage",
+                    message.getId(),
+                    "UPSERT",
+                    message.getClientMessageId(),
+                    buildDto(message)
+            );
+            return;
+        }
+
         ChatMessageDto dto = buildDto(message);
         restApiService.postChatMessage(dto).enqueue(new Callback<>() {
             @Override
@@ -283,9 +306,10 @@ public class ChatRepository implements IChatRepository {
                     // Update local entity with confirmed state if server echoes it back.
                     ChatMessageDto confirmed = response.body();
                     if (confirmed.confirmed) {
-                        executorService.execute(() -> {
+                        dbExecutor.execute(() -> {
                             ChatMessageEntity updated = dtoToEntity(confirmed);
                             chatMessageDao.insert(updated);
+                            pruneMessageCache(updated.groupId);
                         });
                     }
                 }
@@ -377,6 +401,10 @@ public class ChatRepository implements IChatRepository {
     }
 
     private void refreshUserNameCache(boolean force) {
+        if (!networkMonitor.isOnline()) {
+            return;
+        }
+
         long now = System.currentTimeMillis();
         if (!force && (now - userNameCacheUpdatedAtMs) < USER_NAME_CACHE_TTL_MS) {
             return;
@@ -409,7 +437,7 @@ public class ChatRepository implements IChatRepository {
             return;
         }
 
-        executorService.execute(() -> {
+        backgroundExecutor.execute(() -> {
             try {
                 Thread.sleep(WS_RECONNECT_DELAY_MS);
             } catch (InterruptedException interrupted) {
@@ -423,6 +451,16 @@ public class ChatRepository implements IChatRepository {
                 connectToGroup(groupId);
             }
         });
+    }
+
+    private void pruneMessageCache(String groupId) {
+        if (isBlank(groupId)) {
+            return;
+        }
+        try {
+            chatMessageDao.pruneGroupToLimit(groupId, MAX_CACHED_MESSAGES_PER_GROUP);
+        } catch (Exception ignored) {
+        }
     }
 
     /**
