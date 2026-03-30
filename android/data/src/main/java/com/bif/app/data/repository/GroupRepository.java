@@ -19,6 +19,8 @@ import com.bif.app.data.source.local.entity.GroupFriendCrossRef;
 import com.bif.app.domain.model.Friend;
 import com.bif.app.domain.model.Group;
 import com.bif.app.domain.repository.IGroupRepository;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 
 import java.util.ArrayList;
@@ -26,6 +28,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.lang.reflect.Type;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.UUID;
@@ -43,6 +46,7 @@ public class GroupRepository implements IGroupRepository {
 
     private final GroupDao groupDao;
     private final GroupMapper groupMapper;
+    private final Gson gson;
     private final ExecutorService executorService;
     private final boolean useApi;
 
@@ -60,6 +64,7 @@ public class GroupRepository implements IGroupRepository {
 
         this.groupDao = groupDao;
         this.groupMapper = null;
+        this.gson = new Gson();
         this.executorService = Executors.newSingleThreadExecutor();
         this.useApi = true;
 
@@ -76,6 +81,7 @@ public class GroupRepository implements IGroupRepository {
 
         this.groupDao = groupDao;
         this.groupMapper = groupMapper;
+        this.gson = null;
         this.executorService = Executors.newSingleThreadExecutor();
         this.useApi = false;
 
@@ -88,6 +94,7 @@ public class GroupRepository implements IGroupRepository {
     @Override
     public LiveData<List<Group>> getGroups() {
         if (useApi) {
+            emitCachedGroupsAsync();
             refreshGroupsAsync();
             return groupsLiveData;
         }
@@ -97,6 +104,7 @@ public class GroupRepository implements IGroupRepository {
     @Override
     public LiveData<Group> getGroupById(int groupId) {
         if (useApi) {
+            emitCachedGroupsAsync();
             refreshGroupsAsync();
             return Transformations.map(groupsLiveData, groups -> findGroupByLocalId(groups, groupId));
         }
@@ -106,6 +114,7 @@ public class GroupRepository implements IGroupRepository {
     @Override
     public LiveData<Group> getGroupByServerId(String groupId) {
         if (useApi) {
+            emitCachedGroupsAsync();
             refreshGroupsAsync();
             return Transformations.map(groupsLiveData, groups -> findGroupByServerId(groups, groupId));
         }
@@ -473,10 +482,163 @@ public class GroupRepository implements IGroupRepository {
             refreshUsersCache();
             Response<List<GroupApiModel>> response = restApiService.getGroupsByUser(actorId).execute();
             if (!response.isSuccessful() || response.body() == null) {
+                emitCachedGroupsSync();
                 return;
             }
-            groupsLiveData.postValue(mapGroups(response.body(), actorId));
+            List<GroupApiModel> apiGroups = response.body();
+            groupsLiveData.postValue(mapGroups(apiGroups, actorId));
+            cacheGroups(apiGroups, actorId);
         } catch (Exception ignored) {
+            emitCachedGroupsSync();
+        }
+    }
+
+    private void cacheGroups(List<GroupApiModel> apiGroups, String actorId) {
+        if (gson == null) {
+            return;
+        }
+
+        List<GroupEntity> existing = groupDao.getAllGroupsSync();
+        Map<String, Integer> existingIdsByServerId = new HashMap<>();
+        for (GroupEntity entity : existing) {
+            if (entity != null && !isBlank(entity.getServerId())) {
+                existingIdsByServerId.put(entity.getServerId(), entity.getId());
+            }
+        }
+
+        List<GroupEntity> replacement = new ArrayList<>();
+        long now = System.currentTimeMillis();
+        for (GroupApiModel apiGroup : apiGroups) {
+            if (apiGroup == null || isBlank(apiGroup.id)) {
+                continue;
+            }
+
+            int localId = existingIdsByServerId.containsKey(apiGroup.id)
+                    ? existingIdsByServerId.get(apiGroup.id)
+                    : stableId(apiGroup.id);
+
+            GroupEntity entity = new GroupEntity(
+                    localId,
+                    apiGroup.id,
+                    apiGroup.name != null ? apiGroup.name : apiGroup.id,
+                    !isBlank(apiGroup.avatarLetter) ? apiGroup.avatarLetter : safeAvatarLetter(apiGroup.name),
+                    apiGroup.avatarColor,
+                    actorId.equals(apiGroup.ownerId),
+                    apiGroup.ownerId,
+                    gson.toJson(apiGroup.memberIds != null ? apiGroup.memberIds : Collections.emptyList()),
+                    gson.toJson(apiGroup.memberRoles != null ? apiGroup.memberRoles : Collections.emptyMap()),
+                    0L,
+                    false,
+                    now
+            );
+            replacement.add(entity);
+        }
+
+        groupDao.replaceAllGroups(replacement);
+    }
+
+    private void emitCachedGroupsAsync() {
+        executorService.execute(this::emitCachedGroupsSync);
+    }
+
+    private void emitCachedGroupsSync() {
+        List<GroupEntity> cachedEntities = groupDao.getAllGroupsSync();
+        if (cachedEntities == null || cachedEntities.isEmpty()) {
+            return;
+        }
+        groupsLiveData.postValue(mapCachedGroups(cachedEntities));
+    }
+
+    private List<Group> mapCachedGroups(List<GroupEntity> cachedEntities) {
+        List<Group> cachedGroups = new ArrayList<>();
+        groupServerIdByLocalId.clear();
+
+        for (GroupEntity entity : cachedEntities) {
+            if (entity == null || isBlank(entity.getServerId()) || entity.isDeleted()) {
+                continue;
+            }
+
+            String serverId = entity.getServerId();
+            int localId = entity.getId() > 0 ? entity.getId() : stableId(serverId);
+            groupServerIdByLocalId.put(localId, serverId);
+
+            List<String> memberIds = parseMemberIds(entity.getMemberIdsJson());
+            Map<String, String> rolesByServerId = parseMemberRoles(entity.getMemberRolesJson());
+            List<Friend> members = new ArrayList<>();
+            Map<Integer, String> memberRoles = new HashMap<>();
+
+            for (String memberId : memberIds) {
+                if (isBlank(memberId)) {
+                    continue;
+                }
+
+                int memberLocalId = stableId(memberId);
+                userServerIdByLocalId.put(memberLocalId, memberId);
+
+                UserApiModel cachedUser = usersById.get(memberId);
+                String friendName = cachedUser != null && !isBlank(cachedUser.name)
+                        ? cachedUser.name
+                        : memberId;
+                String avatarLetter = cachedUser != null && !isBlank(cachedUser.avatarLetter)
+                        ? cachedUser.avatarLetter
+                        : safeAvatarLetter(friendName);
+                int avatarColor = cachedUser != null ? cachedUser.avatarColor : 0xFF03DAC5;
+                boolean isOnline = cachedUser != null && cachedUser.isOnline;
+
+                members.add(new Friend(
+                        memberLocalId,
+                        memberId,
+                        friendName,
+                        avatarLetter,
+                        avatarColor,
+                        isOnline
+                ));
+
+                String role = normalizeRole(rolesByServerId.get(memberId));
+                if (memberId.equals(entity.getOwnerId())) {
+                    role = "ADMIN";
+                }
+                memberRoles.put(memberLocalId, role);
+            }
+
+            cachedGroups.add(new Group(
+                    localId,
+                    serverId,
+                    entity.getName(),
+                    entity.getAvatarLetter(),
+                    entity.getAvatarColor(),
+                    members,
+                    entity.isOwner(),
+                    memberRoles
+            ));
+        }
+
+        return cachedGroups;
+    }
+
+    private List<String> parseMemberIds(String json) {
+        if (gson == null || isBlank(json)) {
+            return Collections.emptyList();
+        }
+        try {
+            Type listType = new TypeToken<List<String>>() { }.getType();
+            List<String> parsed = gson.fromJson(json, listType);
+            return parsed != null ? parsed : Collections.emptyList();
+        } catch (Exception ignored) {
+            return Collections.emptyList();
+        }
+    }
+
+    private Map<String, String> parseMemberRoles(String json) {
+        if (gson == null || isBlank(json)) {
+            return Collections.emptyMap();
+        }
+        try {
+            Type mapType = new TypeToken<Map<String, String>>() { }.getType();
+            Map<String, String> parsed = gson.fromJson(json, mapType);
+            return parsed != null ? parsed : Collections.emptyMap();
+        } catch (Exception ignored) {
+            return Collections.emptyMap();
         }
     }
 
