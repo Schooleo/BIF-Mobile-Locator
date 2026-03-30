@@ -24,6 +24,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -48,6 +50,7 @@ public class SyncManager {
     private final Gson gson;
     private final Map<String, SyncEntityHandler> handlersByEntityType;
     private final Context appContext;
+    private final ExecutorService enqueueExecutor;
 
     private String userId;
     private String deviceId;
@@ -71,6 +74,7 @@ public class SyncManager {
                 Context.MODE_PRIVATE);
         this.gson = new Gson();
         this.appContext = appContext;
+        this.enqueueExecutor = Executors.newSingleThreadExecutor();
         this.handlersByEntityType = new HashMap<>();
         registerHandler(new PlaceSyncEntityHandler(placeDao, gson));
         registerHandler(new TripSyncEntityHandler(tripDao, gson));
@@ -92,6 +96,7 @@ public class SyncManager {
         this.syncPrefs = null;
         this.appContext = null;
         this.gson = new Gson();
+        this.enqueueExecutor = Executors.newSingleThreadExecutor();
         this.handlersByEntityType = new HashMap<>();
     }
 
@@ -218,16 +223,18 @@ public class SyncManager {
     public void enqueueChange(String entityType, String entityId,
                               String operation, String clientChangeId,
                               Object payload) {
-        SyncQueueEntity entry = new SyncQueueEntity();
-        entry.entityType = entityType;
-        entry.entityId = entityId;
-        entry.operation = operation;
-        entry.clientChangeId = clientChangeId;
-        entry.payload = serializePayload(entityType, payload);
-        entry.status = "PENDING";
-        entry.retryCount = 0;
-        entry.createdAt = System.currentTimeMillis();
-        syncQueueDao.enqueue(entry);
+        enqueueExecutor.execute(() -> {
+            SyncQueueEntity entry = new SyncQueueEntity();
+            entry.entityType = entityType;
+            entry.entityId = entityId;
+            entry.operation = operation;
+            entry.clientChangeId = clientChangeId;
+            entry.payload = serializePayload(entityType, payload);
+            entry.status = "PENDING";
+            entry.retryCount = 0;
+            entry.createdAt = System.currentTimeMillis();
+            syncQueueDao.enqueue(entry);
+        });
     }
 
     /**
