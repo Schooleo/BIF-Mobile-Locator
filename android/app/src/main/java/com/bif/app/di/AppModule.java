@@ -11,6 +11,7 @@ import com.bif.app.data.source.local.FavoriteDao;
 import com.bif.app.data.source.local.FriendDao;
 import com.bif.app.data.source.local.GroupDao;
 import com.bif.app.data.source.local.PlaceDao;
+import com.bif.app.data.source.local.ProfileDao;
 import com.bif.app.data.source.local.SearchHistoryDao;
 import com.bif.app.data.source.local.SyncQueueDao;
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -77,6 +78,12 @@ public class AppModule {
     @Singleton
     public PlaceDao providePlaceDao(AppDatabase database) {
         return database.placeDao();
+    }
+
+    @Provides
+    @Singleton
+    public ProfileDao provideProfileDao(AppDatabase database) {
+      return database.profileDao();
     }
 
     @Provides

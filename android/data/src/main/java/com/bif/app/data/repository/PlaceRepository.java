@@ -328,10 +328,10 @@ public class PlaceRepository implements IPlaceRepository {
         if (appContext == null) {
             return "anonymous";
         }
-        String username = UserPreferences.getUsername(appContext);
-        if (username.trim().isEmpty()) {
+        String userId = UserPreferences.getUserId(appContext);
+        if (userId.trim().isEmpty()) {
             return "anonymous";
         }
-        return username.trim();
+        return userId.trim();
     }
 }

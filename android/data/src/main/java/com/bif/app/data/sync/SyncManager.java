@@ -12,6 +12,7 @@ import com.bif.app.core.network.dto.SyncRequestDto;
 import com.bif.app.core.network.dto.SyncResponseDto;
 import com.bif.app.data.source.local.FavoriteDao;
 import com.bif.app.data.source.local.PlaceDao;
+import com.bif.app.data.source.local.ProfileDao;
 import com.bif.app.data.source.local.SyncQueueDao;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 import com.google.gson.Gson;
@@ -59,6 +60,7 @@ public class SyncManager {
                        SyncQueueDao syncQueueDao,
                        PlaceDao placeDao,
                        FavoriteDao favoriteDao,
+                       ProfileDao profileDao,
                        NetworkMonitor networkMonitor,
                        @ApplicationContext Context appContext) {
         this.restApiService = restApiService;
@@ -72,6 +74,8 @@ public class SyncManager {
         this.lastObservedOnline = networkMonitor.isOnline();
         registerHandler(new PlaceSyncEntityHandler(placeDao, gson));
         registerHandler(new FavoriteSyncEntityHandler(favoriteDao, gson));
+        registerHandler(new ProfileSyncEntityHandler(profileDao, gson,
+            appContext));
         loadPersistedSyncState();
         registerReconnectAutoSync();
     }
@@ -93,7 +97,17 @@ public class SyncManager {
     }
 
     public void setUserContext(String userId, String deviceId) {
-        this.userId = userId != null ? userId.trim() : null;
+        String normalizedUserId = userId != null ? userId.trim() : null;
+        boolean hasCurrentUser = this.userId != null
+            && !this.userId.isEmpty();
+        boolean hasIncomingUser = normalizedUserId != null
+            && !normalizedUserId.isEmpty();
+        if (hasCurrentUser && hasIncomingUser
+            && !this.userId.equals(normalizedUserId)) {
+            setLastPulledVersion(0L);
+        }
+
+        this.userId = normalizedUserId;
         this.deviceId = resolveDeviceId(deviceId);
 
         if (syncPrefs != null) {

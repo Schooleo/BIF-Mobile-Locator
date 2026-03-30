@@ -7,6 +7,8 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 
+import com.bif.app.domain.repository.IProfileRepository;
+
 import javax.inject.Inject;
 
 import dagger.hilt.android.lifecycle.HiltViewModel;
@@ -44,7 +46,7 @@ public class ProfileViewModel extends ViewModel {
     }
 
     private final Context appContext;
-    private final ProfileRepository profileRepository;
+    private final IProfileRepository profileRepository;
     private final MutableLiveData<ProfileUiState> profileState = new MutableLiveData<>();
     private final MutableLiveData<Integer> messageResId = new MutableLiveData<>();
     private final MutableLiveData<Boolean> isRefreshing = new MutableLiveData<>(false);
@@ -52,7 +54,7 @@ public class ProfileViewModel extends ViewModel {
     @Inject
     public ProfileViewModel(
             @ApplicationContext Context appContext,
-            ProfileRepository profileRepository
+            IProfileRepository profileRepository
     ) {
         this.appContext = appContext;
         this.profileRepository = profileRepository;
@@ -72,11 +74,12 @@ public class ProfileViewModel extends ViewModel {
     }
 
     public void consumeMessage() {
-        messageResId.setValue(null);
+        messageResId.postValue(null);
     }
 
     public void loadFromLocal() {
-        ProfileRepository.LocalProfile localProfile = profileRepository.readLocalProfile();
+        IProfileRepository.LocalProfile localProfile =
+            profileRepository.readLocalProfile();
         boolean isLoggedIn = localProfile.isLoggedIn;
         String usernameRaw = localProfile.username;
         String emailRaw = localProfile.email;
@@ -86,7 +89,7 @@ public class ProfileViewModel extends ViewModel {
         String emailForDisplay = getStoredValue(emailRaw);
         String avatarInitial = resolveAvatarInitial(usernameRaw, emailRaw);
 
-        profileState.setValue(new ProfileUiState(
+        profileState.postValue(new ProfileUiState(
                 isLoggedIn,
                 usernameRaw,
                 emailRaw,
@@ -100,7 +103,7 @@ public class ProfileViewModel extends ViewModel {
     public void onAvatarSelected(@NonNull String avatarUri) {
         profileRepository.saveAvatarUri(avatarUri);
         loadFromLocal();
-        messageResId.setValue(R.string.avatar_updated);
+        messageResId.postValue(R.string.avatar_updated);
     }
 
     public void refreshProfileFromServer() {
@@ -112,32 +115,33 @@ public class ProfileViewModel extends ViewModel {
             isRefreshing.setValue(true);
         }
 
-        profileRepository.syncProfileMetadata(new ProfileRepository.ProfileCallback() {
+        profileRepository.syncProfileMetadata(new IProfileRepository.ProfileCallback() {
             @Override
             public void onSuccess() {
                 loadFromLocal();
-                isRefreshing.setValue(false);
+                isRefreshing.postValue(false);
             }
 
             @Override
             public void onFailure() {
-                isRefreshing.setValue(false);
-                messageResId.setValue(R.string.profile_sync_failed);
+                isRefreshing.postValue(false);
+                messageResId.postValue(R.string.profile_sync_failed);
             }
         });
     }
 
     public void updateProfile(@NonNull String updatedUsername) {
-        profileRepository.updateProfile(updatedUsername, new ProfileRepository.ProfileCallback() {
+        profileRepository.updateProfile(updatedUsername,
+                new IProfileRepository.ProfileCallback() {
             @Override
             public void onSuccess() {
                 loadFromLocal();
-                messageResId.setValue(R.string.profile_updated);
+                messageResId.postValue(R.string.profile_updated);
             }
 
             @Override
             public void onFailure() {
-                messageResId.setValue(R.string.profile_update_failed);
+                messageResId.postValue(R.string.profile_update_failed);
             }
         });
     }

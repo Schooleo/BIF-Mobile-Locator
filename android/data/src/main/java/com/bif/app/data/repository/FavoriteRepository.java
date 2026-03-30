@@ -1,8 +1,11 @@
 package com.bif.app.data.repository;
 
+import android.content.Context;
+
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.Transformations;
 
+import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.FavoriteMapper;
 import com.bif.app.data.source.local.AppDatabase;
 import com.bif.app.data.source.local.FavoriteDao;
@@ -21,6 +24,8 @@ import java.util.concurrent.ExecutorService;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
+import dagger.hilt.android.qualifiers.ApplicationContext;
+
 @Singleton
 public class FavoriteRepository implements IFavoriteRepository {
 
@@ -30,19 +35,36 @@ public class FavoriteRepository implements IFavoriteRepository {
     private final SyncManager syncManager;
     private final ExecutorService executorService;
     private final Gson gson;
+    private final String activeUserId;
 
     @Inject
     public FavoriteRepository(FavoriteDao favoriteDao,
                               SyncQueueDao syncQueueDao,
                               AppDatabase appDatabase,
                               SyncManager syncManager,
-                              ExecutorService executorService) {
+                              ExecutorService executorService,
+                              @ApplicationContext Context appContext) {
         this.favoriteDao = favoriteDao;
         this.syncQueueDao = syncQueueDao;
         this.appDatabase = appDatabase;
         this.syncManager = syncManager;
         this.executorService = executorService;
         this.gson = new Gson();
+        this.activeUserId = resolveActiveUserId(appContext);
+
+        if (appContext != null && !activeUserId.trim().isEmpty()) {
+            syncManager.setUserContext(activeUserId, null);
+        }
+    }
+
+    // Backward-compatible constructor used by tests.
+    public FavoriteRepository(FavoriteDao favoriteDao,
+                              SyncQueueDao syncQueueDao,
+                              AppDatabase appDatabase,
+                              SyncManager syncManager,
+                              ExecutorService executorService) {
+        this(favoriteDao, syncQueueDao, appDatabase, syncManager,
+                executorService, null);
     }
 
     @Override
@@ -70,7 +92,7 @@ public class FavoriteRepository implements IFavoriteRepository {
                         "favorite",
                         syncFavorite.id,
                         "CREATE",
-                        FavoriteMapper.toDto(syncFavorite, null)
+                    FavoriteMapper.toDto(syncFavorite, activeUserId)
                 );
                 syncQueueDao.enqueue(syncEntry);
             });
@@ -93,7 +115,7 @@ public class FavoriteRepository implements IFavoriteRepository {
                         "favorite",
                         syncFavorite.id,
                         "UPDATE",
-                        FavoriteMapper.toDto(syncFavorite, null)
+                    FavoriteMapper.toDto(syncFavorite, activeUserId)
                 );
                 syncQueueDao.enqueue(syncEntry);
             });
@@ -114,7 +136,7 @@ public class FavoriteRepository implements IFavoriteRepository {
                             "favorite",
                             syncFavorite.id,
                             "UPDATE",
-                            FavoriteMapper.toDto(syncFavorite, null)
+                            FavoriteMapper.toDto(syncFavorite, activeUserId)
                     );
                     syncQueueDao.enqueue(syncEntry);
                 }
@@ -177,5 +199,16 @@ public class FavoriteRepository implements IFavoriteRepository {
                 if (callback != null) callback.onError(e.getMessage());
             }
         });
+    }
+
+    private String resolveActiveUserId(Context appContext) {
+        if (appContext == null) {
+            return "anonymous";
+        }
+        String userId = UserPreferences.getUserId(appContext);
+        if (userId.trim().isEmpty()) {
+            return "anonymous";
+        }
+        return userId.trim();
     }
 }

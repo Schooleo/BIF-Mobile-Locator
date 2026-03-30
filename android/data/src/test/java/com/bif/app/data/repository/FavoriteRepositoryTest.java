@@ -8,9 +8,12 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.content.Context;
+
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.MutableLiveData;
 
+import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.LiveDataTestUtil;
 import com.bif.app.data.source.local.AppDatabase;
 import com.bif.app.data.source.local.FavoriteDao;
@@ -26,6 +29,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 
 import java.util.ArrayList;
@@ -75,6 +79,27 @@ public class FavoriteRepositoryTest {
                 mockSyncManager, 
                 mockExecutorService
         );
+    }
+
+    @Test
+    public void constructor_withApplicationContext_setsSyncContextFromUserId() {
+        Context appContext = org.mockito.Mockito.mock(Context.class);
+        try (MockedStatic<UserPreferences> userPrefs = org.mockito.Mockito
+                .mockStatic(UserPreferences.class)) {
+            userPrefs.when(() -> UserPreferences.getUserId(appContext))
+                    .thenReturn("user-123");
+
+            new FavoriteRepository(
+                    mockDao,
+                    mockSyncQueueDao,
+                    mockAppDatabase,
+                    mockSyncManager,
+                    mockExecutorService,
+                    appContext
+            );
+
+            verify(mockSyncManager).setUserContext("user-123", null);
+        }
     }
 
     @Test
