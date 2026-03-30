@@ -160,7 +160,7 @@ public class GroupRepository implements IGroupRepository {
 
         executorService.execute(() -> {
             String groupServerId = groupServerIdByLocalId.get(groupId);
-            String memberServerId = userServerIdByLocalId.get(friendId);
+            String memberServerId = resolveMemberServerId(friendId);
             String actorId = resolveActorId();
             if (isBlank(groupServerId) || isBlank(memberServerId) || isBlank(actorId)) {
                 return;
@@ -188,7 +188,7 @@ public class GroupRepository implements IGroupRepository {
         }
 
         executorService.execute(() -> {
-            String memberServerId = userServerIdByLocalId.get(friendId);
+            String memberServerId = resolveMemberServerId(friendId);
             String actorId = resolveActorId();
             if (isBlank(groupId) || isBlank(memberServerId) || isBlank(actorId)) {
                 return;
@@ -217,7 +217,7 @@ public class GroupRepository implements IGroupRepository {
 
         executorService.execute(() -> {
             String groupServerId = groupServerIdByLocalId.get(groupId);
-            String memberServerId = userServerIdByLocalId.get(friendId);
+            String memberServerId = resolveMemberServerId(friendId);
             String actorId = resolveActorId();
             if (isBlank(groupServerId) || isBlank(memberServerId) || isBlank(actorId)) {
                 return;
@@ -243,7 +243,7 @@ public class GroupRepository implements IGroupRepository {
         }
 
         executorService.execute(() -> {
-            String memberServerId = userServerIdByLocalId.get(friendId);
+            String memberServerId = resolveMemberServerId(friendId);
             String actorId = resolveActorId();
             if (isBlank(groupId) || isBlank(memberServerId) || isBlank(actorId)) {
                 return;
@@ -269,11 +269,19 @@ public class GroupRepository implements IGroupRepository {
 
         executorService.execute(() -> {
             String groupServerId = groupServerIdByLocalId.get(groupId);
-            String memberServerId = userServerIdByLocalId.get(friendId);
+            String memberServerId = resolveMemberServerId(friendId);
             String actorId = resolveActorId();
             String normalizedRole = normalizeRole(role);
 
-            if (isBlank(groupServerId) || isBlank(memberServerId) || isBlank(actorId) || isBlank(normalizedRole)) {
+            if (isBlank(groupServerId) || isBlank(memberServerId) || isBlank(normalizedRole)) {
+                return;
+            }
+
+            if (isBlank(actorId)) {
+                Map<String, String> payload = new HashMap<>();
+                payload.put("memberId", memberServerId);
+                payload.put("role", normalizedRole);
+                enqueueGroupChange("UPDATE_MEMBER_ROLE", groupServerId, payload);
                 return;
             }
 
@@ -302,11 +310,19 @@ public class GroupRepository implements IGroupRepository {
         }
 
         executorService.execute(() -> {
-            String memberServerId = userServerIdByLocalId.get(friendId);
+            String memberServerId = resolveMemberServerId(friendId);
             String actorId = resolveActorId();
             String normalizedRole = normalizeRole(role);
 
-            if (isBlank(groupId) || isBlank(memberServerId) || isBlank(actorId) || isBlank(normalizedRole)) {
+            if (isBlank(groupId) || isBlank(memberServerId) || isBlank(normalizedRole)) {
+                return;
+            }
+
+            if (isBlank(actorId)) {
+                Map<String, String> payload = new HashMap<>();
+                payload.put("memberId", memberServerId);
+                payload.put("role", normalizedRole);
+                enqueueGroupChange("UPDATE_MEMBER_ROLE", groupId, payload);
                 return;
             }
 
@@ -474,7 +490,7 @@ public class GroupRepository implements IGroupRepository {
 
         String actorId = resolveActorId();
         if (isBlank(actorId)) {
-            groupsLiveData.postValue(Collections.emptyList());
+            emitCachedGroupsSync();
             return;
         }
 
@@ -762,6 +778,16 @@ public class GroupRepository implements IGroupRepository {
             }
         }
         return null;
+    }
+
+    private String resolveMemberServerId(int friendId) {
+        String memberServerId = userServerIdByLocalId.get(friendId);
+        if (!isBlank(memberServerId)) {
+            return memberServerId;
+        }
+
+        refreshUsersCache();
+        return userServerIdByLocalId.get(friendId);
     }
 
     private String resolveGroupServerId(Group group) {
