@@ -20,6 +20,12 @@ public interface FriendDao {
     @Query("SELECT * FROM friends ORDER BY name ASC")
     List<FriendEntity> getAllFriendsSync();
 
+    @Query("SELECT * FROM friends WHERE id = :friendId LIMIT 1")
+    FriendEntity getByIdSync(int friendId);
+
+    @Query("SELECT * FROM friends WHERE serverUserId = :serverUserId LIMIT 1")
+    FriendEntity getByServerUserIdSync(String serverUserId);
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insert(FriendEntity friend);
 
@@ -28,6 +34,9 @@ public interface FriendDao {
 
     @Delete
     void delete(FriendEntity friend);
+
+    @Query("DELETE FROM friends WHERE serverUserId = :serverUserId")
+    void deleteByServerUserId(String serverUserId);
 
     @Query("DELETE FROM friends")
     void clearAll();

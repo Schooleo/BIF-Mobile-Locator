@@ -13,6 +13,7 @@ import com.bif.app.data.source.local.FriendshipDao;
 import com.bif.app.data.source.local.GroupDao;
 import com.bif.app.data.source.local.PlaceDao;
 import com.bif.app.data.source.local.SearchHistoryDao;
+import com.bif.app.data.source.local.SocialActionQueueDao;
 import com.bif.app.data.source.local.SyncQueueDao;
 import com.bif.app.data.source.local.TripDao;
 
@@ -83,6 +84,13 @@ public class AppModule {
     @Singleton
     public SyncQueueDao provideSyncQueueDao(AppDatabase database) {
         return database.syncQueueDao();
+    }
+
+    @Provides
+    @Singleton
+    public SocialActionQueueDao provideSocialActionQueueDao(
+            AppDatabase database) {
+        return database.socialActionQueueDao();
     }
 
     @Provides

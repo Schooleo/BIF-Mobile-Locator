@@ -11,6 +11,7 @@ import com.bif.app.data.source.local.entity.GroupEntity;
 import com.bif.app.data.source.local.entity.GroupFriendCrossRef;
 import com.bif.app.data.source.local.entity.PlaceEntity;
 import com.bif.app.data.source.local.entity.SearchHistoryEntity;
+import com.bif.app.data.source.local.entity.SocialActionQueueEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 import com.bif.app.data.source.local.entity.TripPlanEntity;
 import com.bif.app.data.source.local.entity.TripStopEntity;
@@ -23,11 +24,12 @@ import com.bif.app.data.source.local.entity.TripStopEntity;
         GroupFriendCrossRef.class,
         PlaceEntity.class,
         SyncQueueEntity.class,
+        SocialActionQueueEntity.class,
         SearchHistoryEntity.class,
         ChatMessageEntity.class,
         TripPlanEntity.class,
         TripStopEntity.class
-}, version = 11, exportSchema = false)
+    }, version = 14, exportSchema = false)
 @TypeConverters({FriendshipStatusConverter.class})
 public abstract class AppDatabase extends RoomDatabase {
     public abstract FriendDao friendDao();
@@ -36,6 +38,7 @@ public abstract class AppDatabase extends RoomDatabase {
     public abstract GroupDao groupDao();
     public abstract PlaceDao placeDao();
     public abstract SyncQueueDao syncQueueDao();
+    public abstract SocialActionQueueDao socialActionQueueDao();
     public abstract SearchHistoryDao searchHistoryDao();
     public abstract ChatMessageDao chatMessageDao();
     public abstract TripDao tripDao();
