@@ -2,7 +2,11 @@ FROM eclipse-temurin:21-jre
 
 WORKDIR /app
 
-COPY build/libs/*.jar app.jar
+RUN addgroup --system app && adduser --system --ingroup app app
+
+COPY --chown=app:app build/libs/*-SNAPSHOT.jar app.jar
+
+USER app
 
 EXPOSE 8080
 
