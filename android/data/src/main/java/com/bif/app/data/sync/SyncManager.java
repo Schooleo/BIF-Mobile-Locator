@@ -8,6 +8,7 @@ import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.SyncChangeDto;
 import com.bif.app.core.network.dto.SyncRequestDto;
 import com.bif.app.core.network.dto.SyncResponseDto;
+import com.bif.app.data.source.local.ChatMessageDao;
 import com.bif.app.data.source.local.PlaceDao;
 import com.bif.app.data.source.local.SyncQueueDao;
 import com.bif.app.data.source.local.TripDao;
@@ -54,6 +55,7 @@ public class SyncManager {
                        SyncQueueDao syncQueueDao,
                        PlaceDao placeDao,
                        TripDao tripDao,
+                       ChatMessageDao chatMessageDao,
                        NetworkMonitor networkMonitor,
                        @ApplicationContext Context appContext) {
         this.restApiService = restApiService;
@@ -67,6 +69,7 @@ public class SyncManager {
         registerHandler(new PlaceSyncEntityHandler(placeDao, gson));
         registerHandler(new TripSyncEntityHandler(tripDao, gson));
         registerHandler(new TripStopSyncEntityHandler(tripDao, gson));
+        registerHandler(new ChatMessageSyncEntityHandler(chatMessageDao, gson));
         loadPersistedSyncState();
     }
 
