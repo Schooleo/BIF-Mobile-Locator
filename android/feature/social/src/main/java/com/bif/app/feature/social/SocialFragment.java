@@ -199,6 +199,9 @@ public class SocialFragment extends Fragment {
                     case "__MSG_FRIEND_REQUEST_SEND_FAILED__":
                         toastMessage = getString(R.string.friend_request_send_failed);
                         break;
+                    case "__MSG_FRIEND_REQUEST_REQUIRES_ONLINE__":
+                        toastMessage = getString(R.string.friend_request_requires_online);
+                        break;
                     case "__MSG_FRIEND_REQUEST_ACCEPT_SUCCESS__":
                         toastMessage = getString(R.string.friend_request_accepted);
                         break;
@@ -218,6 +221,10 @@ public class SocialFragment extends Fragment {
                         break;
                     case "__MSG_UNFRIEND_FAILED__":
                         toastMessage = getString(R.string.unfriend_failed);
+                        viewModel.retryFriends();
+                        break;
+                    case "__MSG_UNFRIEND_REQUIRES_ONLINE__":
+                        toastMessage = getString(R.string.unfriend_requires_online);
                         viewModel.retryFriends();
                         break;
                 }
@@ -241,22 +248,28 @@ public class SocialFragment extends Fragment {
                 String toastMessage = message;
                 switch (message) {
                     case "__MSG_GROUP_CREATE_SUCCESS__":
-                        toastMessage = "Group created successfully";
+                        toastMessage = getString(R.string.group_create_success);
                         break;
                     case "__MSG_GROUP_CREATE_FAILED__":
-                        toastMessage = "Failed to create group";
+                        toastMessage = getString(R.string.group_create_failed);
+                        break;
+                    case "__MSG_GROUP_CREATE_REQUIRES_ONLINE__":
+                        toastMessage = getString(R.string.group_create_requires_online);
                         break;
                     case "__MSG_GROUP_DISBAND_SUCCESS__":
-                        toastMessage = "Group disbanded";
+                        toastMessage = getString(R.string.group_disbanded);
                         break;
                     case "__MSG_GROUP_DISBAND_FAILED__":
-                        toastMessage = "Failed to disband group";
+                        toastMessage = getString(R.string.group_disband_failed);
+                        break;
+                    case "__MSG_GROUP_DELETE_REQUIRES_ONLINE__":
+                        toastMessage = getString(R.string.group_delete_requires_online);
                         break;
                     case "__MSG_GROUP_LEAVE_SUCCESS__":
-                        toastMessage = "Left group";
+                        toastMessage = getString(R.string.group_leave_success);
                         break;
                     case "__MSG_GROUP_LEAVE_FAILED__":
-                        toastMessage = "Failed to leave group";
+                        toastMessage = getString(R.string.group_leave_failed);
                         break;
                     case "__MSG_GROUP_RENAME_SUCCESS__":
                         toastMessage = getString(R.string.group_updated);
