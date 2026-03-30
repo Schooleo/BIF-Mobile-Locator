@@ -9,6 +9,7 @@ import com.bif.app.core.network.dto.friendship.CreateFriendRequestDto;
 import com.bif.app.core.network.dto.friendship.FriendshipApiModel;
 import com.bif.app.data.mapper.FriendMapper;
 import com.bif.app.data.mapper.FriendshipMapper;
+import com.bif.app.data.sync.SyncManager;
 import com.bif.app.data.source.local.FriendDao;
 import com.bif.app.data.source.local.FriendshipDao;
 import com.bif.app.data.source.local.entity.FriendEntity;
@@ -26,6 +27,9 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.UUID;
+
+import java.io.IOException;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -37,6 +41,7 @@ public class FriendshipRepository implements IFriendshipRepository {
     private final RestApiService restApiService;
     private final FriendshipDao friendshipDao;
     private final FriendDao friendDao;
+    private final SyncManager syncManager;
     private final ExecutorService executorService;
     private final MutableLiveData<List<Friendship>> pendingRequestsLiveData;
     private final MutableLiveData<List<Friendship>> outgoingRequestsLiveData;
@@ -47,10 +52,12 @@ public class FriendshipRepository implements IFriendshipRepository {
     @Inject
     public FriendshipRepository(RestApiService restApiService,
                                 FriendshipDao friendshipDao,
-                                FriendDao friendDao) {
+                                FriendDao friendDao,
+                                SyncManager syncManager) {
         this.restApiService = restApiService;
         this.friendshipDao = friendshipDao;
         this.friendDao = friendDao;
+        this.syncManager = syncManager;
         this.executorService = Executors.newSingleThreadExecutor();
         this.pendingRequestsLiveData = new MutableLiveData<>(new ArrayList<>());
         this.outgoingRequestsLiveData = new MutableLiveData<>(new ArrayList<>());
@@ -169,6 +176,11 @@ public class FriendshipRepository implements IFriendshipRepository {
                 friendshipDao.rollbackReservedPending(currentUserId.trim(), normalizedReceiverId);
             }
             throw illegalState;
+        } catch (IOException ioException) {
+            enqueueFriendshipChange("SEND_REQUEST", null,
+                    buildSendRequestPayload(currentUserId.trim(),
+                            normalizedReceiverId));
+            refreshRequestCachesSync();
         } catch (Exception ignored) {
             if (reserved) {
                 friendshipDao.rollbackReservedPending(currentUserId.trim(), normalizedReceiverId);
@@ -195,6 +207,18 @@ public class FriendshipRepository implements IFriendshipRepository {
             if (!response.isSuccessful()) {
                 throw new IllegalStateException("UNFRIEND_FAILED");
             }
+        } catch (IOException ioException) {
+            String currentUserId = fetchCurrentUserId();
+            if (!isBlank(currentUserId)) {
+                friendshipDao.deleteBetweenUsers(currentUserId.trim(),
+                        friendId.trim());
+            }
+            friendDao.deleteByServerUserId(friendId.trim());
+            enqueueFriendshipChange("UNFRIEND", friendId.trim(),
+                    Collections.singletonMap("friendId", friendId.trim()));
+            refreshFriendsSync();
+            refreshRequestCachesSync();
+            return;
         } catch (IllegalStateException stateException) {
             throw stateException;
         } catch (Exception ignored) {
@@ -346,6 +370,23 @@ public class FriendshipRepository implements IFriendshipRepository {
             if (!response.isSuccessful()) {
                 throw new IllegalStateException(accept ? "ACCEPT_FAILED" : "REJECT_FAILED");
             }
+        } catch (IOException ioException) {
+            existing.status = accept ? FriendshipStatus.ACCEPTED
+                    : FriendshipStatus.REJECTED;
+            existing.updatedAt = System.currentTimeMillis();
+            friendshipDao.update(existing);
+
+            String op = accept ? "ACCEPT_REQUEST" : "REJECT_REQUEST";
+            String serverId = existing.serverId != null
+                    ? existing.serverId : String.valueOf(friendshipId);
+            enqueueFriendshipChange(op, serverId,
+                    Collections.singletonMap("friendshipId", serverId));
+
+            refreshRequestCachesSync();
+            if (accept) {
+                refreshFriendsSync();
+            }
+            return;
         } catch (IllegalStateException stateException) {
             throw stateException;
         } catch (Exception ignored) {
@@ -440,5 +481,19 @@ public class FriendshipRepository implements IFriendshipRepository {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private void enqueueFriendshipChange(String operation, String entityId,
+                                         Object payload) {
+        syncManager.enqueueChange("friendship", entityId, operation,
+                UUID.randomUUID().toString(), payload);
+    }
+
+    private java.util.Map<String, String> buildSendRequestPayload(
+            String requesterId, String receiverId) {
+        java.util.Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("requesterId", requesterId);
+        payload.put("receiverId", receiverId);
+        return payload;
     }
 }

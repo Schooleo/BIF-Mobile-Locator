@@ -51,6 +51,9 @@ public class FriendshipService {
                 f.setStatus(FriendshipStatus.ACCEPTED);
                 return friendshipRepository.save(f);
             }
+            if (isReceiver && f.getStatus() == FriendshipStatus.ACCEPTED) {
+                return f;
+            }
             return f;
         }).orElseThrow(() -> new IllegalArgumentException("Friendship not found"));
     }
@@ -61,6 +64,9 @@ public class FriendshipService {
             if (isReceiver && f.getStatus() == FriendshipStatus.PENDING) {
                 f.setStatus(FriendshipStatus.REJECTED);
                 return friendshipRepository.save(f);
+            }
+            if (isReceiver && f.getStatus() == FriendshipStatus.REJECTED) {
+                return f;
             }
             return f;
         }).orElseThrow(() -> new IllegalArgumentException("Friendship not found"));
@@ -85,10 +91,16 @@ public class FriendshipService {
         List<Friendship> f2 = friendshipRepository.findByRequesterIdAndReceiverId(friendId, currentUserId);
         
         for (Friendship f : f1) {
+            if (f.getStatus() == FriendshipStatus.CANCELED) {
+                continue;
+            }
             f.setStatus(FriendshipStatus.CANCELED);
             friendshipRepository.save(f);
         }
         for (Friendship f : f2) {
+            if (f.getStatus() == FriendshipStatus.CANCELED) {
+                continue;
+            }
             f.setStatus(FriendshipStatus.CANCELED);
             friendshipRepository.save(f);
         }

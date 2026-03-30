@@ -23,11 +23,17 @@ public interface FriendDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insert(FriendEntity friend);
 
+    @Query("SELECT * FROM friends WHERE serverUserId = :serverUserId LIMIT 1")
+    FriendEntity getByServerUserId(String serverUserId);
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insertAll(List<FriendEntity> friends);
 
     @Delete
     void delete(FriendEntity friend);
+
+    @Query("DELETE FROM friends WHERE serverUserId = :serverUserId")
+    void deleteByServerUserId(String serverUserId);
 
     @Query("DELETE FROM friends")
     void clearAll();
