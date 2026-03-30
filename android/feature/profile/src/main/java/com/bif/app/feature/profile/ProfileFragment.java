@@ -249,8 +249,14 @@ public class ProfileFragment extends Fragment {
                         if (!isAdded()) {
                             return;
                         }
-                        Toast.makeText(requireContext(), R.string.logout_success, Toast.LENGTH_SHORT).show();
-                        navController.navigate(UriUtils.buildUri(UriUtils.PathTo.LOGIN));
+
+                        requireActivity().runOnUiThread(() -> {
+                            if (!isAdded()) {
+                                return;
+                            }
+                            Toast.makeText(requireContext(), R.string.logout_success, Toast.LENGTH_SHORT).show();
+                            navController.navigate(UriUtils.buildUri(UriUtils.PathTo.LOGIN));
+                        });
                     });
                 }
             );
