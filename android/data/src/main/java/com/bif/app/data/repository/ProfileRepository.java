@@ -191,7 +191,8 @@ public class ProfileRepository implements IProfileRepository {
         String displayName = safe(entity.displayName);
         String email = safe(entity.email);
         if (!displayName.isEmpty() || !email.isEmpty()) {
-            UserPreferences.saveUserProfile(appContext, displayName, email);
+            UserPreferences.saveUserProfile(appContext, entity.userId,
+                    displayName, email);
         }
     }
 
