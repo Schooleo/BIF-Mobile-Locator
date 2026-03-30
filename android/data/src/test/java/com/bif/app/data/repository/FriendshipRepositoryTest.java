@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,6 +13,7 @@ import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.UserApiModel;
 import com.bif.app.core.network.dto.auth.AuthStateResponse;
 import com.bif.app.core.network.dto.friendship.FriendshipApiModel;
+import com.bif.app.data.sync.NetworkMonitor;
 import com.bif.app.data.sync.SyncManager;
 import com.bif.app.data.source.local.FriendDao;
 import com.bif.app.data.source.local.FriendshipDao;
@@ -45,20 +47,27 @@ public class FriendshipRepositoryTest {
     @Mock
     private SyncManager mockSyncManager;
 
+        @Mock
+        private NetworkMonitor mockNetworkMonitor;
+
     private FriendshipRepository repository;
 
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
         repository = new FriendshipRepository(mockRestApiService,
-                mockFriendshipDao, mockFriendDao, mockSyncManager);
+                                mockFriendshipDao, mockFriendDao, mockSyncManager,
+                                mockNetworkMonitor);
+                when(mockNetworkMonitor.isOnline()).thenReturn(true);
 
         stubAuthUser();
         stubFriendshipRefreshEndpoints();
     }
 
     @Test
-    public void sendFriendRequest_whenOffline_enqueuesSyncChange() throws Exception {
+        public void sendFriendRequest_whenOffline_throwsPolicyError() throws Exception {
+                when(mockNetworkMonitor.isOnline()).thenReturn(false);
+
         when(mockFriendshipDao.reservePendingIfAbsent(eq("user-1"),
                 eq("user-2"), anyLong())).thenReturn(true);
 
@@ -67,9 +76,14 @@ public class FriendshipRepositoryTest {
         when(sendCall.execute()).thenThrow(new IOException("offline"));
         when(mockRestApiService.sendFriendRequest(any())).thenReturn(sendCall);
 
-        repository.sendFriendRequest("user-2");
+                try {
+                        repository.sendFriendRequest("user-2");
+                        org.junit.Assert.fail("Expected policy error");
+                } catch (IllegalStateException expected) {
+                        org.junit.Assert.assertEquals("SEND_REQUEST_REQUIRES_ONLINE", expected.getMessage());
+                }
 
-        verify(mockSyncManager).enqueueChange(eq("friendship"), isNull(),
+                verify(mockSyncManager, never()).enqueueChange(eq("friendship"), isNull(),
                 eq("SEND_REQUEST"), anyString(), any());
     }
 
