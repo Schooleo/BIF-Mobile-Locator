@@ -2,6 +2,7 @@ services:
   tailscale:
     image: tailscale/tailscale:stable
     container_name: tailscale-router
+    restart: on-failure
     profiles:
       - tailscale
     network_mode: "service:bif-server"
@@ -12,13 +13,13 @@ services:
       TS_USERSPACE: "true"
     volumes:
       - ./tailscale-state:/var/lib/tailscale
-    restart: unless-stopped
 
   bif-server:
     build:
       context: ./server
       dockerfile: Dockerfile
     container_name: bif-server-dev
+    restart: on-failure
     ports:
       - "8080:8080"
     environment:
@@ -31,17 +32,17 @@ services:
       TYPESENSE_PORT: 8108
       TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-dev-typesense-key}
       TYPESENSE_BOOTSTRAP_REINDEX_ON_STARTUP: ${TYPESENSE_BOOTSTRAP_REINDEX_ON_STARTUP:-false}
+      OLLAMA_BASE_URL: http://ollama:11434
     depends_on:
       mongodb:
         condition: service_healthy
-    restart: unless-stopped
 
   mongodb:
     image: mongo:latest
     container_name: bif-mongodb
-    restart: unless-stopped
+    restart: on-failure
     ports:
-      - "27018:27017"
+      - "27017:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: pass
@@ -66,7 +67,7 @@ services:
     container_name: mongo-express
     profiles:
       - express
-    restart: unless-stopped
+    restart: on-failure
     ports:
       - "8081:8081"
     environment:
@@ -81,7 +82,7 @@ services:
     container_name: bif-typesense
     profiles:
       - typesense
-    restart: unless-stopped
+    restart: on-failure
     ports:
       - "8108:8108"
     command: >
@@ -91,6 +92,37 @@ services:
     volumes:
       - typesense_data:/data
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: bif-ollama
+    profiles:
+      - ollama
+    restart: on-failure
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            capabilities: ["gpu"]
+            count: all
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: bif-ollama-init
+    profiles:
+      - ollama
+    depends_on:
+      - ollama
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    entrypoint: /bin/sh
+    command: -c "sleep 10 && ollama pull llama3.1"
+
 volumes:
   mongo_data:
   typesense_data:
+  ollama_data:
