@@ -48,7 +48,10 @@ dependencies {
     implementation libs.retrofit.gson
 
     // STOMP + RxJava2 for real-time WebSocket chat
-    implementation libs.stomp.protocol
+    implementation(libs.stomp.protocol) {
+        exclude group: 'org.java-websocket', module: 'Java-WebSocket'
+    }
+    implementation libs.java.websocket
     implementation libs.rxjava2
     implementation libs.rxandroid2
 
