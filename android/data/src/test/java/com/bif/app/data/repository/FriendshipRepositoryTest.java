@@ -53,7 +53,7 @@ public class FriendshipRepositoryTest {
         repository = new FriendshipRepository(mockRestApiService,
                 mockFriendshipDao, mockFriendDao, mockSyncManager);
 
-        stubAuthUser("user-1");
+        stubAuthUser();
         stubFriendshipRefreshEndpoints();
     }
 
@@ -98,10 +98,10 @@ public class FriendshipRepositoryTest {
                 eq("friendship-1"), eq("ACCEPT_REQUEST"), anyString(), any());
     }
 
-    private void stubAuthUser(String userId) throws Exception {
+    private void stubAuthUser() throws Exception {
         AuthStateResponse auth = new AuthStateResponse();
         auth.authenticated = true;
-        auth.userId = userId;
+        auth.userId = "user-1";
 
         @SuppressWarnings("unchecked")
         Call<AuthStateResponse> authCall = Mockito.mock(Call.class);
