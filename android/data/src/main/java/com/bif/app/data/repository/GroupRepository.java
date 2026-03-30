@@ -12,6 +12,7 @@ import com.bif.app.core.network.dto.UpdateGroupRequestDto;
 import com.bif.app.core.network.dto.UpdateMemberRoleRequestDto;
 import com.bif.app.core.network.dto.UserApiModel;
 import com.bif.app.data.mapper.GroupMapper;
+import com.bif.app.data.sync.SyncManager;
 import com.bif.app.data.source.local.GroupDao;
 import com.bif.app.data.source.local.entity.GroupEntity;
 import com.bif.app.data.source.local.entity.GroupFriendCrossRef;
@@ -27,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.UUID;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -37,6 +39,7 @@ import retrofit2.Response;
 public class GroupRepository implements IGroupRepository {
 
     private final RestApiService restApiService;
+    private final SyncManager syncManager;
 
     private final GroupDao groupDao;
     private final GroupMapper groupMapper;
@@ -49,10 +52,13 @@ public class GroupRepository implements IGroupRepository {
     private final Map<Integer, String> groupServerIdByLocalId;
 
     @Inject
-    public GroupRepository(RestApiService restApiService) {
+    public GroupRepository(RestApiService restApiService,
+                           GroupDao groupDao,
+                           SyncManager syncManager) {
         this.restApiService = restApiService;
+        this.syncManager = syncManager;
 
-        this.groupDao = null;
+        this.groupDao = groupDao;
         this.groupMapper = null;
         this.executorService = Executors.newSingleThreadExecutor();
         this.useApi = true;
@@ -66,6 +72,7 @@ public class GroupRepository implements IGroupRepository {
     // Legacy constructor kept for existing local-data unit tests.
     public GroupRepository(GroupDao groupDao, GroupMapper groupMapper) {
         this.restApiService = null;
+        this.syncManager = null;
 
         this.groupDao = groupDao;
         this.groupMapper = groupMapper;
@@ -126,6 +133,7 @@ public class GroupRepository implements IGroupRepository {
             try {
                 restApiService.updateGroup(groupId, actorId, request).execute();
             } catch (Exception ignored) {
+                enqueueGroupChange("UPDATE", groupId, request);
                 return;
             }
             refreshGroupsSync();
@@ -156,6 +164,7 @@ public class GroupRepository implements IGroupRepository {
             try {
                 restApiService.addMember(groupServerId, actorId, request).execute();
             } catch (Exception ignored) {
+                enqueueGroupChange("ADD_MEMBER", groupServerId, request);
                 return;
             }
             refreshGroupsSync();
@@ -183,6 +192,7 @@ public class GroupRepository implements IGroupRepository {
             try {
                 restApiService.addMember(groupId, actorId, request).execute();
             } catch (Exception ignored) {
+                enqueueGroupChange("ADD_MEMBER", groupId, request);
                 return;
             }
             refreshGroupsSync();
@@ -207,6 +217,9 @@ public class GroupRepository implements IGroupRepository {
             try {
                 restApiService.removeMember(groupServerId, memberServerId, actorId).execute();
             } catch (Exception ignored) {
+                Map<String, String> payload = new HashMap<>();
+                payload.put("memberId", memberServerId);
+                enqueueGroupChange("REMOVE_MEMBER", groupServerId, payload);
                 return;
             }
             refreshGroupsSync();
@@ -230,6 +243,9 @@ public class GroupRepository implements IGroupRepository {
             try {
                 restApiService.removeMember(groupId, memberServerId, actorId).execute();
             } catch (Exception ignored) {
+                Map<String, String> payload = new HashMap<>();
+                payload.put("memberId", memberServerId);
+                enqueueGroupChange("REMOVE_MEMBER", groupId, payload);
                 return;
             }
             refreshGroupsSync();
@@ -258,6 +274,11 @@ public class GroupRepository implements IGroupRepository {
             try {
                 restApiService.updateMemberRole(groupServerId, memberServerId, actorId, request).execute();
             } catch (Exception ignored) {
+                Map<String, String> payload = new HashMap<>();
+                payload.put("memberId", memberServerId);
+                payload.put("role", normalizedRole);
+                enqueueGroupChange("UPDATE_MEMBER_ROLE", groupServerId,
+                        payload);
                 return;
             }
             refreshGroupsSync();
@@ -286,6 +307,10 @@ public class GroupRepository implements IGroupRepository {
             try {
                 restApiService.updateMemberRole(groupId, memberServerId, actorId, request).execute();
             } catch (Exception ignored) {
+                Map<String, String> payload = new HashMap<>();
+                payload.put("memberId", memberServerId);
+                payload.put("role", normalizedRole);
+                enqueueGroupChange("UPDATE_MEMBER_ROLE", groupId, payload);
                 return;
             }
             refreshGroupsSync();
@@ -377,6 +402,8 @@ public class GroupRepository implements IGroupRepository {
                     }
                 }
             } catch (Exception ignored) {
+                enqueueGroupChange("CREATE", "local-" + UUID.randomUUID(),
+                        request);
                 return;
             }
             refreshGroupsSync();
@@ -417,6 +444,7 @@ public class GroupRepository implements IGroupRepository {
             try {
                 restApiService.deleteGroup(groupId, actorId).execute();
             } catch (Exception ignored) {
+                enqueueGroupChange("DELETE", groupId, null);
                 return;
             }
             refreshGroupsSync();
@@ -630,5 +658,14 @@ public class GroupRepository implements IGroupRepository {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private void enqueueGroupChange(String operation, String entityId,
+                                    Object payload) {
+        if (syncManager == null) {
+            return;
+        }
+        syncManager.enqueueChange("group", entityId, operation,
+                UUID.randomUUID().toString(), payload);
     }
 }
