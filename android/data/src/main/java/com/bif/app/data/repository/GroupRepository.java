@@ -333,7 +333,21 @@ public class GroupRepository implements IGroupRepository {
 
             if (selectedFriends != null) {
                 for (Friend friend : selectedFriends) {
-                    String memberId = userServerIdByLocalId.get(friend.getId());
+                    if (friend == null) {
+                        continue;
+                    }
+
+                    String memberId = null;
+                    if (!isBlank(friend.getServerUserId())) {
+                        memberId = friend.getServerUserId().trim();
+                    }
+                    if (isBlank(memberId)) {
+                        memberId = userServerIdByLocalId.get(friend.getId());
+                    }
+                    if (isBlank(memberId)) {
+                        memberId = resolveUserIdByName(friend.getName());
+                    }
+
                     if (!isBlank(memberId) && !request.memberIds.contains(memberId)) {
                         request.memberIds.add(memberId);
                     }
@@ -341,7 +355,27 @@ public class GroupRepository implements IGroupRepository {
             }
 
             try {
-                restApiService.createGroup(request).execute();
+                Response<GroupApiModel> createResponse = restApiService.createGroup(request).execute();
+                if (createResponse.isSuccessful() && createResponse.body() != null) {
+                    List<Group> mappedCreated = mapGroups(Collections.singletonList(createResponse.body()), actorId);
+                    if (!mappedCreated.isEmpty()) {
+                        Group created = mappedCreated.get(0);
+                        List<Group> current = groupsLiveData.getValue();
+                        List<Group> merged = new ArrayList<>();
+                        if (current != null) {
+                            for (Group group : current) {
+                                if (group == null) {
+                                    continue;
+                                }
+                                if (!created.getServerId().equals(group.getServerId())) {
+                                    merged.add(group);
+                                }
+                            }
+                        }
+                        merged.add(0, created);
+                        groupsLiveData.postValue(merged);
+                    }
+                }
             } catch (Exception ignored) {
                 return;
             }
@@ -561,6 +595,23 @@ public class GroupRepository implements IGroupRepository {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private String resolveUserIdByName(String name) {
+        if (isBlank(name)) {
+            return null;
+        }
+
+        String normalizedName = name.trim();
+        for (UserApiModel user : usersById.values()) {
+            if (user == null || isBlank(user.id) || isBlank(user.name)) {
+                continue;
+            }
+            if (normalizedName.equalsIgnoreCase(user.name.trim())) {
+                return user.id.trim();
+            }
+        }
+        return null;
     }
 
     private int stableId(String value) {

@@ -10,6 +10,7 @@ import androidx.lifecycle.Transformations;
 
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.ChatMessageDto;
+import com.bif.app.core.network.dto.UserApiModel;
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.ChatMapper;
 import com.bif.app.data.source.local.ChatMessageDao;
@@ -22,11 +23,14 @@ import com.google.gson.Gson;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import javax.inject.Inject;
+import javax.inject.Named;
 import javax.inject.Singleton;
 
 import dagger.hilt.android.qualifiers.ApplicationContext;
@@ -50,6 +54,7 @@ public class ChatRepository implements IChatRepository {
     private final RestApiService restApiService;
     private final SyncManager syncManager;
     private final Context context;
+    private final String wsBaseUrl;
     private final ExecutorService executorService;
     private final Gson gson;
 
@@ -57,23 +62,29 @@ public class ChatRepository implements IChatRepository {
     private StompClient stompClient;
     private final CompositeDisposable wsDisposables = new CompositeDisposable();
     private String connectedGroupId;
+    private final Map<String, String> userNamesById = new ConcurrentHashMap<>();
+    private volatile long userNameCacheUpdatedAtMs = 0L;
 
     // Base WebSocket URL — mirrors REST_BASE_URL but uses the ws/stomp endpoint.
     // SockJS fallback: the server exposes /ws via SockJS.
     // The STOMP library will append /websocket for the raw socket connection.
     private static final String WS_URL_TEMPLATE = "ws://%s:8080/ws/websocket";
+    private static final long USER_NAME_CACHE_TTL_MS = 5 * 60 * 1000;
+    private static final long WS_RECONNECT_DELAY_MS = 1500;
 
     @Inject
     public ChatRepository(ChatMessageDao chatMessageDao,
                           ChatMapper chatMapper,
                           RestApiService restApiService,
                           SyncManager syncManager,
-                          @ApplicationContext Context context) {
+                          @ApplicationContext Context context,
+                          @Named("wsBaseUrl") String wsBaseUrl) {
         this.chatMessageDao = chatMessageDao;
         this.chatMapper = chatMapper;
         this.restApiService = restApiService;
         this.syncManager = syncManager;
         this.context = context;
+        this.wsBaseUrl = wsBaseUrl;
         this.executorService = Executors.newSingleThreadExecutor();
         this.gson = new Gson();
     }
@@ -131,6 +142,7 @@ public class ChatRepository implements IChatRepository {
                                    @NonNull Response<List<ChatMessageDto>> response) {
                 if (response.isSuccessful() && response.body() != null) {
                     executorService.execute(() -> {
+                        refreshUserNameCache(false);
                         List<ChatMessageEntity> entities = new ArrayList<>();
                         for (ChatMessageDto dto : response.body()) {
                             entities.add(dtoToEntity(dto));
@@ -158,9 +170,11 @@ public class ChatRepository implements IChatRepository {
         disconnectFromGroup(); // Clean up any previous connection.
         connectedGroupId = groupId;
 
-        String host = resolveHost();
-        String wsUrl = String.format(WS_URL_TEMPLATE, host);
+        String wsUrl = !isBlank(wsBaseUrl)
+            ? wsBaseUrl.trim()
+            : String.format(WS_URL_TEMPLATE, resolveHost());
         stompClient = Stomp.over(Stomp.ConnectionProvider.OKHTTP, wsUrl);
+        executorService.execute(() -> refreshUserNameCache(false));
 
         // Lifecycle events for logging.
         wsDisposables.add(
@@ -171,29 +185,20 @@ public class ChatRepository implements IChatRepository {
                             switch (event.getType()) {
                                 case OPENED:
                                     Log.d(TAG, "STOMP connected for group " + groupId);
+                                    subscribeToTopic(groupId);
                                     break;
                                 case CLOSED:
                                     Log.d(TAG, "STOMP disconnected");
+                                    scheduleReconnect(groupId);
                                     break;
                                 case ERROR:
                                     Log.e(TAG, "STOMP error", event.getException());
+                                    scheduleReconnect(groupId);
                                     break;
                                 default:
                                     break;
                             }
                         }, e -> Log.e(TAG, "STOMP lifecycle error", e))
-        );
-
-        // Subscribe to incoming messages for this group.
-        String topicDest = "/topic/chat/" + groupId;
-        wsDisposables.add(
-                stompClient.topic(topicDest)
-                        .subscribeOn(Schedulers.io())
-                        .observeOn(Schedulers.io())
-                        .subscribe(
-                            this::handleIncomingMessage,
-                                e -> Log.e(TAG, "Message subscription error", e)
-                        )
         );
 
         stompClient.connect();
@@ -209,6 +214,19 @@ public class ChatRepository implements IChatRepository {
         connectedGroupId = null;
     }
 
+    private void subscribeToTopic(String groupId) {
+        String topicDest = "/topic/chat/" + groupId;
+        wsDisposables.add(
+                stompClient.topic(topicDest)
+                        .subscribeOn(Schedulers.io())
+                        .observeOn(Schedulers.io())
+                        .subscribe(
+                                this::handleIncomingMessage,
+                                e -> Log.e(TAG, "Message subscription error", e)
+                        )
+        );
+    }
+
     // ─── Internal helpers ──────────────────────────────────────────────────────
 
     /**
@@ -219,6 +237,8 @@ public class ChatRepository implements IChatRepository {
         try {
             ChatMessageDto dto = gson.fromJson(stompMessage.getPayload(), ChatMessageDto.class);
             if (dto == null) return;
+
+            refreshUserNameCache(false);
 
             // Determine current user's ID to tag isOutgoing; the entity stores
             // everything, the mapper derives isOutgoing at query time.
@@ -318,13 +338,91 @@ public class ChatRepository implements IChatRepository {
                 sentAtMillis = System.currentTimeMillis();
             }
         }
+        String senderName = resolveSenderName(dto);
         return new ChatMessageEntity(
                 dto.id != null ? dto.id : UUID.randomUUID().toString(),
-                dto.groupId, dto.senderUserId, null,
+                dto.groupId, dto.senderUserId, senderName,
                 dto.content, dto.type, sentAtMillis,
                 dto.clientMessageId, lat, lng,
                 dto.sharedAddress, dto.confirmed
         );
+    }
+
+    private String resolveSenderName(ChatMessageDto dto) {
+        if (dto == null) {
+            return "";
+        }
+        if (!isBlank(dto.senderName)) {
+            return dto.senderName.trim();
+        }
+        if (isBlank(dto.senderUserId)) {
+            return "";
+        }
+
+        String senderId = dto.senderUserId.trim();
+        String cachedName = userNamesById.get(senderId);
+        if (!isBlank(cachedName)) {
+            return cachedName;
+        }
+
+        String currentUserId = UserPreferences.getId(context);
+        if (isBlank(currentUserId)) {
+            currentUserId = UserPreferences.getUsername(context);
+        }
+        if (!isBlank(currentUserId) && senderId.equals(currentUserId.trim())) {
+            String currentUserName = UserPreferences.getUsername(context);
+            return !isBlank(currentUserName) ? currentUserName.trim() : senderId;
+        }
+        return senderId;
+    }
+
+    private void refreshUserNameCache(boolean force) {
+        long now = System.currentTimeMillis();
+        if (!force && (now - userNameCacheUpdatedAtMs) < USER_NAME_CACHE_TTL_MS) {
+            return;
+        }
+
+        try {
+            Response<List<UserApiModel>> response = restApiService.getUsers().execute();
+            if (!response.isSuccessful() || response.body() == null) {
+                return;
+            }
+
+            for (UserApiModel user : response.body()) {
+                if (user == null || isBlank(user.id)) {
+                    continue;
+                }
+                String displayName = !isBlank(user.name) ? user.name.trim() : user.id.trim();
+                userNamesById.put(user.id.trim(), displayName);
+            }
+            userNameCacheUpdatedAtMs = now;
+        } catch (Exception ignored) {
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    private void scheduleReconnect(String groupId) {
+        if (isBlank(groupId)) {
+            return;
+        }
+
+        executorService.execute(() -> {
+            try {
+                Thread.sleep(WS_RECONNECT_DELAY_MS);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+
+            boolean shouldReconnect = groupId.equals(connectedGroupId)
+                    && (stompClient == null || !stompClient.isConnected());
+            if (shouldReconnect) {
+                connectToGroup(groupId);
+            }
+        });
     }
 
     /**

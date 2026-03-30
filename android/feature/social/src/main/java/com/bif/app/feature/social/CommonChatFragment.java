@@ -8,6 +8,7 @@ import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ImageButton;
@@ -15,6 +16,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -44,6 +46,7 @@ public class CommonChatFragment extends Fragment {
     private String chatId;
     private EditText messageInput;
     private RecyclerView rvMessages;
+    private int previousSoftInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_UNSPECIFIED;
 
     @Nullable
     @Override
@@ -72,9 +75,11 @@ public class CommonChatFragment extends Fragment {
         ImageButton btnBack = view.findViewById(R.id.btn_back);
         ImageButton btnGroupSettings = view.findViewById(R.id.btn_group_settings);
         rvMessages = view.findViewById(R.id.rv_messages);
+        View inputBar = view.findViewById(R.id.layout_input_bar);
         EditText etMessage = view.findViewById(R.id.et_message);
         messageInput = etMessage;
         MaterialButton btnSend = view.findViewById(R.id.btn_send);
+        applyKeyboardInsets(view, inputBar, rvMessages);
 
         tvAvatar.setText(avatarLetter);
         if (avatarColor != 0) {
@@ -156,9 +161,17 @@ public class CommonChatFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        previousSoftInputMode = requireActivity().getWindow().getAttributes().softInputMode;
+        requireActivity().getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
         if (messageInput != null) {
             messageInput.post(() -> focusInputAndShowKeyboard(messageInput));
         }
+    }
+
+    @Override
+    public void onPause() {
+        requireActivity().getWindow().setSoftInputMode(previousSoftInputMode);
+        super.onPause();
     }
 
     // ─── LiveData observers ────────────────────────────────────────────────────
@@ -294,5 +307,35 @@ public class CommonChatFragment extends Fragment {
                 }
             }
         }, 120);
+    }
+
+    private void applyKeyboardInsets(View root, View inputBar, RecyclerView messagesView) {
+        final int inputPadLeft = inputBar.getPaddingLeft();
+        final int inputPadTop = inputBar.getPaddingTop();
+        final int inputPadRight = inputBar.getPaddingRight();
+        final int inputPadBottom = inputBar.getPaddingBottom();
+
+        final int listPadLeft = messagesView.getPaddingLeft();
+        final int listPadTop = messagesView.getPaddingTop();
+        final int listPadRight = messagesView.getPaddingRight();
+        final int listPadBottom = messagesView.getPaddingBottom();
+
+        ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+            Insets imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime());
+            Insets systemInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            int imeOffset = Math.max(0, imeInsets.bottom - systemInsets.bottom);
+            inputBar.setTranslationY(-imeOffset);
+
+            int inputBarHeight = inputBar.getHeight();
+            int recyclerBottomPadding = listPadBottom + inputBarHeight + imeOffset;
+            messagesView.setPadding(listPadLeft, listPadTop, listPadRight, recyclerBottomPadding);
+            inputBar.setPadding(inputPadLeft, inputPadTop, inputPadRight, inputPadBottom);
+            return insets;
+        });
+
+        inputBar.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) ->
+                ViewCompat.requestApplyInsets(root)
+        );
+        ViewCompat.requestApplyInsets(root);
     }
 }

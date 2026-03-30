@@ -24,6 +24,8 @@ public class SecurityConfig {
                 "/api/auth/login",
                 "/api/auth/refresh",
                 "/api/auth/logout",
+                "/ws",
+                "/ws/**",
                 "/swagger-ui/**",
                 "/v3/api-docs/**",
                 "/graphiql",

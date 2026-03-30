@@ -12,6 +12,7 @@ import dagger.Module;
 import dagger.Provides;
 import dagger.hilt.InstallIn;
 import dagger.hilt.components.SingletonComponent;
+import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.logging.HttpLoggingInterceptor;
 import retrofit2.Retrofit;
@@ -73,9 +74,15 @@ public class NetworkModule {
     @Named("wsBaseUrl")
     public String provideWsBaseUrl() {
         String restBase = com.bif.app.BuildConfig.REST_BASE_URL;
-        // Strip trailing path (e.g., /api/) and replace http with ws.
+        HttpUrl parsed = HttpUrl.parse(restBase);
+        if (parsed != null) {
+            String wsScheme = parsed.isHttps() ? "wss" : "ws";
+            return wsScheme + "://" + parsed.host() + ":" + parsed.port() + "/ws/websocket";
+        }
+
+        // Fallback for malformed URL strings.
         String baseHost = restBase
-                .replaceFirst("/api/.*$", "")
+                .replaceFirst("/api(?:/.*)?$", "")
                 .replaceFirst("^http", "ws");
         return baseHost + "/ws/websocket";
     }
