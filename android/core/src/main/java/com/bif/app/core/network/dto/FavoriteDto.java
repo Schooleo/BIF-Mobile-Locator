@@ -1,6 +1,6 @@
-package com.bif.app.domain.model;
+package com.bif.app.core.network.dto;
 
-public class Favorite {
+public class FavoriteDto {
     public String id;
     public String name;
     public double latitude;
@@ -10,7 +10,9 @@ public class Favorite {
     public String notes;
     public int rating;
     public String imagePath;
+    
+    // Sync fields
+    public String userId;
     public long serverVersion;
     public boolean deleted;
-    public String userId;
 }

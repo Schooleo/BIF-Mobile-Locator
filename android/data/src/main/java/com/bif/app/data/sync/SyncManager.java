@@ -4,10 +4,13 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
 
+import androidx.lifecycle.LiveData;
+
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.SyncChangeDto;
 import com.bif.app.core.network.dto.SyncRequestDto;
 import com.bif.app.core.network.dto.SyncResponseDto;
+import com.bif.app.data.source.local.FavoriteDao;
 import com.bif.app.data.source.local.PlaceDao;
 import com.bif.app.data.source.local.SyncQueueDao;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
@@ -19,6 +22,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -42,15 +47,18 @@ public class SyncManager {
     private final SharedPreferences syncPrefs;
     private final Gson gson;
     private final Map<String, SyncEntityHandler> handlersByEntityType;
+    private final ExecutorService reconnectSyncExecutor;
 
     private String userId;
     private String deviceId;
     private long lastPulledVersion;
+    private boolean lastObservedOnline;
 
     @Inject
     public SyncManager(RestApiService restApiService,
                        SyncQueueDao syncQueueDao,
                        PlaceDao placeDao,
+                       FavoriteDao favoriteDao,
                        NetworkMonitor networkMonitor,
                        @ApplicationContext Context appContext) {
         this.restApiService = restApiService;
@@ -60,8 +68,12 @@ public class SyncManager {
                 Context.MODE_PRIVATE);
         this.gson = new Gson();
         this.handlersByEntityType = new HashMap<>();
+        this.reconnectSyncExecutor = Executors.newSingleThreadExecutor();
+        this.lastObservedOnline = networkMonitor.isOnline();
         registerHandler(new PlaceSyncEntityHandler(placeDao, gson));
+        registerHandler(new FavoriteSyncEntityHandler(favoriteDao, gson));
         loadPersistedSyncState();
+        registerReconnectAutoSync();
     }
 
     // Backward-compatible constructor used by unit tests.
@@ -74,6 +86,10 @@ public class SyncManager {
         this.syncPrefs = null;
         this.gson = new Gson();
         this.handlersByEntityType = new HashMap<>();
+        this.reconnectSyncExecutor = Executors.newSingleThreadExecutor();
+        this.lastObservedOnline = networkMonitor != null
+            && networkMonitor.isOnline();
+        registerReconnectAutoSync();
     }
 
     public void setUserContext(String userId, String deviceId) {
@@ -220,6 +236,13 @@ public class SyncManager {
         }
     }
 
+    /**
+     * Expose current connectivity status for repository-layer decisions.
+     */
+    public boolean isOnline() {
+        return networkMonitor.isOnline();
+    }
+
     private void handleFailedPush(List<SyncQueueEntity> failed) {
         for (SyncQueueEntity entry : failed) {
             entry.retryCount++;
@@ -308,6 +331,25 @@ public class SyncManager {
     private void registerHandler(SyncEntityHandler handler) {
         handlersByEntityType.put(handler.entityType().toLowerCase(),
                 handler);
+    }
+
+    private void registerReconnectAutoSync() {
+        if (networkMonitor == null) {
+            return;
+        }
+
+        LiveData<Boolean> connectivity = networkMonitor.observeConnectivity();
+        if (connectivity == null) {
+            return;
+        }
+
+        connectivity.observeForever(connected -> {
+            boolean online = Boolean.TRUE.equals(connected);
+            if (online && !lastObservedOnline) {
+                reconnectSyncExecutor.execute(this::syncIfOnline);
+            }
+            lastObservedOnline = online;
+        });
     }
 
     private String serializePayload(String entityType, Object payload) {

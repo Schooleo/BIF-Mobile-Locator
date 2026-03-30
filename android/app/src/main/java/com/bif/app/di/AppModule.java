@@ -33,6 +33,12 @@ public class AppModule {
 
     @Provides
     @Singleton
+    public ExecutorService provideExecutorService() {
+        return Executors.newFixedThreadPool(4);
+    }
+
+    @Provides
+    @Singleton
     public FusedLocationProviderClient provideLocationClient(@ApplicationContext Context context) {
         return LocationServices.getFusedLocationProviderClient(context);
     }
