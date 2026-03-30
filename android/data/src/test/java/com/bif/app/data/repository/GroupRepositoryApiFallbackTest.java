@@ -14,7 +14,9 @@ import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.GroupApiModel;
 import com.bif.app.core.network.dto.UserApiModel;
 import com.bif.app.core.network.dto.auth.AuthStateResponse;
+import com.bif.app.data.sync.NetworkMonitor;
 import com.bif.app.data.sync.SyncManager;
+import com.bif.app.data.source.local.FriendDao;
 import com.bif.app.data.source.local.GroupDao;
 import com.bif.app.data.source.local.entity.GroupEntity;
 import com.bif.app.domain.model.Group;
@@ -48,14 +50,22 @@ public class GroupRepositoryApiFallbackTest {
     private GroupDao mockGroupDao;
 
     @Mock
+    private FriendDao mockFriendDao;
+
+    @Mock
     private SyncManager mockSyncManager;
+
+    @Mock
+    private NetworkMonitor mockNetworkMonitor;
 
     private GroupRepository repository;
 
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
-        repository = new GroupRepository(mockRestApiService, mockGroupDao, mockSyncManager);
+        repository = new GroupRepository(mockRestApiService, mockGroupDao,
+            mockSyncManager, mockNetworkMonitor, mockFriendDao);
+        when(mockNetworkMonitor.isOnline()).thenReturn(true);
         stubAuthenticatedUser();
     }
 
