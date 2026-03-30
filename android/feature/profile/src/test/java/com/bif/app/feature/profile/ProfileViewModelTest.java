@@ -14,6 +14,8 @@ import android.content.Context;
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 
+import com.bif.app.domain.repository.IProfileRepository;
+
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -30,13 +32,13 @@ public class ProfileViewModelTest {
     private Context context;
 
     @Mock
-    private ProfileRepository profileRepository;
+    private IProfileRepository profileRepository;
 
     @Test
     public void constructor_loadsLocalProfileIntoUiState() {
         when(context.getString(R.string.not_available)).thenReturn("Not available");
         when(profileRepository.readLocalProfile()).thenReturn(
-                new ProfileRepository.LocalProfile(true, "alice", "alice@bif.com", "content://avatar")
+            new IProfileRepository.LocalProfile(true, "alice", "alice@bif.com", "content://avatar")
         );
 
         ProfileViewModel viewModel = new ProfileViewModel(context, profileRepository);
@@ -53,7 +55,7 @@ public class ProfileViewModelTest {
     public void loadFromLocal_blankFields_useNotAvailableAndGuestInitial() {
         when(context.getString(R.string.not_available)).thenReturn("Not available");
         when(profileRepository.readLocalProfile()).thenReturn(
-                new ProfileRepository.LocalProfile(true, "   ", "", "")
+            new IProfileRepository.LocalProfile(true, "   ", "", "")
         );
 
         ProfileViewModel viewModel = new ProfileViewModel(context, profileRepository);
@@ -68,7 +70,7 @@ public class ProfileViewModelTest {
     public void loadFromLocal_blankUsername_usesEmailInitial() {
         when(context.getString(R.string.not_available)).thenReturn("Not available");
         when(profileRepository.readLocalProfile()).thenReturn(
-                new ProfileRepository.LocalProfile(true, "", "bravo@bif.com", "")
+            new IProfileRepository.LocalProfile(true, "", "bravo@bif.com", "")
         );
 
         ProfileViewModel viewModel = new ProfileViewModel(context, profileRepository);
@@ -80,8 +82,8 @@ public class ProfileViewModelTest {
     public void onAvatarSelected_savesAvatarReloadsAndEmitsMessage() {
         when(context.getString(R.string.not_available)).thenReturn("Not available");
         when(profileRepository.readLocalProfile())
-                .thenReturn(new ProfileRepository.LocalProfile(true, "alice", "alice@bif.com", "old"))
-                .thenReturn(new ProfileRepository.LocalProfile(true, "alice", "alice@bif.com", "new"));
+            .thenReturn(new IProfileRepository.LocalProfile(true, "alice", "alice@bif.com", "old"))
+            .thenReturn(new IProfileRepository.LocalProfile(true, "alice", "alice@bif.com", "new"));
 
         ProfileViewModel viewModel = new ProfileViewModel(context, profileRepository);
         viewModel.onAvatarSelected("new");
@@ -96,10 +98,10 @@ public class ProfileViewModelTest {
     public void refreshProfileFromServer_success_reloadsLocalState() {
         when(context.getString(R.string.not_available)).thenReturn("Not available");
         when(profileRepository.readLocalProfile())
-                .thenReturn(new ProfileRepository.LocalProfile(true, "old", "old@bif.com", ""))
-                .thenReturn(new ProfileRepository.LocalProfile(true, "new", "new@bif.com", ""));
+                .thenReturn(new IProfileRepository.LocalProfile(true, "old", "old@bif.com", ""))
+                .thenReturn(new IProfileRepository.LocalProfile(true, "new", "new@bif.com", ""));
         doAnswer(invocation -> {
-            ProfileRepository.ProfileCallback callback = invocation.getArgument(0);
+            IProfileRepository.ProfileCallback callback = invocation.getArgument(0);
             callback.onSuccess();
             return null;
         }).when(profileRepository).syncProfileMetadata(any());
@@ -115,10 +117,10 @@ public class ProfileViewModelTest {
     public void refreshProfileFromServer_failure_emitsErrorMessage() {
         when(context.getString(R.string.not_available)).thenReturn("Not available");
         when(profileRepository.readLocalProfile()).thenReturn(
-                new ProfileRepository.LocalProfile(true, "alice", "alice@bif.com", "")
+                new IProfileRepository.LocalProfile(true, "alice", "alice@bif.com", "")
         );
         doAnswer(invocation -> {
-            ProfileRepository.ProfileCallback callback = invocation.getArgument(0);
+            IProfileRepository.ProfileCallback callback = invocation.getArgument(0);
             callback.onFailure();
             return null;
         }).when(profileRepository).syncProfileMetadata(any());
@@ -133,10 +135,10 @@ public class ProfileViewModelTest {
     public void updateProfile_success_reloadsAndEmitsSuccessMessage() {
         when(context.getString(R.string.not_available)).thenReturn("Not available");
         when(profileRepository.readLocalProfile())
-                .thenReturn(new ProfileRepository.LocalProfile(true, "old", "old@bif.com", ""))
-                .thenReturn(new ProfileRepository.LocalProfile(true, "new", "old@bif.com", ""));
+                .thenReturn(new IProfileRepository.LocalProfile(true, "old", "old@bif.com", ""))
+                .thenReturn(new IProfileRepository.LocalProfile(true, "new", "old@bif.com", ""));
         doAnswer(invocation -> {
-            ProfileRepository.ProfileCallback callback = invocation.getArgument(1);
+            IProfileRepository.ProfileCallback callback = invocation.getArgument(1);
             callback.onSuccess();
             return null;
         }).when(profileRepository).updateProfile(eq("new"), any());
@@ -153,10 +155,10 @@ public class ProfileViewModelTest {
     public void updateProfile_failure_emitsFailureMessage() {
         when(context.getString(R.string.not_available)).thenReturn("Not available");
         when(profileRepository.readLocalProfile()).thenReturn(
-                new ProfileRepository.LocalProfile(true, "alice", "alice@bif.com", "")
+                new IProfileRepository.LocalProfile(true, "alice", "alice@bif.com", "")
         );
         doAnswer(invocation -> {
-            ProfileRepository.ProfileCallback callback = invocation.getArgument(1);
+            IProfileRepository.ProfileCallback callback = invocation.getArgument(1);
             callback.onFailure();
             return null;
         }).when(profileRepository).updateProfile(eq("alice"), any());
@@ -171,10 +173,10 @@ public class ProfileViewModelTest {
     public void consumeMessage_clearsCurrentMessage() {
         when(context.getString(R.string.not_available)).thenReturn("Not available");
         when(profileRepository.readLocalProfile()).thenReturn(
-                new ProfileRepository.LocalProfile(true, "alice", "alice@bif.com", "")
+                new IProfileRepository.LocalProfile(true, "alice", "alice@bif.com", "")
         );
         doAnswer(invocation -> {
-            ProfileRepository.ProfileCallback callback = invocation.getArgument(1);
+            IProfileRepository.ProfileCallback callback = invocation.getArgument(1);
             callback.onFailure();
             return null;
         }).when(profileRepository).updateProfile(eq("alice"), any());

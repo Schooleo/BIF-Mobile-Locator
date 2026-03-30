@@ -246,6 +246,24 @@ public class SyncManagerTest {
         org.junit.Assert.assertTrue(saved.payload.contains("\"name\":\"Cafe\""));
     }
 
+        @Test
+        public void setUserContext_whenUserChanges_resetsLastPulledVersion() {
+                syncManager.setLastPulledVersion(12);
+
+                syncManager.setUserContext("user2", "device2");
+
+                assertEquals(0, syncManager.getLastPulledVersion());
+        }
+
+        @Test
+        public void setUserContext_whenUserUnchanged_keepsLastPulledVersion() {
+                syncManager.setLastPulledVersion(12);
+
+                syncManager.setUserContext("user1", "device1");
+
+                assertEquals(12, syncManager.getLastPulledVersion());
+        }
+
     @Test
     @SuppressWarnings("unchecked")
     public void sync_whenPendingHasPayload_includesPayloadInRequest()

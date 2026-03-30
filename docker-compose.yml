@@ -4,15 +4,19 @@ services:
     container_name: tailscale-router
     profiles:
       - tailscale
+    depends_on:
+      - bif-server
     network_mode: "service:bif-server"
+    env_file:
+      - .env
     environment:
-      TS_HOSTNAME: "${TS_HOSTNAME:-bif-server}"
-      TS_AUTHKEY: "${TS_AUTHKEY}"
-      TS_STATE_DIR: /var/lib/tailscale
-      TS_USERSPACE: "true"
+      TS_HOSTNAME: ${TS_HOSTNAME:-bif-server}
+      TS_AUTHKEY: ${TS_AUTHKEY}
+      TS_STATE_DIR: ${TS_STATE_DIR:-/var/lib/tailscale}
+      TS_USERSPACE: ${TS_USERSPACE:-true}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
-    restart: unless-stopped
+    restart: on-failure
 
   bif-server:
     build:
@@ -21,30 +25,34 @@ services:
     container_name: bif-server-dev
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
-      SPRING_PROFILES_ACTIVE: docker
-      SPRING_MONGODB_URI: mongodb://admin:pass@mongodb:27017/bif_db?authSource=admin
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
+      SPRING_MONGODB_URI: "${SPRING_MONGODB_URI:-mongodb://admin:pass@mongodb:27017/bif_db?authSource=admin}"
       PLACE_SEARCH_PROVIDER: ${PLACE_SEARCH_PROVIDER:-mongo}
       TYPESENSE_ENABLED: ${TYPESENSE_ENABLED:-false}
-      TYPESENSE_PROTOCOL: http
-      TYPESENSE_HOST: typesense
-      TYPESENSE_PORT: 8108
+      TYPESENSE_PROTOCOL: ${TYPESENSE_PROTOCOL:-http}
+      TYPESENSE_HOST: ${TYPESENSE_HOST:-typesense}
+      TYPESENSE_PORT: ${TYPESENSE_PORT:-8108}
       TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-dev-typesense-key}
       TYPESENSE_BOOTSTRAP_REINDEX_ON_STARTUP: ${TYPESENSE_BOOTSTRAP_REINDEX_ON_STARTUP:-false}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
     depends_on:
       mongodb:
         condition: service_healthy
-    restart: unless-stopped
+    restart: on-failure
 
   mongodb:
     image: mongo:latest
     container_name: bif-mongodb
-    restart: unless-stopped
+    env_file:
+      - .env
     ports:
-      - "27018:27017"
+      - "27017:27017"
     environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: pass
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-pass}
     volumes:
       - mongo_data:/data/db
     healthcheck:
@@ -55,33 +63,18 @@ services:
           "--quiet",
           "--eval",
           "db.adminCommand('ping').ok",
-          "mongodb://admin:pass@localhost:27017/admin",
+          "mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-pass}@localhost:27017/admin",
         ]
-      interval: 10s
+      interval: 30s
       timeout: 5s
       retries: 6
-
-  mongo-express:
-    image: mongo-express:latest
-    container_name: mongo-express
-    profiles:
-      - express
-    restart: unless-stopped
-    ports:
-      - "8081:8081"
-    environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
-      ME_CONFIG_MONGODB_ADMINPASSWORD: pass
-      ME_CONFIG_MONGODB_URL: mongodb://admin:pass@mongodb:27017/
-    depends_on:
-      - mongodb
+    restart: on-failure
 
   typesense:
     image: typesense/typesense:30.1
     container_name: bif-typesense
     profiles:
       - typesense
-    restart: unless-stopped
     ports:
       - "8108:8108"
     command: >
@@ -90,7 +83,58 @@ services:
       --enable-cors
     volumes:
       - typesense_data:/data
+    env_file:
+      - .env
+    restart: on-failure
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: bif-ollama
+    profiles:
+      - ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            capabilities: ["gpu"]
+            count: all
+    env_file:
+      - .env
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: on-failure
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: bif-ollama-init
+    profiles:
+      - ollama
+    depends_on:
+      ollama:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      OLLAMA_HOST: ${OLLAMA_BASE_URL:-http://ollama:11434}
+    entrypoint: /bin/sh
+    command: -c "ollama pull ${OLLAMA_MODEL:-llama3.1}"
 
 volumes:
   mongo_data:
   typesense_data:
+  ollama_data:
+
+networks:
+  default:
+    name: shared-dev-network
+    external: true

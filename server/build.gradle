@@ -7,13 +7,17 @@ plugins {
 }
 
 group = 'com.bif'
-version = '0.0.1-SNAPSHOT'
+version = project.hasProperty('appVersion') ? project.property('appVersion') : 'latest'
 description = 'server'
 
 java {
 	toolchain {
 		languageVersion = JavaLanguageVersion.of(21)
 	}
+}
+
+bootJar {
+    archiveFileName = 'app.jar'
 }
 
 configurations {

@@ -9,6 +9,7 @@ public class UserPreferences {
     private static final String KEY_ID = "user_id";
     private static final String KEY_USERNAME = "username";
     private static final String KEY_EMAIL = "email";
+    private static final String KEY_USER_ID = "user_id";
     private static final String KEY_AVATAR_URI = "avatar_uri";
     private static final String KEY_AUTH_TOKEN = "auth_token";
     private static final String KEY_REFRESH_TOKEN = "refresh_token";
@@ -39,9 +40,19 @@ public class UserPreferences {
         return getPrefs(context).getString(KEY_EMAIL, "");
     }
 
+    public static String getUserId(Context context) {
+        return getPrefs(context).getString(KEY_USER_ID, "");
+    }
+
     public static void setUsername(Context context, String username) {
         getPrefs(context).edit()
                 .putString(KEY_USERNAME, username)
+                .apply();
+    }
+
+    public static void setUserId(Context context, String userId) {
+        getPrefs(context).edit()
+                .putString(KEY_USER_ID, userId != null ? userId : "")
                 .apply();
     }
 
