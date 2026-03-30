@@ -1,35 +1,4 @@
 services:
   bif-server:
     image: ghcr.io/schooleo/bif-server:${SERVER_IMAGE_TAG:-latest}
-    container_name: bif-server
     pull_policy: always
-    ports:
-      - "8080:8080"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-      PLACE_SEARCH_PROVIDER: ${PLACE_SEARCH_PROVIDER:-mongo}
-      TYPESENSE_ENABLED: ${TYPESENSE_ENABLED:-false}
-      TYPESENSE_PROTOCOL: http
-      TYPESENSE_HOST: typesense
-      TYPESENSE_PORT: 8108
-      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-dev-typesense-key}
-      TYPESENSE_BOOTSTRAP_REINDEX_ON_STARTUP: ${TYPESENSE_BOOTSTRAP_REINDEX_ON_STARTUP:-false}
-    restart: unless-stopped
-
-  typesense:
-    image: typesense/typesense:30.1
-    container_name: bif-typesense
-    profiles:
-      - typesense
-    restart: unless-stopped
-    ports:
-      - "8108:8108"
-    command: >
-      --data-dir /data
-      --api-key=${TYPESENSE_API_KEY:-dev-typesense-key}
-      --enable-cors
-    volumes:
-      - typesense_data:/data
-
-volumes:
-  typesense_data:

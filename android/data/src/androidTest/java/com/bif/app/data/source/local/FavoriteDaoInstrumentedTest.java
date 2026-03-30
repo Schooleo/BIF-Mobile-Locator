@@ -62,6 +62,71 @@ public class FavoriteDaoInstrumentedTest {
     }
 
     @Test
+    public void upsert_NewEntity_InsertsIntoDatabase() throws InterruptedException {
+        // Arrange
+        FavoriteEntity entity = new FavoriteEntity();
+        entity.id = "fav-upsert-new";
+        entity.name = "Brand New";
+
+        // Act
+        favoriteDao.upsert(entity);
+        FavoriteEntity result = favoriteDao.findById("fav-upsert-new");
+
+        // Assert
+        assertNotNull(result);
+        assertEquals("Brand New", result.name);
+    }
+
+    @Test
+    public void upsert_ExistingEntity_UpdatesDatabase() throws InterruptedException {
+        // Arrange
+        FavoriteEntity entity = new FavoriteEntity();
+        entity.id = "fav-upsert-exist";
+        entity.name = "Old Name";
+        favoriteDao.insert(entity);
+
+        FavoriteEntity updated = new FavoriteEntity();
+        updated.id = "fav-upsert-exist";
+        updated.name = "New Name";
+
+        // Act
+        favoriteDao.upsert(updated);
+        FavoriteEntity result = favoriteDao.findById("fav-upsert-exist");
+
+        // Assert
+        assertNotNull(result);
+        assertEquals("New Name", result.name);
+    }
+
+    @Test
+    public void getAll_ExcludesDeletedEntities() throws InterruptedException {
+        // Arrange
+        FavoriteEntity active = new FavoriteEntity();
+        active.id = "active-1";
+        active.name = "Active";
+        active.deleted = false;
+
+        FavoriteEntity deleted = new FavoriteEntity();
+        deleted.id = "deleted-1";
+        deleted.name = "Deleted";
+        deleted.deleted = true;
+
+        favoriteDao.insert(active);
+        favoriteDao.insert(deleted);
+
+        // Act
+        List<FavoriteEntity> result = LiveDataTestUtil.getOrAwaitValue(favoriteDao.getAll());
+
+        // Assert
+        assertEquals(1, result.size());
+        assertEquals("active-1", result.get(0).id);
+    }
+
+    private void assertNotNull(Object obj) {
+        org.junit.Assert.assertNotNull(obj);
+    }
+
+    @Test
     public void delete_ExistingEntity_RemovesItemFromDatabase() throws InterruptedException {
         // Arrange
         FavoriteEntity entity = new FavoriteEntity();
