@@ -45,6 +45,9 @@ public class ProfileSyncEntityHandler implements SyncEntityHandler {
             user.setServerVersion(newVersion);
             user.setLastModifiedBy(userId);
             User saved = userRepository.save(user);
+            if (saved == null) {
+                saved = user;
+            }
 
             ProfilePayload responsePayload = toPayload(saved);
             responsePayload.userId = userId;
@@ -77,6 +80,9 @@ public class ProfileSyncEntityHandler implements SyncEntityHandler {
         user.setServerVersion(newVersion);
         user.setLastModifiedBy(userId);
         User saved = userRepository.save(user);
+        if (saved == null) {
+            saved = user;
+        }
 
         ProfilePayload responsePayload = toPayload(saved);
         responsePayload.userId = userId;
