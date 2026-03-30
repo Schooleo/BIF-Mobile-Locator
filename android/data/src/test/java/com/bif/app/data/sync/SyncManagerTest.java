@@ -5,6 +5,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -215,7 +216,7 @@ public class SyncManagerTest {
 
         ArgumentCaptor<SyncQueueEntity> captor =
                 ArgumentCaptor.forClass(SyncQueueEntity.class);
-        verify(mockSyncQueueDao).enqueue(captor.capture());
+        verify(mockSyncQueueDao, timeout(1000)).enqueue(captor.capture());
 
         SyncQueueEntity saved = captor.getValue();
         assertEquals("place", saved.entityType);
@@ -237,7 +238,7 @@ public class SyncManagerTest {
 
         ArgumentCaptor<SyncQueueEntity> captor =
                 ArgumentCaptor.forClass(SyncQueueEntity.class);
-        verify(mockSyncQueueDao).enqueue(captor.capture());
+        verify(mockSyncQueueDao, timeout(1000)).enqueue(captor.capture());
 
         SyncQueueEntity saved = captor.getValue();
         assertNotNull(saved.payload);
