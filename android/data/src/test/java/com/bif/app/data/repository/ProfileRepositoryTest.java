@@ -132,8 +132,8 @@ public class ProfileRepositoryTest {
             assertEquals("UPDATE", queued.operation);
 
             verify(syncManager).syncIfOnline();
-            prefs.verify(() -> UserPreferences.saveUserProfile(context,
-                    "Alice", "alice@bif.com"));
+                prefs.verify(() -> UserPreferences.saveUserProfile(context,
+                    "user-123", "Alice", "alice@bif.com"));
 
             assertTrue(success[0]);
             assertFalse(failure[0]);

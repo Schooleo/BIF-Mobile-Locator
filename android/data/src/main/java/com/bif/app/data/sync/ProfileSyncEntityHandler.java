@@ -116,10 +116,14 @@ public class ProfileSyncEntityHandler implements SyncEntityHandler {
     }
 
     private void persistProfileToPreferences(ProfileDto payload) {
+        String userId = safe(payload.userId);
+        if (userId.isEmpty()) {
+            userId = UserPreferences.getUserId(appContext);
+        }
         String displayName = safe(payload.displayName);
         String email = safe(payload.email);
         if (!displayName.isEmpty() || !email.isEmpty()) {
-            UserPreferences.saveUserProfile(appContext, displayName, email);
+            UserPreferences.saveUserProfile(appContext, userId, displayName, email);
         }
     }
 

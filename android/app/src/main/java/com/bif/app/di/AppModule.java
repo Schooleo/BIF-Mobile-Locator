@@ -16,8 +16,6 @@ import com.bif.app.data.source.local.ProfileDao;
 import com.bif.app.data.source.local.SearchHistoryDao;
 import com.bif.app.data.source.local.SyncQueueDao;
 import com.bif.app.data.source.local.TripDao;
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationServices;
 
 import javax.inject.Singleton;
 
@@ -38,12 +36,6 @@ public class AppModule {
     @Singleton
     public ExecutorService provideExecutorService() {
         return Executors.newFixedThreadPool(4);
-    }
-
-    @Provides
-    @Singleton
-    public FusedLocationProviderClient provideLocationClient(@ApplicationContext Context context) {
-        return LocationServices.getFusedLocationProviderClient(context);
     }
 
     @Provides

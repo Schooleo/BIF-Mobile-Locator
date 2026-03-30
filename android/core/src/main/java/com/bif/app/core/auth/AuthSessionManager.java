@@ -73,7 +73,7 @@ public class AuthSessionManager {
         }
 
         if (!username.isBlank() || !email.isBlank()) {
-            UserPreferences.saveUserProfile(context, username, email);
+            UserPreferences.saveUserProfile(context, userId, username, email);
         }
     }
 
