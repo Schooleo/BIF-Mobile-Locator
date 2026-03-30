@@ -29,7 +29,7 @@ import com.bif.app.data.source.local.entity.TripStopEntity;
         ChatMessageEntity.class,
         TripPlanEntity.class,
         TripStopEntity.class
-    }, version = 14, exportSchema = false)
+    }, version = 15, exportSchema = false)
 @TypeConverters({FriendshipStatusConverter.class})
 public abstract class AppDatabase extends RoomDatabase {
     public abstract FriendDao friendDao();

@@ -16,6 +16,8 @@ import com.bif.app.data.source.local.SearchHistoryDao;
 import com.bif.app.data.source.local.SocialActionQueueDao;
 import com.bif.app.data.source.local.SyncQueueDao;
 import com.bif.app.data.source.local.TripDao;
+import com.bif.app.domain.repository.IFriendshipRepository;
+import com.bif.app.domain.repository.IGroupRepository;
 
 import javax.inject.Singleton;
 
@@ -109,13 +111,22 @@ public class AppModule {
     @Singleton
     public LocalSessionDataCleaner provideLocalSessionDataCleaner(
             AppDatabase appDatabase,
+            IFriendshipRepository friendshipRepository,
+            IGroupRepository groupRepository,
             @ApplicationContext Context context) {
         return () -> {
             ExecutorService executor = Executors.newSingleThreadExecutor();
             executor.execute(() -> {
                 try {
+                    friendshipRepository.clearCache();
+                    groupRepository.clearCache();
                     appDatabase.clearAllTables();
                     context.getSharedPreferences("SYNC_PREF", Context.MODE_PRIVATE)
+                            .edit()
+                            .clear()
+                            .apply();
+                    context.getSharedPreferences("SOCIAL_GROUP_CACHE",
+                                    Context.MODE_PRIVATE)
                             .edit()
                             .clear()
                             .apply();

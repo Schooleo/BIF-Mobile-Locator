@@ -185,17 +185,28 @@ public class FriendshipRepository implements IFriendshipRepository {
             return;
         }
 
-        String normalizedReceiverId = receiverId.trim();
+        String receiverLookup = receiverId.trim();
+        boolean online = isOnline();
+        String receiverIdForApi = receiverLookup;
+        if (online) {
+            String resolvedReceiverId = resolveReceiverIdStrict(receiverLookup);
+            if (isBlank(resolvedReceiverId)) {
+                throw new IllegalStateException("USER_NOT_FOUND");
+            }
+            receiverIdForApi = resolvedReceiverId;
+        }
+
+        String localReceiverValue = online ? receiverIdForApi : receiverLookup;
         String currentUserId = resolveCurrentUserId();
         if (isBlank(currentUserId)) {
             throw new IllegalStateException("AUTH_USER_UNKNOWN");
         }
-        if (currentUserId.equalsIgnoreCase(normalizedReceiverId)) {
+        if (currentUserId.equalsIgnoreCase(receiverIdForApi)) {
             throw new IllegalStateException("SELF_REQUEST");
         }
 
         String requestKey = buildRequestKey(currentUserId,
-                normalizedReceiverId);
+                localReceiverValue);
         synchronized (requestLock) {
             if (inFlightRequestKeys.contains(requestKey)) {
                 throw new IllegalStateException("REQUEST_PENDING");
@@ -207,10 +218,10 @@ public class FriendshipRepository implements IFriendshipRepository {
         long now = System.currentTimeMillis();
         try {
             reserved = friendshipDao.reservePendingIfAbsent(
-                    currentUserId.trim(), normalizedReceiverId, now);
+                    currentUserId.trim(), localReceiverValue, now);
             if (!reserved) {
                 FriendshipEntity existing = friendshipDao.findBetweenUsers(
-                        currentUserId, normalizedReceiverId);
+                        currentUserId, localReceiverValue);
                 if (existing != null
                         && existing.status == FriendshipStatus.PENDING) {
                     throw new IllegalStateException("REQUEST_PENDING");
@@ -221,12 +232,12 @@ public class FriendshipRepository implements IFriendshipRepository {
                 }
             }
 
-            if (hasAcceptedFriend(normalizedReceiverId)) {
+            if (hasAcceptedFriend(receiverIdForApi)) {
                 throw new IllegalStateException("ALREADY_FRIENDS");
             }
 
             FriendshipEntity existing = friendshipDao.findBetweenUsers(
-                    currentUserId, normalizedReceiverId);
+                    currentUserId, localReceiverValue);
             if (existing != null
                     && existing.status == FriendshipStatus.PENDING
                     && !currentUserId.trim().equalsIgnoreCase(
@@ -234,25 +245,32 @@ public class FriendshipRepository implements IFriendshipRepository {
                 throw new IllegalStateException("REQUEST_PENDING");
             }
 
-            if (isOnline()) {
+            if (online) {
                 CreateFriendRequestDto request = new CreateFriendRequestDto();
-                request.receiverId = normalizedReceiverId;
+                request.receiverId = receiverIdForApi;
                 Response<FriendshipApiModel> response = restApiService
                         .sendFriendRequest(request).execute();
                 if (!response.isSuccessful()) {
                     if (reserved) {
                         friendshipDao.rollbackReservedPending(
                                 currentUserId.trim(),
-                                normalizedReceiverId);
+                                localReceiverValue);
                     }
                     throw new IllegalStateException("SEND_FAILED");
                 }
+
+                if (!receiverLookup.equalsIgnoreCase(receiverIdForApi)) {
+                    friendshipDao.remapPendingReceiver(currentUserId,
+                            receiverLookup, receiverIdForApi,
+                            System.currentTimeMillis());
+                }
+
                 refreshRequestCachesSync(false);
                 return;
             }
 
             enqueueAction(ACTION_SEND_REQUEST,
-                    new FriendRequestQueuePayload(normalizedReceiverId));
+                    new FriendRequestQueuePayload(receiverLookup));
             loadRequestCachesFromLocal();
         } catch (IllegalStateException illegalState) {
             if (reserved
@@ -261,12 +279,12 @@ public class FriendshipRepository implements IFriendshipRepository {
                     || "SELF_REQUEST".equals(illegalState.getMessage())
                     || "SEND_FAILED".equals(illegalState.getMessage()))) {
                 friendshipDao.rollbackReservedPending(
-                        currentUserId.trim(), normalizedReceiverId);
+                        currentUserId.trim(), localReceiverValue);
             }
             throw illegalState;
         } catch (Exception ignored) {
             enqueueAction(ACTION_SEND_REQUEST,
-                    new FriendRequestQueuePayload(normalizedReceiverId));
+                    new FriendRequestQueuePayload(receiverLookup));
             loadRequestCachesFromLocal();
         } finally {
             synchronized (requestLock) {
@@ -329,6 +347,19 @@ public class FriendshipRepository implements IFriendshipRepository {
     @Override
     public void refreshFriends() {
         executorService.execute(() -> refreshFriendsSync(true));
+    }
+
+    @Override
+    public void clearCache() {
+        executorService.execute(() -> {
+            cachedUserId = null;
+            synchronized (requestLock) {
+                inFlightRequestKeys.clear();
+            }
+            pendingRequestsLiveData.postValue(Collections.emptyList());
+            outgoingRequestsLiveData.postValue(Collections.emptyList());
+            friendsLiveData.postValue(Collections.emptyList());
+        });
     }
 
     private void refreshRequestCachesSync(boolean replayQueue) {
@@ -502,9 +533,14 @@ public class FriendshipRepository implements IFriendshipRepository {
             return;
         }
 
-        socialActionQueueDao.resetInFlight();
+        String currentUserId = resolveCurrentUserId();
+        if (isBlank(currentUserId)) {
+            return;
+        }
+
+        socialActionQueueDao.resetInFlight(currentUserId);
         List<SocialActionQueueEntity> pending = socialActionQueueDao
-                .getPendingByScope(QUEUE_SCOPE);
+                .getPendingByScope(QUEUE_SCOPE, currentUserId);
         if (pending == null || pending.isEmpty()) {
             return;
         }
@@ -537,11 +573,33 @@ public class FriendshipRepository implements IFriendshipRepository {
             if (ACTION_SEND_REQUEST.equals(entry.actionType)) {
                 FriendRequestQueuePayload payload = gson.fromJson(
                         entry.payload, FriendRequestQueuePayload.class);
-                if (payload == null || isBlank(payload.receiverId)) {
-                    return true;
+                String receiverLookup = extractReceiverLookup(payload);
+                if (payload == null || isBlank(receiverLookup)) {
+                    return false;
                 }
+
+                String currentUserId = resolveCurrentUserId();
+                String resolvedReceiverId = resolveReceiverIdStrict(
+                        receiverLookup);
+                if (isBlank(resolvedReceiverId)) {
+                    return false;
+                }
+
+                if (!isBlank(currentUserId)
+                        && !receiverLookup.equalsIgnoreCase(
+                        resolvedReceiverId)) {
+                    friendshipDao.remapPendingReceiver(currentUserId,
+                            receiverLookup, resolvedReceiverId,
+                            System.currentTimeMillis());
+                }
+
+                payload.receiverUsername = receiverLookup;
+                payload.receiverId = resolvedReceiverId;
+                entry.payload = gson.toJson(payload);
+                socialActionQueueDao.update(entry);
+
                 CreateFriendRequestDto request = new CreateFriendRequestDto();
-                request.receiverId = payload.receiverId;
+                request.receiverId = resolvedReceiverId;
                 Response<FriendshipApiModel> response = restApiService
                         .sendFriendRequest(request).execute();
                 return response.isSuccessful();
@@ -551,7 +609,7 @@ public class FriendshipRepository implements IFriendshipRepository {
                 FriendIdQueuePayload payload = gson.fromJson(
                         entry.payload, FriendIdQueuePayload.class);
                 if (payload == null || isBlank(payload.friendId)) {
-                    return true;
+                    return false;
                 }
                 Response<Void> response = restApiService
                         .unfriend(payload.friendId).execute();
@@ -562,7 +620,7 @@ public class FriendshipRepository implements IFriendshipRepository {
                 RequestDecisionQueuePayload payload = gson.fromJson(
                         entry.payload, RequestDecisionQueuePayload.class);
                 if (payload == null || isBlank(payload.requestId)) {
-                    return true;
+                    return false;
                 }
                 Response<FriendshipApiModel> response = restApiService
                         .acceptFriendRequest(payload.requestId).execute();
@@ -573,7 +631,7 @@ public class FriendshipRepository implements IFriendshipRepository {
                 RequestDecisionQueuePayload payload = gson.fromJson(
                         entry.payload, RequestDecisionQueuePayload.class);
                 if (payload == null || isBlank(payload.requestId)) {
-                    return true;
+                    return false;
                 }
                 Response<FriendshipApiModel> response = restApiService
                         .rejectFriendRequest(payload.requestId).execute();
@@ -591,7 +649,13 @@ public class FriendshipRepository implements IFriendshipRepository {
             return;
         }
 
+        String currentUserId = resolveCurrentUserId();
+        if (isBlank(currentUserId)) {
+            return;
+        }
+
         SocialActionQueueEntity entry = new SocialActionQueueEntity();
+        entry.userId = currentUserId;
         entry.scope = QUEUE_SCOPE;
         entry.actionType = actionType;
         entry.payload = payload == null ? null : gson.toJson(payload);
@@ -719,6 +783,71 @@ public class FriendshipRepository implements IFriendshipRepository {
         }
     }
 
+    private String resolveReceiverIdStrict(String query) {
+        if (isBlank(query)) {
+            return null;
+        }
+
+        String normalizedQuery = query.trim().toLowerCase(Locale.ROOT);
+        if (isOnline()) {
+            try {
+                Response<List<UserApiModel>> response = restApiService.getUsers()
+                        .execute();
+                if (response.isSuccessful() && response.body() != null) {
+                    for (UserApiModel user : response.body()) {
+                        if (user == null || isBlank(user.id)) {
+                            continue;
+                        }
+
+                        String userId = user.id.trim();
+                        String userName = isBlank(user.name)
+                                ? "" : user.name.trim();
+                        if (userId.toLowerCase(Locale.ROOT)
+                                .equals(normalizedQuery)
+                                || userName.toLowerCase(Locale.ROOT)
+                                .equals(normalizedQuery)) {
+                            return userId;
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+                // Fall through to local cache lookup.
+            }
+        }
+
+        List<FriendEntity> localFriends = friendDao.getAllFriendsSync();
+        if (localFriends != null) {
+            for (FriendEntity friend : localFriends) {
+                if (friend == null || isBlank(friend.serverUserId)) {
+                    continue;
+                }
+                if (friend.serverUserId.trim().toLowerCase(Locale.ROOT)
+                        .equals(normalizedQuery)
+                        || (!isBlank(friend.name)
+                        && friend.name.trim().toLowerCase(Locale.ROOT)
+                        .equals(normalizedQuery))) {
+                    return friend.serverUserId.trim();
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private String extractReceiverLookup(FriendRequestQueuePayload payload) {
+        if (payload == null) {
+            return null;
+        }
+
+        if (!isBlank(payload.receiverUsername)) {
+            return payload.receiverUsername.trim();
+        }
+        if (!isBlank(payload.receiverId)) {
+            return payload.receiverId.trim();
+        }
+        return null;
+    }
+
     private boolean hasAcceptedFriend(String targetUserId) {
         List<FriendEntity> currentFriends = friendDao.getAllFriendsSync();
         if (currentFriends == null || currentFriends.isEmpty()) {
@@ -761,26 +890,37 @@ public class FriendshipRepository implements IFriendshipRepository {
         return value == null || value.trim().isEmpty();
     }
 
-    private static class FriendRequestQueuePayload {
-        private final String receiverId;
+    public static class FriendRequestQueuePayload {
+        public String receiverId;
+        public String receiverUsername;
 
-        FriendRequestQueuePayload(String receiverId) {
-            this.receiverId = receiverId;
+        public FriendRequestQueuePayload() {
+        }
+
+        public FriendRequestQueuePayload(String receiverUsername) {
+            this.receiverUsername = receiverUsername;
+            this.receiverId = receiverUsername;
         }
     }
 
-    private static class FriendIdQueuePayload {
-        private final String friendId;
+    public static class FriendIdQueuePayload {
+        public String friendId;
 
-        FriendIdQueuePayload(String friendId) {
+        public FriendIdQueuePayload() {
+        }
+
+        public FriendIdQueuePayload(String friendId) {
             this.friendId = friendId;
         }
     }
 
-    private static class RequestDecisionQueuePayload {
-        private final String requestId;
+    public static class RequestDecisionQueuePayload {
+        public String requestId;
 
-        RequestDecisionQueuePayload(String requestId) {
+        public RequestDecisionQueuePayload() {
+        }
+
+        public RequestDecisionQueuePayload(String requestId) {
             this.requestId = requestId;
         }
     }

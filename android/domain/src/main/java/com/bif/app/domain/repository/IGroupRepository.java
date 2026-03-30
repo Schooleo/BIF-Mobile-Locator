@@ -34,4 +34,7 @@ public interface IGroupRepository {
     void leaveGroup(Group group);
     void disbandGroup(Group group);
     void refreshGroups();
+
+    default void clearCache() {
+    }
 }

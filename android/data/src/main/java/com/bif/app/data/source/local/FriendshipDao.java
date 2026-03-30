@@ -47,6 +47,12 @@ public interface FriendshipDao {
     @Query("DELETE FROM friendships WHERE ((requesterId = :userA AND receiverId = :userB) OR (requesterId = :userB AND receiverId = :userA))")
     void deleteBetweenUsers(String userA, String userB);
 
+        @Query("DELETE FROM friendships WHERE requesterId = :requesterId "
+            + "AND receiverId = :receiverId AND status = :status")
+        void deleteByRequesterAndReceiverAndStatus(String requesterId,
+                               String receiverId,
+                               FriendshipStatus status);
+
     @Transaction
     default void replaceAll(List<FriendshipEntity> friendships) {
         clearAll();
@@ -74,5 +80,48 @@ public interface FriendshipDao {
     @Transaction
     default void rollbackReservedPending(String requesterId, String receiverId) {
         deleteBetweenUsers(requesterId, receiverId);
+    }
+
+    @Transaction
+    default void remapPendingReceiver(String requesterId,
+                                      String oldReceiver,
+                                      String newReceiver,
+                                      long nowMillis) {
+        if (requesterId == null || oldReceiver == null || newReceiver == null) {
+            return;
+        }
+
+        String normalizedRequester = requesterId.trim();
+        String normalizedOld = oldReceiver.trim();
+        String normalizedNew = newReceiver.trim();
+
+        if (normalizedRequester.isEmpty()
+                || normalizedOld.isEmpty()
+                || normalizedNew.isEmpty()
+                || normalizedOld.equalsIgnoreCase(normalizedNew)) {
+            return;
+        }
+
+        FriendshipEntity target = findBetweenUsers(normalizedRequester,
+                normalizedOld);
+        if (target == null
+                || target.status != FriendshipStatus.PENDING
+                || target.requesterId == null
+                || !normalizedRequester.equalsIgnoreCase(
+                target.requesterId.trim())) {
+            return;
+        }
+
+        FriendshipEntity alreadyResolved = findBetweenUsers(normalizedRequester,
+                normalizedNew);
+        if (alreadyResolved != null) {
+            deleteByRequesterAndReceiverAndStatus(normalizedRequester,
+                    normalizedOld, FriendshipStatus.PENDING);
+            return;
+        }
+
+        target.receiverId = normalizedNew;
+        target.updatedAt = nowMillis;
+        update(target);
     }
 }

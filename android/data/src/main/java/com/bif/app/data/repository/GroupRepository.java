@@ -15,6 +15,7 @@ import com.bif.app.core.network.dto.UpdateGroupRequestDto;
 import com.bif.app.core.network.dto.UpdateMemberRoleRequestDto;
 import com.bif.app.core.network.dto.UserApiModel;
 import com.bif.app.core.network.dto.auth.AuthStateResponse;
+import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.GroupMapper;
 import com.bif.app.data.source.local.FriendDao;
 import com.bif.app.data.source.local.GroupDao;
@@ -56,11 +57,16 @@ public class GroupRepository implements IGroupRepository {
     private static final String ACTION_REMOVE_MEMBER = "REMOVE_MEMBER";
     private static final String ACTION_UPDATE_MEMBER_ROLE = "UPDATE_MEMBER_ROLE";
     private static final String ACTION_DELETE_GROUP = "DELETE_GROUP";
+    private static final String FRIENDSHIP_SCOPE = "FRIENDSHIP";
     private static final int MAX_RETRY_COUNT = 5;
+    private static final long FRIENDSHIP_DEPENDENCY_WAIT_MS = 10_000L;
+    private static final long FRIENDSHIP_DEPENDENCY_POLL_MS = 200L;
 
     private static final String CACHE_PREF = "SOCIAL_GROUP_CACHE";
-    private static final String CACHE_KEY_GROUPS = "groups_json";
+    private static final String CACHE_KEY_GROUPS_PREFIX = "groups_json_";
+    private static final String CACHE_KEY_GROUPS_LEGACY = "groups_json";
 
+    private final Context appContext;
     private final RestApiService restApiService;
     private final GroupDao groupDao;
     private final GroupMapper groupMapper;
@@ -77,8 +83,6 @@ public class GroupRepository implements IGroupRepository {
     private final Map<Integer, String> groupServerIdByLocalId;
     private final SharedPreferences cachePrefs;
 
-    private volatile String cachedActorId;
-
     @Inject
     public GroupRepository(RestApiService restApiService,
                            GroupDao groupDao,
@@ -87,6 +91,7 @@ public class GroupRepository implements IGroupRepository {
                            SocialActionQueueDao socialActionQueueDao,
                            NetworkMonitor networkMonitor,
                            @ApplicationContext Context appContext) {
+                this.appContext = appContext;
         this.restApiService = restApiService;
         this.groupDao = groupDao;
         this.groupMapper = groupMapper;
@@ -119,6 +124,7 @@ public class GroupRepository implements IGroupRepository {
 
     // Legacy constructor kept for existing local-data unit tests.
     public GroupRepository(GroupDao groupDao, GroupMapper groupMapper) {
+        this.appContext = null;
         this.restApiService = null;
         this.groupDao = groupDao;
         this.groupMapper = groupMapper;
@@ -430,6 +436,29 @@ public class GroupRepository implements IGroupRepository {
         refreshGroupsAsync();
     }
 
+    @Override
+    public void clearCache() {
+        executorService.execute(() -> {
+            usersById.clear();
+            userServerIdByLocalId.clear();
+            groupServerIdByLocalId.clear();
+            groupsLiveData.postValue(Collections.emptyList());
+
+            if (cachePrefs == null) {
+                return;
+            }
+
+            Map<String, ?> allEntries = cachePrefs.getAll();
+            SharedPreferences.Editor editor = cachePrefs.edit();
+            for (String key : allEntries.keySet()) {
+                if (key != null && key.startsWith(CACHE_KEY_GROUPS_PREFIX)) {
+                    editor.remove(key);
+                }
+            }
+            editor.remove(CACHE_KEY_GROUPS_LEGACY).apply();
+        });
+    }
+
     private void deleteGroupLocallyAndQueue(Group group) {
         executorService.execute(() -> {
             if (group == null || isBlank(group.getServerId())) {
@@ -497,14 +526,27 @@ public class GroupRepository implements IGroupRepository {
             return;
         }
 
-        socialActionQueueDao.resetInFlight();
+        String actorId = resolveActorId();
+        if (isBlank(actorId)) {
+            return;
+        }
+
+        socialActionQueueDao.resetInFlight(actorId);
+        if (!waitForFriendshipQueueDrain(actorId)) {
+            return;
+        }
+
         List<SocialActionQueueEntity> pending = socialActionQueueDao
-                .getPendingByScope(QUEUE_SCOPE);
+                .getPendingByScope(QUEUE_SCOPE, actorId);
         if (pending == null || pending.isEmpty()) {
             return;
         }
 
         for (SocialActionQueueEntity entry : pending) {
+            if (!waitForFriendshipQueueDrain(actorId)) {
+                break;
+            }
+
             entry.status = "IN_FLIGHT";
             socialActionQueueDao.update(entry);
 
@@ -673,7 +715,13 @@ public class GroupRepository implements IGroupRepository {
             return;
         }
 
+        String actorId = resolveActorId();
+        if (isBlank(actorId)) {
+            return;
+        }
+
         SocialActionQueueEntity entry = new SocialActionQueueEntity();
+        entry.userId = actorId;
         entry.scope = QUEUE_SCOPE;
         entry.actionType = actionType;
         entry.payload = payload == null ? null : gson.toJson(payload);
@@ -706,6 +754,30 @@ public class GroupRepository implements IGroupRepository {
             }
         } catch (Exception ignored) {
         }
+    }
+
+    private boolean waitForFriendshipQueueDrain(String actorId) {
+        if (socialActionQueueDao == null || isBlank(actorId)) {
+            return true;
+        }
+
+        long deadline = System.currentTimeMillis() + FRIENDSHIP_DEPENDENCY_WAIT_MS;
+        while (System.currentTimeMillis() < deadline) {
+            if (!socialActionQueueDao.hasUnresolvedByScope(FRIENDSHIP_SCOPE,
+                    actorId)) {
+                return true;
+            }
+
+            try {
+                Thread.sleep(FRIENDSHIP_DEPENDENCY_POLL_MS);
+            } catch (InterruptedException interruptedException) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+
+        return !socialActionQueueDao.hasUnresolvedByScope(FRIENDSHIP_SCOPE,
+                actorId);
     }
 
     private List<Group> mapGroups(List<GroupApiModel> groups,
@@ -1022,8 +1094,13 @@ public class GroupRepository implements IGroupRepository {
             return;
         }
 
+        String actorId = resolveActorId();
+        if (isBlank(actorId)) {
+            return;
+        }
+
         List<SocialActionQueueEntity> pending = socialActionQueueDao
-                .getPendingByScope(QUEUE_SCOPE);
+                .getPendingByScope(QUEUE_SCOPE, actorId);
         if (pending == null || pending.isEmpty()) {
             return;
         }
@@ -1083,7 +1160,12 @@ public class GroupRepository implements IGroupRepository {
                     : new ArrayList<>();
         }
 
-        String raw = cachePrefs.getString(CACHE_KEY_GROUPS, null);
+        String cacheKey = resolveGroupsCacheKey();
+        if (isBlank(cacheKey)) {
+            return new ArrayList<>();
+        }
+
+        String raw = cachePrefs.getString(cacheKey, null);
         if (isBlank(raw)) {
             return new ArrayList<>();
         }
@@ -1100,8 +1182,13 @@ public class GroupRepository implements IGroupRepository {
 
     private void persistCachedGroups(List<Group> groups) {
         if (cachePrefs != null) {
+            String cacheKey = resolveGroupsCacheKey();
+            if (isBlank(cacheKey)) {
+                return;
+            }
+
             cachePrefs.edit()
-                    .putString(CACHE_KEY_GROUPS, gson.toJson(groups))
+                    .putString(cacheKey, gson.toJson(groups))
                     .apply();
         }
     }
@@ -1203,8 +1290,9 @@ public class GroupRepository implements IGroupRepository {
     }
 
     private String resolveActorId() {
-        if (!isBlank(cachedActorId)) {
-            return cachedActorId;
+        String prefUserId = resolveUserIdFromPreferences();
+        if (!isBlank(prefUserId)) {
+            return prefUserId;
         }
 
         if (!isOnline()) {
@@ -1219,11 +1307,35 @@ public class GroupRepository implements IGroupRepository {
                     || isBlank(response.body().userId)) {
                 return null;
             }
-            cachedActorId = response.body().userId;
-            return cachedActorId;
+            return response.body().userId.trim();
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private String resolveUserIdFromPreferences() {
+        if (appContext == null) {
+            return null;
+        }
+
+        String userId = UserPreferences.getId(appContext);
+        if (isBlank(userId)) {
+            userId = UserPreferences.getUsername(appContext);
+        }
+
+        if (isBlank(userId)) {
+            return null;
+        }
+
+        return userId.trim();
+    }
+
+    private String resolveGroupsCacheKey() {
+        String userId = resolveUserIdFromPreferences();
+        if (isBlank(userId)) {
+            return null;
+        }
+        return CACHE_KEY_GROUPS_PREFIX + userId;
     }
 
     private boolean sameGroup(Group left, Group right) {

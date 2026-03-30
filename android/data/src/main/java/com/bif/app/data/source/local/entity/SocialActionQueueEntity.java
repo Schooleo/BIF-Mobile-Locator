@@ -8,6 +8,7 @@ public class SocialActionQueueEntity {
     @PrimaryKey(autoGenerate = true)
     public int id;
 
+    public String userId;
     public String scope;
     public String actionType;
     public String payload;

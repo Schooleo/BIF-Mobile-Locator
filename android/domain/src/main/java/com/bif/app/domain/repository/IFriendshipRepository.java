@@ -21,4 +21,7 @@ public interface IFriendshipRepository {
     void refreshPendingRequests();
     void refreshOutgoingRequests();
     void refreshFriends();
+
+    default void clearCache() {
+    }
 }
