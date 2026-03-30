@@ -27,9 +27,13 @@ public class MyApplication extends Application implements Configuration.Provider
     public void onCreate() {
         super.onCreate();
 
-        String username = UserPreferences.getUsername(this);
-        if (username != null && !username.trim().isEmpty()) {
-            syncManager.setUserContext(username, null);
+        String userId = UserPreferences.getId(this);
+        if (userId.trim().isEmpty()) {
+            userId = UserPreferences.getUsername(this);
+        }
+
+        if (!userId.trim().isEmpty()) {
+            syncManager.setUserContext(userId, null);
         }
 
         SyncWorker.schedule(this);
