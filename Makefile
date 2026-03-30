@@ -21,13 +21,13 @@ PROFILES ?=
 COMPOSE_PROFILES := $(addprefix --profile ,$(PROFILES))
 
 # All Profiles for Global Shutdown/Logs
-ALL_PROFILES := --profile ollama --profile typesense --profile tailscale --profile db --profile ai --profile logs
-PROD_DEFAULT_PROFILES := --profile ollama --profile typesense --profile tailscale
+ALL_PROFILES := --profile ollama --profile osrm --profile typesense --profile tailscale --profile db --profile ai --profile logs
+PROD_DEFAULT_PROFILES := --profile ollama --profile osrm --profile typesense --profile tailscale
 DEBUG_PROFILES := --profile db --profile ai --profile logs
 
 .DEFAULT_GOAL := help
 
-.PHONY: help env network-create up up-debug prod build down down-debug destroy logs ps shell
+.PHONY: help env network-create up up-debug prod build down down-debug destroy logs ps shell init-maps
 
 help:
 	@echo ========================================================
@@ -40,6 +40,9 @@ help:
 	@echo   up-debug     - Start DEBUG tools only (mongo-express, Open-WebUI, Dozzle)
 	@echo   up-prod      - Start demo-production stack (no deployed server images)
 	@echo   prod         - Start full production stack (images from docker-compose.image.yml)
+	@echo.
+	@echo SETUP COMMANDS:
+	@echo   init-maps    - Download Overture places + OSM data and compile OSRM routing graph
 	@echo.
 	@echo SHUTDOWN COMMANDS:
 	@echo   down         - Stop CORE services (keeps volumes)
@@ -57,6 +60,7 @@ help:
 	@echo COMMON EXAMPLES:
 	@echo   make env
 	@echo   make network-create
+	@echo   make init-maps
 	@echo   make up PROFILES="ollama typesense"
 	@echo   make up-debug PROFILES="db ai logs"
 	@echo   make logs SERVICE=bif-server
@@ -78,6 +82,10 @@ network-create:
 up: network-create env
 	@echo Starting core application...
 	$(DC) $(DC_ROOT_FILES) $(COMPOSE_PROFILES) up -d --build
+
+init-map: env
+	@echo Downloading map data and compiling OSRM routing graph...
+	@bash init-scripts/init-map-data.sh
 
 up-debug: network-create env
 	@echo Starting debug tools only...
