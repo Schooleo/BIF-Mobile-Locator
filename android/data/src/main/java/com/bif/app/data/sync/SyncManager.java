@@ -9,6 +9,9 @@ import com.bif.app.core.network.dto.SyncChangeDto;
 import com.bif.app.core.network.dto.SyncRequestDto;
 import com.bif.app.core.network.dto.SyncResponseDto;
 import com.bif.app.data.source.local.ChatMessageDao;
+import com.bif.app.data.source.local.FriendDao;
+import com.bif.app.data.source.local.FriendshipDao;
+import com.bif.app.data.source.local.GroupDao;
 import com.bif.app.data.source.local.PlaceDao;
 import com.bif.app.data.source.local.SyncQueueDao;
 import com.bif.app.data.source.local.TripDao;
@@ -56,6 +59,9 @@ public class SyncManager {
                        PlaceDao placeDao,
                        TripDao tripDao,
                        ChatMessageDao chatMessageDao,
+                       GroupDao groupDao,
+                       FriendDao friendDao,
+                       FriendshipDao friendshipDao,
                        NetworkMonitor networkMonitor,
                        @ApplicationContext Context appContext) {
         this.restApiService = restApiService;
@@ -70,6 +76,9 @@ public class SyncManager {
         registerHandler(new TripSyncEntityHandler(tripDao, gson));
         registerHandler(new TripStopSyncEntityHandler(tripDao, gson));
         registerHandler(new ChatMessageSyncEntityHandler(chatMessageDao, gson));
+        registerHandler(new GroupSyncEntityHandler(groupDao, gson));
+        registerHandler(new FriendshipSyncEntityHandler(friendshipDao,
+            friendDao, gson));
         loadPersistedSyncState();
     }
 
