@@ -38,10 +38,12 @@ public class PlaceSearchIndexSyncServiceDefaultTest {
     void defaultEnsureCollectionExists_noop() {
         PlaceSearchIndexSyncService svc = new PlaceSearchIndexSyncService() {
             @Override
-            public void upsert(Place place) {}
+            public void upsert(Place place) {
+            }
 
             @Override
-            public void deleteById(String placeId) {}
+            public void deleteById(String placeId) {
+            }
         };
 
         // ensureCollectionExists default is a no-op; calling should not throw

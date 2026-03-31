@@ -3,6 +3,7 @@ package com.bif.server.features.search.services;
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.search.config.TypesenseProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -31,7 +32,8 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
-    public TypesensePlaceIndexSyncService(TypesenseProperties typesenseProperties,
+        @Autowired
+        public TypesensePlaceIndexSyncService(TypesenseProperties typesenseProperties,
             ObjectMapper objectMapper) {
         this.typesenseProperties = typesenseProperties;
         this.objectMapper = objectMapper;
@@ -40,6 +42,18 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
                         typesenseProperties.getConnectTimeoutMs()))
                 .build();
     }
+
+        // Constructor overload for tests to inject a custom HttpClient
+        TypesensePlaceIndexSyncService(TypesenseProperties typesenseProperties,
+                       ObjectMapper objectMapper,
+                       HttpClient httpClient) {
+        this.typesenseProperties = typesenseProperties;
+        this.objectMapper = objectMapper;
+        this.httpClient = httpClient != null ? httpClient : HttpClient.newBuilder()
+            .connectTimeout(Duration.ofMillis(
+                typesenseProperties.getConnectTimeoutMs()))
+            .build();
+        }
 
     @Override
     public void upsert(Place place) {

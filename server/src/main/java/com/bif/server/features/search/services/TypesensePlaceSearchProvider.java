@@ -5,6 +5,7 @@ import com.bif.server.features.place.models.Place;
 import com.bif.server.features.search.config.TypesenseProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -31,8 +32,9 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
-    public TypesensePlaceSearchProvider(TypesenseProperties typesenseProperties,
-                                        ObjectMapper objectMapper) {
+        @Autowired
+        public TypesensePlaceSearchProvider(TypesenseProperties typesenseProperties,
+                        ObjectMapper objectMapper) {
         this.typesenseProperties = typesenseProperties;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
@@ -40,6 +42,19 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
                         typesenseProperties.getConnectTimeoutMs()))
                 .build();
     }
+
+
+        // Constructor overload for tests to inject a custom HttpClient
+        TypesensePlaceSearchProvider(TypesenseProperties typesenseProperties,
+                     ObjectMapper objectMapper,
+                     HttpClient httpClient) {
+        this.typesenseProperties = typesenseProperties;
+        this.objectMapper = objectMapper;
+        this.httpClient = httpClient != null ? httpClient : HttpClient.newBuilder()
+            .connectTimeout(Duration.ofMillis(
+                typesenseProperties.getConnectTimeoutMs()))
+            .build();
+        }
 
     @Override
     public List<Place> search(String query) {
