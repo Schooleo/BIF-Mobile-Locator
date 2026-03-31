@@ -130,6 +130,21 @@ services:
       retries: 10
     restart: on-failure
 
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: bif-ollama-init
+    profiles:
+      - ollama
+    depends_on:
+      ollama:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      OLLAMA_HOST: ${OLLAMA_BASE_URL:-http://ollama:11434}
+    entrypoint: /bin/sh
+    command: -c "ollama pull ${OLLAMA_MODEL:-llama3.1}"
+
 volumes:
   mongo_data:
   osrm_data:
