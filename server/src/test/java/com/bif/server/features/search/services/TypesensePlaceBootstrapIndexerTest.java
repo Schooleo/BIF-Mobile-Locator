@@ -10,6 +10,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,7 +38,7 @@ class TypesensePlaceBootstrapIndexerTest {
         indexer.run(null);
 
         verify(placeRepository, never()).findByDeletedFalse();
-        verify(placeSearchIndexSyncService, never()).upsert(org.mockito.ArgumentMatchers.any());
+        verify(placeSearchIndexSyncService, never()).batchUpsert(anyList());
     }
 
     @Test
@@ -54,7 +55,7 @@ class TypesensePlaceBootstrapIndexerTest {
         indexer.run(null);
 
         verify(placeRepository, never()).findByDeletedFalse();
-        verify(placeSearchIndexSyncService, never()).upsert(org.mockito.ArgumentMatchers.any());
+        verify(placeSearchIndexSyncService, never()).batchUpsert(anyList());
     }
 
     @Test
@@ -68,7 +69,9 @@ class TypesensePlaceBootstrapIndexerTest {
         Place p2 = new Place();
         p2.setId("p2");
 
-        when(placeRepository.findByDeletedFalse()).thenReturn(List.of(p1, p2));
+        List<Place> places = List.of(p1, p2);
+        when(placeRepository.findByDeletedFalse()).thenReturn(places);
+        when(placeSearchIndexSyncService.batchUpsert(places)).thenReturn(2);
 
         TypesensePlaceBootstrapIndexer indexer = new TypesensePlaceBootstrapIndexer(
                 properties,
@@ -77,8 +80,9 @@ class TypesensePlaceBootstrapIndexerTest {
 
         indexer.run(null);
 
+        verify(placeSearchIndexSyncService).ensureCollectionExists();
         verify(placeRepository).findByDeletedFalse();
-        verify(placeSearchIndexSyncService).upsert(p1);
-        verify(placeSearchIndexSyncService).upsert(p2);
+        verify(placeSearchIndexSyncService).batchUpsert(places);
     }
 }
+
