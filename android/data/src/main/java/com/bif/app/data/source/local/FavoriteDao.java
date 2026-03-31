@@ -14,14 +14,20 @@ import java.util.List;
 
 @Dao
 public interface FavoriteDao {
-    @Query("SELECT * FROM favorites ORDER BY id DESC")
+    @Query("SELECT * FROM favorites WHERE deleted = 0 ORDER BY id DESC")
     LiveData<List<FavoriteEntity>> getAll();
 
-    @Query("SELECT * FROM favorites WHERE name LIKE '%' || :query || '%' OR address LIKE '%' || :query || '%'")
+    @Query("SELECT * FROM favorites WHERE deleted = 0 AND (name LIKE '%' || :query || '%' OR address LIKE '%' || :query || '%')")
     LiveData<List<FavoriteEntity>> searchFavorites(String query);
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insert(FavoriteEntity favorite);
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    void upsert(FavoriteEntity favorite);
+
+    @Query("SELECT * FROM favorites WHERE id = :id LIMIT 1")
+    FavoriteEntity findById(String id);
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insertAll(List<FavoriteEntity> favorites);

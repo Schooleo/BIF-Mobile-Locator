@@ -1,36 +1,70 @@
 package com.bif.app.data.repository;
 
+import android.content.Context;
+
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.Transformations;
 
-import com.bif.app.core.network.RestApiService;
-import com.bif.app.core.network.dto.favorite.FavoriteResponseDto;
+import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.FavoriteMapper;
+import com.bif.app.data.source.local.AppDatabase;
 import com.bif.app.data.source.local.FavoriteDao;
+import com.bif.app.data.source.local.SyncQueueDao;
+import com.bif.app.data.source.local.entity.FavoriteEntity;
+import com.bif.app.data.source.local.entity.SyncQueueEntity;
+import com.bif.app.data.sync.SyncManager;
 import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.repository.IFavoriteRepository;
+import com.google.gson.Gson;
 
-import java.io.IOException;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import javax.inject.Inject;
+import javax.inject.Singleton;
 
-import retrofit2.Call;
-import retrofit2.Response;
+import dagger.hilt.android.qualifiers.ApplicationContext;
 
+@Singleton
 public class FavoriteRepository implements IFavoriteRepository {
 
     private final FavoriteDao favoriteDao;
-    private final RestApiService restApiService;
+    private final SyncQueueDao syncQueueDao;
+    private final AppDatabase appDatabase;
+    private final SyncManager syncManager;
     private final ExecutorService executorService;
+    private final Gson gson;
+    private final String activeUserId;
 
     @Inject
-    public FavoriteRepository(FavoriteDao favoriteDao, RestApiService restApiService) {
+    public FavoriteRepository(FavoriteDao favoriteDao,
+                              SyncQueueDao syncQueueDao,
+                              AppDatabase appDatabase,
+                              SyncManager syncManager,
+                              ExecutorService executorService,
+                              @ApplicationContext Context appContext) {
         this.favoriteDao = favoriteDao;
-        this.restApiService = restApiService;
-        this.executorService = Executors.newFixedThreadPool(4);
+        this.syncQueueDao = syncQueueDao;
+        this.appDatabase = appDatabase;
+        this.syncManager = syncManager;
+        this.executorService = executorService;
+        this.gson = new Gson();
+        this.activeUserId = resolveActiveUserId(appContext);
+
+        if (appContext != null && !activeUserId.trim().isEmpty()) {
+            syncManager.setUserContext(activeUserId, null);
+        }
+    }
+
+    // Backward-compatible constructor used by tests.
+    public FavoriteRepository(FavoriteDao favoriteDao,
+                              SyncQueueDao syncQueueDao,
+                              AppDatabase appDatabase,
+                              SyncManager syncManager,
+                              ExecutorService executorService) {
+        this(favoriteDao, syncQueueDao, appDatabase, syncManager,
+                executorService, null);
     }
 
     @Override
@@ -46,97 +80,135 @@ public class FavoriteRepository implements IFavoriteRepository {
     @Override
     public void addFavorite(Favorite favorite) {
         executorService.execute(() -> {
-            favoriteDao.insert(FavoriteMapper.toEntity(favorite));
-            try {
-                Call<FavoriteResponseDto> call = restApiService.upsertMyFavorite(FavoriteMapper.toRequestDto(favorite));
-                if (call != null) {
-                    call.execute();
-                }
-            } catch (IOException ignored) {
-            }
+            appDatabase.runInTransaction(() -> {
+                FavoriteEntity entity = FavoriteMapper.toEntity(favorite);
+                favoriteDao.insert(entity);
+
+                Favorite syncFavorite = FavoriteMapper.toDomain(entity);
+                favorite.id = syncFavorite.id;
+
+                // Atomic Sync Enqueue
+                SyncQueueEntity syncEntry = createSyncEntry(
+                        "favorite",
+                        syncFavorite.id,
+                        "CREATE",
+                    FavoriteMapper.toDto(syncFavorite, activeUserId)
+                );
+                syncQueueDao.enqueue(syncEntry);
+            });
+            syncManager.syncIfOnline();
         });
     }
 
     @Override
     public void updateFavorite(Favorite favorite) {
         executorService.execute(() -> {
-            favoriteDao.update(FavoriteMapper.toEntity(favorite));
-            try {
-                Call<FavoriteResponseDto> call = restApiService.upsertMyFavorite(FavoriteMapper.toRequestDto(favorite));
-                if (call != null) {
-                    call.execute();
-                }
-            } catch (IOException ignored) {
-            }
+            appDatabase.runInTransaction(() -> {
+                FavoriteEntity entity = FavoriteMapper.toEntity(favorite);
+                favoriteDao.update(entity);
+
+                Favorite syncFavorite = FavoriteMapper.toDomain(entity);
+                favorite.id = syncFavorite.id;
+
+                // Atomic Sync Enqueue
+                SyncQueueEntity syncEntry = createSyncEntry(
+                        "favorite",
+                        syncFavorite.id,
+                        "UPDATE",
+                    FavoriteMapper.toDto(syncFavorite, activeUserId)
+                );
+                syncQueueDao.enqueue(syncEntry);
+            });
+            syncManager.syncIfOnline();
         });
     }
 
     @Override
     public void updateAllFavorites(List<Favorite> favorites) {
+        if (favorites == null) return;
         executorService.execute(() -> {
-            favoriteDao.updateAll(FavoriteMapper.toEntityList(favorites));
-            if (favorites == null) {
-                return;
-            }
-            for (Favorite favorite : favorites) {
-                try {
-                    Call<FavoriteResponseDto> call = restApiService.upsertMyFavorite(FavoriteMapper.toRequestDto(favorite));
-                    if (call != null) {
-                        call.execute();
-                    }
-                } catch (IOException ignored) {
+            appDatabase.runInTransaction(() -> {
+                List<FavoriteEntity> entities = FavoriteMapper.toEntityList(favorites);
+                favoriteDao.updateAll(entities);
+                for (FavoriteEntity entity : entities) {
+                    Favorite syncFavorite = FavoriteMapper.toDomain(entity);
+                    SyncQueueEntity syncEntry = createSyncEntry(
+                            "favorite",
+                            syncFavorite.id,
+                            "UPDATE",
+                            FavoriteMapper.toDto(syncFavorite, activeUserId)
+                    );
+                    syncQueueDao.enqueue(syncEntry);
                 }
-            }
+            });
+            syncManager.syncIfOnline();
         });
     }
 
     @Override
     public void deleteFavorite(Favorite favorite) {
+        if (favorite == null || favorite.id == null) return;
         executorService.execute(() -> {
-            favoriteDao.delete(FavoriteMapper.toEntity(favorite));
-            if (favorite == null || favorite.id == null || favorite.id.trim().isEmpty()) {
-                return;
-            }
-            try {
-                Call<Void> call = restApiService.deleteMyFavorite(favorite.id);
-                if (call != null) {
-                    call.execute();
-                }
-            } catch (IOException ignored) {
-            }
+            appDatabase.runInTransaction(() -> {
+                FavoriteEntity entity = FavoriteMapper.toEntity(favorite);
+                // FIX: SOFT DELETE locally to support offline tombstone sync
+                entity.deleted = true;
+                favoriteDao.update(entity);
+
+                // Atomic Sync Enqueue
+                SyncQueueEntity syncEntry = createSyncEntry(
+                        "favorite",
+                        favorite.id,
+                        "DELETE",
+                        null
+                );
+                syncQueueDao.enqueue(syncEntry);
+            });
+            syncManager.syncIfOnline();
         });
+    }
+
+    private SyncQueueEntity createSyncEntry(String entityType, String entityId, String operation, Object payload) {
+        SyncQueueEntity entry = new SyncQueueEntity();
+        entry.entityType = entityType;
+        entry.entityId = entityId;
+        entry.operation = operation;
+        entry.clientChangeId = UUID.randomUUID().toString();
+        entry.payload = payload != null ? gson.toJson(payload) : null;
+        entry.status = "PENDING";
+        entry.retryCount = 0;
+        entry.createdAt = System.currentTimeMillis();
+        return entry;
     }
 
     @Override
     public void refreshFavorites(SyncCallback callback) {
         executorService.execute(() -> {
             try {
-                Call<List<FavoriteResponseDto>> call = restApiService.getMyFavorites();
-                if (call == null) {
-                    if (callback != null) {
-                        callback.onError("Unable to sync favorites");
-                    }
-                    return;
+                // Perform a full sync using existing sync() method
+                Object syncResponse = syncManager.sync();
+                if (syncResponse != null) {
+                    if (callback != null) callback.onSuccess();
+                } else if (!syncManager.isOnline()) {
+                    // Offline mode is expected in offline-first flow.
+                    if (callback != null) callback.onSuccess();
+                } else {
+                    if (callback != null) callback.onError("Sync failed");
                 }
-
-                Response<List<FavoriteResponseDto>> response = call.execute();
-                if (!response.isSuccessful() || response.body() == null) {
-                    if (callback != null) {
-                        callback.onError("Unable to sync favorites");
-                    }
-                    return;
-                }
-
-                List<Favorite> favorites = FavoriteMapper.toDomainListFromDto(response.body());
-                favoriteDao.replaceAll(FavoriteMapper.toEntityList(favorites));
-                if (callback != null) {
-                    callback.onSuccess();
-                }
-            } catch (IOException e) {
-                if (callback != null) {
-                    callback.onError("Offline mode: showing local favorites");
-                }
+            } catch (Exception e) {
+                if (callback != null) callback.onError(e.getMessage());
             }
         });
+    }
+
+    private String resolveActiveUserId(Context appContext) {
+        if (appContext == null) {
+            return "anonymous";
+        }
+        String userId = UserPreferences.getUserId(appContext);
+        if (userId.trim().isEmpty()) {
+            return "anonymous";
+        }
+        return userId.trim();
     }
 }

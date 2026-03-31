@@ -104,4 +104,14 @@
     <string name="unfriend_action">Unfriend</string>
     <string name="unfriend_success">Friend removed</string>
     <string name="unfriend_failed">Unable to remove friend</string>
+    <string name="unfriend_requires_online">Please reconnect to internet to remove a friend</string>
+    <string name="group_create_success">Group created successfully</string>
+    <string name="group_create_failed">Unable to create group</string>
+    <string name="group_disband_failed">Unable to disband group</string>
+    <string name="group_leave_success">Left group</string>
+    <string name="group_leave_failed">Unable to leave group</string>
+    <string name="group_create_requires_online">Please reconnect to internet to create a group</string>
+    <string name="group_delete_requires_online">Please reconnect to internet to delete this group</string>
+    <string name="group_remove_member_requires_online">Please reconnect to internet to remove members</string>
+    <string name="friend_request_requires_online">Please reconnect to internet to send a friend request</string>
 </resources>

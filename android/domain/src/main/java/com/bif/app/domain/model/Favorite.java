@@ -10,4 +10,7 @@ public class Favorite {
     public String notes;
     public int rating;
     public String imagePath;
+    public long serverVersion;
+    public boolean deleted;
+    public String userId;
 }

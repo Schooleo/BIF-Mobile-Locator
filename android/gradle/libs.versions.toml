@@ -8,6 +8,7 @@ firebaseBom = "34.11.0"
 hiltAndroid = "2.59.2"
 hiltAndroidTesting = "2.59.2"
 hiltCompiler = "2.59.2"
+hiltNavigationFragment = "1.3.0"
 junit = "4.13.2"
 junitVersion = "1.3.0"
 espressoCore = "3.7.0"
@@ -25,10 +26,15 @@ room = "2.8.4"
 coreTesting = "2.2.0"
 navigationRuntime = "2.9.7"
 lifecycleLivedataCore = "2.10.0"
+lifecycleViewmodel = "2.10.0"
 bcrypt = "0.10.2"
 workRuntime = "2.11.2"
 startupRuntime = "1.2.0"
 maplibreAndroid = "13.0.1"
+stomp-protocol = "1.6.6"
+java-websocket = "1.6.0"
+rxjava2 = "2.2.21"
+rxandroid2 = "2.1.1"
 
 [libraries]
 apollo-java-client = { group = "com.apollographql.java", name = "client", version.ref = "apollo-java" }
@@ -41,6 +47,7 @@ hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hiltA
 hilt-android-testing = { module = "com.google.dagger:hilt-android-testing", version.ref = "hiltAndroidTesting" }
 hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hiltCompiler" }
 hilt-work = { module = "androidx.hilt:hilt-work", version = "1.3.0" }
+hilt-navigation-fragment = { group = "androidx.hilt", name = "hilt-navigation-fragment", version.ref = "hiltNavigationFragment" }
 hilt-work-compiler = { module = "androidx.hilt:hilt-compiler", version = "1.3.0" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
@@ -59,10 +66,15 @@ mockito-inline = { module = "org.mockito:mockito-inline", version.ref = "mockito
 fragment-testing = { module = "androidx.fragment:fragment-testing", version.ref = "fragmentTesting" }
 navigation-runtime = { group = "androidx.navigation", name = "navigation-runtime", version.ref = "navigationRuntime" }
 lifecycle-livedata-core = { group = "androidx.lifecycle", name = "lifecycle-livedata-core", version.ref = "lifecycleLivedataCore" }
+lifecycle-viewmodel = { group = "androidx.lifecycle", name = "lifecycle-viewmodel", version.ref = "lifecycleViewmodel" }
 bcrypt = { module = "at.favre.lib:bcrypt", version.ref = "bcrypt" }
 work-runtime = { group = "androidx.work", name = "work-runtime", version.ref = "workRuntime" }
 startup-runtime = { group = "androidx.startup", name = "startup-runtime", version.ref = "startupRuntime" }
 maplibre-android-sdk = { module = "org.maplibre.gl:android-sdk", version.ref = "maplibreAndroid" }
+stomp-protocol = { group = "com.github.NaikSoftware", name = "StompProtocolAndroid", version.ref = "stomp-protocol" }
+java-websocket = { group = "org.java-websocket", name = "Java-WebSocket", version.ref = "java-websocket" }
+rxjava2 = { group = "io.reactivex.rxjava2", name = "rxjava", version.ref = "rxjava2" }
+rxandroid2 = { group = "io.reactivex.rxjava2", name = "rxandroid", version.ref = "rxandroid2" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
