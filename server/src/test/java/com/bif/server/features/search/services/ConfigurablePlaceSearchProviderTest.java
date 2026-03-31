@@ -1,16 +1,17 @@
 package com.bif.server.features.search.services;
 
-import com.bif.server.features.place.models.Place;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import com.bif.server.features.place.models.Place;
 
 @ExtendWith(MockitoExtension.class)
 class ConfigurablePlaceSearchProviderTest {
