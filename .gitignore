@@ -9,3 +9,6 @@ Thumbs.db
 
 # Tailscale
 tailscale-state/
+
+# Init
+map-data/

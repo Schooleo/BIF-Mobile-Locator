@@ -4,7 +4,7 @@ WORKDIR /app
 
 RUN addgroup --system app && adduser --system --ingroup app app
 
-COPY --chown=app:app build/libs/*-SNAPSHOT.jar app.jar
+COPY --chown=app:app build/libs/app.jar app.jar
 
 USER app
 

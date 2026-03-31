@@ -3,6 +3,7 @@ package com.bif.server.features.search.services;
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.search.config.TypesenseProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -15,6 +16,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
+import java.util.StringJoiner;
 
 @Component
 public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncService {
@@ -22,12 +25,16 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
     private static final Logger LOGGER = LoggerFactory.getLogger(
             TypesensePlaceIndexSyncService.class);
 
+    private static final int MAX_RETRIES = 3;
+    private static final long INITIAL_BACKOFF_MS = 500;
+
     private final TypesenseProperties typesenseProperties;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
-    public TypesensePlaceIndexSyncService(TypesenseProperties typesenseProperties,
-                                          ObjectMapper objectMapper) {
+        @Autowired
+        public TypesensePlaceIndexSyncService(TypesenseProperties typesenseProperties,
+            ObjectMapper objectMapper) {
         this.typesenseProperties = typesenseProperties;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
@@ -35,6 +42,18 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
                         typesenseProperties.getConnectTimeoutMs()))
                 .build();
     }
+
+        // Constructor overload for tests to inject a custom HttpClient
+        TypesensePlaceIndexSyncService(TypesenseProperties typesenseProperties,
+                       ObjectMapper objectMapper,
+                       HttpClient httpClient) {
+        this.typesenseProperties = typesenseProperties;
+        this.objectMapper = objectMapper;
+        this.httpClient = httpClient != null ? httpClient : HttpClient.newBuilder()
+            .connectTimeout(Duration.ofMillis(
+                typesenseProperties.getConnectTimeoutMs()))
+            .build();
+        }
 
     @Override
     public void upsert(Place place) {
@@ -54,18 +73,89 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();
 
-            HttpResponse<String> response = httpClient.send(
-                    request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                LOGGER.warn("Typesense upsert failed for place {} with status {}",
-                        place.getId(), response.statusCode());
-            }
+            sendWithRetry(request, "upsert place " + place.getId());
         } catch (IOException e) {
             LOGGER.error("Typesense upsert I/O failure for place {}", place.getId(), e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             LOGGER.error("Typesense upsert interrupted for place {}", place.getId(), e);
         }
+    }
+
+    /**
+     * Bulk-import a list of places using Typesense's JSONL import endpoint.
+     * Far more efficient than individual upserts for bootstrap scenarios.
+     *
+     * @return the number of successfully imported documents
+     */
+    @Override
+    public int batchUpsert(List<Place> places) {
+        if (!isReady() || places == null || places.isEmpty()) {
+            return 0;
+        }
+
+        try {
+            // Build JSONL body (one JSON object per line)
+            StringJoiner joiner = new StringJoiner("\n");
+            for (Place place : places) {
+                if (place != null && place.getId() != null && !place.getId().isBlank()) {
+                    joiner.add(objectMapper.writeValueAsString(place));
+                }
+            }
+            String jsonlBody = joiner.toString();
+            if (jsonlBody.isBlank()) {
+                return 0;
+            }
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(buildImportUri())
+                    .timeout(Duration.ofSeconds(30))
+                    .header("X-TYPESENSE-API-KEY", typesenseProperties.getApiKey())
+                    .header("Content-Type", "text/plain")
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonlBody))
+                    .build();
+
+            HttpResponse<String> response = sendWithRetry(request, "batch import");
+            if (response != null && response.statusCode() >= 200 && response.statusCode() < 300) {
+                // Count successful lines (each line is a JSON result)
+                int successCount = 0;
+                for (String line : response.body().split("\n")) {
+                    if (line.contains("\"success\":true")) {
+                        successCount++;
+                    }
+                }
+                return successCount;
+            }
+        } catch (IOException e) {
+            LOGGER.error("Typesense batch import I/O failure", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            LOGGER.error("Typesense batch import interrupted", e);
+        }
+        return 0;
+    }
+
+    /**
+     * Send an HTTP request with retry + exponential backoff for transient errors
+     * (503).
+     */
+    private HttpResponse<String> sendWithRetry(HttpRequest request, String context)
+            throws IOException, InterruptedException {
+        for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 503 && attempt < MAX_RETRIES) {
+                long backoff = INITIAL_BACKOFF_MS * (1L << attempt);
+                LOGGER.warn("Typesense 503 for {}. Retrying in {}ms (attempt {}/{})...",
+                        context, backoff, attempt + 1, MAX_RETRIES);
+                Thread.sleep(backoff);
+                continue;
+            }
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                LOGGER.warn("Typesense {} failed with status {}", context, response.statusCode());
+            }
+            return response;
+        }
+        return null;
     }
 
     @Override
@@ -109,9 +199,126 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
         return true;
     }
 
+    /**
+     * Creates the Typesense collection if it does not already exist.
+     * Waits for Typesense to become healthy before proceeding.
+     */
+    @Override
+    public void ensureCollectionExists() {
+        if (!isReady()) {
+            return;
+        }
+
+        String collection = safe(typesenseProperties.getPlacesCollection(), "places");
+        String baseUrl = String.format("%s://%s:%d",
+                safe(typesenseProperties.getProtocol(), "http"),
+                safe(typesenseProperties.getHost(), "localhost"),
+                typesenseProperties.getPort());
+
+        try {
+            // 1. Wait for Typesense to be healthy
+            if (!waitForTypesenseReady(baseUrl)) {
+                LOGGER.error("Typesense did not become ready in time. Skipping collection setup.");
+                return;
+            }
+
+            // 2. Check if collection already exists
+            HttpRequest getReq = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/collections/" + encode(collection)))
+                    .header("X-TYPESENSE-API-KEY", typesenseProperties.getApiKey())
+                    .GET()
+                    .build();
+
+            HttpResponse<String> getResp = httpClient.send(getReq, HttpResponse.BodyHandlers.ofString());
+            if (getResp.statusCode() == 200) {
+                LOGGER.info("Typesense collection '{}' already exists.", collection);
+                return;
+            }
+
+            // 3. Create collection with schema matching the Place model (NO ID FIELD)
+            String schema = """
+                    {
+                      "name": "%s",
+                      "fields": [
+                        {"name": "name",              "type": "string"},
+                        {"name": "address",           "type": "string",   "optional": true},
+                        {"name": "rating",            "type": "float",    "optional": true},
+                        {"name": "tags",              "type": "string[]", "optional": true},
+                        {"name": "placeSource",       "type": "string",   "optional": true},
+                        {"name": "persistedByAction", "type": "string",   "optional": true},
+                        {"name": "persistedByUserId", "type": "string",   "optional": true},
+                        {"name": "reviewCount",       "type": "int32",    "optional": true}
+                      ]
+                    }
+                    """.formatted(collection);
+
+            HttpRequest postReq = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/collections"))
+                    .header("X-TYPESENSE-API-KEY", typesenseProperties.getApiKey())
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(schema))
+                    .build();
+
+            HttpResponse<String> postResp = sendWithRetry(postReq, "create collection '" + collection + "'");
+            if (postResp != null && postResp.statusCode() >= 200 && postResp.statusCode() < 300) {
+                LOGGER.info("✅ Created Typesense collection '{}'.", collection);
+            } else {
+                LOGGER.error("Failed to create Typesense collection '{}': {}",
+                        collection,
+                        postResp != null ? postResp.statusCode() + " - " + postResp.body() : "null response");
+            }
+        } catch (IOException e) {
+            LOGGER.error("I/O error ensuring Typesense collection exists", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            LOGGER.error("Interrupted while ensuring Typesense collection exists", e);
+        }
+    }
+
+    /**
+     * Polls Typesense /health endpoint until it responds 200 or max attempts are
+     * exhausted.
+     */
+    private boolean waitForTypesenseReady(String baseUrl) throws InterruptedException {
+        int maxAttempts = 10;
+        long waitMs = 2000;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                HttpRequest healthReq = HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/health"))
+                        .timeout(Duration.ofSeconds(3))
+                        .GET()
+                        .build();
+                HttpResponse<String> resp = httpClient.send(healthReq, HttpResponse.BodyHandlers.ofString());
+                if (resp.statusCode() == 200) {
+                    LOGGER.info("Typesense is healthy.");
+                    return true;
+                }
+                LOGGER.warn("Typesense health check returned {}. Waiting {}ms (attempt {}/{})...",
+                        resp.statusCode(), waitMs, attempt, maxAttempts);
+            } catch (IOException e) {
+                LOGGER.warn("Typesense not reachable yet: {}. Waiting {}ms (attempt {}/{})...",
+                        e.getMessage(), waitMs, attempt, maxAttempts);
+            }
+            Thread.sleep(waitMs);
+        }
+        return false;
+    }
+
     private URI buildUpsertUri() {
         String collection = encode(safe(typesenseProperties.getPlacesCollection(), "places"));
         String uri = String.format("%s://%s:%d/collections/%s/documents?action=upsert",
+                safe(typesenseProperties.getProtocol(), "http"),
+                safe(typesenseProperties.getHost(), "localhost"),
+                typesenseProperties.getPort(),
+                collection);
+        return URI.create(uri);
+    }
+
+    private URI buildImportUri() {
+        String collection = encode(safe(typesenseProperties.getPlacesCollection(), "places"));
+        String uri = String.format("%s://%s:%d/collections/%s/documents/import?action=upsert",
                 safe(typesenseProperties.getProtocol(), "http"),
                 safe(typesenseProperties.getHost(), "localhost"),
                 typesenseProperties.getPort(),

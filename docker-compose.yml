@@ -25,6 +25,8 @@ services:
     container_name: bif-server-dev
     ports:
       - "8080:8080"
+    volumes:
+      - ./map-data:/map-data
     env_file:
       - .env
     environment:
@@ -70,6 +72,20 @@ services:
       retries: 6
     restart: on-failure
 
+  osrm:
+    image: osrm/osrm-backend:latest
+    container_name: bif-osrm
+    profiles:
+      - osrm
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./map-data:/data
+    env_file:
+      - .env
+    command: "osrm-routed --algorithm mld /data/merged.osrm"
+    restart: on-failure
+
   typesense:
     image: typesense/typesense:30.1
     container_name: bif-typesense
@@ -100,9 +116,9 @@ services:
       resources:
         reservations:
           devices:
-          - driver: nvidia
-            capabilities: ["gpu"]
-            count: all
+            - driver: nvidia
+              capabilities: ["gpu"]
+              count: all
     env_file:
       - .env
     environment:
@@ -131,6 +147,7 @@ services:
 
 volumes:
   mongo_data:
+  osrm_data:
   typesense_data:
   ollama_data:
 
