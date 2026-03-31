@@ -4,6 +4,7 @@ public class ChatMessageDto {
     public String id;
     public String groupId;
     public String senderUserId;
+    public String senderName;
     public String content;
     public String type;
     public String sentAt;

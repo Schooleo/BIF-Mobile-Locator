@@ -45,4 +45,9 @@ dependencies {
     // Module
     implementation project(':domain')
     implementation project(':core')
+
+    // Lifecycle ViewModel + LiveData (for ChatViewModel)
+    implementation libs.lifecycle.livedata.core
+    implementation libs.lifecycle.viewmodel
+    implementation libs.hilt.navigation.fragment
 }

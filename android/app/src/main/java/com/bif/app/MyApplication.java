@@ -38,10 +38,12 @@ public class MyApplication extends Application implements Configuration.Provider
     public void onCreate() {
         super.onCreate();
 
-        clearIncompatibleLocalSessionIfNeeded();
+        String userId = UserPreferences.getId(this);
+        if (userId.trim().isEmpty()) {
+            userId = UserPreferences.getUsername(this);
+        }
 
-        String userId = UserPreferences.getUserId(this);
-        if (userId != null && !userId.trim().isEmpty()) {
+        if (!userId.trim().isEmpty()) {
             syncManager.setUserContext(userId, null);
         }
 

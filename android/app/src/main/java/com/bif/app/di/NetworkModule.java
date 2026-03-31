@@ -5,12 +5,14 @@ import com.bif.app.core.network.AuthInterceptor;
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.network.TokenRefreshAuthenticator;
 
+import javax.inject.Named;
 import javax.inject.Singleton;
 
 import dagger.Module;
 import dagger.Provides;
 import dagger.hilt.InstallIn;
 import dagger.hilt.components.SingletonComponent;
+import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.logging.HttpLoggingInterceptor;
 import retrofit2.Retrofit;
@@ -61,6 +63,28 @@ public class NetworkModule {
     @Singleton
     public RestApiService provideRestApiService(Retrofit retrofit) {
         return retrofit.create(RestApiService.class);
+    }
+
+    /*
+     * Provides the STOMP WebSocket URL derived from the REST host.
+     * Converts "http://HOST:PORT/api/" → "ws://HOST:PORT/ws/websocket"
+     */
+    @Provides
+    @Singleton
+    @Named("wsBaseUrl")
+    public String provideWsBaseUrl() {
+        String restBase = com.bif.app.BuildConfig.REST_BASE_URL;
+        HttpUrl parsed = HttpUrl.parse(restBase);
+        if (parsed != null) {
+            String wsScheme = parsed.isHttps() ? "wss" : "ws";
+            return wsScheme + "://" + parsed.host() + ":" + parsed.port() + "/ws/websocket";
+        }
+
+        // Fallback for malformed URL strings.
+        String baseHost = restBase
+                .replaceFirst("/api(?:/.*)?$", "")
+                .replaceFirst("^http", "ws");
+        return baseHost + "/ws/websocket";
     }
 }
 
