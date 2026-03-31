@@ -18,6 +18,8 @@ import retrofit2.Response;
 
 public class AuthSessionManager {
 
+    private static final String SYNC_PREF_NAME = "SYNC_PREF";
+
     public interface LogoutCallback {
         void onComplete(boolean remoteSuccess);
     }
@@ -50,13 +52,13 @@ public class AuthSessionManager {
         String refreshToken = authResponse.refreshToken != null ? authResponse.refreshToken : "";
         UserPreferences.saveAuthSession(context, accessToken, refreshToken);
 
-        String id = "";
+        String userId = UserPreferences.getUserId(context);
         String username = fallbackUsername != null ? fallbackUsername : "";
         String email = fallbackEmail != null ? fallbackEmail : "";
 
         if (authResponse.user != null) {
             if (authResponse.user.id != null && !authResponse.user.id.isBlank()) {
-                id = authResponse.user.id;
+                userId = authResponse.user.id.trim();
             }
             if (authResponse.user.username != null && !authResponse.user.username.isBlank()) {
                 username = authResponse.user.username;
@@ -66,14 +68,26 @@ public class AuthSessionManager {
             }
         }
 
-        if (!id.isBlank() || !username.isBlank() || !email.isBlank()) {
-            UserPreferences.saveUserProfile(context, id, username, email);
+        if (!userId.isBlank()) {
+            UserPreferences.setUserId(context, userId);
+        }
+
+        if (!username.isBlank() || !email.isBlank()) {
+            UserPreferences.saveUserProfile(context, userId, username, email);
         }
     }
 
     public void clearSession() {
         UserPreferences.clearUser(context);
+        clearPersistedSyncState();
         localSessionDataCleaner.clearLocalUserData();
+    }
+
+    private void clearPersistedSyncState() {
+        context.getSharedPreferences(SYNC_PREF_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .clear()
+                .apply();
     }
 
     public void logout(@NonNull LogoutCallback callback) {

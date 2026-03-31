@@ -10,4 +10,7 @@ public interface IChatRepository {
     void sendLocationMessage(String groupId, String senderUserId,
                              double latitude, double longitude, String address);
     void refreshMessages(String groupId);
+    void connectToGroup(String groupId);
+    void disconnectFromGroup();
 }
+

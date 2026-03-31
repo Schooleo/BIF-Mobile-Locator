@@ -6,8 +6,10 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.hilt.work.HiltWorker;
 import androidx.work.Constraints;
+import androidx.work.ExistingWorkPolicy;
 import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.NetworkType;
+import androidx.work.OneTimeWorkRequest;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
 import androidx.work.Worker;
@@ -23,6 +25,7 @@ public class SyncWorker extends Worker {
 
     private static final String TAG = "SyncWorker";
     private static final String WORK_NAME = "periodic_sync";
+    private static final String IMMEDIATE_WORK_NAME = "immediate_sync";
 
     private final SyncManager syncManager;
 
@@ -67,6 +70,16 @@ public class SyncWorker extends Worker {
                 WORK_NAME,
                 ExistingPeriodicWorkPolicy.KEEP,
                 request);
+
+        OneTimeWorkRequest immediateRequest =
+            new OneTimeWorkRequest.Builder(SyncWorker.class)
+                .setConstraints(constraints)
+                .build();
+
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            IMMEDIATE_WORK_NAME,
+            ExistingWorkPolicy.REPLACE,
+            immediateRequest);
 
         Log.d(TAG, "Periodic sync scheduled");
     }

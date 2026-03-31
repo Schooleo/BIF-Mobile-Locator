@@ -10,7 +10,6 @@ import com.bif.app.domain.model.Friendship;
 import com.bif.app.domain.repository.IFriendshipRepository;
 import com.bif.app.domain.model.Group;
 import com.bif.app.domain.repository.IGroupRepository;
-import com.bif.app.feature.social.R;
 
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -209,6 +208,8 @@ public class SocialViewModel extends ViewModel {
                 if (successMessageCode != null && !successMessageCode.isEmpty()) {
                     groupActionMessage.postValue(successMessageCode);
                 }
+            } catch (IllegalStateException exception) {
+                groupActionMessage.postValue(mapGroupActionError(exception.getMessage(), fallbackErrorCode));
             } catch (Exception exception) {
                 groupActionMessage.postValue(fallbackErrorCode);
             } finally {
@@ -279,14 +280,33 @@ public class SocialViewModel extends ViewModel {
         if ("SEND_FAILED".equals(errorCode)) {
             return "__MSG_FRIEND_REQUEST_SEND_FAILED__";
         }
+        if ("SEND_REQUEST_REQUIRES_ONLINE".equals(errorCode)) {
+            return "__MSG_FRIEND_REQUEST_REQUIRES_ONLINE__";
+        }
         if ("UNFRIEND_FAILED".equals(errorCode)) {
             return "__MSG_UNFRIEND_FAILED__";
+        }
+        if ("UNFRIEND_REQUIRES_ONLINE".equals(errorCode)) {
+            return "__MSG_UNFRIEND_REQUIRES_ONLINE__";
         }
         if ("ACCEPT_FAILED".equals(errorCode)) {
             return "__MSG_FRIEND_REQUEST_ACCEPT_FAILED__";
         }
         if ("REJECT_FAILED".equals(errorCode)) {
             return "__MSG_FRIEND_REQUEST_REJECT_FAILED__";
+        }
+        return fallbackErrorCode;
+    }
+
+    private String mapGroupActionError(String errorCode, String fallbackErrorCode) {
+        if ("GROUP_CREATE_REQUIRES_ONLINE".equals(errorCode)) {
+            return "__MSG_GROUP_CREATE_REQUIRES_ONLINE__";
+        }
+        if ("GROUP_DELETE_REQUIRES_ONLINE".equals(errorCode)) {
+            return "__MSG_GROUP_DELETE_REQUIRES_ONLINE__";
+        }
+        if ("GROUP_REMOVE_MEMBER_REQUIRES_ONLINE".equals(errorCode)) {
+            return "__MSG_GROUP_REMOVE_MEMBER_REQUIRES_ONLINE__";
         }
         return fallbackErrorCode;
     }

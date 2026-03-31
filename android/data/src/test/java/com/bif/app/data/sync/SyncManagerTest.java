@@ -5,6 +5,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -215,7 +216,7 @@ public class SyncManagerTest {
 
         ArgumentCaptor<SyncQueueEntity> captor =
                 ArgumentCaptor.forClass(SyncQueueEntity.class);
-        verify(mockSyncQueueDao).enqueue(captor.capture());
+        verify(mockSyncQueueDao, timeout(1000)).enqueue(captor.capture());
 
         SyncQueueEntity saved = captor.getValue();
         assertEquals("place", saved.entityType);
@@ -237,13 +238,31 @@ public class SyncManagerTest {
 
         ArgumentCaptor<SyncQueueEntity> captor =
                 ArgumentCaptor.forClass(SyncQueueEntity.class);
-        verify(mockSyncQueueDao).enqueue(captor.capture());
+        verify(mockSyncQueueDao, timeout(1000)).enqueue(captor.capture());
 
         SyncQueueEntity saved = captor.getValue();
         assertNotNull(saved.payload);
         org.junit.Assert.assertTrue(saved.payload.contains("\"id\":\"p1\""));
         org.junit.Assert.assertTrue(saved.payload.contains("\"name\":\"Cafe\""));
     }
+
+        @Test
+        public void setUserContext_whenUserChanges_resetsLastPulledVersion() {
+                syncManager.setLastPulledVersion(12);
+
+                syncManager.setUserContext("user2", "device2");
+
+                assertEquals(0, syncManager.getLastPulledVersion());
+        }
+
+        @Test
+        public void setUserContext_whenUserUnchanged_keepsLastPulledVersion() {
+                syncManager.setLastPulledVersion(12);
+
+                syncManager.setUserContext("user1", "device1");
+
+                assertEquals(12, syncManager.getLastPulledVersion());
+        }
 
     @Test
     @SuppressWarnings("unchecked")

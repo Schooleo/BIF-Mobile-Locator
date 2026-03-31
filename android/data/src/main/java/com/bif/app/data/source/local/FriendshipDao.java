@@ -17,6 +17,9 @@ public interface FriendshipDao {
     @Query("SELECT * FROM friendships WHERE id = :id LIMIT 1")
     FriendshipEntity getById(int id);
 
+    @Query("SELECT * FROM friendships WHERE serverId = :serverId LIMIT 1")
+    FriendshipEntity getByServerId(String serverId);
+
     @Query("SELECT * FROM friendships WHERE status = :status ORDER BY updatedAt DESC")
     List<FriendshipEntity> getByStatus(FriendshipStatus status);
 
@@ -43,6 +46,9 @@ public interface FriendshipDao {
 
     @Query("DELETE FROM friendships")
     void clearAll();
+
+    @Query("DELETE FROM friendships WHERE serverId = :serverId")
+    void deleteByServerId(String serverId);
 
     @Query("DELETE FROM friendships WHERE ((requesterId = :userA AND receiverId = :userB) OR (requesterId = :userB AND receiverId = :userA))")
     void deleteBetweenUsers(String userA, String userB);

@@ -217,17 +217,41 @@ public class GroupSettingsMembersFragment extends Fragment {
     }
 
     private void confirmRemoveMember(Friend member) {
+        if (member == null) {
+            Toast.makeText(requireContext(), R.string.group_update_failed, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         DialogUtils.showConfirmDialog(requireContext(),
                 getString(R.string.remove_member),
                 getString(R.string.remove_member_confirm, member.getName()),
                 getString(R.string.remove),
                 getString(R.string.cancel),
                 () -> {
-                    viewModel.removeMember(member);
-                    Toast.makeText(requireContext(),
-                            getString(R.string.member_removed, member.getName()),
-                            Toast.LENGTH_SHORT).show();
+                    try {
+                        viewModel.removeMember(member);
+                        Toast.makeText(requireContext(),
+                                getString(R.string.member_removed, member.getName()),
+                                Toast.LENGTH_SHORT).show();
+                    } catch (IllegalStateException exception) {
+                        Toast.makeText(requireContext(), mapPolicyErrorToMessage(exception.getMessage()), Toast.LENGTH_SHORT).show();
+                    } catch (Exception exception) {
+                        Toast.makeText(requireContext(), R.string.group_update_failed, Toast.LENGTH_SHORT).show();
+                    }
                 });
+    }
+
+    private int mapPolicyErrorToMessage(String code) {
+        if ("GROUP_CREATE_REQUIRES_ONLINE".equals(code)) {
+            return R.string.group_create_requires_online;
+        }
+        if ("GROUP_DELETE_REQUIRES_ONLINE".equals(code)) {
+            return R.string.group_delete_requires_online;
+        }
+        if ("GROUP_REMOVE_MEMBER_REQUIRES_ONLINE".equals(code)) {
+            return R.string.group_remove_member_requires_online;
+        }
+        return R.string.group_update_failed;
     }
 
     private void setupTabs(TabLayout tabLayout, int selectedPosition, View rootView) {

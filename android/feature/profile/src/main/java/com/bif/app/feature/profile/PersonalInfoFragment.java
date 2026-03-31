@@ -13,6 +13,8 @@ import androidx.fragment.app.Fragment;
 import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 
+import com.bif.app.domain.repository.IProfileRepository;
+
 import javax.inject.Inject;
 
 import dagger.hilt.android.AndroidEntryPoint;
@@ -21,7 +23,7 @@ import dagger.hilt.android.AndroidEntryPoint;
 public class PersonalInfoFragment extends Fragment {
 
     @Inject
-    ProfileRepository profileRepository;
+    IProfileRepository profileRepository;
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
@@ -46,12 +48,13 @@ public class PersonalInfoFragment extends Fragment {
         super.onResume();
         if (getView() != null) {
             bindLocalProfileState(getView());
-            syncProfileMetadataFromServer(getView());
+            syncProfileMetadataFromServer();
         }
     }
 
     private void bindLocalProfileState(@NonNull View view) {
-        ProfileRepository.LocalProfile localProfile = profileRepository.readLocalProfile();
+        IProfileRepository.LocalProfile localProfile =
+            profileRepository.readLocalProfile();
         boolean isLoggedIn = localProfile.isLoggedIn;
         String username = getStoredValue(localProfile.username);
         String email = getStoredValue(localProfile.email);
@@ -65,18 +68,28 @@ public class PersonalInfoFragment extends Fragment {
         tvEmailValue.setText(email);
     }
 
-    private void syncProfileMetadataFromServer(@NonNull View view) {
+    private void syncProfileMetadataFromServer() {
         if (!isAdded()) {
             return;
         }
 
-        profileRepository.syncProfileMetadata(new ProfileRepository.ProfileCallback() {
+        profileRepository.syncProfileMetadata(new IProfileRepository.ProfileCallback() {
             @Override
             public void onSuccess() {
                 if (!isAdded()) {
                     return;
                 }
-                bindLocalProfileState(view);
+
+                // Repository callbacks can come from background thread.
+                requireActivity().runOnUiThread(() -> {
+                    if (!isAdded()) {
+                        return;
+                    }
+                    View currentView = getView();
+                    if (currentView != null) {
+                        bindLocalProfileState(currentView);
+                    }
+                });
             }
 
             @Override

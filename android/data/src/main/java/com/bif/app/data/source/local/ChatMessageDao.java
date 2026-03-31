@@ -19,6 +19,11 @@ public interface ChatMessageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insert(ChatMessageEntity message);
 
+        @Query("DELETE FROM chat_messages WHERE id IN ("
+            + "SELECT id FROM chat_messages WHERE groupId = :groupId "
+            + "ORDER BY sentAt DESC, id DESC LIMIT -1 OFFSET :keepCount)")
+        void pruneGroupToLimit(String groupId, int keepCount);
+
     @Query("DELETE FROM chat_messages WHERE id = :id")
     void deleteById(String id);
 

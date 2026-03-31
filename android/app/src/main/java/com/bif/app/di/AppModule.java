@@ -12,6 +12,7 @@ import com.bif.app.data.source.local.FriendDao;
 import com.bif.app.data.source.local.FriendshipDao;
 import com.bif.app.data.source.local.GroupDao;
 import com.bif.app.data.source.local.PlaceDao;
+import com.bif.app.data.source.local.ProfileDao;
 import com.bif.app.data.source.local.SearchHistoryDao;
 import com.bif.app.data.source.local.SyncQueueDao;
 import com.bif.app.data.source.local.TripDao;
@@ -30,6 +31,12 @@ import dagger.hilt.components.SingletonComponent;
 @Module
 @InstallIn(SingletonComponent.class)
 public class AppModule {
+
+    @Provides
+    @Singleton
+    public ExecutorService provideExecutorService() {
+        return Executors.newFixedThreadPool(4);
+    }
 
     @Provides
     @Singleton
@@ -75,6 +82,12 @@ public class AppModule {
 
     @Provides
     @Singleton
+    public ProfileDao provideProfileDao(AppDatabase database) {
+      return database.profileDao();
+    }
+
+    @Provides
+    @Singleton
     public SearchHistoryDao provideSearchHistoryDao(AppDatabase database) {
         return database.searchHistoryDao();
     }
@@ -112,7 +125,6 @@ public class AppModule {
                             .clear()
                             .apply();
                 } catch (Exception ignored) {
-                    // Keep logout flow resilient even if local cleanup fails.
                 }
             });
             executor.shutdown();

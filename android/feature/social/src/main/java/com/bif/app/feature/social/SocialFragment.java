@@ -1,5 +1,6 @@
 package com.bif.app.feature.social;
 
+import android.annotation.SuppressLint;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -179,33 +180,53 @@ public class SocialFragment extends Fragment {
         viewModel.getFriendActionMessage().observe(getViewLifecycleOwner(), message -> {
             if (message != null && !message.isEmpty()) {
                 String toastMessage = message;
-                if ("__MSG_USER_NOT_FOUND__".equals(message)) {
-                    toastMessage = getString(R.string.user_not_found);
-                } else if ("__MSG_FRIEND_REQUEST_SENT__".equals(message)) {
-                    toastMessage = getString(R.string.friend_request_sent);
-                } else if ("__MSG_FRIEND_REQUEST_SELF__".equals(message)) {
-                    toastMessage = getString(R.string.friend_request_self_not_allowed);
-                } else if ("__MSG_FRIEND_REQUEST_PENDING__".equals(message)) {
-                    toastMessage = getString(R.string.friend_request_pending_exists);
-                } else if ("__MSG_FRIEND_REQUEST_ALREADY_FRIENDS__".equals(message)) {
-                    toastMessage = getString(R.string.friend_request_already_friends);
-                } else if ("__MSG_FRIEND_REQUEST_SEND_FAILED__".equals(message)) {
-                    toastMessage = getString(R.string.friend_request_send_failed);
-                } else if ("__MSG_FRIEND_REQUEST_ACCEPT_SUCCESS__".equals(message)) {
-                    toastMessage = getString(R.string.friend_request_accepted);
-                } else if ("__MSG_FRIEND_REQUEST_REJECT_SUCCESS__".equals(message)) {
-                    toastMessage = getString(R.string.friend_request_rejected);
-                } else if ("__MSG_FRIEND_REQUEST_ACCEPT_FAILED__".equals(message)) {
-                    toastMessage = getString(R.string.friend_request_accept_failed);
-                    viewModel.refreshRequestsOnly();
-                } else if ("__MSG_FRIEND_REQUEST_REJECT_FAILED__".equals(message)) {
-                    toastMessage = getString(R.string.friend_request_reject_failed);
-                    viewModel.refreshRequestsOnly();
-                } else if ("__MSG_UNFRIEND_SUCCESS__".equals(message)) {
-                    toastMessage = getString(R.string.unfriend_success);
-                } else if ("__MSG_UNFRIEND_FAILED__".equals(message)) {
-                    toastMessage = getString(R.string.unfriend_failed);
-                    viewModel.retryFriends();
+                switch (message) {
+                    case "__MSG_USER_NOT_FOUND__":
+                        toastMessage = getString(R.string.user_not_found);
+                        break;
+                    case "__MSG_FRIEND_REQUEST_SENT__":
+                        toastMessage = getString(R.string.friend_request_sent);
+                        break;
+                    case "__MSG_FRIEND_REQUEST_SELF__":
+                        toastMessage = getString(R.string.friend_request_self_not_allowed);
+                        break;
+                    case "__MSG_FRIEND_REQUEST_PENDING__":
+                        toastMessage = getString(R.string.friend_request_pending_exists);
+                        break;
+                    case "__MSG_FRIEND_REQUEST_ALREADY_FRIENDS__":
+                        toastMessage = getString(R.string.friend_request_already_friends);
+                        break;
+                    case "__MSG_FRIEND_REQUEST_SEND_FAILED__":
+                        toastMessage = getString(R.string.friend_request_send_failed);
+                        break;
+                    case "__MSG_FRIEND_REQUEST_REQUIRES_ONLINE__":
+                        toastMessage = getString(R.string.friend_request_requires_online);
+                        break;
+                    case "__MSG_FRIEND_REQUEST_ACCEPT_SUCCESS__":
+                        toastMessage = getString(R.string.friend_request_accepted);
+                        break;
+                    case "__MSG_FRIEND_REQUEST_REJECT_SUCCESS__":
+                        toastMessage = getString(R.string.friend_request_rejected);
+                        break;
+                    case "__MSG_FRIEND_REQUEST_ACCEPT_FAILED__":
+                        toastMessage = getString(R.string.friend_request_accept_failed);
+                        viewModel.refreshRequestsOnly();
+                        break;
+                    case "__MSG_FRIEND_REQUEST_REJECT_FAILED__":
+                        toastMessage = getString(R.string.friend_request_reject_failed);
+                        viewModel.refreshRequestsOnly();
+                        break;
+                    case "__MSG_UNFRIEND_SUCCESS__":
+                        toastMessage = getString(R.string.unfriend_success);
+                        break;
+                    case "__MSG_UNFRIEND_FAILED__":
+                        toastMessage = getString(R.string.unfriend_failed);
+                        viewModel.retryFriends();
+                        break;
+                    case "__MSG_UNFRIEND_REQUIRES_ONLINE__":
+                        toastMessage = getString(R.string.unfriend_requires_online);
+                        viewModel.retryFriends();
+                        break;
                 }
                 Toast.makeText(requireContext(), toastMessage, Toast.LENGTH_SHORT).show();
                 viewModel.clearFriendActionMessage();
@@ -225,22 +246,37 @@ public class SocialFragment extends Fragment {
         viewModel.getGroupActionMessage().observe(getViewLifecycleOwner(), message -> {
             if (message != null && !message.isEmpty()) {
                 String toastMessage = message;
-                if ("__MSG_GROUP_CREATE_SUCCESS__".equals(message)) {
-                    toastMessage = "Group created successfully";
-                } else if ("__MSG_GROUP_CREATE_FAILED__".equals(message)) {
-                    toastMessage = "Failed to create group";
-                } else if ("__MSG_GROUP_DISBAND_SUCCESS__".equals(message)) {
-                    toastMessage = "Group disbanded";
-                } else if ("__MSG_GROUP_DISBAND_FAILED__".equals(message)) {
-                    toastMessage = "Failed to disband group";
-                } else if ("__MSG_GROUP_LEAVE_SUCCESS__".equals(message)) {
-                    toastMessage = "Left group";
-                } else if ("__MSG_GROUP_LEAVE_FAILED__".equals(message)) {
-                    toastMessage = "Failed to leave group";
-                } else if ("__MSG_GROUP_RENAME_SUCCESS__".equals(message)) {
-                    toastMessage = getString(R.string.group_updated);
-                } else if ("__MSG_GROUP_RENAME_FAILED__".equals(message)) {
-                    toastMessage = getString(R.string.group_update_failed);
+                switch (message) {
+                    case "__MSG_GROUP_CREATE_SUCCESS__":
+                        toastMessage = getString(R.string.group_create_success);
+                        break;
+                    case "__MSG_GROUP_CREATE_FAILED__":
+                        toastMessage = getString(R.string.group_create_failed);
+                        break;
+                    case "__MSG_GROUP_CREATE_REQUIRES_ONLINE__":
+                        toastMessage = getString(R.string.group_create_requires_online);
+                        break;
+                    case "__MSG_GROUP_DISBAND_SUCCESS__":
+                        toastMessage = getString(R.string.group_disbanded);
+                        break;
+                    case "__MSG_GROUP_DISBAND_FAILED__":
+                        toastMessage = getString(R.string.group_disband_failed);
+                        break;
+                    case "__MSG_GROUP_DELETE_REQUIRES_ONLINE__":
+                        toastMessage = getString(R.string.group_delete_requires_online);
+                        break;
+                    case "__MSG_GROUP_LEAVE_SUCCESS__":
+                        toastMessage = getString(R.string.group_leave_success);
+                        break;
+                    case "__MSG_GROUP_LEAVE_FAILED__":
+                        toastMessage = getString(R.string.group_leave_failed);
+                        break;
+                    case "__MSG_GROUP_RENAME_SUCCESS__":
+                        toastMessage = getString(R.string.group_updated);
+                        break;
+                    case "__MSG_GROUP_RENAME_FAILED__":
+                        toastMessage = getString(R.string.group_update_failed);
+                        break;
                 }
                 Toast.makeText(requireContext(), toastMessage, Toast.LENGTH_SHORT).show();
                 viewModel.clearGroupActionMessage();
@@ -303,7 +339,7 @@ public class SocialFragment extends Fragment {
         }
         if (state instanceof UiState.Error) {
             UiState.Error<List<Friend>> error = (UiState.Error<List<Friend>>) state;
-            showState(error.getMessage(), true);
+            showState(error.getMessage());
             return;
         }
 
@@ -325,7 +361,7 @@ public class SocialFragment extends Fragment {
         }
         if (state instanceof UiState.Error) {
             UiState.Error<List<Group>> error = (UiState.Error<List<Group>>) state;
-            showState(error.getMessage(), true);
+            showState(error.getMessage());
             return;
         }
 
@@ -334,6 +370,7 @@ public class SocialFragment extends Fragment {
         showList(groupsAdapter);
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     private void showLoading() {
         recyclerView.setVisibility(View.GONE);
         stateLayout.setVisibility(View.GONE);
@@ -342,12 +379,13 @@ public class SocialFragment extends Fragment {
         recyclerView.setAlpha(1f);
     }
 
-    private void showState(String message, boolean showRetry) {
+    @SuppressLint("ClickableViewAccessibility")
+    private void showState(String message) {
         recyclerView.setVisibility(View.GONE);
         progressLoading.setVisibility(View.GONE);
         stateLayout.setVisibility(View.VISIBLE);
         tvStateMessage.setText(message);
-        btnRetry.setVisibility(showRetry ? View.VISIBLE : View.GONE);
+        btnRetry.setVisibility(View.VISIBLE);
         recyclerView.setOnTouchListener(null);
         recyclerView.setAlpha(1f);
     }
@@ -360,6 +398,7 @@ public class SocialFragment extends Fragment {
         updateActionLoadingUi();
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     private void updateActionLoadingUi() {
         boolean isFriendTab = tabLayout != null && tabLayout.getSelectedTabPosition() == 0;
         boolean isGroupTab = tabLayout != null && tabLayout.getSelectedTabPosition() == 1;
@@ -444,9 +483,7 @@ public class SocialFragment extends Fragment {
                 message,
                 actionBtn,
                 "Cancel",
-                () -> {
-                    viewModel.handleGroupAction(group);
-                });
+                () -> viewModel.handleGroupAction(group));
     }
 
     private void showRenameGroupDialog(Group group) {
@@ -491,6 +528,13 @@ public class SocialFragment extends Fragment {
     }
 
     private void navigateToChatFromGroup(Group group) {
+        if (group == null || group.getServerId() == null
+            || group.getServerId().trim().isEmpty()) {
+            Toast.makeText(requireContext(),
+                "Group is not synced yet. Please reconnect and try again.",
+                Toast.LENGTH_SHORT).show();
+            return;
+        }
         android.net.Uri destUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL_CHAT).buildUpon()
                 .appendQueryParameter("chatType", "group")
                 .appendQueryParameter("chatId", group.getServerId())

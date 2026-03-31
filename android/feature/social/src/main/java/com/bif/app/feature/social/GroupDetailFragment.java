@@ -2,6 +2,7 @@ package com.bif.app.feature.social;
 
 import android.content.res.ColorStateList;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -139,23 +140,44 @@ public class GroupDetailFragment extends Fragment {
                 Toast.makeText(requireContext(), R.string.enter_group_name, Toast.LENGTH_SHORT).show();
                 return;
             }
-            viewModel.updateGroupName(newName);
-            Toast.makeText(requireContext(), R.string.group_updated, Toast.LENGTH_SHORT).show();
+            try {
+                viewModel.updateGroupName(newName);
+                Toast.makeText(requireContext(), R.string.group_updated, Toast.LENGTH_SHORT).show();
+            } catch (IllegalStateException exception) {
+                Toast.makeText(requireContext(), mapPolicyErrorToMessage(exception.getMessage()), Toast.LENGTH_SHORT).show();
+            }
             etGroupName.clearFocus();
         });
     }
 
     private void confirmRemoveMember(Friend member) {
+        if (member == null) {
+            showToast(R.string.group_update_failed);
+            return;
+        }
+
+        String rawMemberName = member.getName();
+        final String memberName = TextUtils.isEmpty(rawMemberName)
+            ? getString(R.string.member_role)
+            : rawMemberName;
+
         DialogUtils.showConfirmDialog(requireContext(),
                 getString(R.string.remove_member),
-                getString(R.string.remove_member_confirm, member.getName()),
+                getString(R.string.remove_member_confirm, memberName),
                 getString(R.string.remove),
                 getString(R.string.cancel),
                 () -> {
-                    viewModel.removeMember(member);
-                    Toast.makeText(requireContext(),
-                            getString(R.string.member_removed, member.getName()),
-                            Toast.LENGTH_SHORT).show();
+                    try {
+                        if (!isAdded()) {
+                            return;
+                        }
+                        viewModel.removeMember(member);
+                        showToast(getString(R.string.member_removed, memberName));
+                    } catch (IllegalStateException exception) {
+                        showToast(mapPolicyErrorToMessage(exception.getMessage()));
+                    } catch (Exception exception) {
+                        showToast(R.string.group_update_failed);
+                    }
                 });
     }
 
@@ -166,11 +188,15 @@ public class GroupDetailFragment extends Fragment {
                 getString(R.string.disband),
                 getString(R.string.cancel),
                 () -> {
-                    viewModel.disbandGroup();
-                    Toast.makeText(requireContext(),
-                            getString(R.string.group_disbanded),
-                            Toast.LENGTH_SHORT).show();
-                    navigateBackToGroups();
+                    try {
+                        viewModel.disbandGroup();
+                        Toast.makeText(requireContext(),
+                                getString(R.string.group_disbanded),
+                                Toast.LENGTH_SHORT).show();
+                        navigateBackToGroups();
+                    } catch (IllegalStateException exception) {
+                        Toast.makeText(requireContext(), mapPolicyErrorToMessage(exception.getMessage()), Toast.LENGTH_SHORT).show();
+                    }
                 });
     }
 
@@ -202,9 +228,40 @@ public class GroupDetailFragment extends Fragment {
                     if (newName.equals(group.getName())) {
                         return;
                     }
-                    viewModel.updateGroupName(newName);
-                    Toast.makeText(requireContext(), R.string.group_updated, Toast.LENGTH_SHORT).show();
+                    try {
+                        viewModel.updateGroupName(newName);
+                        Toast.makeText(requireContext(), R.string.group_updated, Toast.LENGTH_SHORT).show();
+                    } catch (IllegalStateException exception) {
+                        Toast.makeText(requireContext(), mapPolicyErrorToMessage(exception.getMessage()), Toast.LENGTH_SHORT).show();
+                    }
                 })
                 .show();
+    }
+
+    private int mapPolicyErrorToMessage(String code) {
+        if ("GROUP_CREATE_REQUIRES_ONLINE".equals(code)) {
+            return R.string.group_create_requires_online;
+        }
+        if ("GROUP_DELETE_REQUIRES_ONLINE".equals(code)) {
+            return R.string.group_delete_requires_online;
+        }
+        if ("GROUP_REMOVE_MEMBER_REQUIRES_ONLINE".equals(code)) {
+            return R.string.group_remove_member_requires_online;
+        }
+        return R.string.group_update_failed;
+    }
+
+    private void showToast(int messageResId) {
+        if (!isAdded() || getContext() == null) {
+            return;
+        }
+        Toast.makeText(getContext(), messageResId, Toast.LENGTH_SHORT).show();
+    }
+
+    private void showToast(String message) {
+        if (!isAdded() || getContext() == null || message == null) {
+            return;
+        }
+        Toast.makeText(getContext(), message, Toast.LENGTH_SHORT).show();
     }
 }

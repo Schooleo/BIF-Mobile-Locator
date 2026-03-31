@@ -75,7 +75,6 @@ public class PlaceRepository implements IPlaceRepository {
         }
     }
 
-    // Backward-compatible constructor used by tests.
     public PlaceRepository(AndroidGeocodingDataSource geocodingDataSource,
                            RestApiService restApiService,
                            PlaceDao placeDao,
@@ -131,7 +130,6 @@ public class PlaceRepository implements IPlaceRepository {
             List<Place> combinedResults = new ArrayList<>();
             Set<String> seenIds = new HashSet<>();
 
-            // Step 1: Query server first when online.
             if (networkMonitor.isOnline()) {
                 try {
                     Response<List<PlaceDto>> response = restApiService
@@ -142,7 +140,6 @@ public class PlaceRepository implements IPlaceRepository {
                                 combinedResults.add(PlaceMapper.fromDto(dto, true));
                                 seenIds.add(dto.id);
                             }
-                            // Always keep local cache up-to-date from server
                             placeDao.upsert(PlaceMapper.fromDto(dto,
                                     activeUserId));
                         }
@@ -151,7 +148,6 @@ public class PlaceRepository implements IPlaceRepository {
                     Log.e(TAG, "Server search failed", e);
                 }
 
-                // Step 2: Query OSM geocoding next to enrich UX beyond server index.
                 try {
                     List<Address> geocoderResults =
                             geocodingDataSource.geocodeLocation(query);
@@ -183,7 +179,6 @@ public class PlaceRepository implements IPlaceRepository {
                 }
             }
 
-            // Step 3: Append local SQLite cache results last.
             String queryLower = query.toLowerCase(java.util.Locale.getDefault());
             List<PlaceEntity> localMatches = placeDao.searchByName(
                     queryLower, activeUserId);
@@ -214,7 +209,6 @@ public class PlaceRepository implements IPlaceRepository {
             PlaceEntity existing = placeDao.getByIdSync(normalizedPlace.id,
                     activeUserId);
 
-            // Cache locally
             PlaceEntity entity = PlaceMapper.toEntity(normalizedPlace,
                     activeUserId);
             entity.persistedByAction = action;
@@ -230,10 +224,8 @@ public class PlaceRepository implements IPlaceRepository {
 
             placeDao.upsert(entity);
 
-            // Enforce local cache limit
             enforceLocalCacheLimit();
 
-            // Enqueue for server sync
             String operation;
             if (isDelete) {
                 operation = "DELETE";
@@ -333,10 +325,7 @@ public class PlaceRepository implements IPlaceRepository {
         if (appContext == null) {
             return "anonymous";
         }
-        String userId = UserPreferences.getId(appContext);
-        if (userId == null || userId.trim().isEmpty()) {
-            userId = UserPreferences.getUsername(appContext);
-        }
+        String userId = UserPreferences.getUserId(appContext);
         if (userId == null || userId.trim().isEmpty()) {
             return "anonymous";
         }

@@ -8,6 +8,7 @@ import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ImageButton;
@@ -15,26 +16,37 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.android.material.button.MaterialButton;
 import com.bif.app.core.utils.UriUtils;
+import com.bif.app.core.utils.UserPreferences;
+import com.bif.app.domain.model.ChatMessage;
+import com.google.android.material.button.MaterialButton;
 
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
+import dagger.hilt.android.AndroidEntryPoint;
+
+@AndroidEntryPoint
 public class CommonChatFragment extends Fragment {
 
     private ChatMessageAdapter adapter;
+    private ChatViewModel viewModel;
     private String chatType;
+    private String chatId;
     private EditText messageInput;
+    private RecyclerView rvMessages;
+    private int previousSoftInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_UNSPECIFIED;
 
     @Nullable
     @Override
@@ -51,7 +63,7 @@ public class CommonChatFragment extends Fragment {
 
         Bundle args = getArguments();
         chatType = getArg(args, "chatType", "friend");
-        String chatId = getArg(args, "chatId", "");
+        chatId = getArg(args, "chatId", "");
         String chatName = getArg(args, "chatName", getString(R.string.chat_default_name));
         String avatarLetter = getArg(args, "avatarLetter", "?");
         int avatarColor = args != null ? args.getInt("avatarColor", 0) : 0;
@@ -62,10 +74,12 @@ public class CommonChatFragment extends Fragment {
         TextView tvSubtitle = view.findViewById(R.id.tv_chat_subtitle);
         ImageButton btnBack = view.findViewById(R.id.btn_back);
         ImageButton btnGroupSettings = view.findViewById(R.id.btn_group_settings);
-        RecyclerView rvMessages = view.findViewById(R.id.rv_messages);
+        rvMessages = view.findViewById(R.id.rv_messages);
+        View inputBar = view.findViewById(R.id.layout_input_bar);
         EditText etMessage = view.findViewById(R.id.et_message);
         messageInput = etMessage;
         MaterialButton btnSend = view.findViewById(R.id.btn_send);
+        applyKeyboardInsets(view, inputBar, rvMessages);
 
         tvAvatar.setText(avatarLetter);
         if (avatarColor != 0) {
@@ -99,25 +113,34 @@ public class CommonChatFragment extends Fragment {
         }
 
         btnBack.setOnClickListener(v -> navigateBackFromChat(view));
-
-        // Tap blank space on the chat screen to focus the input.
         view.setOnClickListener(v -> focusInputAndShowKeyboard(etMessage));
-
-        // Always open keyboard when entering the chat screen.
         etMessage.post(() -> focusInputAndShowKeyboard(etMessage));
 
+        // Set up adapter
         adapter = new ChatMessageAdapter(this::handleLocationLinkClick);
         rvMessages.setLayoutManager(new LinearLayoutManager(requireContext()));
         rvMessages.setAdapter(adapter);
-        adapter.submit(buildSeedMessages(chatType));
 
+        // Wire ViewModel
+        viewModel = new ViewModelProvider(this).get(ChatViewModel.class);
+
+        String currentUserId = UserPreferences.getId(requireContext());
+        if (currentUserId.isEmpty()) {
+            currentUserId = UserPreferences.getUsername(requireContext());
+        }
+
+        if (!chatId.isEmpty()) {
+            viewModel.init(chatId, chatName, currentUserId);
+        }
+
+        // Observe messages from ViewModel
+        viewModel.getMessages().observe(getViewLifecycleOwner(), this::onMessagesUpdated);
+
+        // Handle initial shared place if navigated here with a place argument
         if (savedInstanceState == null) {
             appendSharedPlaceMessageIfPresent(args);
         }
 
-        rvMessages.scrollToPosition(Math.max(0, adapter.getItemCount() - 1));
-
-        // Tap on the chat area to type immediately instead of triggering any navigation.
         rvMessages.setOnTouchListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_DOWN) {
                 focusInputAndShowKeyboard(etMessage);
@@ -128,22 +151,9 @@ public class CommonChatFragment extends Fragment {
 
         btnSend.setOnClickListener(v -> {
             String input = etMessage.getText().toString().trim();
-            if (input.isEmpty()) {
-                return;
-            }
-
-            adapter.add(new ChatMessageAdapter.ChatMessage(
-                    getString(R.string.chat_you),
-                    input,
-                    "",
-                    "",
-                    nowTime(),
-                    true,
-                    ChatMessageAdapter.MessageType.TEXT
-            ));
-
+            if (input.isEmpty()) return;
+            viewModel.sendMessage(input);
             etMessage.setText("");
-            rvMessages.scrollToPosition(Math.max(0, adapter.getItemCount() - 1));
             focusInputAndShowKeyboard(etMessage);
         });
     }
@@ -151,108 +161,99 @@ public class CommonChatFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        previousSoftInputMode = requireActivity().getWindow().getAttributes().softInputMode;
+        requireActivity().getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
         if (messageInput != null) {
             messageInput.post(() -> focusInputAndShowKeyboard(messageInput));
         }
     }
 
-    private List<ChatMessageAdapter.ChatMessage> buildSeedMessages(String type) {
-        List<ChatMessageAdapter.ChatMessage> list = new ArrayList<>();
+    @Override
+    public void onPause() {
+        requireActivity().getWindow().setSoftInputMode(previousSoftInputMode);
+        super.onPause();
+    }
 
-        if ("group".equalsIgnoreCase(type)) {
-            list.add(new ChatMessageAdapter.ChatMessage(
-                    "Alice",
-                    getString(R.string.chat_seed_group_1),
-                    "",
-                    "",
-                    "10:30",
-                    false,
-                    ChatMessageAdapter.MessageType.TEXT
-            ));
-            list.add(new ChatMessageAdapter.ChatMessage(
-                    getString(R.string.chat_you),
-                    getString(R.string.chat_seed_group_2),
-                    "",
-                    "",
-                    "10:32",
-                    true,
-                    ChatMessageAdapter.MessageType.TEXT
-            ));
-            list.add(new ChatMessageAdapter.ChatMessage(
-                    "Bob",
-                    getString(R.string.chat_seed_group_3),
-                    getString(R.string.chat_seed_group_4),
+    // ─── LiveData observers ────────────────────────────────────────────────────
+
+    private void onMessagesUpdated(List<ChatMessage> messages) {
+        if (messages == null) return;
+        List<ChatMessageAdapter.ChatMessage> adapterMessages = new ArrayList<>();
+        for (ChatMessage msg : messages) {
+            adapterMessages.add(domainToAdapterMessage(msg));
+        }
+        adapter.submit(adapterMessages);
+        scrollToBottom();
+    }
+
+    private ChatMessageAdapter.ChatMessage domainToAdapterMessage(ChatMessage msg) {
+        String senderDisplay = msg.getSenderName() != null && !msg.getSenderName().isEmpty()
+                ? msg.getSenderName()
+                : (msg.getSenderUserId() != null ? msg.getSenderUserId() : "");
+        if (msg.isOutgoing()) senderDisplay = getString(R.string.chat_you);
+
+        String time = DateFormat.format("HH:mm", new Date(msg.getSentAt())).toString();
+
+        if (msg.isLocationMessage()) {
+            String title = msg.getContent() != null && !msg.getContent().isEmpty()
+                    ? msg.getContent()
+                    : msg.getSharedAddress();
+            return new ChatMessageAdapter.ChatMessage(
+                    senderDisplay,
+                    title != null ? title : "",
+                    msg.getSharedAddress() != null ? msg.getSharedAddress() : "",
                     getString(R.string.chat_seed_group_5),
-                    "10:35",
-                    false,
+                    buildMapQuery(msg),
+                    time,
+                    msg.isOutgoing(),
                     ChatMessageAdapter.MessageType.LOCATION
-            ));
-        } else {
-            list.add(new ChatMessageAdapter.ChatMessage(
-                    getString(R.string.chat_friend_name),
-                    getString(R.string.chat_seed_friend_1),
-                    "",
-                    "",
-                    "09:48",
-                    false,
-                    ChatMessageAdapter.MessageType.TEXT
-            ));
-            list.add(new ChatMessageAdapter.ChatMessage(
-                    getString(R.string.chat_you),
-                    getString(R.string.chat_seed_friend_2),
-                    "",
-                    "",
-                    "09:50",
-                    true,
-                    ChatMessageAdapter.MessageType.TEXT
-            ));
+            );
         }
 
-        return list;
+        return new ChatMessageAdapter.ChatMessage(
+                senderDisplay,
+                msg.getContent() != null ? msg.getContent() : "",
+                "",
+                "",
+                time,
+                msg.isOutgoing(),
+                ChatMessageAdapter.MessageType.TEXT
+        );
     }
 
-    private String nowTime() {
-        return DateFormat.format("HH:mm", new Date()).toString();
+    private String buildMapQuery(ChatMessage msg) {
+        if (msg.getSharedLatitude() != 0 || msg.getSharedLongitude() != 0) {
+            return msg.getSharedLatitude() + "," + msg.getSharedLongitude();
+        }
+        return msg.getSharedAddress() != null ? msg.getSharedAddress() : "";
     }
+
+    // ─── Shared place from navigation args ─────────────────────────────────────
 
     private void appendSharedPlaceMessageIfPresent(Bundle args) {
-        if (args == null || !"group".equalsIgnoreCase(chatType)) {
-            return;
-        }
+        if (args == null || !"group".equalsIgnoreCase(chatType)) return;
 
         String placeName = getArg(args, "sharedPlaceName", "");
-        if (placeName.isEmpty()) {
-            return;
-        }
+        if (placeName.isEmpty()) return;
 
-        String placeAddress = getArg(args, "sharedPlaceAddress", "");
-        String mapLink = getArg(args, "sharedPlaceLink", "");
+        double lat = 0, lng = 0;
+        String address = getArg(args, "sharedPlaceAddress", "");
+        try {
+            lat = Double.parseDouble(getArg(args, "sharedPlaceLat", "0"));
+            lng = Double.parseDouble(getArg(args, "sharedPlaceLng", "0"));
+        } catch (NumberFormatException ignored) {}
 
-        adapter.add(new ChatMessageAdapter.ChatMessage(
-                getString(R.string.chat_you),
-                placeName,
-                placeAddress,
-                getString(R.string.chat_seed_group_5),
-                mapLink,
-                nowTime(),
-                true,
-                ChatMessageAdapter.MessageType.LOCATION
-        ));
+        viewModel.shareLocation(lat, lng, placeName);
     }
+
+    // ─── Navigation / UI helpers ───────────────────────────────────────────────
 
     private void handleLocationLinkClick(ChatMessageAdapter.ChatMessage message) {
         String mapQuery = message.getMapQuery();
         if (mapQuery == null || mapQuery.trim().isEmpty()) {
-            if (message.getSubtitle() != null && !message.getSubtitle().trim().isEmpty()) {
-                mapQuery = message.getSubtitle();
-            } else {
-                mapQuery = message.getTitle();
-            }
+            mapQuery = message.getSubtitle() != null && !message.getSubtitle().trim().isEmpty()
+                    ? message.getSubtitle() : message.getTitle();
         }
-
-        Bundle args = new Bundle();
-        args.putString("location", mapQuery);
-        // Using deep link navigation for map to avoid direct resource dependency across modules
         android.net.Uri mapUri = UriUtils.buildUri("/map")
                 .buildUpon()
                 .appendQueryParameter("location", mapQuery)
@@ -260,23 +261,22 @@ public class CommonChatFragment extends Fragment {
         Navigation.findNavController(requireView()).navigate(mapUri);
     }
 
+    private void scrollToBottom() {
+        if (rvMessages != null && adapter.getItemCount() > 0) {
+            rvMessages.post(() -> rvMessages.scrollToPosition(adapter.getItemCount() - 1));
+        }
+    }
+
     private String getArg(Bundle args, String key, String fallback) {
-        if (args == null) {
-            return fallback;
-        }
+        if (args == null) return fallback;
         String value = args.getString(key);
-        if (value == null || value.trim().isEmpty()) {
-            return fallback;
-        }
-        return value;
+        return (value == null || value.trim().isEmpty()) ? fallback : value;
     }
 
     private void navigateBackFromChat(View rootView) {
         if ("group".equalsIgnoreCase(chatType)) {
-            // Ask Social screen to open the Groups tab after navigation.
             getParentFragmentManager().setFragmentResult("groupDetailResult", new Bundle());
         }
-
         android.net.Uri socialUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL);
         Navigation.findNavController(rootView).navigate(socialUri);
     }
@@ -295,12 +295,9 @@ public class CommonChatFragment extends Fragment {
             imm.showSoftInput(etMessage, InputMethodManager.SHOW_IMPLICIT);
         }
 
-        // Retry once after layout pass for devices that ignore the first request.
         etMessage.postDelayed(() -> {
             if (isAdded()) {
-                if (!etMessage.hasFocus()) {
-                    etMessage.requestFocus();
-                }
+                if (!etMessage.hasFocus()) etMessage.requestFocus();
                 WindowInsetsControllerCompat delayedController = ViewCompat.getWindowInsetsController(etMessage);
                 if (delayedController != null) {
                     delayedController.show(WindowInsetsCompat.Type.ime());
@@ -310,5 +307,35 @@ public class CommonChatFragment extends Fragment {
                 }
             }
         }, 120);
+    }
+
+    private void applyKeyboardInsets(View root, View inputBar, RecyclerView messagesView) {
+        final int inputPadLeft = inputBar.getPaddingLeft();
+        final int inputPadTop = inputBar.getPaddingTop();
+        final int inputPadRight = inputBar.getPaddingRight();
+        final int inputPadBottom = inputBar.getPaddingBottom();
+
+        final int listPadLeft = messagesView.getPaddingLeft();
+        final int listPadTop = messagesView.getPaddingTop();
+        final int listPadRight = messagesView.getPaddingRight();
+        final int listPadBottom = messagesView.getPaddingBottom();
+
+        ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+            Insets imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime());
+            Insets systemInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            int imeOffset = Math.max(0, imeInsets.bottom - systemInsets.bottom);
+            inputBar.setTranslationY(-imeOffset);
+
+            int inputBarHeight = inputBar.getHeight();
+            int recyclerBottomPadding = listPadBottom + inputBarHeight + imeOffset;
+            messagesView.setPadding(listPadLeft, listPadTop, listPadRight, recyclerBottomPadding);
+            inputBar.setPadding(inputPadLeft, inputPadTop, inputPadRight, inputPadBottom);
+            return insets;
+        });
+
+        inputBar.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) ->
+                ViewCompat.requestApplyInsets(root)
+        );
+        ViewCompat.requestApplyInsets(root);
     }
 }
