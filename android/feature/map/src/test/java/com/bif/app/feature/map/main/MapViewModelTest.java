@@ -2,6 +2,7 @@ package com.bif.app.feature.map.main;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.MutableLiveData;
@@ -11,10 +12,12 @@ import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
 import com.bif.app.domain.model.Place;
+import com.bif.app.domain.model.Route;
 import com.bif.app.domain.repository.IFavoriteRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
+import com.bif.app.domain.repository.IRouteRepository;
 
 import java.util.Collections;
 import java.util.List;
@@ -48,6 +51,9 @@ public class MapViewModelTest {
     private IGroupRepository groupRepository;
 
     @Mock
+    private IRouteRepository routeRepository;
+
+    @Mock
     private Observer<Location> searchResultObserver;
 
     @Mock
@@ -64,8 +70,15 @@ public class MapViewModelTest {
             .thenReturn(new MutableLiveData<>());
         Mockito.lenient().when(groupRepository.getGroups())
             .thenReturn(new MutableLiveData<>(Collections.emptyList()));
+        Mockito.lenient().when(routeRepository.getRoute(ArgumentMatchers.anyList()))
+            .thenReturn(new MutableLiveData<>());
 
-        viewModel = new MapViewModel(mapRepository, placeRepository, favoriteRepository, groupRepository);
+        viewModel = new MapViewModel(
+                mapRepository,
+                placeRepository,
+                favoriteRepository,
+                groupRepository,
+                routeRepository);
         viewModel.searchResult.observeForever(searchResultObserver);
         viewModel.statusText.observeForever(statusTextObserver);
     }
@@ -235,7 +248,13 @@ public class MapViewModelTest {
         MutableLiveData<List<Favorite>> favsLiveData = new MutableLiveData<>();
         Mockito.when(favoriteRepository.getAllFavorites()).thenReturn(favsLiveData);
         Mockito.when(groupRepository.getGroups()).thenReturn(new MutableLiveData<>(Collections.emptyList()));
-        MapViewModel vm = new MapViewModel(mapRepository, placeRepository, favoriteRepository, groupRepository);
+        Mockito.when(routeRepository.getRoute(ArgumentMatchers.anyList())).thenReturn(new MutableLiveData<>());
+        MapViewModel vm = new MapViewModel(
+            mapRepository,
+            placeRepository,
+            favoriteRepository,
+            groupRepository,
+            routeRepository);
 
         Observer<List<Favorite>> observer = Mockito.mock(Observer.class);
         vm.allFavorites.observeForever(observer);
@@ -251,5 +270,51 @@ public class MapViewModelTest {
         Mockito.verify(observer).onChanged(captor.capture());
         assertEquals(1, captor.getValue().size());
         assertEquals("My Favorite Place", captor.getValue().get(0).name);
+    }
+
+    @Test
+    public void estimateRoute_whenRouteAvailable_updatesStatusTextWithSummary() {
+        // Arrange
+        MutableLiveData<Route> routeLiveData = new MutableLiveData<>();
+        Mockito.when(routeRepository.getRoute(ArgumentMatchers.anyList())).thenReturn(routeLiveData);
+
+        // Act
+        viewModel.estimateRoute(new Location(10.0, 106.0), new Location(10.1, 106.1));
+        routeLiveData.setValue(new Route(2500.0, 600.0, "{}", "driving", Route.SOURCE_ONLINE));
+
+        // Assert
+        Event<String> event = viewModel.statusText.getValue();
+        assertNotNull(event);
+        String summary = event.peekContent();
+        assertNotNull(summary);
+        assertTrue(summary.contains("Route"));
+        assertTrue(summary.toLowerCase().contains("online"));
+
+        String routeSummary = viewModel.routeSummary.getValue();
+        assertNotNull(routeSummary);
+        assertTrue(routeSummary.contains("Route"));
+
+        String routeGeometry = viewModel.routeGeometryJson.getValue();
+        assertNotNull(routeGeometry);
+        assertEquals("{}", routeGeometry);
+    }
+
+    @Test
+    public void estimateRoute_whenRouteUnavailable_showsNoMapDataMessage() {
+        // Arrange
+        MutableLiveData<Route> routeLiveData = new MutableLiveData<>();
+        Mockito.when(routeRepository.getRoute(ArgumentMatchers.anyList())).thenReturn(routeLiveData);
+
+        // Act
+        viewModel.estimateRoute(new Location(10.0, 106.0), new Location(10.1, 106.1));
+        routeLiveData.setValue(null);
+
+        // Assert
+        assertEquals("No map data downloaded", viewModel.routeSummary.getValue());
+        assertEquals(null, viewModel.routeGeometryJson.getValue());
+
+        Event<String> event = viewModel.statusText.getValue();
+        assertNotNull(event);
+        assertEquals("No map data downloaded", event.peekContent());
     }
 }

@@ -18,6 +18,8 @@ import okhttp3.logging.HttpLoggingInterceptor;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
+import java.util.concurrent.TimeUnit;
+
 @Module
 @InstallIn(SingletonComponent.class)
 public class NetworkModule {
@@ -26,17 +28,24 @@ public class NetworkModule {
     @Singleton
     public OkHttpClient provideOkHttpClient(
             AuthInterceptor authInterceptor,
-            TokenRefreshAuthenticator tokenRefreshAuthenticator
-    ) {
+            TokenRefreshAuthenticator tokenRefreshAuthenticator) {
 
-        // Prints network traffic to Logcat
+        // BODY logging can OOM on large/binary payloads (offline map downloads).
+        // Keep debug logs useful while preventing full-body buffering.
         HttpLoggingInterceptor loggingInterceptor = new HttpLoggingInterceptor();
-        loggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
+        loggingInterceptor.setLevel(
+                com.bif.app.BuildConfig.DEBUG
+                        ? HttpLoggingInterceptor.Level.BASIC
+                        : HttpLoggingInterceptor.Level.NONE);
 
         return new OkHttpClient.Builder()
                 .addInterceptor(authInterceptor) // Attaches JWT
                 .authenticator(tokenRefreshAuthenticator)
                 .addInterceptor(loggingInterceptor) // Prints the logs
+                .connectTimeout(20, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .writeTimeout(60, TimeUnit.SECONDS)
+                .callTimeout(75, TimeUnit.SECONDS)
                 .build();
     }
 
@@ -87,4 +96,3 @@ public class NetworkModule {
         return baseHost + "/ws/websocket";
     }
 }
-

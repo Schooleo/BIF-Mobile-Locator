@@ -17,6 +17,7 @@ import com.bif.server.common.models.Location;
 import com.bif.server.features.route.dto.rest.RouteRequest;
 import com.bif.server.features.route.dto.rest.RouteResponse;
 import com.bif.server.features.route.services.OsrmRouteService;
+import com.bif.server.features.route.services.RouteNotFoundException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
@@ -63,5 +64,20 @@ class RouteRestControllerTest {
         ResponseEntity<RouteResponse> result = controller.route(request);
 
         assertEquals(HttpStatus.BAD_REQUEST, result.getStatusCode());
+    }
+
+    @Test
+    void route_WhenNoRouteFound_ReturnsNotFound() {
+        RouteRequest request = new RouteRequest(List.of(
+                new Location(10.7037989, 106.7208914),
+                new Location(10.699896578323205, 106.71619663930733)
+        ), "foot");
+
+        when(osrmRouteService.route(request.waypoints(), request.profile()))
+                .thenThrow(new RouteNotFoundException("No route found in OSRM response"));
+
+        ResponseEntity<RouteResponse> result = controller.route(request);
+
+        assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
     }
 }

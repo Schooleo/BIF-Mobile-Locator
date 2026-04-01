@@ -11,9 +11,13 @@ import androidx.lifecycle.LiveData;
 import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.IFavoriteRepository;
+import com.bif.app.domain.repository.IGroupRepository;
+import com.bif.app.domain.repository.IRouteRepository;
+import com.bif.app.domain.model.Friend;
 import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
+import com.bif.app.domain.model.Group;
 import java.util.List;
 import java.util.Collections;
 import com.bif.app.domain.model.MapState;
@@ -39,6 +43,8 @@ public class MapViewModelInstrumentedTest {
     private IMapRepository mapRepository;
     private IPlaceRepository placeRepository;
     private IFavoriteRepository favoriteRepository;
+    private IGroupRepository groupRepository;
+    private IRouteRepository routeRepository;
     private Context context;
 
     private static class FakeMapRepository implements IMapRepository {
@@ -65,6 +71,25 @@ public class MapViewModelInstrumentedTest {
         public LiveData<List<Place>> searchPlaces(String query) {
             return new MutableLiveData<>(Collections.emptyList());
         }
+
+        @Override
+        public LiveData<List<Place>> searchPlacesFromHistory(String query) {
+            return new MutableLiveData<>(Collections.emptyList());
+        }
+
+        @Override
+        public void persistPlace(Place place, String action) {
+        }
+
+        @Override
+        public LiveData<List<Place>> getAllPersistedPlaces() {
+            return new MutableLiveData<>(Collections.emptyList());
+        }
+
+        @Override
+        public LiveData<List<String>> getSearchHistory() {
+            return new MutableLiveData<>(Collections.emptyList());
+        }
     }
 
     private static class FakeFavoriteRepository implements IFavoriteRepository {
@@ -88,6 +113,57 @@ public class MapViewModelInstrumentedTest {
         }
     }
 
+    private static class FakeGroupRepository implements IGroupRepository {
+        @Override
+        public LiveData<List<Group>> getGroups() {
+            return new MutableLiveData<>(Collections.emptyList());
+        }
+
+        @Override
+        public LiveData<Group> getGroupById(int groupId) {
+            return new MutableLiveData<>(null);
+        }
+
+        @Override
+        public void createGroup(String name, List<Friend> selectedFriends) {
+        }
+
+        @Override
+        public void updateGroup(Group group) {
+        }
+
+        @Override
+        public void addMember(int groupId, int friendId) {
+        }
+
+        @Override
+        public void removeMember(int groupId, int friendId) {
+        }
+
+        @Override
+        public void updateMemberRole(int groupId, int friendId, String role) {
+        }
+
+        @Override
+        public void leaveGroup(Group group) {
+        }
+
+        @Override
+        public void disbandGroup(Group group) {
+        }
+
+        @Override
+        public void refreshGroups() {
+        }
+    }
+
+    private static class FakeRouteRepository implements IRouteRepository {
+        @Override
+        public LiveData<com.bif.app.domain.model.Route> getRoute(List<Location> waypoints) {
+            return new MutableLiveData<>(null);
+        }
+    }
+
     @Before
     public void setUp() {
         context = InstrumentationRegistry.getInstrumentation().getTargetContext();
@@ -95,7 +171,14 @@ public class MapViewModelInstrumentedTest {
         placeRepository = new FakePlaceRepository();
         mapRepository = new FakeMapRepository();
         favoriteRepository = new FakeFavoriteRepository();
-        viewModel = new MapViewModel(mapRepository, placeRepository, favoriteRepository);
+        groupRepository = new FakeGroupRepository();
+        routeRepository = new FakeRouteRepository();
+        viewModel = new MapViewModel(
+            mapRepository,
+            placeRepository,
+            favoriteRepository,
+            groupRepository,
+            routeRepository);
     }
 
     @After
@@ -117,7 +200,9 @@ public class MapViewModelInstrumentedTest {
         MapViewModel newViewModel = new MapViewModel(
                 mapRepository,
                 placeRepository,
-                favoriteRepository
+            favoriteRepository,
+            groupRepository,
+            routeRepository
         );
 
         MapState retrievedState = newViewModel.getLastMapState();
@@ -133,7 +218,11 @@ public class MapViewModelInstrumentedTest {
     public void setStatusText_updatesLiveData() throws InterruptedException {
         // Arrange
         final String[] observedValue = new String[1];
-        Observer<String> observer = value -> observedValue[0] = value;
+        Observer<Event<String>> observer = value -> {
+            if (value != null) {
+                observedValue[0] = value.peekContent();
+            }
+        };
         viewModel.statusText.observeForever(observer);
 
         // Act

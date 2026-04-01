@@ -8,12 +8,14 @@ import android.widget.EditText;
 
 import androidx.appcompat.app.AlertDialog;
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
 public class DialogUtils {
     private static final String TAG = "DialogUtils";
     public static void showConfirmDialog(Context context, String title, String message,
                                          String positiveText, String negativeText,
                                          Runnable onConfirm) {
-        new AlertDialog.Builder(context)
+        new MaterialAlertDialogBuilder(context)
                 .setTitle(title)
                 .setMessage(message)
                 .setPositiveButton(positiveText, (dialog, which) -> {

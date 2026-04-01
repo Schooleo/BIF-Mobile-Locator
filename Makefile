@@ -27,7 +27,7 @@ DEBUG_PROFILES := --profile db --profile ai --profile logs
 
 .DEFAULT_GOAL := help
 
-.PHONY: help env network-create up up-debug prod build down down-debug destroy logs ps shell init-maps
+.PHONY: help env network-create up up-debug prod build down down-debug destroy logs ps shell init-map init-city-map
 
 help:
 	@echo ========================================================
@@ -43,6 +43,8 @@ help:
 	@echo.
 	@echo SETUP COMMANDS:
 	@echo   init-maps    - Download Overture places + OSM data and compile OSRM routing graph
+	@echo   init-city-map - Build city-level OSRM graph from LAT/LON in Vietnam
+	@echo                  Example: make init-city-map LAT=10.7769 LON=106.7009 RADIUS_KM=20
 	@echo.
 	@echo SHUTDOWN COMMANDS:
 	@echo   down         - Stop CORE services (keeps volumes)
@@ -86,6 +88,10 @@ up: network-create env
 init-map: env
 	@echo Downloading map data and compiling OSRM routing graph...
 	@bash init-scripts/init-map-data.sh
+
+init-city-map: env
+	@echo Building city-level map around LAT=$(LAT), LON=$(LON), RADIUS_KM=$(RADIUS_KM)...
+	@LAT="$(LAT)" LON="$(LON)" RADIUS_KM="$(RADIUS_KM)" bash init-scripts/init-city-map.sh
 
 up-debug: network-create env
 	@echo Starting debug tools only...

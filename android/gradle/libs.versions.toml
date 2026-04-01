@@ -35,6 +35,7 @@ stomp-protocol = "1.6.6"
 java-websocket = "1.6.0"
 rxjava2 = "2.2.21"
 rxandroid2 = "2.1.1"
+graphhopper = "8.0"
 
 [libraries]
 apollo-java-client = { group = "com.apollographql.java", name = "client", version.ref = "apollo-java" }
@@ -75,6 +76,7 @@ stomp-protocol = { group = "com.github.NaikSoftware", name = "StompProtocolAndro
 java-websocket = { group = "org.java-websocket", name = "Java-WebSocket", version.ref = "java-websocket" }
 rxjava2 = { group = "io.reactivex.rxjava2", name = "rxjava", version.ref = "rxjava2" }
 rxandroid2 = { group = "io.reactivex.rxjava2", name = "rxandroid", version.ref = "rxandroid2" }
+graphhopper-core = { group = "com.graphhopper", name = "graphhopper-core", version.ref = "graphhopper" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

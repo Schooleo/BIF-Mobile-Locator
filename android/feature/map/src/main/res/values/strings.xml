@@ -12,8 +12,19 @@
     <string name="about_header">About</string>
     <string name="photos_header">Photos</string>
     <string name="share_place">Share Place</string>
-    <string name="navigate_to_place">Go to Place</string>
+    <string name="navigate_to_place">Route to Place</string>
     <string name="no_group_available">No group available to share.</string>
     <string name="select_group_to_share">Share to group</string>
     <string name="maps_app_not_found">No map application found.</string>
+    <string name="route_estimating">Estimating route...</string>
+    <string name="no_map_data_downloaded">No map data downloaded</string>
+    <string name="route_not_supported_outside_vietnam">Not supported outside of Vietnam</string>
+    <string name="download_map">Download</string>
+    <string name="download_map_title">Download Offline Map</string>
+    <string name="download_map_message">Download map data for this city so routing can work offline?</string>
+    <string name="download_map_confirm">Download</string>
+    <string name="download_map_success">Offline map data downloaded</string>
+    <string name="download_map_failed">Could not download offline map data</string>
+    <string name="download_map_location_required">Current location unavailable for map download.</string>
+    <string name="download_map_in_progress">Downloading...</string>
 </resources>

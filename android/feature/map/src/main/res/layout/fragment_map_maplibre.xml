@@ -61,6 +61,45 @@
         android:src="@android:drawable/ic_menu_mylocation"
         app:tint="?attr/colorPrimary" />
 
+    <LinearLayout
+        android:id="@+id/layout_download_city_map"
+        android:layout_width="164dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:layout_marginStart="16dp"
+        android:layout_marginBottom="100dp"
+        android:elevation="6dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_download_city_map"
+            style="@style/Widget.MaterialComponents.Button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minHeight="44dp"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="10dp"
+            android:text="@string/download_map"
+            android:textAllCaps="false"
+            app:icon="@android:drawable/stat_sys_download"
+            app:iconGravity="textStart"
+            app:iconPadding="8dp" />
+
+        <com.google.android.material.progressindicator.LinearProgressIndicator
+            android:id="@+id/progress_download_city_map"
+            android:layout_width="match_parent"
+            android:layout_height="4dp"
+            android:layout_marginTop="8dp"
+            android:indeterminate="false"
+            android:max="100"
+            android:visibility="gone"
+            tools:progress="45"
+            tools:visibility="visible" />
+    </LinearLayout>
+
     <include
         layout="@layout/dialog_place_detail"
         android:layout_width="match_parent"

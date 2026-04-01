@@ -46,6 +46,7 @@ dependencies {
     androidTestImplementation libs.espresso.core
     implementation libs.retrofit.core
     implementation libs.retrofit.gson
+    implementation libs.graphhopper.core
 
     // STOMP + RxJava2 for real-time WebSocket chat
     implementation(libs.stomp.protocol) {
