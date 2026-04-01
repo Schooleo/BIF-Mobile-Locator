@@ -4,7 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
-import com.bif.app.core.network.dto.FavoriteDto;
+import com.bif.app.core.network.dto.favorite.FavoriteDto;
 import com.bif.app.data.source.local.entity.FavoriteEntity;
 import com.bif.app.domain.model.Favorite;
 

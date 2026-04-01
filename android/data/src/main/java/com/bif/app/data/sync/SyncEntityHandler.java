@@ -1,6 +1,6 @@
 package com.bif.app.data.sync;
 
-import com.bif.app.core.network.dto.SyncChangeDto;
+import com.bif.app.core.network.dto.sync.SyncChangeDto;
 
 public interface SyncEntityHandler {
     String entityType();
@@ -9,3 +9,4 @@ public interface SyncEntityHandler {
 
     void applyPulledChange(SyncChangeDto change, String activeUserId);
 }
+

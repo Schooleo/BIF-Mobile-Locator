@@ -2,8 +2,8 @@ package com.bif.app.data.sync;
 
 import android.util.Log;
 
-import com.bif.app.core.network.dto.ChatMessageDto;
-import com.bif.app.core.network.dto.SyncChangeDto;
+import com.bif.app.core.network.dto.chat.ChatMessageDto;
+import com.bif.app.core.network.dto.sync.SyncChangeDto;
 import com.bif.app.data.source.local.ChatMessageDao;
 import com.bif.app.data.source.local.entity.ChatMessageEntity;
 import com.google.gson.Gson;
@@ -93,3 +93,4 @@ public class ChatMessageSyncEntityHandler implements SyncEntityHandler {
         }
     }
 }
+

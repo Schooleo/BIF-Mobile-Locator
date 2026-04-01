@@ -10,10 +10,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.bif.app.core.network.RestApiService;
-import com.bif.app.core.network.dto.PlaceDto;
-import com.bif.app.core.network.dto.SyncChangeDto;
-import com.bif.app.core.network.dto.SyncRequestDto;
-import com.bif.app.core.network.dto.SyncResponseDto;
+import com.bif.app.core.network.dto.place.PlaceDto;
+import com.bif.app.core.network.dto.sync.SyncChangeDto;
+import com.bif.app.core.network.dto.sync.SyncRequestDto;
+import com.bif.app.core.network.dto.sync.SyncResponseDto;
 import com.bif.app.data.source.local.SyncQueueDao;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 
@@ -330,3 +330,4 @@ public class SyncManagerTest {
         verify(mockSyncQueueDao, never()).resetInFlight();
     }
 }
+

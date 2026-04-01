@@ -2,8 +2,8 @@ package com.bif.app.data.sync;
 
 import android.util.Log;
 
-import com.bif.app.core.network.dto.GroupApiModel;
-import com.bif.app.core.network.dto.SyncChangeDto;
+import com.bif.app.core.network.dto.group.GroupApiModel;
+import com.bif.app.core.network.dto.sync.SyncChangeDto;
 import com.bif.app.data.source.local.GroupDao;
 import com.bif.app.data.source.local.entity.GroupEntity;
 import com.google.gson.Gson;
@@ -97,3 +97,4 @@ public class GroupSyncEntityHandler implements SyncEntityHandler {
         return Math.abs(source.hashCode());
     }
 }
+

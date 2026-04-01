@@ -198,3 +198,4 @@ class TripRestControllerTest {
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
     }
 }
+

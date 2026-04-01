@@ -3,8 +3,8 @@ package com.bif.app.data.repository;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.Transformations;
 
-import com.bif.app.core.network.dto.ChatMessageDto;
-import com.bif.app.core.network.dto.TripStopDto;
+import com.bif.app.core.network.dto.chat.ChatMessageDto;
+import com.bif.app.core.network.dto.trip.TripStopDto;
 import com.bif.app.data.source.local.TripDao;
 import com.bif.app.data.source.local.entity.TripStopEntity;
 import com.bif.app.data.sync.SyncManager;
@@ -233,3 +233,4 @@ public class TripRepository implements ITripRepository {
         }
     }
 }
+

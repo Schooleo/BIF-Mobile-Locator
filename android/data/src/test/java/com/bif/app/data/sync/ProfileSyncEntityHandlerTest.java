@@ -8,7 +8,7 @@ import static org.mockito.Mockito.verify;
 
 import android.content.Context;
 
-import com.bif.app.core.network.dto.SyncChangeDto;
+import com.bif.app.core.network.dto.sync.SyncChangeDto;
 import com.bif.app.data.source.local.ProfileDao;
 import com.bif.app.data.source.local.entity.ProfileEntity;
 import com.google.gson.Gson;
@@ -89,3 +89,4 @@ public class ProfileSyncEntityHandlerTest {
         verify(profileDao, never()).upsert(any(ProfileEntity.class));
     }
 }
+

@@ -2,7 +2,7 @@ package com.bif.app.data.sync;
 
 import android.util.Log;
 
-import com.bif.app.core.network.dto.SyncChangeDto;
+import com.bif.app.core.network.dto.sync.SyncChangeDto;
 import com.bif.app.core.network.dto.friendship.FriendshipApiModel;
 import com.bif.app.data.mapper.FriendshipMapper;
 import com.bif.app.data.source.local.FriendDao;
@@ -132,3 +132,4 @@ public class FriendshipSyncEntityHandler implements SyncEntityHandler {
         return source.trim().substring(0, 1).toUpperCase();
     }
 }
+

@@ -9,7 +9,7 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Transformations;
 
 import com.bif.app.core.network.RestApiService;
-import com.bif.app.core.network.dto.PlaceDto;
+import com.bif.app.core.network.dto.place.PlaceDto;
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.PlaceMapper;
 import com.bif.app.data.source.AndroidGeocodingDataSource;

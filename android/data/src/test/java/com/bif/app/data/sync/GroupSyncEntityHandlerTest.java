@@ -3,7 +3,7 @@ package com.bif.app.data.sync;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.bif.app.core.network.dto.SyncChangeDto;
+import com.bif.app.core.network.dto.sync.SyncChangeDto;
 import com.bif.app.data.source.local.GroupDao;
 import com.bif.app.data.source.local.entity.GroupEntity;
 import com.google.gson.Gson;
@@ -66,3 +66,4 @@ public class GroupSyncEntityHandlerTest {
         org.junit.Assert.assertTrue(saved.isOwner());
     }
 }
+

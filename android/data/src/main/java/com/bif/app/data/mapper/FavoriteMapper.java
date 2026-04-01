@@ -1,6 +1,6 @@
 package com.bif.app.data.mapper;
 
-import com.bif.app.core.network.dto.FavoriteDto;
+import com.bif.app.core.network.dto.favorite.FavoriteDto;
 import com.bif.app.core.network.dto.favorite.FavoriteLocationDto;
 import com.bif.app.core.network.dto.favorite.FavoriteRequestDto;
 import com.bif.app.core.network.dto.favorite.FavoriteResponseDto;
