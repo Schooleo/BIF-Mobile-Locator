@@ -4,7 +4,7 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
 import com.bif.app.core.network.RestApiService;
-import com.bif.app.core.network.dto.UserApiModel;
+import com.bif.app.core.network.dto.user.UserApiModel;
 import com.bif.app.core.network.dto.friendship.CreateFriendRequestDto;
 import com.bif.app.core.network.dto.friendship.FriendshipApiModel;
 import com.bif.app.data.mapper.FriendMapper;

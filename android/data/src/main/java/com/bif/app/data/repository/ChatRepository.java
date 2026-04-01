@@ -9,8 +9,8 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.Transformations;
 
 import com.bif.app.core.network.RestApiService;
-import com.bif.app.core.network.dto.ChatMessageDto;
-import com.bif.app.core.network.dto.UserApiModel;
+import com.bif.app.core.network.dto.chat.ChatMessageDto;
+import com.bif.app.core.network.dto.user.UserApiModel;
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.ChatMapper;
 import com.bif.app.data.sync.NetworkMonitor;
@@ -68,7 +68,7 @@ public class ChatRepository implements IChatRepository {
     private final Map<String, String> userNamesById = new ConcurrentHashMap<>();
     private volatile long userNameCacheUpdatedAtMs = 0L;
 
-    // Base WebSocket URL — mirrors REST_BASE_URL but uses the ws/stomp endpoint.
+    // Base WebSocket URL - mirrors REST_BASE_URL but uses the ws/stomp endpoint.
     // SockJS fallback: the server exposes /ws via SockJS.
     // The STOMP library will append /websocket for the raw socket connection.
     private static final String WS_URL_TEMPLATE = "ws://%s:8080/ws/websocket";
@@ -96,7 +96,7 @@ public class ChatRepository implements IChatRepository {
         this.gson = new Gson();
     }
 
-    // ─── IChatRepository ───────────────────────────────────────────────────────
+    // IChatRepository
 
     @Override
     public LiveData<List<ChatMessage>> getMessagesByGroup(String groupId) {
@@ -164,7 +164,7 @@ public class ChatRepository implements IChatRepository {
 
             @Override
             public void onFailure(@NonNull Call<List<ChatMessageDto>> call, @NonNull Throwable t) {
-                Log.w(TAG, "refreshMessages failed — using cached data", t);
+                Log.w(TAG, "refreshMessages failed - using cached data", t);
             }
         });
     }
@@ -236,7 +236,7 @@ public class ChatRepository implements IChatRepository {
         );
     }
 
-    // ─── Internal helpers ──────────────────────────────────────────────────────
+    // Internal helpers
 
     /**
      * Handle a message pushed from the server via STOMP.
@@ -277,7 +277,7 @@ public class ChatRepository implements IChatRepository {
                         .subscribe(
                                 () -> Log.d(TAG, "Message sent via WebSocket"),
                                 e -> {
-                                    Log.w(TAG, "WebSocket send failed — falling back to REST", e);
+                                    Log.w(TAG, "WebSocket send failed - falling back to REST", e);
                                     sendViaRest(message);
                                 }
                         )
@@ -317,7 +317,7 @@ public class ChatRepository implements IChatRepository {
 
             @Override
             public void onFailure(@NonNull Call<ChatMessageDto> call, @NonNull Throwable t) {
-                Log.w(TAG, "REST send failed — queuing for sync retry", t);
+                Log.w(TAG, "REST send failed - queuing for sync retry", t);
                 // Enqueue for retry via SyncManager when network restores.
                 syncManager.enqueueChange(
                         "chatMessage",
@@ -473,3 +473,4 @@ public class ChatRepository implements IChatRepository {
         return "10.0.2.2";
     }
 }
+

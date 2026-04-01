@@ -6,7 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
-import com.bif.app.core.network.dto.SyncChangeDto;
+import com.bif.app.core.network.dto.sync.SyncChangeDto;
 import com.bif.app.data.source.local.TripDao;
 import com.bif.app.data.source.local.entity.TripPlanEntity;
 import com.google.gson.Gson;
@@ -95,3 +95,4 @@ public class TripSyncEntityHandlerTest {
         verify(mockTripDao).evictOldestTripsByGroup("g-1", 3);
     }
 }
+

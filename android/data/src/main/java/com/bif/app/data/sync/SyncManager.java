@@ -7,10 +7,10 @@ import android.util.Log;
 import androidx.lifecycle.LiveData;
 
 import com.bif.app.core.network.RestApiService;
-import com.bif.app.core.network.dto.ChatMessageDto;
-import com.bif.app.core.network.dto.SyncChangeDto;
-import com.bif.app.core.network.dto.SyncRequestDto;
-import com.bif.app.core.network.dto.SyncResponseDto;
+import com.bif.app.core.network.dto.chat.ChatMessageDto;
+import com.bif.app.core.network.dto.sync.SyncChangeDto;
+import com.bif.app.core.network.dto.sync.SyncRequestDto;
+import com.bif.app.core.network.dto.sync.SyncResponseDto;
 import com.bif.app.data.source.local.ChatMessageDao;
 import com.bif.app.data.source.local.FriendDao;
 import com.bif.app.data.source.local.FriendshipDao;

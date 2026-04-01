@@ -3,8 +3,8 @@ package com.bif.app.data.sync;
 import android.content.Context;
 import android.util.Log;
 
-import com.bif.app.core.network.dto.ProfileDto;
-import com.bif.app.core.network.dto.SyncChangeDto;
+import com.bif.app.core.network.dto.profile.ProfileDto;
+import com.bif.app.core.network.dto.sync.SyncChangeDto;
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.ProfileMapper;
 import com.bif.app.data.source.local.ProfileDao;
@@ -134,3 +134,4 @@ public class ProfileSyncEntityHandler implements SyncEntityHandler {
         return value.trim();
     }
 }
+

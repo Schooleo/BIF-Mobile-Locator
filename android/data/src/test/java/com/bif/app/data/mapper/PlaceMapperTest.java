@@ -4,7 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
-import com.bif.app.core.network.dto.PlaceDto;
+import com.bif.app.core.network.dto.place.PlaceDto;
 import com.bif.app.data.source.local.entity.PlaceEntity;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
@@ -177,3 +177,4 @@ public class PlaceMapperTest {
         assertEquals("d2", places.get(1).id);
     }
 }
+

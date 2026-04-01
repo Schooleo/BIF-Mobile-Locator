@@ -2,8 +2,8 @@ package com.bif.app.data.sync;
 
 import android.util.Log;
 
-import com.bif.app.core.network.dto.FavoriteDto;
-import com.bif.app.core.network.dto.SyncChangeDto;
+import com.bif.app.core.network.dto.favorite.FavoriteDto;
+import com.bif.app.core.network.dto.sync.SyncChangeDto;
 import com.bif.app.data.mapper.FavoriteMapper;
 import com.bif.app.data.source.local.FavoriteDao;
 import com.google.gson.Gson;
@@ -71,3 +71,4 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
         }
     }
 }
+

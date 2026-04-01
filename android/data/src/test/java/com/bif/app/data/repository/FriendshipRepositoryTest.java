@@ -10,7 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.bif.app.core.network.RestApiService;
-import com.bif.app.core.network.dto.UserApiModel;
+import com.bif.app.core.network.dto.user.UserApiModel;
 import com.bif.app.core.network.dto.auth.AuthStateResponse;
 import com.bif.app.core.network.dto.friendship.FriendshipApiModel;
 import com.bif.app.data.sync.NetworkMonitor;
@@ -147,3 +147,4 @@ public class FriendshipRepositoryTest {
         when(mockFriendDao.getAllFriendsSync()).thenReturn(Collections.emptyList());
     }
 }
+

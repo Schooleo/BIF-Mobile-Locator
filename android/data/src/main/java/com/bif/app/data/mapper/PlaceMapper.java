@@ -1,6 +1,6 @@
 package com.bif.app.data.mapper;
 
-import com.bif.app.core.network.dto.PlaceDto;
+import com.bif.app.core.network.dto.place.PlaceDto;
 import com.bif.app.data.source.local.entity.PlaceEntity;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
@@ -109,3 +109,4 @@ public class PlaceMapper {
         return result;
     }
 }
+

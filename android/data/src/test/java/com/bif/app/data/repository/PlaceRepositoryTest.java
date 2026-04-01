@@ -19,7 +19,7 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.LiveData;
 
 import com.bif.app.core.network.RestApiService;
-import com.bif.app.core.network.dto.PlaceDto;
+import com.bif.app.core.network.dto.place.PlaceDto;
 import com.bif.app.data.source.AndroidGeocodingDataSource;
 import com.bif.app.data.source.local.PlaceDao;
 import com.bif.app.data.source.local.SearchHistoryDao;
@@ -387,3 +387,4 @@ public class PlaceRepositoryTest {
                 anyString(), anyString(), any());
     }
 }
+

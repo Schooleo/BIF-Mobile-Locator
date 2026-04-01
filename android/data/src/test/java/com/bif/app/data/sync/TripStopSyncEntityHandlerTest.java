@@ -3,7 +3,7 @@ package com.bif.app.data.sync;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.bif.app.core.network.dto.SyncChangeDto;
+import com.bif.app.core.network.dto.sync.SyncChangeDto;
 import com.bif.app.data.source.local.TripDao;
 import com.bif.app.data.source.local.entity.TripStopEntity;
 import com.google.gson.Gson;
@@ -73,3 +73,4 @@ public class TripStopSyncEntityHandlerTest {
         org.junit.Assert.assertEquals(10L, saved.serverVersion);
     }
 }
+

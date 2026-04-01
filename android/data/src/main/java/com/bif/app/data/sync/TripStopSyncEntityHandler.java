@@ -2,8 +2,8 @@ package com.bif.app.data.sync;
 
 import android.util.Log;
 
-import com.bif.app.core.network.dto.SyncChangeDto;
-import com.bif.app.core.network.dto.TripStopDto;
+import com.bif.app.core.network.dto.sync.SyncChangeDto;
+import com.bif.app.core.network.dto.trip.TripStopDto;
 import com.bif.app.data.source.local.TripDao;
 import com.bif.app.data.source.local.entity.TripStopEntity;
 import com.google.gson.Gson;
@@ -97,3 +97,4 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         }
     }
 }
+

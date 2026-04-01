@@ -11,8 +11,8 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.Observer;
 
 import com.bif.app.core.network.RestApiService;
-import com.bif.app.core.network.dto.GroupApiModel;
-import com.bif.app.core.network.dto.UserApiModel;
+import com.bif.app.core.network.dto.group.GroupApiModel;
+import com.bif.app.core.network.dto.user.UserApiModel;
 import com.bif.app.core.network.dto.auth.AuthStateResponse;
 import com.bif.app.data.sync.NetworkMonitor;
 import com.bif.app.data.sync.SyncManager;
@@ -186,3 +186,4 @@ public class GroupRepositoryApiFallbackTest {
         when(mockRestApiService.getAuthState()).thenReturn(authCall);
     }
 }
+

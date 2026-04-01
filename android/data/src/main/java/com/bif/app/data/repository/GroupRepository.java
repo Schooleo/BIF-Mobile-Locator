@@ -7,12 +7,12 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Transformations;
 
 import com.bif.app.core.network.RestApiService;
-import com.bif.app.core.network.dto.AddMemberRequestDto;
-import com.bif.app.core.network.dto.CreateGroupRequestDto;
-import com.bif.app.core.network.dto.GroupApiModel;
-import com.bif.app.core.network.dto.UpdateGroupRequestDto;
-import com.bif.app.core.network.dto.UpdateMemberRoleRequestDto;
-import com.bif.app.core.network.dto.UserApiModel;
+import com.bif.app.core.network.dto.group.AddMemberRequestDto;
+import com.bif.app.core.network.dto.group.CreateGroupRequestDto;
+import com.bif.app.core.network.dto.group.GroupApiModel;
+import com.bif.app.core.network.dto.group.UpdateGroupRequestDto;
+import com.bif.app.core.network.dto.group.UpdateMemberRoleRequestDto;
+import com.bif.app.core.network.dto.user.UserApiModel;
 import com.bif.app.data.mapper.GroupMapper;
 import com.bif.app.data.sync.NetworkMonitor;
 import com.bif.app.data.sync.SyncManager;

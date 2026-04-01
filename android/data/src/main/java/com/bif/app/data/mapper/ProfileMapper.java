@@ -1,6 +1,6 @@
 package com.bif.app.data.mapper;
 
-import com.bif.app.core.network.dto.ProfileDto;
+import com.bif.app.core.network.dto.profile.ProfileDto;
 import com.bif.app.data.source.local.entity.ProfileEntity;
 
 public final class ProfileMapper {
@@ -39,3 +39,4 @@ public final class ProfileMapper {
         return dto;
     }
 }
+
