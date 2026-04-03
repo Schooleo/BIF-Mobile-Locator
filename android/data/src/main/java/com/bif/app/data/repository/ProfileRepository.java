@@ -11,6 +11,8 @@ import com.bif.app.data.source.local.ProfileDao;
 import com.bif.app.data.source.local.SyncQueueDao;
 import com.bif.app.data.source.local.entity.ProfileEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
+import com.bif.app.data.source.local.entity.UploadStatus;
+import com.bif.app.data.sync.ImageUploadWorker;
 import com.bif.app.data.sync.SyncManager;
 import com.bif.app.domain.repository.IProfileRepository;
 import com.google.gson.Gson;
@@ -57,17 +59,71 @@ public class ProfileRepository implements IProfileRepository {
 
     @Override
     public LocalProfile readLocalProfile() {
+        String activeUserId = resolveActiveUserId();
+        ProfileEntity localEntity = activeUserId.isEmpty()
+                ? null
+                : profileDao.getByUserId(activeUserId);
+
+        String username = safe(UserPreferences.getUsername(appContext));
+        String email = safe(UserPreferences.getEmail(appContext));
+        if (localEntity != null) {
+            if (localEntity.displayName != null
+                    && !localEntity.displayName.trim().isEmpty()) {
+                username = localEntity.displayName.trim();
+            }
+            if (localEntity.email != null
+                    && !localEntity.email.trim().isEmpty()) {
+                email = localEntity.email.trim();
+            }
+        }
+
         return new LocalProfile(
                 UserPreferences.isLoggedIn(appContext),
-                safe(UserPreferences.getUsername(appContext)),
-                safe(UserPreferences.getEmail(appContext)),
-                safe(UserPreferences.getAvatarUri(appContext))
+                username,
+                email,
+                resolveAvatarForUi(localEntity)
         );
     }
 
     @Override
     public void saveAvatarUri(String avatarUri) {
-        UserPreferences.setAvatarUri(appContext, avatarUri);
+        String normalizedPath = sanitize(avatarUri);
+        if (normalizedPath.isEmpty()) {
+            return;
+        }
+
+        executorService.execute(() -> {
+            String activeUserId = resolveActiveUserId();
+            if (activeUserId.isEmpty()) {
+                return;
+            }
+
+            syncManager.setUserContext(activeUserId, null);
+            appDatabase.runInTransaction(() -> {
+                ProfileEntity existing = profileDao.getByUserId(activeUserId);
+                ProfileEntity entity = existing != null ? existing : new ProfileEntity();
+                entity.userId = activeUserId;
+                entity.displayName = existing != null
+                        ? existing.displayName
+                        : safe(UserPreferences.getUsername(appContext));
+                entity.email = existing != null
+                        ? existing.email
+                        : safe(UserPreferences.getEmail(appContext));
+                entity.avatarLetter = resolveAvatarLetter(entity.displayName,
+                        entity.email, existing);
+                entity.avatarColor = existing != null ? existing.avatarColor : 0;
+                entity.avatarUrl = existing != null ? existing.avatarUrl : null;
+                entity.localImagePath = normalizedPath;
+                entity.uploadStatus = UploadStatus.PENDING;
+                entity.serverVersion = existing != null ? existing.serverVersion : 0;
+                entity.updatedAt = System.currentTimeMillis();
+                entity.deleted = false;
+                profileDao.upsert(entity);
+                UserPreferences.setAvatarUri(appContext, normalizedPath);
+            });
+
+            ImageUploadWorker.enqueue(appContext);
+        });
     }
 
     @Override
@@ -142,6 +198,12 @@ public class ProfileRepository implements IProfileRepository {
                             entity.email, existing);
                     entity.avatarColor = existing != null
                             ? existing.avatarColor : 0;
+                        entity.avatarUrl = existing != null
+                            ? existing.avatarUrl : null;
+                        entity.localImagePath = existing != null
+                            ? existing.localImagePath : null;
+                        entity.uploadStatus = existing != null
+                            ? existing.uploadStatus : UploadStatus.SYNCED;
                     entity.serverVersion = existing != null
                             ? existing.serverVersion : 0;
                     entity.updatedAt = System.currentTimeMillis();
@@ -231,6 +293,23 @@ public class ProfileRepository implements IProfileRepository {
             return "";
         }
         return userId.trim();
+    }
+
+    private String resolveAvatarForUi(ProfileEntity localEntity) {
+        if (localEntity != null) {
+            boolean hasLocal = localEntity.localImagePath != null
+                    && !localEntity.localImagePath.trim().isEmpty();
+            if (hasLocal && localEntity.uploadStatus != UploadStatus.SYNCED) {
+                return localEntity.localImagePath.trim();
+            }
+            if (localEntity.avatarUrl != null && !localEntity.avatarUrl.trim().isEmpty()) {
+                return localEntity.avatarUrl.trim();
+            }
+            if (hasLocal) {
+                return localEntity.localImagePath.trim();
+            }
+        }
+        return safe(UserPreferences.getAvatarUri(appContext));
     }
 
     private String sanitize(String value) {

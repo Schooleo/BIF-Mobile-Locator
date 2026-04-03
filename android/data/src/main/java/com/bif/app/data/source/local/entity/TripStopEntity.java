@@ -23,6 +23,9 @@ public class TripStopEntity {
     public String tripId;
     public String title;
     public String note;
+    public String photoUrl;
+    public String localImagePath;
+    public UploadStatus uploadStatus = UploadStatus.SYNCED;
     public double latitude;
     public double longitude;
     public long arrivalTime;

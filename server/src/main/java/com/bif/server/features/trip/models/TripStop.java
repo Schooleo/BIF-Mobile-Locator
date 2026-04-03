@@ -15,6 +15,7 @@ public class TripStop {
     private Location location;
     private Instant arrivalTime;
     private Instant departureTime;
+    private String photoUrl;
     private int orderIndex;
     private long serverVersion;
     private boolean deleted;

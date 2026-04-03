@@ -96,6 +96,7 @@ public class PlaceSyncEntityHandler implements SyncEntityHandler {
         place.setPersistedByAction(payload.persistedByAction);
         place.setPersistedByUserId(userId);
         place.setReviewCount(payload.reviewCount);
+        place.setPhotoUrl(payload.photoUrl);
         place.setDeleted(payload.deleted);
         place.setServerVersion(newVersion);
         place.setLastModifiedBy(userId);
@@ -165,6 +166,7 @@ public class PlaceSyncEntityHandler implements SyncEntityHandler {
         payload.persistedByAction = place.getPersistedByAction();
         payload.persistedByUserId = place.getPersistedByUserId();
         payload.reviewCount = place.getReviewCount();
+        payload.photoUrl = place.getPhotoUrl();
         payload.serverVersion = place.getServerVersion();
         payload.deleted = place.isDeleted();
         return payload;
@@ -182,6 +184,7 @@ public class PlaceSyncEntityHandler implements SyncEntityHandler {
         public String persistedByAction;
         public String persistedByUserId;
         public int reviewCount;
+        public String photoUrl;
         public long serverVersion;
         public boolean deleted;
     }

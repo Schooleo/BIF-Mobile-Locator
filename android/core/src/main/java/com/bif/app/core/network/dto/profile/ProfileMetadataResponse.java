@@ -5,6 +5,7 @@ public class ProfileMetadataResponse {
     public String displayName;
     public String email;
     public String avatarLetter;
+    public String avatarUrl;
     public int avatarColor;
     public boolean online;
     public long serverVersion;

@@ -9,6 +9,7 @@ import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.ProfileMapper;
 import com.bif.app.data.source.local.ProfileDao;
 import com.bif.app.data.source.local.entity.ProfileEntity;
+import com.bif.app.data.source.local.entity.UploadStatus;
 import com.google.gson.Gson;
 
 public class ProfileSyncEntityHandler implements SyncEntityHandler {
@@ -85,6 +86,10 @@ public class ProfileSyncEntityHandler implements SyncEntityHandler {
 
             ProfileEntity merged = ProfileMapper.fromDto(payload,
                     activeUserId);
+            if (payload.avatarUrl != null && !payload.avatarUrl.trim().isEmpty()) {
+                merged.localImagePath = null;
+                merged.uploadStatus = UploadStatus.SYNCED;
+            }
             profileDao.upsert(merged);
 
             if (!payload.deleted && payload.userId.equals(activeUserId)) {

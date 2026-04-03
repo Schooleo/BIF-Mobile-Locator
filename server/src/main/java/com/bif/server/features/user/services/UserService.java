@@ -39,7 +39,8 @@ public class UserService {
             String userId,
             String username,
             String avatarLetter,
-            Integer avatarColor
+            Integer avatarColor,
+            String avatarUrl
     ) {
         if (userId == null || userId.isBlank()) {
             throw new IllegalArgumentException("userId must not be blank");
@@ -49,6 +50,9 @@ public class UserService {
         }
         if (avatarLetter != null && avatarLetter.isBlank()) {
             throw new IllegalArgumentException("avatarLetter must not be blank");
+        }
+        if (avatarUrl != null && avatarUrl.isBlank()) {
+            throw new IllegalArgumentException("avatarUrl must not be blank");
         }
 
         return userRepository.findById(userId).map(user -> {
@@ -61,13 +65,16 @@ public class UserService {
             if (avatarColor != null) {
                 user.setAvatarColor(avatarColor);
             }
+            if (avatarUrl != null) {
+                user.setAvatarUrl(avatarUrl.trim());
+            }
             return userRepository.save(user);
         });
     }
 
     public int calculateProfileCompletion(User user) {
         int completed = 0;
-        int total = 4;
+        int total = 5;
 
         if (user.getUsername() != null && !user.getUsername().isBlank()) {
             completed++;
@@ -79,6 +86,9 @@ public class UserService {
             completed++;
         }
         if (user.getAvatarColor() != 0) {
+            completed++;
+        }
+        if (user.getAvatarUrl() != null && !user.getAvatarUrl().isBlank()) {
             completed++;
         }
 

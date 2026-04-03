@@ -15,6 +15,17 @@ public interface ProfileDao {
     @Query("SELECT * FROM profiles WHERE userId = :userId LIMIT 1")
     ProfileEntity getByUserId(String userId);
 
+        @Query("SELECT * FROM profiles WHERE deleted = 0 AND localImagePath IS NOT NULL "
+            + "AND uploadStatus IN ('PENDING','ERROR') ORDER BY updatedAt ASC LIMIT 1")
+        ProfileEntity getFirstPendingUpload();
+
+        @Query("SELECT * FROM profiles WHERE deleted = 0 AND uploadStatus = 'SYNCED' "
+            + "AND localImagePath IS NOT NULL")
+        java.util.List<ProfileEntity> getSyncedWithLocalImagePath();
+
+        @Query("SELECT localImagePath FROM profiles WHERE localImagePath IS NOT NULL")
+        java.util.List<String> getAllReferencedLocalImagePaths();
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void upsert(ProfileEntity profile);
 

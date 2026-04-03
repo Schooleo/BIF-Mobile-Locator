@@ -74,6 +74,7 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         if (payload != null) {
             target.setTitle(payload.title);
             target.setNote(payload.note);
+            target.setPhotoUrl(payload.photoUrl);
             target.setOrderIndex(payload.orderIndex);
             target.setArrivalTime(payload.arrivalTime);
             target.setDepartureTime(payload.departureTime);
@@ -159,6 +160,7 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         payload.tripId = tripId;
         payload.title = stop.getTitle();
         payload.note = stop.getNote();
+        payload.photoUrl = stop.getPhotoUrl();
         payload.arrivalTime = stop.getArrivalTime();
         payload.departureTime = stop.getDepartureTime();
         payload.orderIndex = stop.getOrderIndex();
@@ -176,6 +178,7 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         public String tripId;
         public String title;
         public String note;
+        public String photoUrl;
         public Double latitude;
         public Double longitude;
         public Instant arrivalTime;

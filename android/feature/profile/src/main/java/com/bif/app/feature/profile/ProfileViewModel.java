@@ -1,6 +1,7 @@
 package com.bif.app.feature.profile;
 
 import android.content.Context;
+import android.net.Uri;
 
 import androidx.annotation.NonNull;
 import androidx.lifecycle.LiveData;
@@ -10,6 +11,11 @@ import androidx.lifecycle.ViewModel;
 import com.bif.app.domain.repository.IProfileRepository;
 
 import javax.inject.Inject;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.util.UUID;
 
 import dagger.hilt.android.lifecycle.HiltViewModel;
 import dagger.hilt.android.qualifiers.ApplicationContext;
@@ -101,9 +107,17 @@ public class ProfileViewModel extends ViewModel {
     }
 
     public void onAvatarSelected(@NonNull String avatarUri) {
-        profileRepository.saveAvatarUri(avatarUri);
-        loadFromLocal();
-        messageResId.postValue(R.string.avatar_updated);
+        new Thread(() -> {
+            String stagedPath = copyToInternalStorage(avatarUri);
+            if (stagedPath == null || stagedPath.isBlank()) {
+                messageResId.postValue(R.string.profile_update_failed);
+                return;
+            }
+
+            profileRepository.saveAvatarUri(stagedPath);
+            loadFromLocal();
+            messageResId.postValue(R.string.avatar_updated);
+        }).start();
     }
 
     public void refreshProfileFromServer() {
@@ -162,6 +176,35 @@ public class ProfileViewModel extends ViewModel {
             return email.substring(0, 1).toUpperCase();
         }
         return "G";
+    }
+
+    private String copyToInternalStorage(String uriString) {
+        try {
+            Uri sourceUri = Uri.parse(uriString);
+            File stagingDir = new File(appContext.getFilesDir(), "image-staging");
+            if (!stagingDir.exists() && !stagingDir.mkdirs()) {
+                return null;
+            }
+
+            File outFile = new File(stagingDir,
+                    "avatar-" + UUID.randomUUID() + ".jpg");
+            try (InputStream input = appContext.getContentResolver().openInputStream(sourceUri);
+                 FileOutputStream output = new FileOutputStream(outFile)) {
+                if (input == null) {
+                    return null;
+                }
+
+                byte[] buffer = new byte[8192];
+                int len;
+                while ((len = input.read(buffer)) != -1) {
+                    output.write(buffer, 0, len);
+                }
+                output.flush();
+            }
+            return outFile.getAbsolutePath();
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
 }

@@ -66,6 +66,9 @@ public class ProfileSyncEntityHandler implements SyncEntityHandler {
             if (payload.avatarLetter != null && !payload.avatarLetter.isBlank()) {
                 user.setAvatarLetter(payload.avatarLetter.trim());
             }
+            if (payload.avatarUrl != null && !payload.avatarUrl.isBlank()) {
+                user.setAvatarUrl(payload.avatarUrl.trim());
+            }
             if (payload.avatarColor != null) {
                 user.setAvatarColor(payload.avatarColor);
             }
@@ -141,6 +144,7 @@ public class ProfileSyncEntityHandler implements SyncEntityHandler {
         payload.displayName = user.getUsername();
         payload.email = user.getEmail();
         payload.avatarLetter = user.getAvatarLetter();
+        payload.avatarUrl = user.getAvatarUrl();
         payload.avatarColor = user.getAvatarColor();
         payload.online = user.isOnline();
         payload.serverVersion = user.getServerVersion();
@@ -155,6 +159,7 @@ public class ProfileSyncEntityHandler implements SyncEntityHandler {
         public String displayName;
         public String email;
         public String avatarLetter;
+        public String avatarUrl;
         public Integer avatarColor;
         public Boolean online;
         public Long serverVersion;

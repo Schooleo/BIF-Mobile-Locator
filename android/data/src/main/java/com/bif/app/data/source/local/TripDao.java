@@ -38,6 +38,17 @@ public interface TripDao {
     @Query("SELECT * FROM trip_stops WHERE id = :stopId LIMIT 1")
     TripStopEntity getStopByIdSync(String stopId);
 
+        @Query("SELECT * FROM trip_stops WHERE deleted = 0 AND localImagePath IS NOT NULL "
+            + "AND uploadStatus IN ('PENDING','ERROR') ORDER BY serverVersion ASC LIMIT 1")
+        TripStopEntity getFirstPendingUploadStop();
+
+        @Query("SELECT * FROM trip_stops WHERE deleted = 0 AND uploadStatus = 'SYNCED' "
+            + "AND localImagePath IS NOT NULL")
+        List<TripStopEntity> getSyncedStopsWithLocalImagePath();
+
+        @Query("SELECT localImagePath FROM trip_stops WHERE localImagePath IS NOT NULL")
+        List<String> getAllReferencedLocalImagePaths();
+
     @Query("SELECT * FROM trip_plans WHERE id = :tripId LIMIT 1")
     TripPlanEntity getTripByIdSync(String tripId);
 

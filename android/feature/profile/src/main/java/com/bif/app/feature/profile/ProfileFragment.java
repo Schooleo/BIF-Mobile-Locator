@@ -2,7 +2,6 @@ package com.bif.app.feature.profile;
 
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
-import android.net.Uri;
 import android.os.Bundle;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -34,9 +33,12 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.bif.app.core.auth.AuthSessionManager;
 import com.bif.app.core.utils.DialogUtils;
 import com.bif.app.core.utils.UriUtils;
+import com.bumptech.glide.Glide;
 import com.google.android.material.button.MaterialButton;
 
 import javax.inject.Inject;
+
+import java.io.File;
 
 import dagger.hilt.android.AndroidEntryPoint;
 
@@ -265,7 +267,7 @@ public class ProfileFragment extends Fragment {
 
     private void bindAvatar(ImageView ivAvatarImage, TextView tvAvatar, String avatarUriString) {
         if (avatarUriString == null || avatarUriString.trim().isEmpty()) {
-            ivAvatarImage.setImageURI(null);
+            Glide.with(this).clear(ivAvatarImage);
             ivAvatarImage.setImageDrawable(null);
             ivAvatarImage.setVisibility(View.GONE);
             tvAvatar.setVisibility(View.VISIBLE);
@@ -273,12 +275,18 @@ public class ProfileFragment extends Fragment {
         }
 
         try {
-            ivAvatarImage.setImageURI(Uri.parse(avatarUriString));
-            if (ivAvatarImage.getDrawable() != null) {
-                ivAvatarImage.setVisibility(View.VISIBLE);
-                tvAvatar.setVisibility(View.INVISIBLE);
-                return;
-            }
+            String trimmed = avatarUriString.trim();
+            Object imageSource = (trimmed.startsWith("http://")
+                    || trimmed.startsWith("https://"))
+                    ? trimmed
+                    : new File(trimmed);
+            Glide.with(this)
+                    .load(imageSource)
+                    .error(com.bif.app.core.R.drawable.bg_logo_placeholder)
+                    .into(ivAvatarImage);
+            ivAvatarImage.setVisibility(View.VISIBLE);
+            tvAvatar.setVisibility(View.INVISIBLE);
+            return;
         } catch (Exception ignored) {
             // Fall back to initial avatar when image cannot be resolved.
         }

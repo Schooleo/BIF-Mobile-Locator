@@ -19,6 +19,11 @@ public final class ProfileMapper {
         entity.displayName = dto.displayName;
         entity.email = dto.email;
         entity.avatarLetter = dto.avatarLetter;
+        entity.avatarUrl = dto.avatarUrl;
+        if (entity.avatarUrl != null && !entity.avatarUrl.trim().isEmpty()) {
+            entity.localImagePath = null;
+            entity.uploadStatus = com.bif.app.data.source.local.entity.UploadStatus.SYNCED;
+        }
         entity.avatarColor = dto.avatarColor;
         entity.serverVersion = dto.serverVersion;
         entity.updatedAt = dto.updatedAt;
@@ -32,6 +37,7 @@ public final class ProfileMapper {
         dto.displayName = entity.displayName;
         dto.email = entity.email;
         dto.avatarLetter = entity.avatarLetter;
+        dto.avatarUrl = entity.avatarUrl;
         dto.avatarColor = entity.avatarColor;
         dto.serverVersion = entity.serverVersion;
         dto.updatedAt = entity.updatedAt;

@@ -208,6 +208,7 @@ public class TripRepository implements ITripRepository {
         dto.tripId = entity.tripId;
         dto.title = entity.title;
         dto.note = entity.note;
+        dto.photoUrl = entity.photoUrl;
         dto.orderIndex = entity.orderIndex;
         dto.arrivalTime = formatInstant(entity.arrivalTime);
         dto.departureTime = formatInstant(entity.departureTime);

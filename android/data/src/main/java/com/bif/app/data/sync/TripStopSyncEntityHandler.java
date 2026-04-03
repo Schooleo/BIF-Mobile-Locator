@@ -6,6 +6,7 @@ import com.bif.app.core.network.dto.sync.SyncChangeDto;
 import com.bif.app.core.network.dto.trip.TripStopDto;
 import com.bif.app.data.source.local.TripDao;
 import com.bif.app.data.source.local.entity.TripStopEntity;
+import com.bif.app.data.source.local.entity.UploadStatus;
 import com.google.gson.Gson;
 
 public class TripStopSyncEntityHandler implements SyncEntityHandler {
@@ -73,6 +74,7 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
             entity.tripId = payload.tripId;
             entity.title = payload.title;
             entity.note = payload.note;
+            entity.photoUrl = payload.photoUrl;
             entity.latitude = payload.location != null ? payload.location.latitude : 0d;
             entity.longitude = payload.location != null ? payload.location.longitude : 0d;
             entity.arrivalTime = parseInstant(payload.arrivalTime);
@@ -80,6 +82,10 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
             entity.orderIndex = payload.orderIndex;
             entity.serverVersion = Math.max(payload.serverVersion, change.serverVersion);
             entity.deleted = payload.deleted || "DELETE".equalsIgnoreCase(change.operation);
+            if (entity.photoUrl != null && !entity.photoUrl.trim().isEmpty()) {
+                entity.localImagePath = null;
+                entity.uploadStatus = UploadStatus.SYNCED;
+            }
             tripDao.upsertStop(entity);
         } catch (Exception e) {
             Log.e(TAG, "Failed applying pulled trip stop change", e);

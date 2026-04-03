@@ -13,6 +13,9 @@ public class ProfileEntity {
     public String displayName;
     public String email;
     public String avatarLetter;
+    public String avatarUrl;
+    public String localImagePath;
+    public UploadStatus uploadStatus = UploadStatus.SYNCED;
     public int avatarColor;
 
     // Sync fields

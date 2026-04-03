@@ -8,12 +8,18 @@ import androidx.annotation.NonNull;
 import androidx.hilt.work.HiltWorkerFactory;
 import androidx.work.Configuration;
 
+import com.cloudinary.android.MediaManager;
 import com.bif.app.core.auth.LocalSessionDataCleaner;
 import com.bif.app.core.utils.UserPreferences;
+import com.bif.app.data.sync.ImageUploadWorker;
+import com.bif.app.data.sync.StorageCleanupWorker;
 import com.bif.app.data.sync.SyncManager;
 import com.bif.app.data.sync.SyncWorker;
 
 import javax.inject.Inject;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import dagger.hilt.android.HiltAndroidApp;
 
@@ -38,6 +44,8 @@ public class MyApplication extends Application implements Configuration.Provider
     public void onCreate() {
         super.onCreate();
 
+        initCloudinary();
+
         String userId = UserPreferences.getId(this);
         if (userId.trim().isEmpty()) {
             userId = UserPreferences.getUsername(this);
@@ -48,6 +56,8 @@ public class MyApplication extends Application implements Configuration.Provider
         }
 
         SyncWorker.schedule(this);
+        ImageUploadWorker.enqueue(this);
+        StorageCleanupWorker.schedule(this);
     }
 
     @NonNull
@@ -80,5 +90,15 @@ public class MyApplication extends Application implements Configuration.Provider
         guardPrefs.edit()
                 .putInt(KEY_SESSION_SCHEMA_VERSION, SESSION_SCHEMA_VERSION)
                 .apply();
+    }
+
+    private void initCloudinary() {
+        try {
+            Map<String, String> config = new HashMap<>();
+            config.put("cloud_name", BuildConfig.CLOUDINARY_CLOUD_NAME);
+            MediaManager.init(this, config);
+        } catch (IllegalStateException ignored) {
+            // Cloudinary is already initialized in this process.
+        }
     }
 }
