@@ -4,6 +4,7 @@ public class Route {
 
     public static final String SOURCE_ONLINE = "ONLINE";
     public static final String SOURCE_OFFLINE = "OFFLINE";
+    public static final String SOURCE_BROUTER = "BROUTER";
 
     private final double distanceMeters;
     private final double durationSeconds;

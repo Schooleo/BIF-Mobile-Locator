@@ -42,10 +42,9 @@ public class AppModule {
     @Singleton
     public AppDatabase provideAppDatabase(@ApplicationContext Context context) {
         return Room.databaseBuilder(
-                        context,
-                        AppDatabase.class,
-                        "bif_database"
-                )
+                context,
+                AppDatabase.class,
+                "bif_database")
                 .fallbackToDestructiveMigration(true)
                 .build();
     }
@@ -65,7 +64,7 @@ public class AppModule {
     @Provides
     @Singleton
     public FriendshipDao provideFriendshipDao(AppDatabase database) {
-      return database.friendshipDao();
+        return database.friendshipDao();
     }
 
     @Provides
@@ -83,7 +82,7 @@ public class AppModule {
     @Provides
     @Singleton
     public ProfileDao provideProfileDao(AppDatabase database) {
-      return database.profileDao();
+        return database.profileDao();
     }
 
     @Provides
