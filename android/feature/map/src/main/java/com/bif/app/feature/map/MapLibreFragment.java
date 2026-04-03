@@ -1,10 +1,12 @@
-package com.bif.app.feature.map.main;
+package com.bif.app.feature.map;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.PointF;
 import android.graphics.drawable.Drawable;
 import android.location.Address;
@@ -17,7 +19,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
-import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -52,6 +53,7 @@ import com.bif.app.domain.model.MapState;
 import com.bif.app.domain.model.OfflineMapDownloadState;
 import com.bif.app.domain.model.Place;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
+import com.google.android.material.progressindicator.CircularProgressIndicator;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -66,11 +68,11 @@ import org.maplibre.android.maps.MapLibreMap;
 import org.maplibre.android.maps.MapView;
 import org.maplibre.android.maps.OnMapReadyCallback;
 import org.maplibre.android.maps.Style;
-import org.maplibre.android.maps.UiSettings;
 import org.maplibre.android.style.layers.Property;
 import org.maplibre.android.style.layers.PropertyFactory;
 import org.maplibre.android.style.layers.LineLayer;
 import org.maplibre.android.style.layers.SymbolLayer;
+import org.maplibre.android.style.expressions.Expression;
 import org.maplibre.android.style.sources.GeoJsonSource;
 import org.maplibre.geojson.Feature;
 import org.maplibre.geojson.FeatureCollection;
@@ -80,7 +82,6 @@ import org.maplibre.geojson.Point;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -92,7 +93,6 @@ import java.util.Objects;
 import java.util.UUID;
 
 import com.google.android.material.button.MaterialButton;
-import com.google.android.material.progressindicator.LinearProgressIndicator;
 
 import dagger.hilt.android.AndroidEntryPoint;
 
@@ -109,17 +109,26 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private static final String SEARCH_LAYER_ID = "search-places-layer";
     private static final String SELECTED_SOURCE_ID = "selected-place-source";
     private static final String SELECTED_LAYER_ID = "selected-place-layer";
-    private static final String ROUTE_SOURCE_ID = "route-line-source";
-    private static final String ROUTE_LAYER_ID = "route-line-layer";
+    private static final String ROUTE_REMAINING_SOURCE_ID = "route-remaining-source";
+    private static final String ROUTE_REMAINING_LAYER_ID = "route-remaining-layer";
+    private static final String ROUTE_PASSED_SOURCE_ID = "route-passed-source";
+    private static final String ROUTE_PASSED_LAYER_ID = "route-passed-layer";
+    private static final String ROUTE_TURN_SOURCE_ID = "route-turn-source";
+    private static final String ROUTE_TURN_LAYER_ID = "route-turn-layer";
+    private static final String USER_ROUTE_SOURCE_ID = "route-user-source";
+    private static final String USER_ROUTE_LAYER_ID = "route-user-layer";
     private static final String MARKER_ICON_FAVORITE_ID = "marker-icon-favorite";
     private static final String MARKER_ICON_SEARCH_ID = "marker-icon-search";
     private static final String MARKER_ICON_SELECTED_ID = "marker-icon-selected";
+    private static final String TURN_ARROW_ICON_ID = "turn-arrow-icon";
+    private static final String USER_ARROW_ICON_ID = "user-arrow-icon";
     private static final String PROP_PLACE_ID = "placeId";
     private static final String PROP_NAME = "name";
     private static final String PROP_ADDRESS = "address";
     private static final String PROP_RATING = "rating";
     private static final String PROP_LAT = "lat";
     private static final String PROP_LNG = "lng";
+    private static final String PROP_BEARING = "bearing";
     private static final double VIETNAM_MIN_LAT = 8.56;
     private static final double VIETNAM_MAX_LAT = 23.39;
     private static final double VIETNAM_MIN_LON = 102.14;
@@ -129,12 +138,35 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private MapLibreMap mapLibreMap;
     private Place selectedPlace;
     private BottomSheetBehavior<View> bottomSheetBehavior;
+    private View bottomSheetContainer;
+    private View placeDetailSheet;
+    private View routeDetailSheet;
+    private TextView tvRouteTitle;
+    private TextView tvRouteAddress;
+    private TextView tvRouteEta;
+    private TextView tvRouteDistance;
+    private View followRouteBar;
+    private TextView tvFollowDistanceLeft;
+    private TextView tvFollowTimeLeft;
+    private MaterialButton btnStopFollowRoute;
+    private MaterialButton btnCancelRoute;
+    private MaterialButton btnFollowRoute;
+    private ImageButton btnMapCompass;
+    private final MapLibreMap.OnCameraMoveListener onCameraMoveListener = this::updateCompassButtonVisibility;
+    private final MapLibreMap.OnCameraIdleListener onCameraIdleListener = this::updateCompassButtonVisibility;
     private MapViewModel viewModel;
     private List<Favorite> currentFavorites = new ArrayList<>();
     private Location lastKnownUserLocation;
+    private float lastKnownUserBearingDegrees;
+    private boolean followLocationUpdatesActive;
+    private boolean reopeningPlaceAfterRouteStop;
+    @Nullable
+    private String renderedRouteGeometryJson;
+    @NonNull
+    private List<Point> renderedRoutePoints = Collections.emptyList();
     private View downloadCityMapLayout;
-    private MaterialButton btnDownloadCityMap;
-    private LinearProgressIndicator progressDownloadCityMap;
+    private ImageButton btnDownloadCityMap;
+    private CircularProgressIndicator progressDownloadCityMap;
     private boolean isOnlineNow;
     @Nullable
     private OfflineMapDownloadState.Status lastOfflineMapDownloadStatus;
@@ -150,6 +182,16 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private final LocationListener singleLocationListener = location -> {
         centerMapOnLocation(location);
         stopSingleLocationUpdates();
+    };
+
+    private final LocationListener followLocationListener = location -> {
+        lastKnownUserLocation = new Location(location.getLatitude(), location.getLongitude());
+        float bearing = location.hasBearing() ? location.getBearing() : 0f;
+        lastKnownUserBearingDegrees = bearing;
+        renderUserLocationIndicator(lastKnownUserLocation, bearing);
+        if (viewModel != null) {
+            viewModel.updateFollowingLocation(lastKnownUserLocation, bearing);
+        }
     };
 
     private static final class PoiTap {
@@ -195,9 +237,34 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             mapView = null;
         }
 
-        View bottomSheet = root.findViewById(R.id.place_detail_sheet);
-        bottomSheetBehavior = BottomSheetBehavior.from(bottomSheet);
+        bottomSheetContainer = root.findViewById(R.id.bottom_sheet_container);
+        placeDetailSheet = root.findViewById(R.id.place_detail_sheet);
+        routeDetailSheet = root.findViewById(R.id.route_detail_sheet);
+        bottomSheetBehavior = BottomSheetBehavior.from(bottomSheetContainer);
         bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+        bottomSheetBehavior.addBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
+            @Override
+            public void onStateChanged(@NonNull View bottomSheet, int newState) {
+                updateFloatingControlsPosition();
+                if (viewModel == null) {
+                    return;
+                }
+                if (newState != BottomSheetBehavior.STATE_HIDDEN && reopeningPlaceAfterRouteStop) {
+                    reopeningPlaceAfterRouteStop = false;
+                }
+                RouteSession session = viewModel.getCurrentRouteSession();
+                if (newState == BottomSheetBehavior.STATE_HIDDEN && session.isVisible() && !session.following) {
+                    viewModel.cancelRoute();
+                } else if (newState == BottomSheetBehavior.STATE_HIDDEN && !reopeningPlaceAfterRouteStop) {
+                    clearSelectedMarker();
+                }
+            }
+
+            @Override
+            public void onSlide(@NonNull View bottomSheet, float slideOffset) {
+                updateFloatingControlsPosition();
+            }
+        });
 
         return root;
     }
@@ -211,7 +278,32 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     public void onViewCreated(@NonNull View view,
             @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        viewModel = new ViewModelProvider(this).get(MapViewModel.class);
+        viewModel = new ViewModelProvider(requireActivity()).get(MapViewModel.class);
+
+        tvRouteTitle = view.findViewById(R.id.tv_route_title);
+        tvRouteAddress = view.findViewById(R.id.tv_route_address);
+        tvRouteEta = view.findViewById(R.id.tv_route_eta);
+        tvRouteDistance = view.findViewById(R.id.tv_route_distance);
+        followRouteBar = view.findViewById(R.id.layout_follow_route_bar);
+        tvFollowDistanceLeft = view.findViewById(R.id.tv_follow_distance_left);
+        tvFollowTimeLeft = view.findViewById(R.id.tv_follow_time_left);
+        btnStopFollowRoute = view.findViewById(R.id.btn_stop_follow_route);
+        btnCancelRoute = view.findViewById(R.id.btn_cancel_route);
+        btnFollowRoute = view.findViewById(R.id.btn_follow_route);
+        btnMapCompass = view.findViewById(R.id.btn_map_compass);
+
+        if (btnCancelRoute != null) {
+            btnCancelRoute.setOnClickListener(v -> stopRouteAndFocusDestination());
+        }
+        if (btnFollowRoute != null) {
+            btnFollowRoute.setOnClickListener(v -> startFollowingRouteSession());
+        }
+        if (btnStopFollowRoute != null) {
+            btnStopFollowRoute.setOnClickListener(v -> stopRouteAndFocusDestination());
+        }
+        if (btnMapCompass != null) {
+            btnMapCompass.setOnClickListener(v -> resetMapBearingNorth());
+        }
 
         if (mapView == null) {
             viewModel.setStatusText("Map initialization failed on this device.");
@@ -232,32 +324,23 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             }
         });
 
-        viewModel.routeSummary.observe(getViewLifecycleOwner(), summary -> {
-            View root = getView();
-            if (root == null) {
-                return;
-            }
-            TextView tvRouteSummary = root.findViewById(R.id.tv_route_summary);
-            if (tvRouteSummary == null) {
-                return;
-            }
-
-            if (summary == null || summary.trim().isEmpty()) {
-                tvRouteSummary.setVisibility(View.GONE);
-            } else {
-                tvRouteSummary.setVisibility(View.VISIBLE);
-                tvRouteSummary.setText(summary);
-            }
-        });
-
-        viewModel.routeGeometryJson.observe(getViewLifecycleOwner(), this::renderRouteGeometry);
+        viewModel.routeSession.observe(getViewLifecycleOwner(), this::renderRouteSession);
 
         setupSearchUi(view);
 
         ImageButton btnMyLocation = view.findViewById(R.id.btn_my_location);
         if (btnMyLocation != null) {
             btnMyLocation.setOnClickListener(v -> {
-                if (bottomSheetBehavior.getState() != BottomSheetBehavior.STATE_HIDDEN) {
+                RouteSession session = viewModel.getCurrentRouteSession();
+                if (session.following && session.lastKnownLocation != null && !renderedRoutePoints.isEmpty()) {
+                    RouteGeometryUtils.RouteProgress progress = RouteGeometryUtils.computeRouteProgress(
+                            renderedRoutePoints,
+                            session.lastKnownLocation);
+                    fitCameraToUserAndRemainingRoute(session.lastKnownLocation, progress.remainingPoints);
+                    return;
+                }
+                if (!viewModel.hasActiveRouteSession()
+                        && bottomSheetBehavior.getState() != BottomSheetBehavior.STATE_HIDDEN) {
                     bottomSheetBehavior.setState(
                             BottomSheetBehavior.STATE_HIDDEN);
                 }
@@ -299,6 +382,8 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             MapStyleUtils.applyPaletteForCurrentMode(requireContext(), style);
             ensurePlaceLayers(style);
             configureCompassAboveMyLocation();
+            mapLibreMap.addOnCameraMoveListener(onCameraMoveListener);
+            mapLibreMap.addOnCameraIdleListener(onCameraIdleListener);
 
             CameraPosition camera = new CameraPosition.Builder()
                     .target(new LatLng(10.7769, 106.7009))
@@ -308,8 +393,15 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
             mapLibreMap.addOnMapClickListener(point -> {
                 hideHistory.run();
+                if (viewModel.hasActiveRouteSession()) {
+                    viewModel.setStatusText(getString(R.string.route_active_place_sheet_blocked));
+                    return true;
+                }
+
                 Place tappedPlace = findRenderedPlaceAt(point);
                 if (tappedPlace != null) {
+                    selectedPlace = tappedPlace;
+                    renderSelectedPlace();
                     animateCameraToSelection(new LatLng(
                             tappedPlace.location.latitude,
                             tappedPlace.location.longitude));
@@ -337,61 +429,51 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             }
 
             refreshFavoriteMarkers();
-            renderRouteGeometry(viewModel.routeGeometryJson.getValue());
+            renderUserLocationIndicator(lastKnownUserLocation, lastKnownUserBearingDegrees);
+            renderRouteSession(viewModel.getCurrentRouteSession());
+            updateCompassButtonVisibility();
         });
 
     }
 
     private void configureCompassAboveMyLocation() {
-        if (mapLibreMap == null || getView() == null) {
-            return;
-        }
-
-        View root = getView();
-        ImageButton btnMyLocation = root.findViewById(R.id.btn_my_location);
-        if (btnMyLocation == null) {
-            applyCompassMargins(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(120));
-            return;
-        }
-
-        btnMyLocation.post(() -> {
-            if (mapLibreMap == null || getView() == null) {
-                return;
-            }
-
-            int right = dpToPx(16);
-            int myLocationBottom = getView().getHeight() - btnMyLocation.getTop();
-            int bottom = myLocationBottom + btnMyLocation.getHeight() + dpToPx(10);
-            int topFallback = Math.max(dpToPx(16),
-                    getView().getHeight() - bottom - dpToPx(40));
-
-            applyCompassMargins(dpToPx(16), topFallback, right, bottom);
-        });
-    }
-
-    private void applyCompassMargins(int left, int top, int right, int bottom) {
         if (mapLibreMap == null) {
             return;
         }
+        mapLibreMap.getUiSettings().setCompassEnabled(false);
+    }
 
-        UiSettings uiSettings = mapLibreMap.getUiSettings();
-        uiSettings.setCompassEnabled(true);
-
-        // Prefer bottom-end placement if the SDK exposes compass gravity.
-        try {
-            Method setCompassGravity = uiSettings.getClass()
-                    .getMethod("setCompassGravity", int.class);
-            setCompassGravity.invoke(uiSettings, Gravity.BOTTOM | Gravity.END);
-        } catch (Exception ignored) {
-            // Older SDKs may not expose compass gravity; margins still apply.
+    private void updateCompassButtonVisibility() {
+        if (mapLibreMap == null || btnMapCompass == null) {
+            return;
         }
+        double bearing = Math.abs(mapLibreMap.getCameraPosition().bearing);
+        boolean show = bearing > 1d && bearing < 359d;
+        btnMapCompass.setVisibility(show ? View.VISIBLE : View.GONE);
+        updateFloatingControlsPosition();
+    }
 
-        uiSettings.setCompassMargins(left, top, right, bottom);
+    private void resetMapBearingNorth() {
+        if (mapLibreMap == null) {
+            return;
+        }
+        CameraPosition current = mapLibreMap.getCameraPosition();
+        CameraPosition target = new CameraPosition.Builder()
+                .target(current.target)
+                .zoom(current.zoom)
+                .tilt(current.tilt)
+                .bearing(0.0)
+                .build();
+        mapLibreMap.animateCamera(CameraUpdateFactory.newCameraPosition(target), 450);
     }
 
     private int dpToPx(int dp) {
         return Math.round(dp * requireContext().getResources()
                 .getDisplayMetrics().density);
+    }
+
+    private float dpToPx(float dp) {
+        return dp * requireContext().getResources().getDisplayMetrics().density;
     }
 
     private void animateCameraToSelection(@NonNull LatLng target) {
@@ -530,11 +612,8 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 ? state
                 : OfflineMapDownloadState.idle();
 
-        btnDownloadCityMap.setText(R.string.download_map);
-
         if (effectiveState.status == OfflineMapDownloadState.Status.DOWNLOADING) {
             btnDownloadCityMap.setEnabled(false);
-            btnDownloadCityMap.setText(R.string.download_map_in_progress);
             progressDownloadCityMap.setVisibility(View.VISIBLE);
             progressDownloadCityMap.setIndeterminate(effectiveState.indeterminate);
             if (!effectiveState.indeterminate) {
@@ -543,6 +622,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         } else {
             btnDownloadCityMap.setEnabled(true);
             progressDownloadCityMap.setVisibility(View.GONE);
+            progressDownloadCityMap.setProgressCompat(0, false);
         }
 
         if (effectiveState.status == OfflineMapDownloadState.Status.COMPLETED
@@ -649,6 +729,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private void clearSelectedMarker() {
         selectedPlace = null;
         setFeatures(SELECTED_SOURCE_ID, Collections.emptyList());
+        updateFloatingControlsPosition();
     }
 
     private void renderSelectedPlace() {
@@ -667,11 +748,14 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         addSourceIfMissing(style, FAVORITE_SOURCE_ID);
         addSourceIfMissing(style, SEARCH_SOURCE_ID);
         addSourceIfMissing(style, SELECTED_SOURCE_ID);
-        addSourceIfMissing(style, ROUTE_SOURCE_ID);
+        addSourceIfMissing(style, ROUTE_REMAINING_SOURCE_ID);
+        addSourceIfMissing(style, ROUTE_PASSED_SOURCE_ID);
+        addSourceIfMissing(style, ROUTE_TURN_SOURCE_ID);
+        addSourceIfMissing(style, USER_ROUTE_SOURCE_ID);
 
         addMarkerImages(style);
 
-        addRouteLayerIfMissing(style);
+        addRouteLayersIfMissing(style);
 
         addSymbolLayerIfMissing(style, FAVORITE_LAYER_ID, FAVORITE_SOURCE_ID,
                 MARKER_ICON_FAVORITE_ID, 0.92f);
@@ -679,6 +763,10 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 MARKER_ICON_SEARCH_ID, 1.0f);
         addSymbolLayerIfMissing(style, SELECTED_LAYER_ID, SELECTED_SOURCE_ID,
                 MARKER_ICON_SELECTED_ID, 1.08f);
+        addRotatingSymbolLayerIfMissing(style, ROUTE_TURN_LAYER_ID, ROUTE_TURN_SOURCE_ID,
+                TURN_ARROW_ICON_ID, 0.72f);
+        addRotatingSymbolLayerIfMissing(style, USER_ROUTE_LAYER_ID, USER_ROUTE_SOURCE_ID,
+                USER_ARROW_ICON_ID, 0.92f);
     }
 
     private void addSourceIfMissing(@NonNull Style style, @NonNull String sourceId) {
@@ -688,19 +776,28 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         }
     }
 
-    private void addRouteLayerIfMissing(@NonNull Style style) {
-        if (style.getLayer(MapLibreFragment.ROUTE_LAYER_ID) != null) {
-            return;
+    private void addRouteLayersIfMissing(@NonNull Style style) {
+        if (style.getLayer(ROUTE_PASSED_LAYER_ID) == null) {
+            LineLayer passedLayer = new LineLayer(ROUTE_PASSED_LAYER_ID, ROUTE_PASSED_SOURCE_ID);
+            passedLayer.setProperties(
+                    PropertyFactory.lineColor("#166534"),
+                    PropertyFactory.lineWidth(6.2f),
+                    PropertyFactory.lineOpacity(0.95f),
+                    PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                    PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND));
+            style.addLayer(passedLayer);
         }
 
-        LineLayer routeLayer = new LineLayer(MapLibreFragment.ROUTE_LAYER_ID, MapLibreFragment.ROUTE_SOURCE_ID);
-        routeLayer.setProperties(
-                PropertyFactory.lineColor("#2D8CFF"),
-                PropertyFactory.lineWidth(5.0f),
-                PropertyFactory.lineOpacity(0.92f),
-                PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
-                PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND));
-        style.addLayer(routeLayer);
+        if (style.getLayer(ROUTE_REMAINING_LAYER_ID) == null) {
+            LineLayer remainingLayer = new LineLayer(ROUTE_REMAINING_LAYER_ID, ROUTE_REMAINING_SOURCE_ID);
+            remainingLayer.setProperties(
+                    PropertyFactory.lineColor("#2ECC71"),
+                    PropertyFactory.lineWidth(6.0f),
+                    PropertyFactory.lineOpacity(0.94f),
+                    PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                    PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND));
+            style.addLayer(remainingLayer);
+        }
     }
 
     private void addSymbolLayerIfMissing(@NonNull Style style,
@@ -722,6 +819,27 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         style.addLayer(layer);
     }
 
+    private void addRotatingSymbolLayerIfMissing(@NonNull Style style,
+            @NonNull String layerId,
+            @NonNull String sourceId,
+            @NonNull String iconId,
+            float iconScale) {
+        if (style.getLayer(layerId) != null) {
+            return;
+        }
+        SymbolLayer layer = new SymbolLayer(layerId, sourceId);
+        layer.setProperties(
+                PropertyFactory.iconImage(iconId),
+                PropertyFactory.iconAnchor(Property.ICON_ANCHOR_CENTER),
+                PropertyFactory.iconSize(iconScale),
+                PropertyFactory.iconAllowOverlap(true),
+                PropertyFactory.iconIgnorePlacement(true),
+                PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
+                PropertyFactory.iconPitchAlignment(Property.ICON_PITCH_ALIGNMENT_MAP),
+                PropertyFactory.iconRotate(Expression.get(PROP_BEARING)));
+        style.addLayer(layer);
+    }
+
     private void addMarkerImages(@NonNull Style style) {
         style.addImage(MARKER_ICON_FAVORITE_ID,
                 loadMarkerBitmap(R.drawable.ic_marker, "#F1C40F"));
@@ -729,6 +847,8 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 loadMarkerBitmap(R.drawable.ic_marker, "#F39C12"));
         style.addImage(MARKER_ICON_SELECTED_ID,
                 loadMarkerBitmap(R.drawable.ic_marker, "#E74C3C"));
+        style.addImage(TURN_ARROW_ICON_ID, createTurnArrowBitmap());
+        style.addImage(USER_ARROW_ICON_ID, createUserNavigationBitmap());
     }
 
     @NonNull
@@ -758,6 +878,76 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         return bitmap;
     }
 
+    @NonNull
+    private Bitmap createTurnArrowBitmap() {
+        int size = dpToPx(28);
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+
+        Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
+        stroke.setColor(resolveThemeColor(android.R.attr.textColorPrimary, Color.WHITE));
+        stroke.setStyle(Paint.Style.STROKE);
+        stroke.setStrokeJoin(Paint.Join.ROUND);
+        stroke.setStrokeCap(Paint.Cap.ROUND);
+        stroke.setStrokeWidth(dpToPx(4));
+
+        Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+        fill.setColor(Color.parseColor("#2ECC71"));
+        fill.setStyle(Paint.Style.STROKE);
+        fill.setStrokeJoin(Paint.Join.ROUND);
+        fill.setStrokeCap(Paint.Cap.ROUND);
+        fill.setStrokeWidth(dpToPx(2.2f));
+
+        Path path = new Path();
+        path.moveTo(size * 0.22f, size * 0.78f);
+        path.lineTo(size * 0.52f, size * 0.50f);
+        path.lineTo(size * 0.52f, size * 0.68f);
+        path.lineTo(size * 0.78f, size * 0.68f);
+        path.lineTo(size * 0.78f, size * 0.32f);
+
+        canvas.drawPath(path, stroke);
+        canvas.drawPath(path, fill);
+        return bitmap;
+    }
+
+    @NonNull
+    private Bitmap createUserNavigationBitmap() {
+        Drawable borderDrawable = AppCompatResources.getDrawable(requireContext(), R.drawable.ic_navigation);
+        Drawable fillDrawable = AppCompatResources.getDrawable(requireContext(), R.drawable.ic_navigation);
+        if (borderDrawable == null || fillDrawable == null) {
+            return Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
+        }
+
+        Drawable border = DrawableCompat.wrap(borderDrawable.mutate());
+        Drawable fill = DrawableCompat.wrap(fillDrawable.mutate());
+        DrawableCompat.setTint(border, resolveThemeColor(android.R.attr.textColorPrimary, Color.WHITE));
+        DrawableCompat.setTint(fill, Color.parseColor("#2ECC71"));
+
+        int size = dpToPx(40);
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+
+        int borderInset = dpToPx(4);
+        border.setBounds(borderInset, borderInset, size - borderInset, size - borderInset);
+        border.draw(canvas);
+
+        int fillInset = dpToPx(8);
+        fill.setBounds(fillInset, fillInset, size - fillInset, size - fillInset);
+        fill.draw(canvas);
+        return bitmap;
+    }
+
+    private int resolveThemeColor(int attrResId, int fallbackColor) {
+        android.util.TypedValue typedValue = new android.util.TypedValue();
+        if (requireContext().getTheme().resolveAttribute(attrResId, typedValue, true)) {
+            if (typedValue.resourceId != 0) {
+                return ContextCompat.getColor(requireContext(), typedValue.resourceId);
+            }
+            return typedValue.data;
+        }
+        return fallbackColor;
+    }
+
     private void setFeatures(@NonNull String sourceId,
             @NonNull List<Feature> features) {
         if (mapLibreMap == null) {
@@ -775,25 +965,414 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         }
     }
 
-    private void renderRouteGeometry(@Nullable String geometryJson) {
+    private void clearRouteFeatures() {
+        renderedRouteGeometryJson = null;
+        renderedRoutePoints = Collections.emptyList();
+        setFeatures(ROUTE_REMAINING_SOURCE_ID, Collections.emptyList());
+        setFeatures(ROUTE_PASSED_SOURCE_ID, Collections.emptyList());
+        setFeatures(ROUTE_TURN_SOURCE_ID, Collections.emptyList());
+    }
+
+    private void renderRouteSession(@Nullable RouteSession session) {
+        RouteSession effectiveSession = session != null ? session : RouteSession.idle();
+        renderRouteSheet(effectiveSession);
+
         if (mapLibreMap == null) {
             return;
         }
 
+        if (!effectiveSession.hasRoute()) {
+            clearRouteFeatures();
+            renderUserLocationIndicator(lastKnownUserLocation, lastKnownUserBearingDegrees);
+            return;
+        }
+
+        String geometryJson = effectiveSession.route != null ? effectiveSession.route.getGeometryJson() : null;
         if (geometryJson == null || geometryJson.trim().isEmpty()) {
-            setFeatures(ROUTE_SOURCE_ID, Collections.emptyList());
+            clearRouteFeatures();
+            renderUserLocationIndicator(lastKnownUserLocation, lastKnownUserBearingDegrees);
             return;
         }
 
-        Feature routeFeature = parseRouteFeature(geometryJson);
-        if (routeFeature == null) {
-            Log.w(TAG, "Route geometry could not be parsed for drawing. payload=" + truncateForLog(geometryJson));
-            setFeatures(ROUTE_SOURCE_ID, Collections.emptyList());
+        if (!TextUtils.equals(renderedRouteGeometryJson, geometryJson)) {
+            Feature routeFeature = parseRouteFeature(geometryJson);
+            if (routeFeature == null || !(routeFeature.geometry() instanceof LineString)) {
+                Log.w(TAG, "Route geometry could not be parsed for drawing. payload=" + truncateForLog(geometryJson));
+                clearRouteFeatures();
+                return;
+            }
+            renderedRouteGeometryJson = geometryJson;
+            renderedRoutePoints = ((LineString) routeFeature.geometry()).coordinates();
+            if (!effectiveSession.following) {
+                fitCameraToRouteVisibleArea(routeFeature);
+            }
+        }
+
+        if (renderedRoutePoints.size() < 2) {
+            clearRouteFeatures();
             return;
         }
 
-        setFeatures(ROUTE_SOURCE_ID, Collections.singletonList(routeFeature));
-        fitCameraToRoute(routeFeature);
+        List<Point> passedPoints = Collections.emptyList();
+        List<Point> remainingPoints = renderedRoutePoints;
+        List<Feature> userFeatures = Collections.emptyList();
+        Location knownLocation = effectiveSession.lastKnownLocation != null
+                ? effectiveSession.lastKnownLocation
+                : lastKnownUserLocation;
+
+        if (knownLocation != null) {
+            RouteGeometryUtils.RouteProgress progress = RouteGeometryUtils.computeRouteProgress(
+                    renderedRoutePoints,
+                    knownLocation);
+            passedPoints = progress.passedPoints;
+            remainingPoints = progress.remainingPoints;
+            float userBearing = effectiveSession.lastBearingDegrees != 0f
+                    ? effectiveSession.lastBearingDegrees
+                    : progress.segmentBearing;
+            userFeatures = Collections.singletonList(createBearingFeature(
+                    Point.fromLngLat(
+                            knownLocation.longitude,
+                            knownLocation.latitude),
+                    userBearing));
+            if (effectiveSession.following) {
+                fitCameraToUserAndRemainingRoute(knownLocation, remainingPoints);
+            }
+            if (effectiveSession.following && tvFollowDistanceLeft != null) {
+                tvFollowDistanceLeft
+                        .setText(formatDistance(RouteGeometryUtils.polylineDistanceMeters(remainingPoints)));
+            }
+            if (effectiveSession.following && tvFollowTimeLeft != null && effectiveSession.route != null) {
+                double remainingDistance = RouteGeometryUtils.polylineDistanceMeters(remainingPoints);
+                double totalDistance = Math.max(1d, effectiveSession.route.getDistanceMeters());
+                double remainingSeconds = effectiveSession.route.getDurationSeconds()
+                        * Math.min(1d, Math.max(0d, remainingDistance / totalDistance));
+                tvFollowTimeLeft.setText(formatDuration(remainingSeconds));
+            }
+        }
+
+        setFeatures(ROUTE_PASSED_SOURCE_ID, passedPoints.size() >= 2
+                ? Collections.singletonList(Feature.fromGeometry(LineString.fromLngLats(passedPoints)))
+                : Collections.emptyList());
+        setFeatures(ROUTE_REMAINING_SOURCE_ID, remainingPoints.size() >= 2
+                ? Collections.singletonList(Feature.fromGeometry(LineString.fromLngLats(remainingPoints)))
+                : Collections.emptyList());
+        setFeatures(ROUTE_TURN_SOURCE_ID, Collections.emptyList());
+        if (userFeatures.isEmpty()) {
+            renderUserLocationIndicator(lastKnownUserLocation, lastKnownUserBearingDegrees);
+        } else {
+            setFeatures(USER_ROUTE_SOURCE_ID, userFeatures);
+        }
+    }
+
+    private void renderUserLocationIndicator(@Nullable Location location, float bearing) {
+        if (location == null) {
+            setFeatures(USER_ROUTE_SOURCE_ID, Collections.emptyList());
+            return;
+        }
+        setFeatures(USER_ROUTE_SOURCE_ID, Collections.singletonList(
+                createBearingFeature(
+                        Point.fromLngLat(location.longitude, location.latitude),
+                        bearing)));
+    }
+
+    private void renderRouteSheet(@NonNull RouteSession session) {
+        if (placeDetailSheet == null || routeDetailSheet == null || bottomSheetBehavior == null) {
+            return;
+        }
+
+        if (!session.isVisible()) {
+            placeDetailSheet.setVisibility(View.GONE);
+            routeDetailSheet.setVisibility(View.GONE);
+            if (followRouteBar != null) {
+                followRouteBar.setVisibility(View.GONE);
+            }
+            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+            stopFollowLocationUpdates();
+            updateFloatingControlsPosition();
+            return;
+        }
+
+        if (session.following) {
+            routeDetailSheet.setVisibility(View.GONE);
+            placeDetailSheet.setVisibility(View.GONE);
+            if (followRouteBar != null) {
+                followRouteBar.setVisibility(View.VISIBLE);
+            }
+            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+        } else {
+            showRouteSheetOnly();
+            if (followRouteBar != null) {
+                followRouteBar.setVisibility(View.GONE);
+            }
+        }
+        Place destination = session.destinationPlace;
+        if (tvRouteTitle != null) {
+            String title = destination != null && !TextUtils.isEmpty(destination.name)
+                    ? getString(R.string.route_sheet_title) + " to " + destination.name
+                    : getString(R.string.route_sheet_title);
+            tvRouteTitle.setText(title);
+        }
+        if (tvRouteAddress != null) {
+            tvRouteAddress.setText(destination != null && !TextUtils.isEmpty(destination.address)
+                    ? destination.address
+                    : "");
+        }
+        if (tvRouteEta != null) {
+            tvRouteEta.setText(!TextUtils.isEmpty(session.durationText)
+                    ? "Estimated: " + session.durationText
+                    : "Estimated: --");
+        }
+        if (tvRouteDistance != null) {
+            tvRouteDistance.setText(!TextUtils.isEmpty(session.distanceText)
+                    ? "Distance: " + session.distanceText
+                    : "Distance: --");
+        }
+        if (tvFollowDistanceLeft != null && !TextUtils.isEmpty(session.distanceText)) {
+            tvFollowDistanceLeft.setText(session.distanceText);
+        }
+        if (tvFollowTimeLeft != null && !TextUtils.isEmpty(session.durationText)) {
+            tvFollowTimeLeft.setText(session.durationText);
+        }
+        if (btnFollowRoute != null) {
+            boolean canFollow = session.hasRoute();
+            btnFollowRoute.setEnabled(canFollow && !session.following);
+            btnFollowRoute.setText(session.following
+                    ? R.string.following_route
+                    : R.string.follow_route);
+        }
+
+        if (session.hasRoute()) {
+            ensureFollowLocationUpdates();
+        } else {
+            stopFollowLocationUpdates();
+        }
+        updateFloatingControlsPosition();
+    }
+
+    private void showPlaceSheetOnly() {
+        if (placeDetailSheet != null) {
+            placeDetailSheet.setVisibility(View.VISIBLE);
+        }
+        if (routeDetailSheet != null) {
+            routeDetailSheet.setVisibility(View.GONE);
+        }
+        if (followRouteBar != null) {
+            followRouteBar.setVisibility(View.GONE);
+        }
+        updateFloatingControlsPosition();
+    }
+
+    private void showRouteSheetOnly() {
+        if (placeDetailSheet != null) {
+            placeDetailSheet.setVisibility(View.GONE);
+        }
+        if (routeDetailSheet != null) {
+            routeDetailSheet.setVisibility(View.VISIBLE);
+        }
+        if (bottomSheetBehavior != null) {
+            routeDetailSheet.post(() -> {
+                if (routeDetailSheet.getHeight() > 0) {
+                    bottomSheetBehavior.setPeekHeight(routeDetailSheet.getHeight());
+                }
+                bottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
+                updateFloatingControlsPosition();
+            });
+        }
+    }
+
+    private void startFollowingRouteSession() {
+        if (ContextCompat.checkSelfPermission(requireContext(),
+                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION);
+            viewModel.setStatusText(getString(R.string.follow_route_location_required));
+            return;
+        }
+
+        viewModel.startFollowingRoute();
+        ensureFollowLocationUpdates();
+    }
+
+    private void stopRouteAndFocusDestination() {
+        RouteSession session = viewModel != null ? viewModel.getCurrentRouteSession() : RouteSession.idle();
+        Place destination = session.destinationPlace;
+        reopeningPlaceAfterRouteStop = true;
+        viewModel.cancelRoute();
+        if (destination != null && destination.location != null) {
+            selectedPlace = destination;
+            renderSelectedPlace();
+            animateCameraToSelection(new LatLng(
+                    destination.location.latitude,
+                    destination.location.longitude));
+            if (getView() != null) {
+                showPlaceBottomSheet(destination, requireView());
+            }
+        } else {
+            reopeningPlaceAfterRouteStop = false;
+        }
+    }
+
+    private void updateFloatingControlsPosition() {
+        View root = getView();
+        if (root == null) {
+            return;
+        }
+
+        ImageButton btnMyLocation = root.findViewById(R.id.btn_my_location);
+        if (btnMyLocation == null) {
+            return;
+        }
+
+        root.post(() -> {
+            int rootHeight = root.getHeight();
+            if (rootHeight <= 0) {
+                return;
+            }
+
+            int myLocationDefaultY = rootHeight - dpToPx(100) - btnMyLocation.getHeight();
+            int anchorTop = rootHeight;
+            if (bottomSheetBehavior != null && bottomSheetBehavior.getState() != BottomSheetBehavior.STATE_HIDDEN
+                    && bottomSheetContainer != null) {
+                anchorTop = Math.min(anchorTop, bottomSheetContainer.getTop());
+            }
+
+            int targetMyLocationY = anchorTop < rootHeight
+                    ? anchorTop - btnMyLocation.getHeight() - dpToPx(16)
+                    : myLocationDefaultY;
+            btnMyLocation.setY(Math.min(myLocationDefaultY, targetMyLocationY));
+            if (btnMapCompass != null) {
+                int compassDefaultY = myLocationDefaultY - dpToPx(60);
+                int targetCompassY = (int) btnMyLocation.getY() - btnMapCompass.getHeight() - dpToPx(12);
+                btnMapCompass.setY(Math.min(compassDefaultY, targetCompassY));
+            }
+        });
+    }
+
+    private void ensureFollowLocationUpdates() {
+        if (followLocationUpdatesActive || viewModel == null || !viewModel.getCurrentRouteSession().hasRoute()) {
+            return;
+        }
+        if (ActivityCompat.checkSelfPermission(requireContext(),
+                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+
+        LocationManager locationManager = requireContext().getSystemService(LocationManager.class);
+        if (locationManager == null) {
+            return;
+        }
+
+        try {
+            locationManager.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER,
+                    1000L,
+                    1.5f,
+                    followLocationListener,
+                    Looper.getMainLooper());
+        } catch (Exception ignored) {
+            // ignore
+        }
+
+        try {
+            locationManager.requestLocationUpdates(
+                    LocationManager.NETWORK_PROVIDER,
+                    1500L,
+                    2.0f,
+                    followLocationListener,
+                    Looper.getMainLooper());
+        } catch (Exception ignored) {
+            // ignore
+        }
+
+        android.location.Location lastKnown = getBestLastKnownLocation(locationManager);
+        if (lastKnown != null) {
+            lastKnownUserLocation = new Location(lastKnown.getLatitude(), lastKnown.getLongitude());
+            viewModel.updateFollowingLocation(
+                    lastKnownUserLocation,
+                    lastKnown.hasBearing() ? lastKnown.getBearing() : 0f);
+        }
+        followLocationUpdatesActive = true;
+    }
+
+    private void stopFollowLocationUpdates() {
+        if (!followLocationUpdatesActive || getContext() == null) {
+            return;
+        }
+
+        LocationManager manager = requireContext().getSystemService(LocationManager.class);
+        if (manager == null) {
+            followLocationUpdatesActive = false;
+            return;
+        }
+
+        try {
+            manager.removeUpdates(followLocationListener);
+        } catch (Exception ignored) {
+            // Safe no-op.
+        }
+        followLocationUpdatesActive = false;
+    }
+
+    @NonNull
+    private List<Feature> createTurnFeatures(@NonNull List<RouteGeometryUtils.TurnMarker> markers) {
+        List<Feature> features = new ArrayList<>();
+        for (RouteGeometryUtils.TurnMarker marker : markers) {
+            features.add(createBearingFeature(marker.location, marker.bearing));
+        }
+        return features;
+    }
+
+    @NonNull
+    private Feature createBearingFeature(@NonNull Point point, float bearing) {
+        Feature feature = Feature.fromGeometry(point);
+        feature.addNumberProperty(PROP_BEARING, bearing);
+        return feature;
+    }
+
+    @NonNull
+    private String formatDistance(double distanceMeters) {
+        double safeDistance = Math.max(0d, distanceMeters);
+        if (safeDistance < 1000d) {
+            return String.format(Locale.getDefault(), "%.0f m", safeDistance);
+        }
+        return String.format(Locale.getDefault(), "%.1f km", safeDistance / 1000d);
+    }
+
+    @NonNull
+    private String formatDuration(double durationSeconds) {
+        long totalMinutes = Math.max(1L, Math.round(durationSeconds / 60d));
+        long hours = totalMinutes / 60L;
+        long minutes = totalMinutes % 60L;
+        if (hours <= 0L) {
+            return String.format(Locale.getDefault(), "%d min", totalMinutes);
+        }
+        if (minutes == 0L) {
+            return String.format(Locale.getDefault(), "%d hr", hours);
+        }
+        return String.format(Locale.getDefault(), "%d hr %d min", hours, minutes);
+    }
+
+    private void fitCameraToUserAndRemainingRoute(@NonNull Location userLocation,
+            @NonNull List<Point> remainingPoints) {
+        if (mapLibreMap == null || remainingPoints.isEmpty()) {
+            return;
+        }
+
+        LatLngBounds.Builder boundsBuilder = new LatLngBounds.Builder();
+        boundsBuilder.include(new LatLng(userLocation.latitude, userLocation.longitude));
+        for (Point point : remainingPoints) {
+            boundsBuilder.include(new LatLng(point.latitude(), point.longitude()));
+        }
+
+        try {
+            mapLibreMap.animateCamera(CameraUpdateFactory.newLatLngBounds(
+                    boundsBuilder.build(),
+                    dpToPx(48),
+                    dpToPx(120),
+                    dpToPx(48),
+                    dpToPx(156)));
+        } catch (Exception ignored) {
+            // Ignore degenerate bounds.
+        }
     }
 
     @Nullable
@@ -883,7 +1462,8 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 String routeGeometryString = optNullableString(firstRoute, "geometry");
                 if (!routeGeometryString.isBlank()) {
                     JSONObject routeGeometryJson = parseJsonObject(routeGeometryString);
-                    if (routeGeometryJson != null && "LineString".equalsIgnoreCase(routeGeometryJson.optString("type"))) {
+                    if (routeGeometryJson != null
+                            && "LineString".equalsIgnoreCase(routeGeometryJson.optString("type"))) {
                         return routeGeometryJson;
                     }
                 }
@@ -1200,6 +1780,39 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         }
     }
 
+    private void fitCameraToRouteVisibleArea(@NonNull Feature routeFeature) {
+        if (!(routeFeature.geometry() instanceof LineString) || mapLibreMap == null) {
+            return;
+        }
+
+        List<Point> routePoints = ((LineString) routeFeature.geometry()).coordinates();
+        if (routePoints.size() < 2) {
+            return;
+        }
+
+        LatLngBounds.Builder boundsBuilder = new LatLngBounds.Builder();
+        for (Point point : routePoints) {
+            boundsBuilder.include(new LatLng(point.latitude(), point.longitude()));
+        }
+
+        int bottomPadding = dpToPx(180);
+        if (routeDetailSheet != null && routeDetailSheet.getVisibility() == View.VISIBLE
+                && routeDetailSheet.getHeight() > 0) {
+            bottomPadding = routeDetailSheet.getHeight() + dpToPx(28);
+        }
+
+        try {
+            mapLibreMap.animateCamera(CameraUpdateFactory.newLatLngBounds(
+                    boundsBuilder.build(),
+                    dpToPx(48),
+                    dpToPx(96),
+                    dpToPx(48),
+                    bottomPadding));
+        } catch (Exception ignored) {
+            // Ignore camera update failures for degenerate bounds.
+        }
+    }
+
     @NonNull
     private Feature createFeatureForPlace(@NonNull LatLng position,
             @NonNull Place place) {
@@ -1492,13 +2105,17 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     }
 
     private void showPlaceBottomSheet(Place place, View root) {
+        if (viewModel.hasActiveRouteSession()) {
+            viewModel.setStatusText(getString(R.string.route_active_place_sheet_blocked));
+            return;
+        }
+
         viewModel.cacheViewedPlace(place);
-        viewModel.clearRouteSummary();
+        showPlaceSheetOnly();
 
         TextView tvName = root.findViewById(R.id.tv_place_name);
         TextView tvAddress = root.findViewById(R.id.tv_place_address);
         TextView tvRating = root.findViewById(R.id.tv_place_rating);
-        TextView tvRouteSummary = root.findViewById(R.id.tv_route_summary);
         ImageButton btnAddFavorite = root.findViewById(R.id.btn_add_favorite);
         MaterialButton btnSharePlace = root.findViewById(R.id.btn_share_place);
         MaterialButton btnRoutePlace = root.findViewById(R.id.btn_navigate_place);
@@ -1515,7 +2132,6 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         btnAddFavorite.setEnabled(true);
         btnSharePlace.setEnabled(true);
         btnRoutePlace.setEnabled(true);
-        tvRouteSummary.setVisibility(View.GONE);
 
         updateFavoriteButtonState(btnAddFavorite,
                 findFavoriteForPlace(place) != null);
@@ -1533,7 +2149,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             }
         });
 
-        btnRoutePlace.setOnClickListener(v -> routeToPlace(place, tvRouteSummary));
+        btnRoutePlace.setOnClickListener(v -> routeToPlace(place));
         btnSharePlace.setOnClickListener(v -> showShareToGroupDialog(place));
 
         View layoutExtendedDetails = root.findViewById(R.id.layout_extended_details);
@@ -1572,35 +2188,32 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         button.setBackgroundTintList(android.content.res.ColorStateList.valueOf(color));
     }
 
-    private void routeToPlace(Place place, TextView tvRouteSummary) {
-        if (bottomSheetBehavior != null) {
-            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
-        }
-
+    private void routeToPlace(Place place) {
         if (place == null || place.location == null) {
-            viewModel.setStatusText("Current location unavailable for route estimate.");
-            tvRouteSummary.setVisibility(View.GONE);
+            viewModel.setStatusText(getString(R.string.route_location_required));
             return;
         }
 
         Location origin = resolveRoutingOrigin();
         if (origin == null) {
-            viewModel.setStatusText("Current location unavailable for route estimate.");
-            tvRouteSummary.setVisibility(View.GONE);
+            showRouteSheetOnly();
+            renderRouteSheet(RouteSession.error(place, getString(R.string.route_location_required)));
+            viewModel.setStatusText(getString(R.string.route_location_required));
             return;
         }
 
+        showRouteSheetOnly();
+
         if (!isInVietnamBounds(origin) || !isInVietnamBounds(place.location)) {
-            tvRouteSummary.setVisibility(View.VISIBLE);
-            tvRouteSummary.setText(R.string.route_not_supported_outside_vietnam);
-            setFeatures(ROUTE_SOURCE_ID, Collections.emptyList());
+            clearRouteFeatures();
+            renderRouteSheet(RouteSession.error(place, getString(R.string.route_not_supported_outside_vietnam)));
             viewModel.setStatusText(getString(R.string.route_not_supported_outside_vietnam));
             return;
         }
 
-        tvRouteSummary.setVisibility(View.VISIBLE);
-        tvRouteSummary.setText(R.string.route_estimating);
-        viewModel.estimateRoute(origin, place.location);
+        lastKnownUserLocation = origin;
+        renderRouteSheet(RouteSession.loading(place));
+        viewModel.beginRoutePreview(place, origin, place.location);
     }
 
     private boolean isInVietnamBounds(@NonNull Location location) {
@@ -1634,6 +2247,10 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         lastKnownUserLocation = new Location(
                 bestLastKnown.getLatitude(),
                 bestLastKnown.getLongitude());
+        lastKnownUserBearingDegrees = bestLastKnown.hasBearing()
+                ? bestLastKnown.getBearing()
+                : lastKnownUserBearingDegrees;
+        renderUserLocationIndicator(lastKnownUserLocation, lastKnownUserBearingDegrees);
         return lastKnownUserLocation;
     }
 
@@ -1739,7 +2356,8 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         }
     }
 
-    @RequiresPermission(allOf = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION})
+    @RequiresPermission(allOf = { Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION })
     @Nullable
     private android.location.Location getBestLastKnownLocation(@NonNull LocationManager locationManager) {
         android.location.Location best = null;
@@ -1766,7 +2384,8 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         return best;
     }
 
-    @RequiresPermission(allOf = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION})
+    @RequiresPermission(allOf = { Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION })
     private void requestSingleLocationUpdate(@NonNull LocationManager locationManager) {
         stopSingleLocationUpdates();
 
@@ -1797,6 +2416,8 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
     private void centerMapOnLocation(@NonNull android.location.Location location) {
         lastKnownUserLocation = new Location(location.getLatitude(), location.getLongitude());
+        lastKnownUserBearingDegrees = location.hasBearing() ? location.getBearing() : lastKnownUserBearingDegrees;
+        renderUserLocationIndicator(lastKnownUserLocation, lastKnownUserBearingDegrees);
         if (mapLibreMap == null) {
             return;
         }
@@ -1836,6 +2457,9 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         super.onResume();
         if (mapView != null) {
             mapView.onResume();
+        }
+        if (viewModel != null && viewModel.getCurrentRouteSession().hasRoute()) {
+            ensureFollowLocationUpdates();
         }
     }
 
@@ -1882,13 +2506,32 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         if (mapView != null) {
             mapView.removeOnDidFailLoadingMapListener(
                     onDidFailLoadingMapListener);
+            if (mapLibreMap != null) {
+                mapLibreMap.removeOnCameraMoveListener(onCameraMoveListener);
+                mapLibreMap.removeOnCameraIdleListener(onCameraIdleListener);
+            }
             mapView.onDestroy();
             mapView = null;
         }
         clearFavoriteMarkers();
         clearSearchResultMarkers();
         clearSelectedMarker();
-        setFeatures(ROUTE_SOURCE_ID, Collections.emptyList());
+        clearRouteFeatures();
+        stopFollowLocationUpdates();
+        bottomSheetContainer = null;
+        placeDetailSheet = null;
+        routeDetailSheet = null;
+        tvRouteTitle = null;
+        tvRouteAddress = null;
+        tvRouteEta = null;
+        tvRouteDistance = null;
+        followRouteBar = null;
+        tvFollowDistanceLeft = null;
+        tvFollowTimeLeft = null;
+        btnStopFollowRoute = null;
+        btnMapCompass = null;
+        btnCancelRoute = null;
+        btnFollowRoute = null;
         downloadCityMapLayout = null;
         btnDownloadCityMap = null;
         progressDownloadCityMap = null;
@@ -1896,4 +2539,3 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         super.onDestroyView();
     }
 }
-

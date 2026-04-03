@@ -1,4 +1,4 @@
-package com.bif.app.feature.map.main;
+package com.bif.app.feature.map;
 
 import android.os.Bundle;
 import android.view.LayoutInflater;
