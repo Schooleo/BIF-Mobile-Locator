@@ -24,8 +24,8 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_11
-        targetCompatibility JavaVersion.VERSION_11
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 
     testOptions {
@@ -47,6 +47,7 @@ dependencies {
     implementation libs.retrofit.core
     implementation libs.retrofit.gson
     implementation libs.graphhopper.core
+    implementation libs.slf4j.android
 
     // STOMP + RxJava2 for real-time WebSocket chat
     implementation(libs.stomp.protocol) {

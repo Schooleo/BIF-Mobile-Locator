@@ -21,12 +21,17 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 import javax.inject.Inject;
 
@@ -40,9 +45,12 @@ public class RouteRepository implements IRouteRepository {
     private static final double VIETNAM_MAX_LAT = 23.39;
     private static final double VIETNAM_MIN_LON = 102.14;
     private static final double VIETNAM_MAX_LON = 109.46;
-    private static final String OFFLINE_CITY_MAP_FILE = "offline-map/city-map.osm.pbf";
+    private static final String OFFLINE_CITY_GRAPH_DIR = "offline-map/gh-cache";
+    private static final String OFFLINE_CITY_GRAPH_ARCHIVE = "offline-map/city-map-gh-cache.zip";
+    private static final String GRAPH_PROPERTIES_FILE = "properties";
     private static final long MIN_OFFLINE_CITY_MAP_BYTES = 1024L;
-    private static final long MAX_OFFLINE_CITY_MAP_DOWNLOAD_BYTES = 512L * 1024L * 1024L;
+    private static final long MAX_OFFLINE_CITY_MAP_DOWNLOAD_BYTES = 256L * 1024L * 1024L;
+    private static final long ONLINE_ROUTE_TIMEOUT_SECONDS = 8L;
 
     private final RestApiService restApiService;
     private final OfflineRoutingEngine offlineRoutingEngine;
@@ -83,7 +91,7 @@ public class RouteRepository implements IRouteRepository {
         this.mapDownloadExecutor = Executors.newSingleThreadExecutor();
         this.isCityMapDownloadInProgress = new AtomicBoolean(false);
         this.offlineMapDownloadState = new MutableLiveData<>(
-            hasOfflineCityMap()
+            hasOfflineCityMapData()
                 ? OfflineMapDownloadState.alreadyDownloaded()
                 : OfflineMapDownloadState.idle());
         this.executorService = Executors.newSingleThreadExecutor();
@@ -120,7 +128,7 @@ public class RouteRepository implements IRouteRepository {
             return;
         }
 
-        if (hasOfflineCityMap()) {
+        if (hasOfflineCityMapData()) {
             offlineMapDownloadState.postValue(OfflineMapDownloadState.alreadyDownloaded());
             return;
         }
@@ -139,7 +147,7 @@ public class RouteRepository implements IRouteRepository {
         mapDownloadExecutor.execute(() -> {
             try {
                 DownloadResult result = downloadCityMap(origin);
-                if (result.success || hasOfflineCityMap()) {
+                if (result.success || hasOfflineCityMapData()) {
                     offlineMapDownloadState.postValue(OfflineMapDownloadState.completed());
                 } else {
                     offlineMapDownloadState.postValue(
@@ -169,29 +177,49 @@ public class RouteRepository implements IRouteRepository {
         double totalDistanceKm = DistanceUtils.calculateTotalDistanceKm(geoPoints);
         String profile = DistanceUtils.determineProfile(totalDistanceKm);
 
+        boolean offlineReady = hasOfflineCityMap();
+        if (offlineReady) {
+            Route offlineRoute = fetchEmbeddedOfflineRoute(waypoints, profile);
+            if (offlineRoute != null) {
+                return offlineRoute;
+            }
+        }
+
+        if (!networkMonitor.isOnline()) {
+            return null;
+        }
+
         Route onlineRoute = fetchOnlineRoute(waypoints, profile);
         if (onlineRoute != null) {
             return onlineRoute;
         }
 
-        return fetchEmbeddedOfflineRoute(waypoints, profile);
+        if (!offlineReady && hasOfflineCityMap()) {
+            return fetchEmbeddedOfflineRoute(waypoints, profile);
+        }
+
+        return null;
     }
 
     private Route fetchEmbeddedOfflineRoute(List<Location> waypoints, String profile) {
-        File mapDataFile = offlineCityMapFile();
+        File mapDataFile = offlineCityGraphDir();
         if (!hasOfflineCityMap()) {
             return null;
         }
         return offlineRoutingEngine.route(waypoints, profile, mapDataFile);
     }
 
-    private boolean hasOfflineCityMap() {
-        File cityMap = offlineCityMapFile();
-        return cityMap.exists() && cityMap.isFile() && cityMap.length() >= MIN_OFFLINE_CITY_MAP_BYTES;
+    private boolean hasOfflineCityMapData() {
+        return isGraphCacheDirectory(offlineCityGraphDir());
     }
 
-    private File offlineCityMapFile() {
-        return new File(appContext.getFilesDir(), OFFLINE_CITY_MAP_FILE);
+    private boolean hasOfflineCityMap() {
+        File cityGraphDir = offlineCityGraphDir();
+        return hasOfflineCityMapData() && offlineRoutingEngine.isReady(cityGraphDir);
+    }
+
+    private File offlineCityGraphDir() {
+        return new File(appContext.getFilesDir(), OFFLINE_CITY_GRAPH_DIR);
     }
 
     private DownloadResult downloadCityMap(Location origin) {
@@ -210,19 +238,19 @@ public class RouteRepository implements IRouteRepository {
             return DownloadResult.failed("Map data unavailable from server");
         }
 
-        File cityMap = new File(appContext.getFilesDir(), OFFLINE_CITY_MAP_FILE);
-        File parent = cityMap.getParentFile();
+        File cityGraphDir = offlineCityGraphDir();
+        File parent = cityGraphDir.getParentFile();
         if (parent != null && !parent.exists()) {
             //noinspection ResultOfMethodCallIgnored
             parent.mkdirs();
         }
 
-        File tempFile = new File(cityMap.getAbsolutePath() + ".tmp");
+        File tempArchive = new File(appContext.getFilesDir(), OFFLINE_CITY_GRAPH_ARCHIVE + ".tmp");
         long bytesWritten = 0L;
 
         try (ResponseBody body = response.body();
              InputStream in = body.byteStream();
-             FileOutputStream out = new FileOutputStream(tempFile)) {
+             FileOutputStream out = new FileOutputStream(tempArchive)) {
             long contentLength = body.contentLength();
             if (contentLength > MAX_OFFLINE_CITY_MAP_DOWNLOAD_BYTES) {
                 return DownloadResult.failed("Map data file is too large to download");
@@ -238,7 +266,7 @@ public class RouteRepository implements IRouteRepository {
 
                 if (bytesWritten > MAX_OFFLINE_CITY_MAP_DOWNLOAD_BYTES) {
                     //noinspection ResultOfMethodCallIgnored
-                    tempFile.delete();
+                    tempArchive.delete();
                     return DownloadResult.failed("Map data file is too large to download");
                 }
 
@@ -254,27 +282,147 @@ public class RouteRepository implements IRouteRepository {
             out.flush();
         } catch (IOException ignored) {
             //noinspection ResultOfMethodCallIgnored
-            tempFile.delete();
+            tempArchive.delete();
             return DownloadResult.failed("Failed to save map data to device");
         }
 
-        if (tempFile.length() < MIN_OFFLINE_CITY_MAP_BYTES) {
+        if (tempArchive.length() < MIN_OFFLINE_CITY_MAP_BYTES) {
             //noinspection ResultOfMethodCallIgnored
-            tempFile.delete();
+            tempArchive.delete();
             return DownloadResult.failed("Downloaded map data is invalid");
         }
 
-        if (cityMap.exists()) {
+        File stagingDir = new File(parent, "gh-cache-staging");
+        deleteRecursively(stagingDir);
+        if (!stagingDir.exists() && !stagingDir.mkdirs()) {
             //noinspection ResultOfMethodCallIgnored
-            cityMap.delete();
+            tempArchive.delete();
+            return DownloadResult.failed("Failed to prepare map cache directory");
         }
 
-        boolean renamed = tempFile.renameTo(cityMap);
-        if (renamed) {
+        try {
+            unzipArchive(tempArchive, stagingDir);
+            File extractedGraphCache = findGraphCacheDirectory(stagingDir);
+            if (extractedGraphCache == null) {
+                return DownloadResult.failed("Downloaded map data is not a valid graph cache");
+            }
+
+            if (cityGraphDir.exists()) {
+                deleteRecursively(cityGraphDir);
+            }
+
+            if (!moveDirectory(extractedGraphCache, cityGraphDir)) {
+                return DownloadResult.failed("Failed to finalize downloaded map data");
+            }
+
             offlineMapDownloadState.postValue(OfflineMapDownloadState.downloading(100, false));
             return DownloadResult.success();
+        } catch (IOException ignored) {
+            return DownloadResult.failed("Failed to extract map data on device");
+        } finally {
+            //noinspection ResultOfMethodCallIgnored
+            tempArchive.delete();
+            deleteRecursively(stagingDir);
         }
-        return DownloadResult.failed("Failed to finalize downloaded map data");
+    }
+
+    private boolean isGraphCacheDirectory(File directory) {
+        if (directory == null || !directory.exists() || !directory.isDirectory()) {
+            return false;
+        }
+        File properties = new File(directory, GRAPH_PROPERTIES_FILE);
+        return properties.exists() && properties.isFile() && properties.length() > 0;
+    }
+
+    private void unzipArchive(File archiveFile, File destinationDir) throws IOException {
+        String destinationRoot = destinationDir.getCanonicalPath() + File.separator;
+        try (ZipInputStream zipInputStream = new ZipInputStream(new java.io.FileInputStream(archiveFile))) {
+            ZipEntry entry;
+            while ((entry = zipInputStream.getNextEntry()) != null) {
+                File output = new File(destinationDir, entry.getName());
+                String outputPath = output.getCanonicalPath();
+                if (!outputPath.startsWith(destinationRoot)) {
+                    throw new IOException("Invalid zip entry path");
+                }
+
+                if (entry.isDirectory()) {
+                    if (!output.exists() && !output.mkdirs()) {
+                        throw new IOException("Failed to create directory while extracting map data");
+                    }
+                } else {
+                    File outputParent = output.getParentFile();
+                    if (outputParent != null && !outputParent.exists() && !outputParent.mkdirs()) {
+                        throw new IOException("Failed to prepare output directory while extracting map data");
+                    }
+
+                    try (FileOutputStream outputStream = new FileOutputStream(output)) {
+                        byte[] buffer = new byte[8192];
+                        int read;
+                        while ((read = zipInputStream.read(buffer)) != -1) {
+                            outputStream.write(buffer, 0, read);
+                        }
+                        outputStream.flush();
+                    }
+                }
+                zipInputStream.closeEntry();
+            }
+        }
+    }
+
+    private File findGraphCacheDirectory(File rootDirectory) {
+        if (isGraphCacheDirectory(rootDirectory)) {
+            return rootDirectory;
+        }
+
+        Deque<File> queue = new ArrayDeque<>();
+        queue.add(rootDirectory);
+        int maxVisited = 64;
+        int visited = 0;
+
+        while (!queue.isEmpty() && visited < maxVisited) {
+            File current = queue.poll();
+            visited++;
+
+            File[] children = current.listFiles();
+            if (children == null) {
+                continue;
+            }
+
+            for (File child : children) {
+                if (child.isDirectory()) {
+                    if (isGraphCacheDirectory(child)) {
+                        return child;
+                    }
+                    queue.add(child);
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean moveDirectory(File source, File destination) {
+        if (source.equals(destination)) {
+            return true;
+        }
+        return source.renameTo(destination);
+    }
+
+    private void deleteRecursively(File file) {
+        if (file == null || !file.exists()) {
+            return;
+        }
+
+        if (file.isDirectory()) {
+            File[] children = file.listFiles();
+            if (children != null) {
+                for (File child : children) {
+                    deleteRecursively(child);
+                }
+            }
+        }
+
+        //noinspection ResultOfMethodCallIgnored
+        file.delete();
     }
 
     private String errorForDownloadStatus(int statusCode) {
@@ -299,9 +447,11 @@ public class RouteRepository implements IRouteRepository {
 
     private Route fetchOnlineRoute(List<Location> waypoints, String profile) {
         try {
-            Response<RouteResponseDto> response = restApiService
-                    .routeTrip(toRequest(waypoints, profile))
-                    .execute();
+            retrofit2.Call<RouteResponseDto> call = restApiService
+                .routeTrip(toRequest(waypoints, profile));
+            call.timeout().timeout(ONLINE_ROUTE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+            Response<RouteResponseDto> response = call.execute();
 
             if (!response.isSuccessful() || response.body() == null) {
                 return null;

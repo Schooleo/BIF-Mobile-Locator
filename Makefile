@@ -27,7 +27,7 @@ DEBUG_PROFILES := --profile db --profile ai --profile logs
 
 .DEFAULT_GOAL := help
 
-.PHONY: help env network-create up up-debug prod build down down-debug destroy logs ps shell init-map init-city-map
+.PHONY: help env network-create up up-debug prod build down down-debug destroy logs ps shell init-map init-maps init-city-map init-gh-cache
 
 help:
 	@echo ========================================================
@@ -45,6 +45,8 @@ help:
 	@echo   init-maps    - Download Overture places + OSM data and compile OSRM routing graph
 	@echo   init-city-map - Build city-level OSRM graph from LAT/LON in Vietnam
 	@echo                  Example: make init-city-map LAT=10.7769 LON=106.7009 RADIUS_KM=20
+	@echo   init-gh-cache - Build GraphHopper gh-cache + city-map-gh-cache.zip for Android offline download
+	@echo                  Example: make init-gh-cache
 	@echo.
 	@echo SHUTDOWN COMMANDS:
 	@echo   down         - Stop CORE services (keeps volumes)
@@ -89,9 +91,15 @@ init-map: env
 	@echo Downloading map data and compiling OSRM routing graph...
 	@bash init-scripts/init-map-data.sh
 
+init-maps: init-map
+
 init-city-map: env
 	@echo Building city-level map around LAT=$(LAT), LON=$(LON), RADIUS_KM=$(RADIUS_KM)...
 	@LAT="$(LAT)" LON="$(LON)" RADIUS_KM="$(RADIUS_KM)" bash init-scripts/init-city-map.sh
+
+init-gh-cache: env
+	@echo Building GraphHopper gh-cache archive for Android offline routing...
+	@bash init-scripts/build-gh-cache.sh
 
 up-debug: network-create env
 	@echo Starting debug tools only...

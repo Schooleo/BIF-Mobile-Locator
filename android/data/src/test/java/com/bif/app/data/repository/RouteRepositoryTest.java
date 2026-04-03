@@ -119,7 +119,7 @@ public class RouteRepositoryTest {
     }
 
     private void createOfflineMapFile() throws IOException {
-        File file = new File(temporaryFolder.getRoot(), "offline-map/city-map.osm.pbf");
+        File file = new File(temporaryFolder.getRoot(), "offline-map/gh-cache/properties");
         File parent = file.getParentFile();
         if (parent != null && !parent.exists()) {
             //noinspection ResultOfMethodCallIgnored

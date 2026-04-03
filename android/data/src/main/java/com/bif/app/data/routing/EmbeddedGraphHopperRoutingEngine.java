@@ -25,14 +25,16 @@ import javax.inject.Singleton;
 public class EmbeddedGraphHopperRoutingEngine implements OfflineRoutingEngine {
 
     private static final String TAG = "EmbeddedGHEngine";
+    private static final String GRAPH_PROPERTIES_FILE = "properties";
 
     private final Object initializationLock = new Object();
     @Nullable
     private GraphHopper graphHopper;
     @Nullable
     private String loadedMapPath;
-    private long loadedMapSize = -1L;
+    private long loadedMapMarkerSize = -1L;
     private long loadedMapLastModified = -1L;
+    private boolean graphUnsupportedForRuntime;
 
     @Inject
     public EmbeddedGraphHopperRoutingEngine() {
@@ -40,6 +42,9 @@ public class EmbeddedGraphHopperRoutingEngine implements OfflineRoutingEngine {
 
     @Override
     public boolean isReady(@NonNull File mapDataFile) {
+        if (graphUnsupportedForRuntime) {
+            return false;
+        }
         return isMapDataValid(mapDataFile);
     }
 
@@ -66,7 +71,13 @@ public class EmbeddedGraphHopperRoutingEngine implements OfflineRoutingEngine {
                 .setProfile(resolvedProfile)
                 .setLocale(Locale.getDefault());
 
-        GHResponse response = hopper.route(request);
+        GHResponse response;
+        try {
+            response = hopper.route(request);
+        } catch (Throwable throwable) {
+            Log.e(TAG, "Embedded GraphHopper route execution failed", throwable);
+            return null;
+        }
         if (response.hasErrors()) {
             Log.w(TAG, "Route failed for profile=" + resolvedProfile + ", errors=" + response.getErrors());
             return null;
@@ -94,6 +105,10 @@ public class EmbeddedGraphHopperRoutingEngine implements OfflineRoutingEngine {
     @Nullable
     private GraphHopper ensureGraphHopperLoaded(@NonNull File mapDataFile) {
         synchronized (initializationLock) {
+            if (graphUnsupportedForRuntime) {
+                return null;
+            }
+
             if (graphHopper != null && isSameMapFile(mapDataFile)) {
                 return graphHopper;
             }
@@ -109,16 +124,17 @@ public class EmbeddedGraphHopperRoutingEngine implements OfflineRoutingEngine {
                 }
             }
 
-            File graphCacheDir = new File(mapDataFile.getParentFile(), "gh-cache");
-            if (!graphCacheDir.exists()) {
-                // noinspection ResultOfMethodCallIgnored
-                graphCacheDir.mkdirs();
+            if (!isMapDataValid(mapDataFile)) {
+                Log.w(TAG, "Graph cache directory is missing or invalid: " + mapDataFile.getAbsolutePath());
+                loadedMapPath = null;
+                loadedMapMarkerSize = -1L;
+                loadedMapLastModified = -1L;
+                return null;
             }
 
             try {
                 GraphHopper hopper = new GraphHopper();
-                hopper.setOSMFile(mapDataFile.getAbsolutePath());
-                hopper.setGraphHopperLocation(graphCacheDir.getAbsolutePath());
+                hopper.setGraphHopperLocation(mapDataFile.getAbsolutePath());
                 hopper.setEncodedValuesString(
                         "car_access,car_average_speed,"
                                 + "bike_access,bike_average_speed,"
@@ -131,15 +147,32 @@ public class EmbeddedGraphHopperRoutingEngine implements OfflineRoutingEngine {
 
                 graphHopper = hopper;
                 loadedMapPath = mapDataFile.getAbsolutePath();
-                loadedMapSize = mapDataFile.length();
-                loadedMapLastModified = mapDataFile.lastModified();
-                Log.i(TAG, "Graph loaded from " + loadedMapPath + " into " + graphCacheDir.getAbsolutePath());
+                File markerFile = markerFile(mapDataFile);
+                loadedMapMarkerSize = markerFile.length();
+                loadedMapLastModified = markerFile.lastModified();
+                Log.i(TAG, "Graph loaded from prebuilt cache at " + loadedMapPath);
                 return hopper;
-            } catch (Exception ex) {
+            } catch (OutOfMemoryError oom) {
+                Log.e(TAG, "Graph cache is too large for current device memory", oom);
+                graphUnsupportedForRuntime = true;
+                graphHopper = null;
+                loadedMapPath = null;
+                loadedMapMarkerSize = -1L;
+                loadedMapLastModified = -1L;
+                return null;
+            } catch (NoClassDefFoundError noClassDefFoundError) {
+                Log.e(TAG, "GraphHopper runtime dependency missing on Android classpath", noClassDefFoundError);
+                graphUnsupportedForRuntime = true;
+                graphHopper = null;
+                loadedMapPath = null;
+                loadedMapMarkerSize = -1L;
+                loadedMapLastModified = -1L;
+                return null;
+            } catch (Throwable ex) {
                 Log.e(TAG, "Failed to initialize embedded GraphHopper", ex);
                 graphHopper = null;
                 loadedMapPath = null;
-                loadedMapSize = -1L;
+                loadedMapMarkerSize = -1L;
                 loadedMapLastModified = -1L;
                 return null;
             }
@@ -147,14 +180,19 @@ public class EmbeddedGraphHopperRoutingEngine implements OfflineRoutingEngine {
     }
 
     private boolean isMapDataValid(@NonNull File mapDataFile) {
-        return mapDataFile.exists() && mapDataFile.isFile() && mapDataFile.length() > 0;
+        if (!mapDataFile.exists() || !mapDataFile.isDirectory()) {
+            return false;
+        }
+        File markerFile = markerFile(mapDataFile);
+        return markerFile.exists() && markerFile.isFile() && markerFile.length() > 0;
     }
 
     private boolean isSameMapFile(@NonNull File mapDataFile) {
+        File markerFile = markerFile(mapDataFile);
         return loadedMapPath != null
                 && loadedMapPath.equals(mapDataFile.getAbsolutePath())
-                && loadedMapSize == mapDataFile.length()
-                && loadedMapLastModified == mapDataFile.lastModified();
+                && loadedMapMarkerSize == markerFile.length()
+                && loadedMapLastModified == markerFile.lastModified();
     }
 
     @NonNull
@@ -179,6 +217,11 @@ public class EmbeddedGraphHopperRoutingEngine implements OfflineRoutingEngine {
             default:
                 return "car";
         }
+    }
+
+    @NonNull
+    private File markerFile(@NonNull File mapDataFile) {
+        return new File(mapDataFile, GRAPH_PROPERTIES_FILE);
     }
 
     @NonNull

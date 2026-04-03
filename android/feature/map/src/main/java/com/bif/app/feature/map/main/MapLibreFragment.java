@@ -1264,7 +1264,15 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
     @Nullable
     private String firstNonEmptyProperty(@NonNull Feature feature) {
-        for (String key : new String[] { "name", "name_en", "name:en", "class" }) {
+        for (String key : new String[] {
+                "name",
+                "name_en",
+                "name:en",
+                "name:latin",
+                "name:vi",
+                "ref",
+                "class"
+        }) {
             if (!feature.hasProperty(key)) {
                 continue;
             }
@@ -1312,6 +1320,18 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
     private void fetchAddressAndShowDetails(LatLng latLng,
             @Nullable String preferredName) {
+        Place quickPlace = buildInstantTapPlace(latLng, preferredName);
+        if (mapLibreMap != null) {
+            selectedPlace = quickPlace;
+            renderSelectedPlace();
+            animateCameraToSelection(latLng);
+            showPlaceBottomSheet(quickPlace, requireView());
+        }
+
+        if (!isOnlineNow) {
+            return;
+        }
+
         new Thread(() -> {
             try {
                 List<Address> addresses = reverseGeocodeWithOsmFirst(
@@ -1333,13 +1353,13 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 }
 
                 if (TextUtils.isEmpty(finalName)) {
-                    finalName = "Selected Location";
+                    finalName = quickPlace.name;
                 }
 
                 Place clickedPlace = new Place(
                         UUID.randomUUID().toString(),
                         finalName,
-                        addressText != null ? addressText : "Unknown Address",
+                        addressText != null ? addressText : quickPlace.address,
                         0.0,
                         new Location(latLng.getLatitude(), latLng.getLongitude()));
 
@@ -1348,35 +1368,44 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                         return;
                     }
 
+                    if (!isCurrentSelection(latLng)) {
+                        return;
+                    }
+
                     selectedPlace = clickedPlace;
                     renderSelectedPlace();
-
-                    animateCameraToSelection(latLng);
                     showPlaceBottomSheet(clickedPlace, requireView());
                 });
             } catch (Exception e) {
                 Log.e(TAG, "Geocoding failed", e);
-                requireActivity().runOnUiThread(() -> {
-                    Place fallbackPlace = new Place(
-                            UUID.randomUUID().toString(),
-                            !TextUtils.isEmpty(preferredName)
-                                    ? preferredName
-                                    : "Selected Location",
-                            "Address unavailable",
-                            0.0,
-                            new Location(latLng.getLatitude(),
-                                    latLng.getLongitude()));
-
-                    if (mapLibreMap == null) {
-                        return;
-                    }
-                    selectedPlace = fallbackPlace;
-                    renderSelectedPlace();
-                    animateCameraToSelection(latLng);
-                    showPlaceBottomSheet(fallbackPlace, requireView());
-                });
             }
         }).start();
+    }
+
+    @NonNull
+    private Place buildInstantTapPlace(@NonNull LatLng latLng, @Nullable String preferredName) {
+        String resolvedName = !TextUtils.isEmpty(preferredName)
+                ? preferredName
+                : "Selected Location";
+        String resolvedAddress = String.format(
+                Locale.getDefault(),
+                "%.5f, %.5f",
+                latLng.getLatitude(),
+                latLng.getLongitude());
+
+        return new Place(
+                UUID.randomUUID().toString(),
+                resolvedName,
+                resolvedAddress,
+                0.0,
+                new Location(latLng.getLatitude(), latLng.getLongitude()));
+    }
+
+    private boolean isCurrentSelection(@NonNull LatLng latLng) {
+        return selectedPlace != null
+                && selectedPlace.location != null
+                && Math.abs(selectedPlace.location.latitude - latLng.getLatitude()) < 1e-6
+                && Math.abs(selectedPlace.location.longitude - latLng.getLongitude()) < 1e-6;
     }
 
     private List<Address> reverseGeocodeWithOsmFirst(double latitude,

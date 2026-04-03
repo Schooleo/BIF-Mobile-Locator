@@ -22,11 +22,11 @@ public class OfflineMapController {
     private static final double VIETNAM_MIN_LON = 102.14;
     private static final double VIETNAM_MAX_LON = 109.46;
 
-    private final String cityMapFilePath;
+    private final String cityMapArchivePath;
 
     public OfflineMapController(
-            @Value("${app.maps-data.city-file:/map-data/merged.osm.pbf}") String cityMapFilePath) {
-        this.cityMapFilePath = cityMapFilePath;
+            @Value("${app.maps-data.city-archive-file:/map-data/city-map-gh-cache.zip}") String cityMapArchivePath) {
+        this.cityMapArchivePath = cityMapArchivePath;
     }
 
     @GetMapping("/city")
@@ -37,17 +37,17 @@ public class OfflineMapController {
             return ResponseEntity.badRequest().build();
         }
 
-        File cityMapFile = new File(cityMapFilePath);
-        if (!cityMapFile.exists() || !cityMapFile.isFile()) {
+        File cityMapArchive = new File(cityMapArchivePath);
+        if (!cityMapArchive.exists() || !cityMapArchive.isFile()) {
             return ResponseEntity.notFound().build();
         }
 
-        Resource resource = new FileSystemResource(cityMapFile);
+        Resource resource = new FileSystemResource(cityMapArchive);
         return ResponseEntity.ok()
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentType(MediaType.parseMediaType("application/zip"))
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=city-map.osm.pbf")
-                .contentLength(cityMapFile.length())
+                        "attachment; filename=city-map-gh-cache.zip")
+                .contentLength(cityMapArchive.length())
                 .body(resource);
     }
 
