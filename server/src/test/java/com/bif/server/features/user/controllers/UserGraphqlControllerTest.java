@@ -129,24 +129,25 @@ class UserGraphqlControllerTest {
 
     @Test
     void updateMyProfile_WhenUserIdMissing_ReturnsNull() {
-        UpdateMyProfileInput input = new UpdateMyProfileInput("Alex", "A", 123);
+        UpdateMyProfileInput input = new UpdateMyProfileInput("Alex", "A", 123, null);
 
         User result = controller.updateMyProfile(null, input);
 
         assertNull(result);
-        verify(userService, never()).updateMyProfile(anyString(), any(), any(), any());
+        verify(userService, never()).updateMyProfile(anyString(), any(), any(), any(), any());
     }
 
     @Test
     void updateMyProfile_WhenUserNotFound_ReturnsNull() {
-        UpdateMyProfileInput input = new UpdateMyProfileInput("Alex", "A", 123);
+        UpdateMyProfileInput input = new UpdateMyProfileInput("Alex", "A", 123, null);
 
-        when(userService.updateMyProfile("u1", "Alex", "A", 123)).thenReturn(Optional.empty());
+        when(userService.updateMyProfile("u1", "Alex", "A", 123, null))
+            .thenReturn(Optional.empty());
 
         User result = controller.updateMyProfile("u1", input);
 
         assertNull(result);
-        verify(userService).updateMyProfile("u1", "Alex", "A", 123);
+        verify(userService).updateMyProfile("u1", "Alex", "A", 123, null);
     }
 
     @Test
@@ -155,14 +156,15 @@ class UserGraphqlControllerTest {
         saved.setId("u1");
         saved.setEmail("old@bif.local");
 
-        UpdateMyProfileInput input = new UpdateMyProfileInput("Alex", "A", 123);
+        UpdateMyProfileInput input = new UpdateMyProfileInput("Alex", "A", 123, null);
 
-        when(userService.updateMyProfile("u1", "Alex", "A", 123)).thenReturn(Optional.of(saved));
+        when(userService.updateMyProfile("u1", "Alex", "A", 123, null))
+            .thenReturn(Optional.of(saved));
 
         User result = controller.updateMyProfile("u1", input);
 
         assertNotNull(result);
         assertEquals("u1", result.getId());
-        verify(userService).updateMyProfile("u1", "Alex", "A", 123);
+        verify(userService).updateMyProfile("u1", "Alex", "A", 123, null);
     }
 }

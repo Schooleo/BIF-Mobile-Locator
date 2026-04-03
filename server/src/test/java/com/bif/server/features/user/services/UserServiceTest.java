@@ -84,7 +84,7 @@ class UserServiceTest {
     void updateMyProfile_WhenUserMissing_ReturnsEmpty() {
         when(userRepository.findById("u1")).thenReturn(Optional.empty());
 
-        Optional<User> result = userService.updateMyProfile("u1", "Alex", "A", 123);
+        Optional<User> result = userService.updateMyProfile("u1", "Alex", "A", 123, null);
 
         assertTrue(result.isEmpty());
         verify(userRepository).findById("u1");
@@ -94,7 +94,7 @@ class UserServiceTest {
     @Test
     void updateMyProfile_WhenNameBlank_ThrowsIllegalArgumentException() {
         assertThrows(IllegalArgumentException.class,
-                () -> userService.updateMyProfile("u1", "   ", "A", 123));
+                () -> userService.updateMyProfile("u1", "   ", "A", 123, null));
 
         verify(userRepository, never()).findById(anyString());
         verify(userRepository, never()).save(any(User.class));
@@ -103,7 +103,7 @@ class UserServiceTest {
     @Test
     void updateMyProfile_WhenAvatarLetterBlank_ThrowsIllegalArgumentException() {
         assertThrows(IllegalArgumentException.class,
-                () -> userService.updateMyProfile("u1", "Alex", "   ", 123));
+                () -> userService.updateMyProfile("u1", "Alex", "   ", 123, null));
 
         verify(userRepository, never()).findById(anyString());
         verify(userRepository, never()).save(any(User.class));
@@ -120,7 +120,7 @@ class UserServiceTest {
         when(userRepository.findById("u1")).thenReturn(Optional.of(existing));
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Optional<User> result = userService.updateMyProfile("u1", " Alex ", " A ", 0xFF1E88E5);
+        Optional<User> result = userService.updateMyProfile("u1", " Alex ", " A ", 0xFF1E88E5, null);
 
         assertTrue(result.isPresent());
         User saved = result.get();
