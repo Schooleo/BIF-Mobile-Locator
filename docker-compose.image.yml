@@ -2,3 +2,4 @@ services:
   bif-server:
     image: ghcr.io/schooleo/bif-server:${SERVER_IMAGE_TAG:-latest}
     pull_policy: always
+    mem_limit: ${BIF_SERVER_MEM_LIMIT:-1024m}

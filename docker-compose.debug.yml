@@ -12,6 +12,7 @@ services:
       ME_CONFIG_MONGODB_ADMINUSERNAME: ${ME_CONFIG_MONGODB_ADMINUSERNAME:-admin}
       ME_CONFIG_MONGODB_ADMINPASSWORD: ${ME_CONFIG_MONGODB_ADMINPASSWORD:-pass}
       ME_CONFIG_MONGODB_URL: ${ME_CONFIG_MONGODB_URL:-mongodb://admin:pass@mongodb:27017/}
+    mem_limit: ${MONGO_EXPRESS_MEM_LIMIT:-256m}
     restart: on-failure
 
   open-webui:
@@ -27,6 +28,7 @@ services:
       - "3000:8080"
     volumes:
       - open-webui_data:/app/backend/data
+    mem_limit: ${OPEN_WEBUI_MEM_LIMIT:-1024m}
     restart: on-failure
 
   dozzle:
@@ -38,6 +40,7 @@ services:
       - "8888:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    mem_limit: ${DOZZLE_MEM_LIMIT:-128m}
     restart: on-failure
 
 volumes:

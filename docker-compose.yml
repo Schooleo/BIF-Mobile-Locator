@@ -16,6 +16,7 @@ services:
       TS_USERSPACE: ${TS_USERSPACE:-true}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
+    mem_limit: ${TAILSCALE_MEM_LIMIT:-128m}
     restart: on-failure
 
   bif-server:
@@ -44,6 +45,7 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+    mem_limit: ${BIF_SERVER_MEM_LIMIT:-1024m}
     restart: on-failure
 
   mongodb:
@@ -71,6 +73,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 6
+    mem_limit: ${MONGODB_MEM_LIMIT:-768m}
     restart: on-failure
 
   osrm:
@@ -85,6 +88,7 @@ services:
     env_file:
       - .env
     command: "osrm-routed --algorithm mld /data/merged.osrm"
+    mem_limit: ${OSRM_MEM_LIMIT:-2048m}
     restart: on-failure
 
   typesense:
@@ -102,6 +106,7 @@ services:
       - typesense_data:/data
     env_file:
       - .env
+    mem_limit: ${TYPESENSE_MEM_LIMIT:-1024m}
     restart: on-failure
 
   ollama:
@@ -129,6 +134,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    mem_limit: ${OLLAMA_MEM_LIMIT:-8192m}
     restart: on-failure
 
   ollama-init:
@@ -145,6 +151,7 @@ services:
       OLLAMA_HOST: ${OLLAMA_BASE_URL:-http://ollama:11434}
     entrypoint: /bin/sh
     command: -c "ollama pull ${OLLAMA_MODEL:-llama3.1}"
+    mem_limit: ${OLLAMA_INIT_MEM_LIMIT:-256m}
 
 volumes:
   mongo_data:
