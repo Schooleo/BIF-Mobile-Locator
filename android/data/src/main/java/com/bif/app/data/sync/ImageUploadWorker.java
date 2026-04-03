@@ -4,11 +4,14 @@ import android.content.Context;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
+import androidx.work.BackoffPolicy;
 import androidx.hilt.work.HiltWorker;
 import androidx.work.Constraints;
+import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.ExistingWorkPolicy;
 import androidx.work.NetworkType;
 import androidx.work.OneTimeWorkRequest;
+import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
@@ -45,6 +48,9 @@ public class ImageUploadWorker extends Worker {
 
     private static final String TAG = "ImageUploadWorker";
     private static final String WORK_NAME = "image_upload_work";
+    private static final String PERIODIC_WORK_NAME = "image_upload_periodic_work";
+    private static final int MAX_RUN_ATTEMPTS = 5;
+    private static final int RETRY_BACKOFF_SECONDS = 30;
 
     private final RestApiService restApiService;
     private final ProfileDao profileDao;
@@ -72,16 +78,24 @@ public class ImageUploadWorker extends Worker {
         try {
             ProfileEntity pendingProfile = profileDao.getFirstPendingUpload();
             if (pendingProfile != null) {
+                Log.d(TAG, "Processing pending profile upload, attempt="
+                        + getRunAttemptCount());
                 return uploadProfile(pendingProfile);
             }
 
             TripStopEntity pendingTripStop = tripDao.getFirstPendingUploadStop();
             if (pendingTripStop != null) {
+                Log.d(TAG, "Processing pending trip stop upload, attempt="
+                        + getRunAttemptCount());
                 return uploadTripStop(pendingTripStop);
             }
             return Result.success();
         } catch (Exception ex) {
             Log.e(TAG, "Unexpected upload failure", ex);
+            if (shouldStopRetrying()) {
+                Log.e(TAG, "Max retry attempts reached. Marking work as failure.");
+                return Result.failure();
+            }
             return Result.retry();
         }
     }
@@ -102,15 +116,24 @@ public class ImageUploadWorker extends Worker {
                     .getUploadSignature("avatar", null)
                     .execute();
             if (!response.isSuccessful() || response.body() == null) {
+                Log.w(TAG, "Failed to fetch profile upload signature. code="
+                        + response.code());
                 profile.uploadStatus = UploadStatus.ERROR;
                 profileDao.upsert(profile);
+                if (shouldStopRetrying()) {
+                    return Result.failure();
+                }
                 return Result.retry();
             }
 
             UploadResult uploadResult = uploadFile(profile.localImagePath, response.body());
             if (!uploadResult.success) {
+                Log.w(TAG, "Profile image upload failed: " + uploadResult.errorMessage);
                 profile.uploadStatus = UploadStatus.ERROR;
                 profileDao.upsert(profile);
+                if (shouldStopRetrying()) {
+                    return Result.failure();
+                }
                 return Result.retry();
             }
 
@@ -135,8 +158,12 @@ public class ImageUploadWorker extends Worker {
             enqueue(getApplicationContext());
             return Result.success();
         } catch (IOException ioEx) {
+            Log.e(TAG, "Profile upload I/O error", ioEx);
             profile.uploadStatus = UploadStatus.ERROR;
             profileDao.upsert(profile);
+            if (shouldStopRetrying()) {
+                return Result.failure();
+            }
             return Result.retry();
         }
     }
@@ -156,16 +183,25 @@ public class ImageUploadWorker extends Worker {
                     .getUploadSignature("trip_stop", tripStop.tripId)
                     .execute();
             if (!response.isSuccessful() || response.body() == null) {
+                Log.w(TAG, "Failed to fetch trip stop upload signature. code="
+                        + response.code());
                 tripStop.uploadStatus = UploadStatus.ERROR;
                 tripDao.upsertStop(tripStop);
+                if (shouldStopRetrying()) {
+                    return Result.failure();
+                }
                 return Result.retry();
             }
 
             UploadResult uploadResult = uploadFile(tripStop.localImagePath,
                     response.body());
             if (!uploadResult.success) {
+                Log.w(TAG, "Trip stop image upload failed: " + uploadResult.errorMessage);
                 tripStop.uploadStatus = UploadStatus.ERROR;
                 tripDao.upsertStop(tripStop);
+                if (shouldStopRetrying()) {
+                    return Result.failure();
+                }
                 return Result.retry();
             }
 
@@ -188,8 +224,12 @@ public class ImageUploadWorker extends Worker {
             enqueue(getApplicationContext());
             return Result.success();
         } catch (IOException ioEx) {
+            Log.e(TAG, "Trip stop upload I/O error", ioEx);
             tripStop.uploadStatus = UploadStatus.ERROR;
             tripDao.upsertStop(tripStop);
+            if (shouldStopRetrying()) {
+                return Result.failure();
+            }
             return Result.retry();
         }
     }
@@ -320,6 +360,10 @@ public class ImageUploadWorker extends Worker {
         return !file.exists() || file.delete();
     }
 
+    private boolean shouldStopRetrying() {
+        return getRunAttemptCount() >= MAX_RUN_ATTEMPTS;
+    }
+
     public static void enqueue(Context context) {
         Constraints constraints = new Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -328,6 +372,10 @@ public class ImageUploadWorker extends Worker {
         OneTimeWorkRequest request = new OneTimeWorkRequest.Builder(
                 ImageUploadWorker.class)
                 .setConstraints(constraints)
+                .setBackoffCriteria(
+                        BackoffPolicy.EXPONENTIAL,
+                        RETRY_BACKOFF_SECONDS,
+                        TimeUnit.SECONDS)
                 .build();
 
         WorkManager.getInstance(context).enqueueUniqueWork(
@@ -335,6 +383,24 @@ public class ImageUploadWorker extends Worker {
                 ExistingWorkPolicy.APPEND_OR_REPLACE,
                 request);
     }
+
+            public static void schedulePeriodic(Context context) {
+            Constraints constraints = new Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build();
+
+            PeriodicWorkRequest request = new PeriodicWorkRequest.Builder(
+                ImageUploadWorker.class,
+                15,
+                TimeUnit.MINUTES)
+                .setConstraints(constraints)
+                .build();
+
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                PERIODIC_WORK_NAME,
+                ExistingPeriodicWorkPolicy.KEEP,
+                request);
+            }
 
     private static class UploadResult {
         boolean success;

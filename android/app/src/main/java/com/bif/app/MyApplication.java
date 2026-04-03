@@ -57,6 +57,7 @@ public class MyApplication extends Application implements Configuration.Provider
 
         SyncWorker.schedule(this);
         ImageUploadWorker.enqueue(this);
+        ImageUploadWorker.schedulePeriodic(this);
         StorageCleanupWorker.schedule(this);
     }
 

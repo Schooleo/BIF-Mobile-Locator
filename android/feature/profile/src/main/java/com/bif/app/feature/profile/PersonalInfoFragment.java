@@ -17,6 +17,9 @@ import com.bif.app.domain.repository.IProfileRepository;
 
 import javax.inject.Inject;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 import dagger.hilt.android.AndroidEntryPoint;
 
 @AndroidEntryPoint
@@ -24,6 +27,8 @@ public class PersonalInfoFragment extends Fragment {
 
     @Inject
     IProfileRepository profileRepository;
+
+    private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
@@ -53,19 +58,39 @@ public class PersonalInfoFragment extends Fragment {
     }
 
     private void bindLocalProfileState(@NonNull View view) {
-        IProfileRepository.LocalProfile localProfile =
-            profileRepository.readLocalProfile();
-        boolean isLoggedIn = localProfile.isLoggedIn;
-        String username = getStoredValue(localProfile.username);
-        String email = getStoredValue(localProfile.email);
+        ioExecutor.execute(() -> {
+            IProfileRepository.LocalProfile localProfile =
+                    profileRepository.readLocalProfile();
+            boolean isLoggedIn = localProfile.isLoggedIn;
+            String username = getStoredValue(localProfile.username);
+            String email = getStoredValue(localProfile.email);
 
-        TextView tvAuthStatusValue = view.findViewById(R.id.tvAuthStatusValue);
-        TextView tvUsernameValue = view.findViewById(R.id.tvUsernameValue);
-        TextView tvEmailValue = view.findViewById(R.id.tvEmailValue);
+            if (!isAdded()) {
+                return;
+            }
 
-        tvAuthStatusValue.setText(isLoggedIn ? R.string.logged_in_status : R.string.guest_status);
-        tvUsernameValue.setText(username);
-        tvEmailValue.setText(email);
+            requireActivity().runOnUiThread(() -> {
+                if (!isAdded()) {
+                    return;
+                }
+
+                TextView tvAuthStatusValue = view.findViewById(R.id.tvAuthStatusValue);
+                TextView tvUsernameValue = view.findViewById(R.id.tvUsernameValue);
+                TextView tvEmailValue = view.findViewById(R.id.tvEmailValue);
+
+                tvAuthStatusValue.setText(isLoggedIn
+                        ? R.string.logged_in_status
+                        : R.string.guest_status);
+                tvUsernameValue.setText(username);
+                tvEmailValue.setText(email);
+            });
+        });
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        ioExecutor.shutdown();
     }
 
     private void syncProfileMetadataFromServer() {

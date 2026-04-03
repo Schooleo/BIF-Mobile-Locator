@@ -16,6 +16,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import dagger.hilt.android.lifecycle.HiltViewModel;
 import dagger.hilt.android.qualifiers.ApplicationContext;
@@ -53,6 +55,7 @@ public class ProfileViewModel extends ViewModel {
 
     private final Context appContext;
     private final IProfileRepository profileRepository;
+    private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
     private final MutableLiveData<ProfileUiState> profileState = new MutableLiveData<>();
     private final MutableLiveData<Integer> messageResId = new MutableLiveData<>();
     private final MutableLiveData<Boolean> isRefreshing = new MutableLiveData<>(false);
@@ -84,30 +87,32 @@ public class ProfileViewModel extends ViewModel {
     }
 
     public void loadFromLocal() {
-        IProfileRepository.LocalProfile localProfile =
-            profileRepository.readLocalProfile();
-        boolean isLoggedIn = localProfile.isLoggedIn;
-        String usernameRaw = localProfile.username;
-        String emailRaw = localProfile.email;
-        String avatarUri = localProfile.avatarUri;
+        ioExecutor.execute(() -> {
+            IProfileRepository.LocalProfile localProfile =
+                    profileRepository.readLocalProfile();
+            boolean isLoggedIn = localProfile.isLoggedIn;
+            String usernameRaw = localProfile.username;
+            String emailRaw = localProfile.email;
+            String avatarUri = localProfile.avatarUri;
 
-        String usernameForDisplay = getStoredValue(usernameRaw);
-        String emailForDisplay = getStoredValue(emailRaw);
-        String avatarInitial = resolveAvatarInitial(usernameRaw, emailRaw);
+            String usernameForDisplay = getStoredValue(usernameRaw);
+            String emailForDisplay = getStoredValue(emailRaw);
+            String avatarInitial = resolveAvatarInitial(usernameRaw, emailRaw);
 
-        profileState.postValue(new ProfileUiState(
-                isLoggedIn,
-                usernameRaw,
-                emailRaw,
-                usernameForDisplay,
-                emailForDisplay,
-                avatarUri,
-                avatarInitial
-        ));
+            profileState.postValue(new ProfileUiState(
+                    isLoggedIn,
+                    usernameRaw,
+                    emailRaw,
+                    usernameForDisplay,
+                    emailForDisplay,
+                    avatarUri,
+                    avatarInitial
+            ));
+        });
     }
 
     public void onAvatarSelected(@NonNull String avatarUri) {
-        new Thread(() -> {
+        ioExecutor.execute(() -> {
             String stagedPath = copyToInternalStorage(avatarUri);
             if (stagedPath == null || stagedPath.isBlank()) {
                 messageResId.postValue(R.string.profile_update_failed);
@@ -117,7 +122,13 @@ public class ProfileViewModel extends ViewModel {
             profileRepository.saveAvatarUri(stagedPath);
             loadFromLocal();
             messageResId.postValue(R.string.avatar_updated);
-        }).start();
+        });
+    }
+
+    @Override
+    protected void onCleared() {
+        super.onCleared();
+        ioExecutor.shutdown();
     }
 
     public void refreshProfileFromServer() {
@@ -180,6 +191,12 @@ public class ProfileViewModel extends ViewModel {
 
     private String copyToInternalStorage(String uriString) {
         try {
+            if (uriString != null
+                    && !uriString.startsWith("content://")
+                    && !uriString.startsWith("file://")) {
+                return uriString;
+            }
+
             Uri sourceUri = Uri.parse(uriString);
             File stagingDir = new File(appContext.getFilesDir(), "image-staging");
             if (!stagingDir.exists() && !stagingDir.mkdirs()) {

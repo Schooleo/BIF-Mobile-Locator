@@ -60,9 +60,15 @@ public class ProfileRepository implements IProfileRepository {
     @Override
     public LocalProfile readLocalProfile() {
         String activeUserId = resolveActiveUserId();
-        ProfileEntity localEntity = activeUserId.isEmpty()
-                ? null
-                : profileDao.getByUserId(activeUserId);
+        ProfileEntity localEntity = null;
+        if (!activeUserId.isEmpty()) {
+            try {
+                localEntity = profileDao.getByUserId(activeUserId);
+            } catch (IllegalStateException ignored) {
+                // Room blocks main-thread queries. Fall back to cached preferences.
+                localEntity = null;
+            }
+        }
 
         String username = safe(UserPreferences.getUsername(appContext));
         String email = safe(UserPreferences.getEmail(appContext));
