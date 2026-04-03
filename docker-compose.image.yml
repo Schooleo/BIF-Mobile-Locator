@@ -2,4 +2,6 @@ services:
   bif-server:
     image: ghcr.io/schooleo/bif-server:${SERVER_IMAGE_TAG:-latest}
     pull_policy: always
+    environment:
+      JAVA_TOOL_OPTIONS: "${BIF_SERVER_JAVA_TOOL_OPTIONS:--XX:InitialRAMPercentage=25.0 -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -XX:+UseStringDeduplication -XX:+ExitOnOutOfMemoryError}"
     mem_limit: ${BIF_SERVER_MEM_LIMIT:-1024m}
