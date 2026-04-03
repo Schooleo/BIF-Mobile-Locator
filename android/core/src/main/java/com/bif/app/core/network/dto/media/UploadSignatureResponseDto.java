@@ -7,4 +7,5 @@ public class UploadSignatureResponseDto {
     public String cloudName;
     public String folder;
     public String tags;
+    public String publicId;
 }

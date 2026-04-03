@@ -30,4 +30,5 @@
     <string name="avatar_updated">Avatar updated successfully</string>
     <string name="profile_sync_failed">Could not sync profile. Showing cached data.</string>
     <string name="profile_update_failed">Could not update profile.</string>
+    <string name="image_unavailable_offline">Image unavailable offline. Tap to retry when online.</string>
 </resources>

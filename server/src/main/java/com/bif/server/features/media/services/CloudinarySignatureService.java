@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class CloudinarySignatureService {
@@ -58,10 +59,12 @@ public class CloudinarySignatureService {
         String normalizedTags = tags != null && !tags.isBlank()
                 ? tags.trim()
                 : null;
+        String publicId = UUID.randomUUID().toString();
 
         Map<String, Object> paramsToSign = new HashMap<>();
         paramsToSign.put("timestamp", timestamp);
         paramsToSign.put("folder", normalizedFolder);
+        paramsToSign.put("public_id", publicId);
         if (normalizedTags != null) {
             paramsToSign.put("tags", normalizedTags);
         }
@@ -73,7 +76,8 @@ public class CloudinarySignatureService {
                 apiKey,
                 cloudName,
                 normalizedFolder,
-                normalizedTags
+                normalizedTags,
+                publicId
         );
     }
 

@@ -2,6 +2,7 @@ package com.bif.app.feature.profile;
 
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -34,6 +35,10 @@ import com.bif.app.core.auth.AuthSessionManager;
 import com.bif.app.core.utils.DialogUtils;
 import com.bif.app.core.utils.UriUtils;
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.DataSource;
+import com.bumptech.glide.load.engine.GlideException;
+import com.bumptech.glide.request.RequestListener;
+import com.bumptech.glide.request.target.Target;
 import com.google.android.material.button.MaterialButton;
 
 import javax.inject.Inject;
@@ -268,6 +273,8 @@ public class ProfileFragment extends Fragment {
     private void bindAvatar(ImageView ivAvatarImage, TextView tvAvatar, String avatarUriString) {
         if (avatarUriString == null || avatarUriString.trim().isEmpty()) {
             Glide.with(this).clear(ivAvatarImage);
+            ivAvatarImage.setOnClickListener(null);
+            ivAvatarImage.setContentDescription(null);
             ivAvatarImage.setImageDrawable(null);
             ivAvatarImage.setVisibility(View.GONE);
             tvAvatar.setVisibility(View.VISIBLE);
@@ -276,13 +283,49 @@ public class ProfileFragment extends Fragment {
 
         try {
             String trimmed = avatarUriString.trim();
-            Object imageSource = (trimmed.startsWith("http://")
-                    || trimmed.startsWith("https://"))
+            boolean isRemote = (trimmed.startsWith("http://")
+                    || trimmed.startsWith("https://"));
+            Object imageSource = isRemote
                     ? trimmed
                     : new File(trimmed);
+
+            ivAvatarImage.setOnClickListener(null);
+            ivAvatarImage.setContentDescription(null);
+
             Glide.with(this)
                     .load(imageSource)
                     .error(com.bif.app.core.R.drawable.bg_logo_placeholder)
+                    .listener(new RequestListener<Drawable>() {
+                        @Override
+                        public boolean onLoadFailed(@Nullable GlideException e,
+                                                    Object model,
+                                                    Target<Drawable> target,
+                                                    boolean isFirstResource) {
+                            if (isRemote) {
+                                ivAvatarImage.setContentDescription(
+                                        getString(R.string.image_unavailable_offline));
+                                ivAvatarImage.setOnClickListener(v -> {
+                                    if (!isAdded()) {
+                                        return;
+                                    }
+                                    Toast.makeText(requireContext(),
+                                            R.string.image_unavailable_offline,
+                                            Toast.LENGTH_SHORT).show();
+                                    viewModel.refreshProfileFromServer(true);
+                                });
+                            }
+                            return false;
+                        }
+
+                        @Override
+                        public boolean onResourceReady(Drawable resource,
+                                                       Object model,
+                                                       Target<Drawable> target,
+                                                       DataSource dataSource,
+                                                       boolean isFirstResource) {
+                            return false;
+                        }
+                    })
                     .into(ivAvatarImage);
             ivAvatarImage.setVisibility(View.VISIBLE);
             tvAvatar.setVisibility(View.INVISIBLE);

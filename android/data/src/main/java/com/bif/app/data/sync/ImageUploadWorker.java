@@ -126,6 +126,13 @@ public class ImageUploadWorker extends Worker {
                 return Result.retry();
             }
 
+            if (!hasSignedPublicId(response.body())) {
+                Log.e(TAG, "Profile signature missing server-signed publicId");
+                profile.uploadStatus = UploadStatus.ERROR;
+                profileDao.upsert(profile);
+                return Result.failure();
+            }
+
             UploadResult uploadResult = uploadFile(profile.localImagePath, response.body());
             if (!uploadResult.success) {
                 Log.w(TAG, "Profile image upload failed: " + uploadResult.errorMessage);
@@ -193,6 +200,13 @@ public class ImageUploadWorker extends Worker {
                 return Result.retry();
             }
 
+            if (!hasSignedPublicId(response.body())) {
+                Log.e(TAG, "Trip stop signature missing server-signed publicId");
+                tripStop.uploadStatus = UploadStatus.ERROR;
+                tripDao.upsertStop(tripStop);
+                return Result.failure();
+            }
+
             UploadResult uploadResult = uploadFile(tripStop.localImagePath,
                     response.body());
             if (!uploadResult.success) {
@@ -239,14 +253,13 @@ public class ImageUploadWorker extends Worker {
         UploadResult result = new UploadResult();
         CountDownLatch latch = new CountDownLatch(1);
 
-        Map<String, Object> options = new HashMap<>();
-        options.put("folder", signature.folder);
-        options.put("public_id", UUID.randomUUID().toString());
-        options.put("signature", signature.signature);
-        options.put("timestamp", signature.timestamp);
-        options.put("api_key", signature.apiKey);
-        if (signature.tags != null && !signature.tags.trim().isEmpty()) {
-            options.put("tags", signature.tags.trim());
+        Map<String, Object> options;
+        try {
+            options = buildUploadOptions(signature);
+        } catch (IllegalArgumentException ex) {
+            result.success = false;
+            result.errorMessage = ex.getMessage();
+            return result;
         }
 
         MediaManager.get().upload(localPath)
@@ -314,6 +327,32 @@ public class ImageUploadWorker extends Worker {
         }
 
         return result;
+    }
+
+    Map<String, Object> buildUploadOptions(UploadSignatureResponseDto signature) {
+        if (signature == null) {
+            throw new IllegalArgumentException("Missing signature response");
+        }
+        if (!hasSignedPublicId(signature)) {
+            throw new IllegalArgumentException("Missing server-signed publicId");
+        }
+
+        Map<String, Object> options = new HashMap<>();
+        options.put("folder", signature.folder);
+        options.put("public_id", signature.publicId.trim());
+        options.put("signature", signature.signature);
+        options.put("timestamp", signature.timestamp);
+        options.put("api_key", signature.apiKey);
+        if (signature.tags != null && !signature.tags.trim().isEmpty()) {
+            options.put("tags", signature.tags.trim());
+        }
+        return options;
+    }
+
+    private boolean hasSignedPublicId(UploadSignatureResponseDto signature) {
+        return signature != null
+                && signature.publicId != null
+                && !signature.publicId.trim().isEmpty();
     }
 
     private TripStopDto toTripStopDto(TripStopEntity entity) {
