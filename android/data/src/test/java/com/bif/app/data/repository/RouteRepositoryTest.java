@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -31,6 +32,7 @@ import org.mockito.MockitoAnnotations;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import retrofit2.Call;
@@ -74,13 +76,14 @@ public class RouteRepositoryTest {
     @Test
     public void getRoute_onlineFailsAndOfflineMapExists_usesEmbeddedEngine() throws Exception {
         createOfflineMapFile();
+        when(mockOfflineRoutingEngine.isReady(any())).thenReturn(true);
 
         Route offlineRoute = new Route(
                 1200.0,
                 300.0,
                 "{\"type\":\"LineString\",\"coordinates\":[[106.7,10.7],[106.8,10.8]]}",
-                "car",
-                Route.SOURCE_GRAPHHOPPER);
+                "bike",
+                Route.SOURCE_BROUTER);
         when(mockOfflineRoutingEngine.route(any(), any(), any())).thenReturn(offlineRoute);
 
         List<Location> waypoints = List.of(
@@ -90,8 +93,8 @@ public class RouteRepositoryTest {
         Route result = LiveDataTestUtil.getOrAwaitValue(routeRepository.getRoute(waypoints));
 
         assertNotNull(result);
-        assertEquals(Route.SOURCE_GRAPHHOPPER, result.getSource());
-        verify(mockOfflineRoutingEngine).route(any(), any(), any());
+        assertEquals(Route.SOURCE_BROUTER, result.getSource());
+        verify(mockOfflineRoutingEngine).route(any(), eq("bicycle.brf"), any());
     }
 
     @Test
@@ -119,16 +122,25 @@ public class RouteRepositoryTest {
     }
 
     private void createOfflineMapFile() throws IOException {
-        File file = new File(temporaryFolder.getRoot(), "offline-map/gh-cache/properties");
-        File parent = file.getParentFile();
-        if (parent != null && !parent.exists()) {
-            //noinspection ResultOfMethodCallIgnored
-            parent.mkdirs();
+        File root = new File(temporaryFolder.getRoot(), "offline-map/brouter-cache");
+        File profilesDir = new File(root, "profiles2");
+        File segmentsDir = new File(root, "segments4");
+        profilesDir.mkdirs();
+        segmentsDir.mkdirs();
+
+        try (FileOutputStream lookups = new FileOutputStream(new File(profilesDir, "lookups.dat"))) {
+            lookups.write(new byte[2048]);
+            lookups.flush();
         }
 
-        try (FileOutputStream outputStream = new FileOutputStream(file)) {
-            outputStream.write(new byte[2048]);
-            outputStream.flush();
+        try (FileOutputStream profile = new FileOutputStream(new File(profilesDir, "bicycle.brf"))) {
+            profile.write("assign validForBikes = true\n".getBytes(StandardCharsets.UTF_8));
+            profile.flush();
+        }
+
+        try (FileOutputStream rd5 = new FileOutputStream(new File(segmentsDir, "E105_N10.rd5"))) {
+            rd5.write(new byte[2048]);
+            rd5.flush();
         }
     }
 }

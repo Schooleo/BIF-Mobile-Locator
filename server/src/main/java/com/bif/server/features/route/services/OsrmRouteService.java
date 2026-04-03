@@ -144,14 +144,22 @@ public class OsrmRouteService {
         switch (profile) {
             case "car":
             case "driving":
+            case "car-fast":
+            case "car-fast.brf":
                 return "driving";
             case "bike":
             case "bicycle":
             case "cycling":
+            case "fastbike":
+            case "fastbike.brf":
+            case "bicycle.brf":
                 return "cycling";
             case "foot":
             case "walk":
             case "walking":
+            case "hiking":
+            case "foot.brf":
+            case "hiking-mountain.brf":
                 return "walking";
             default:
                 return "driving";

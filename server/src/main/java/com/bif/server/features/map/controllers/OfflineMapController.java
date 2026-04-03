@@ -25,7 +25,7 @@ public class OfflineMapController {
     private final String cityMapArchivePath;
 
     public OfflineMapController(
-            @Value("${app.maps-data.city-archive-file:/map-data/city-map-gh-cache.zip}") String cityMapArchivePath) {
+            @Value("${app.maps-data.city-archive-file:/map-data/city-map-brouter-cache.zip}") String cityMapArchivePath) {
         this.cityMapArchivePath = cityMapArchivePath;
     }
 
@@ -46,7 +46,7 @@ public class OfflineMapController {
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/zip"))
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=city-map-gh-cache.zip")
+                        "attachment; filename=city-map-brouter-cache.zip")
                 .contentLength(cityMapArchive.length())
                 .body(resource);
     }

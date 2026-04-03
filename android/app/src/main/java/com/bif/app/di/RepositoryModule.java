@@ -11,7 +11,7 @@ import com.bif.app.data.repository.PlaceRepository;
 import com.bif.app.data.repository.ProfileRepository;
 import com.bif.app.data.repository.RouteRepository;
 import com.bif.app.data.repository.TripRepository;
-import com.bif.app.data.routing.EmbeddedGraphHopperRoutingEngine;
+import com.bif.app.data.routing.EmbeddedBRouterEngine;
 import com.bif.app.data.routing.OfflineRoutingEngine;
 import com.bif.app.domain.repository.IChatRepository;
 import com.bif.app.domain.repository.IFavoriteRepository;
@@ -83,5 +83,5 @@ public abstract class RepositoryModule {
     @Binds
     @Singleton
     public abstract OfflineRoutingEngine bindOfflineRoutingEngine(
-            EmbeddedGraphHopperRoutingEngine routingEngine);
+            EmbeddedBRouterEngine routingEngine);
 }

@@ -37,6 +37,7 @@ dependencies {
     // Module
     implementation project(":domain")
     implementation project(":core")
+    implementation project(":brouter")
 
     implementation libs.appcompat
     implementation libs.material
@@ -46,7 +47,6 @@ dependencies {
     androidTestImplementation libs.espresso.core
     implementation libs.retrofit.core
     implementation libs.retrofit.gson
-    implementation libs.graphhopper.core
     implementation libs.slf4j.android
 
     // STOMP + RxJava2 for real-time WebSocket chat

@@ -26,10 +26,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -45,9 +46,14 @@ public class RouteRepository implements IRouteRepository {
     private static final double VIETNAM_MAX_LAT = 23.39;
     private static final double VIETNAM_MIN_LON = 102.14;
     private static final double VIETNAM_MAX_LON = 109.46;
-    private static final String OFFLINE_CITY_GRAPH_DIR = "offline-map/gh-cache";
-    private static final String OFFLINE_CITY_GRAPH_ARCHIVE = "offline-map/city-map-gh-cache.zip";
-    private static final String GRAPH_PROPERTIES_FILE = "properties";
+    private static final String OFFLINE_CITY_GRAPH_DIR = "offline-map/brouter-cache";
+    private static final String OFFLINE_CITY_GRAPH_ARCHIVE = "offline-map/city-map-brouter-cache.zip";
+    private static final String BROUTER_PROFILES_DIR = "profiles2";
+    private static final String BROUTER_SEGMENTS_DIR = "segments4";
+    private static final String BROUTER_LOOKUPS_FILE = "lookups.dat";
+    private static final String CAR_PROFILE = "car-fast.brf";
+    private static final String BICYCLE_PROFILE = "bicycle.brf";
+    private static final String FOOT_PROFILE = "foot.brf";
     private static final long MIN_OFFLINE_CITY_MAP_BYTES = 1024L;
     private static final long MAX_OFFLINE_CITY_MAP_DOWNLOAD_BYTES = 256L * 1024L * 1024L;
     private static final long ONLINE_ROUTE_TIMEOUT_SECONDS = 8L;
@@ -175,11 +181,12 @@ public class RouteRepository implements IRouteRepository {
 
         List<DistanceUtils.GeoPoint> geoPoints = toGeoPoints(waypoints);
         double totalDistanceKm = DistanceUtils.calculateTotalDistanceKm(geoPoints);
-        String profile = DistanceUtils.determineProfile(totalDistanceKm);
+        String onlineProfile = DistanceUtils.determineProfile(totalDistanceKm);
+        String offlineProfile = mapOfflineProfile(onlineProfile);
 
         boolean offlineReady = hasOfflineCityMap();
         if (offlineReady) {
-            Route offlineRoute = fetchEmbeddedOfflineRoute(waypoints, profile);
+            Route offlineRoute = fetchEmbeddedOfflineRoute(waypoints, offlineProfile);
             if (offlineRoute != null) {
                 return offlineRoute;
             }
@@ -189,13 +196,13 @@ public class RouteRepository implements IRouteRepository {
             return null;
         }
 
-        Route onlineRoute = fetchOnlineRoute(waypoints, profile);
+        Route onlineRoute = fetchOnlineRoute(waypoints, onlineProfile);
         if (onlineRoute != null) {
             return onlineRoute;
         }
 
         if (!offlineReady && hasOfflineCityMap()) {
-            return fetchEmbeddedOfflineRoute(waypoints, profile);
+            return fetchEmbeddedOfflineRoute(waypoints, offlineProfile);
         }
 
         return null;
@@ -292,7 +299,7 @@ public class RouteRepository implements IRouteRepository {
             return DownloadResult.failed("Downloaded map data is invalid");
         }
 
-        File stagingDir = new File(parent, "gh-cache-staging");
+        File stagingDir = new File(parent, "brouter-cache-staging");
         deleteRecursively(stagingDir);
         if (!stagingDir.exists() && !stagingDir.mkdirs()) {
             //noinspection ResultOfMethodCallIgnored
@@ -304,7 +311,7 @@ public class RouteRepository implements IRouteRepository {
             unzipArchive(tempArchive, stagingDir);
             File extractedGraphCache = findGraphCacheDirectory(stagingDir);
             if (extractedGraphCache == null) {
-                return DownloadResult.failed("Downloaded map data is not a valid graph cache");
+                return DownloadResult.failed("Downloaded map data is not a valid BRouter cache");
             }
 
             if (cityGraphDir.exists()) {
@@ -330,8 +337,31 @@ public class RouteRepository implements IRouteRepository {
         if (directory == null || !directory.exists() || !directory.isDirectory()) {
             return false;
         }
-        File properties = new File(directory, GRAPH_PROPERTIES_FILE);
-        return properties.exists() && properties.isFile() && properties.length() > 0;
+
+        File profilesDir = new File(directory, BROUTER_PROFILES_DIR);
+        File segmentsDir = new File(directory, BROUTER_SEGMENTS_DIR);
+        File lookups = new File(profilesDir, BROUTER_LOOKUPS_FILE);
+        return profilesDir.exists()
+                && profilesDir.isDirectory()
+                && segmentsDir.exists()
+                && segmentsDir.isDirectory()
+                && lookups.exists()
+                && lookups.isFile()
+                && hasFileWithExtension(profilesDir, ".brf")
+                && hasFileWithExtension(segmentsDir, ".rd5");
+    }
+
+    private boolean hasFileWithExtension(File directory, String extension) {
+        File[] children = directory.listFiles();
+        if (children == null) {
+            return false;
+        }
+        for (File child : children) {
+            if (child.isFile() && child.getName().toLowerCase(Locale.ROOT).endsWith(extension)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void unzipArchive(File archiveFile, File destinationDir) throws IOException {
@@ -488,6 +518,28 @@ public class RouteRepository implements IRouteRepository {
         return request;
     }
 
+    private String mapOfflineProfile(String profile) {
+        if (profile == null || profile.isBlank()) {
+            return CAR_PROFILE;
+        }
+
+        String normalized = profile.trim().toLowerCase(Locale.ROOT);
+        switch (normalized) {
+            case "foot":
+            case "walk":
+            case "walking":
+                return FOOT_PROFILE;
+            case "bike":
+            case "bicycle":
+            case "cycling":
+                return BICYCLE_PROFILE;
+            case "car":
+            case "driving":
+            default:
+                return CAR_PROFILE;
+        }
+    }
+
     private List<DistanceUtils.GeoPoint> toGeoPoints(List<Location> waypoints) {
         if (waypoints == null || waypoints.isEmpty()) {
             return Collections.emptyList();
@@ -502,5 +554,4 @@ public class RouteRepository implements IRouteRepository {
         }
         return points;
     }
-
 }

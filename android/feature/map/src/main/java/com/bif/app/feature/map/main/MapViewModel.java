@@ -225,8 +225,8 @@ public class MapViewModel extends ViewModel {
         String sourceLabel;
         if (Route.SOURCE_ONLINE.equals(route.getSource())) {
             sourceLabel = "online";
-        } else if (Route.SOURCE_GRAPHHOPPER.equals(route.getSource())) {
-            sourceLabel = "graphhopper";
+        } else if (Route.SOURCE_BROUTER.equals(route.getSource())) {
+            sourceLabel = "brouter";
         } else {
             sourceLabel = "offline";
         }

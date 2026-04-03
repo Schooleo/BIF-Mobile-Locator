@@ -12,3 +12,6 @@ tailscale-state/
 
 # Init
 map-data/
+
+# Oh My Codex
+.omx/
