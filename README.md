@@ -150,33 +150,59 @@ This project uses split CI and CD workflows with security as a prerequisite.
     ./gradlew bootRun
     ```
 
-4. **Run server stack in development mode (local build)**:
+4. **Run local infrastructure stack (recommended)**:
 
-    - Use `docker-compose.yml` to build the local `server` source and run MongoDB.
+- Use root `Makefile` helpers for a consistent local workflow.
 
-    - Quick start (no Express UI):
+  ```bash
+  make env
+  make network-create
+  make up
+  ```
 
-    ```bash
-    docker compose up -d --build
-    ```
+- Optional profiles can be enabled from the same command:
 
-    - Start with mongo-express UI for database inspection:
+  ```bash
+  make up PROFILES="typesense ollama tailscale"
+  ```
 
-    ```bash
-    docker compose --profile express up -d --build
-    ```
+- Debug tooling profiles are available via:
 
-5. **Run server container from registry (root compose)**:
+  ```bash
+  make up-debug PROFILES="db ai logs"
+  ```
 
-    - Use the root `docker-compose.image.yml` to pull and run the published server image.
-    - Optional: set `SERVER_IMAGE_TAG` (default: `latest`) before running.
+1. **Initialize routing/place map data (OSRM + Overture)**:
 
-        ```bash
-        docker compose -f docker-compose.image.yml pull
-        docker compose -f docker-compose.image.yml up -d
-        ```
+  ```bash
+  make init-maps
+  ```
 
-6. **Run tests locally**:
+- This generates/updates data in `map-data/`:
+  - Overture places GeoJSON (`places.geojson`)
+  - OSM routing source (`merged.osm.pbf`)
+  - OSRM graph artifacts (`merged.osrm*`)
+
+- City-level extraction is also available:
+
+  ```bash
+  make init-city-map LAT=10.7769 LON=106.7009 RADIUS_KM=20
+  ```
+
+1. **Build BRouter offline cache for Android (optional)**:
+
+  ```bash
+  make init-brouter-cache
+  ```
+
+1. **Run server image compose (registry-based)**:
+
+  ```bash
+  docker compose -f docker-compose.image.yml pull
+  docker compose -f docker-compose.image.yml up -d
+  ```
+
+1. **Run tests locally**:
 
     ```bash
     cd android
@@ -185,6 +211,31 @@ This project uses split CI and CD workflows with security as a prerequisite.
     cd ../server
     ./gradlew test jacocoTestReport jacocoTestCoverageVerification
     ```
+
+## Credits & Attribution
+
+Bring In Friends is built on top of open-source libraries and open geospatial datasets.
+
+### Open-source projects
+
+- **Spring Boot**, **Spring GraphQL**, **Spring Security** for backend APIs and auth.
+- **MongoDB** for persistence.
+- **AndroidX**, **Material Components**, **Room**, **WorkManager**, **Navigation**, **Hilt** for Android architecture and UI.
+- **Retrofit** and **Apollo Java** for REST/GraphQL client networking.
+- **MapLibre Android SDK** for map rendering.
+- **OSRM** (`osrm/osrm-backend`) for route graph preprocessing and routing service.
+- **BRouter** for Android offline routing cache generation.
+- **Typesense** for optional full-text place search.
+- **Ollama** for optional local AI profile features.
+- **Firebase Analytics** for app usage analytics.
+
+### Data sources and map data usage
+
+- **OpenStreetMap** data is used as routing source material (downloaded via Geofabrik extracts).
+- **Geofabrik** provides the country/regional `.osm.pbf` files used in setup scripts.
+- **Overture Maps Foundation** place data is used for local place seed/export (`places.geojson`).
+
+Please comply with upstream attribution and license terms when redistributing builds, datasets, or derived artifacts.
 
 ### Contributors
 

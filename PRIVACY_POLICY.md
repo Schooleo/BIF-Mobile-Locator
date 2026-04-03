@@ -1,6 +1,6 @@
 # Privacy Policy for Bring In Friends
 
-**Last updated:** March 16, 2026
+**Last updated:** April 3, 2026
 
 This Privacy Policy describes how the Bring In Friends team ("we", "us", or "our") collects, uses, and discloses your information when you use our mobile application (the "Service").
 
@@ -25,13 +25,12 @@ If you use our social or profile features, we may collect basic account details 
 
 ### C. Usage Data & Analytics
 
-We use third-party services to monitor and analyze the use of our Service.
+We use third-party services to monitor and analyze usage of the Service.
 
-- **Firebase Analytics (Google)**: We use Firebase to understand how users interact with our app (e.g., screens visited, session duration). This service collects:
-  - Device identifiers (e.g., Android Advertising ID).
-  - IP address (anonymized).
-  - Operating system version.
-  - Crash reports (via Firebase Crashlytics if enabled).
+- **Firebase Analytics (Google)**: We use Firebase Analytics to understand aggregate app behavior (for example, screens viewed and session patterns). Data may include:
+  - Device identifiers (for example, Android Advertising ID where available)
+  - Device and app metadata (OS/app version, device model)
+  - Network and usage signals processed by Google under its terms
 
 For more information, please visit [Google Privacy & Terms](https://policies.google.com/privacy).
 
@@ -40,25 +39,47 @@ For more information, please visit [Google Privacy & Terms](https://policies.goo
 To function correctly, the app may request the following permissions:
 
 - `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION`: To provide location features.
-- `INTERNET`: To connect to analytic services and map providers.
+- `INTERNET`: To connect to backend APIs, analytics services, and map/routing services.
 
 ## 3. Data Retention
 
-We retain only the data required to operate and synchronize core features (such as account/profile metadata, social graph links, favorites, chats, and trip-related records). Location data used for map interactions is primarily processed on-device, and exact retention depends on feature usage and provider policies. Analytics data is retained by Google according to their policies.
+We retain only the data required to operate and synchronize core features (for example, account/profile metadata, social graph links, favorites, chat records, and trip-related records). Location used for map interactions is primarily processed on-device while the app is active. Analytics data is retained by Google according to Google policies.
 
-## 4. Security
+## 4. Third-party Services and Processors
+
+Depending on your deployment and enabled features, the Service can interact with:
+
+- **Firebase Analytics (Google)** for analytics telemetry.
+- **MongoDB** (self-hosted by the project) for backend data storage.
+- **Typesense** (optional) for place-search indexing and query features.
+- **OSRM** (Open Source Routing Machine, self-hosted) for route computation.
+- **Ollama** (optional, self-hosted) for local AI-assisted features.
+
+These services are either self-hosted by the project operator or provided by third parties under their own terms and privacy policies.
+
+## 5. Security
 
 We value your trust in providing us your information and strive to use commercially acceptable means of protecting it. However, remember that no method of transmission over the internet or method of electronic storage is 100% secure and reliable.
 
-## 5. Children's Privacy
+## 6. Children's Privacy
 
 Our Service does not address anyone under the age of 13. We do not knowingly collect personally identifiable information from children under 13.
 
-## 6. Changes to This Privacy Policy
+## 7. Changes to This Privacy Policy
 
 We may update our Privacy Policy from time to time. Thus, you are advised to review this page periodically for any changes. We will notify you of any changes by posting the new Privacy Policy on this page.
 
-## 7. Contact Us
+## 8. Open-source and Data Credits
+
+This project uses open-source software and open geospatial data, including:
+
+- OpenStreetMap data (via Geofabrik extracts)
+- Overture Maps place datasets
+- MapLibre, OSRM, BRouter, Spring Boot, MongoDB, and related ecosystem tools
+
+Attribution and license obligations of upstream projects and datasets remain applicable.
+
+## 9. Contact Us
 
 If you have any questions or suggestions about our Privacy Policy, do not hesitate to contact us at:
 

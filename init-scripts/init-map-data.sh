@@ -12,7 +12,8 @@ DATA_DIR="$ROOT_DIR/map-data"
 # Load .env if present
 if [ -f "$ROOT_DIR/.env" ]; then
     set -a
-    source "$ROOT_DIR/.env"
+    # Support Windows CRLF in .env to avoid bash parse errors under WSL.
+    source <(sed 's/\r$//' "$ROOT_DIR/.env")
     set +a
 fi
 
