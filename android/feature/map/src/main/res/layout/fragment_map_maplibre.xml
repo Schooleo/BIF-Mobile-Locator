@@ -94,8 +94,8 @@
             android:progress="0"
             android:visibility="gone"
             app:indicatorColor="?attr/colorPrimary"
-            app:trackThickness="3dp"
-            app:trackColor="@android:color/transparent"
+            app:trackThickness="5dp"
+            app:trackColor="@color/download_progress_track"
             tools:progress="45"
             tools:visibility="visible" />
 
