@@ -89,16 +89,19 @@ up: network-create env
 
 init-map: env
 	@echo Downloading map data and compiling OSRM routing graph...
+	@sed -i 's/\r$$//' init-scripts/init-map-data.sh
 	@bash init-scripts/init-map-data.sh
 
 init-maps: init-map
 
 init-city-map: env
 	@echo Building city-level map around LAT=$(LAT), LON=$(LON), RADIUS_KM=$(RADIUS_KM)...
+	@sed -i 's/\r$$//' init-scripts/init-city-map.sh
 	@LAT="$(LAT)" LON="$(LON)" RADIUS_KM="$(RADIUS_KM)" bash init-scripts/init-city-map.sh
 
 init-brouter-cache: env
 	@echo Building BRouter rd5 cache archive for Android offline routing...
+	@sed -i 's/\r$$//' init-scripts/build-brouter-cache.sh
 	@bash init-scripts/build-brouter-cache.sh
 
 init-gh-cache: init-brouter-cache
