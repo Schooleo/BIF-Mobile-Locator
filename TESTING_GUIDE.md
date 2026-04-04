@@ -85,18 +85,21 @@ public void searchPlaces_validQuery_returnsPlaceList() {
 
 ### In Android Studio
 
-1.  **Right-click** on a file (e.g., `DistanceUtilsTest`) or directory (`src/test`).
-2.  Select **Run 'DistanceUtilsTest'**.
-3.  View results in the **Run** window at the bottom.
+1. **Right-click** on a file (e.g., `DistanceUtilsTest`) or directory (`src/test`).
+2. Select **Run 'DistanceUtilsTest'**.
+3. View results in the **Run** window at the bottom.
 
 ### Via Command Line
 
 - Run all unit tests:
+
   ```bash
   cd android
   ./gradlew test
   ```
+
 - Run specific test:
+
   ```bash
   cd android
   ./gradlew :feature:map:testDebugUnitTest --tests "com.bif.app.feature.map.PlaceRepositoryTest"
@@ -123,11 +126,14 @@ start app/build/reports/tests/testDebugUnitTest/index.html
 ### Server Tests
 
 - Run server unit tests and coverage verification:
+
   ```bash
   cd server
   ./gradlew test jacocoTestReport jacocoTestCoverageVerification
   ```
+
 - Open JaCoCo HTML report (Windows):
+
   ```powershell
   start server/build/reports/jacoco/test/html/index.html
   ```
@@ -139,17 +145,21 @@ Use this only when Docker services are running and you want end-to-end proof for
 This smoke path is optional and is not part of the default server unit-test flow.
 
 Prerequisites:
+
 - In `.env`, set:
   - `PLACE_SEARCH_PROVIDER=typesense`
   - `TYPESENSE_ENABLED=true`
   - `TYPESENSE_BOOTSTRAP_REINDEX_ON_STARTUP=true`
 - Start services:
+
   ```bash
   make up PROFILES="ollama typesense"
   ```
+
 - Wait for the server, Ollama, and Typesense to become healthy.
 
 Run the smoke path:
+
 ```bash
 make ai-smoke
 ```
@@ -157,10 +167,12 @@ make ai-smoke
 The smoke test registers a fresh temporary user through `/api/auth/register`, then uses the returned bearer token for authenticated AI GraphQL calls.
 
 Optional overrides:
+
 - `AI_LIVE_SMOKE_BASE_URL`
 - `AI_LIVE_SMOKE_PASSWORD`
 
 What the smoke path proves:
+
 - unauthorized AI GraphQL access fails with `UNAUTHORIZED`
 - authenticated `suggestPlacesFromQuery` succeeds
 - authenticated `draftTripFromQuery` succeeds
@@ -217,10 +229,10 @@ To make tests readable and easy to debug, we use a structured **3-part naming co
 
 ## 6. Best Practices
 
-1.  **One Concept per Test**: Each test method should verify one specific behavior.
-2.  **Descriptive Names**: `calculateDistance_samePoint_returnsZero` is better than `test1`.
-3.  **Fast Feedback**: Run local unit tests frequently while coding.
-4.  **Mock Dependencies**: When your code relies on Android classes (like `Context`), use a mocking framework like **Mockito** instead of relying on real device states.
+1. **One Concept per Test**: Each test method should verify one specific behavior.
+2. **Descriptive Names**: `calculateDistance_samePoint_returnsZero` is better than `test1`.
+3. **Fast Feedback**: Run local unit tests frequently while coding.
+4. **Mock Dependencies**: When your code relies on Android classes (like `Context`), use a mocking framework like **Mockito** instead of relying on real device states.
 
 ---
 
