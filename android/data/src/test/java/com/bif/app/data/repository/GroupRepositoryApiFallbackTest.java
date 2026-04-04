@@ -14,10 +14,10 @@ import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.group.GroupApiModel;
 import com.bif.app.core.network.dto.user.UserApiModel;
 import com.bif.app.core.network.dto.auth.AuthStateResponse;
-import com.bif.app.data.sync.NetworkMonitor;
-import com.bif.app.data.sync.SyncManager;
-import com.bif.app.data.source.local.FriendDao;
-import com.bif.app.data.source.local.GroupDao;
+import com.bif.app.data.sync.core.NetworkMonitor;
+import com.bif.app.data.sync.core.SyncManager;
+import com.bif.app.data.source.local.dao.FriendDao;
+import com.bif.app.data.source.local.dao.GroupDao;
 import com.bif.app.data.source.local.entity.GroupEntity;
 import com.bif.app.domain.model.Group;
 
@@ -186,4 +186,5 @@ public class GroupRepositoryApiFallbackTest {
         when(mockRestApiService.getAuthState()).thenReturn(authCall);
     }
 }
+
 

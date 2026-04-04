@@ -259,4 +259,31 @@ class UserRestControllerTest {
         assertEquals(0xFF1E88E5, result.getBody().avatarColor());
         verify(userService).updateMyProfile("u1", " Alex ", " A ", 0xFF1E88E5, null);
     }
+
+    @Test
+    void updateMyProfile_WhenAvatarUrlProvided_ForwardsUrlUnchanged() {
+        Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
+        String avatarUrl = "https://res.cloudinary.com/demo/image/upload/v1/avatar.jpg";
+
+        User saved = new User();
+        saved.setId("u1");
+        saved.setUsername("Alex");
+        saved.setAvatarUrl(avatarUrl);
+
+        UpdateMyProfileRequest request = new UpdateMyProfileRequest(
+                "Alex",
+                "A",
+                123,
+                avatarUrl
+        );
+
+        when(userService.updateMyProfile("u1", "Alex", "A", 123, avatarUrl))
+                .thenReturn(Optional.of(saved));
+        when(userService.calculateProfileCompletion(saved)).thenReturn(100);
+
+        ResponseEntity<ProfileMetadataResponse> result = controller.updateMyProfile(auth, request);
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        verify(userService).updateMyProfile("u1", "Alex", "A", 123, avatarUrl);
+    }
 }

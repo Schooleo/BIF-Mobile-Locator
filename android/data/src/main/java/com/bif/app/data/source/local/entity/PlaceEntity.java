@@ -3,7 +3,7 @@ package com.bif.app.data.source.local.entity;
 import androidx.annotation.NonNull;
 import androidx.room.Entity;
 
-@Entity(tableName = "places", primaryKeys = {"ownerUserId", "id"})
+@Entity(tableName = "places", primaryKeys = { "ownerUserId", "id" })
 public class PlaceEntity {
     @NonNull
     public String ownerUserId;

@@ -4,6 +4,7 @@ import com.bif.server.features.sync.models.SyncChange;
 import com.bif.server.features.sync.models.SyncChangeEntry;
 import com.bif.server.features.user.models.User;
 import com.bif.server.features.user.repositories.UserRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
@@ -66,8 +67,8 @@ public class ProfileSyncEntityHandler implements SyncEntityHandler {
             if (payload.avatarLetter != null && !payload.avatarLetter.isBlank()) {
                 user.setAvatarLetter(payload.avatarLetter.trim());
             }
-            if (payload.avatarUrl != null && !payload.avatarUrl.isBlank()) {
-                user.setAvatarUrl(payload.avatarUrl.trim());
+            if (payload.avatarUrlProvided) {
+                user.setAvatarUrl(normalizeNullable(payload.avatarUrl));
             }
             if (payload.avatarColor != null) {
                 user.setAvatarColor(payload.avatarColor);
@@ -124,7 +125,10 @@ public class ProfileSyncEntityHandler implements SyncEntityHandler {
             return null;
         }
         try {
-            return objectMapper.readValue(json, ProfilePayload.class);
+            JsonNode node = objectMapper.readTree(json);
+            ProfilePayload payload = objectMapper.treeToValue(node, ProfilePayload.class);
+            payload.avatarUrlProvided = node.has("avatarUrl");
+            return payload;
         } catch (Exception e) {
             return null;
         }
@@ -154,6 +158,14 @@ public class ProfileSyncEntityHandler implements SyncEntityHandler {
         return payload;
     }
 
+    private String normalizeNullable(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
     private static class ProfilePayload {
         public String userId;
         public String displayName;
@@ -165,5 +177,6 @@ public class ProfileSyncEntityHandler implements SyncEntityHandler {
         public Long serverVersion;
         public Long updatedAt;
         public Boolean deleted;
+        public boolean avatarUrlProvided;
     }
 }

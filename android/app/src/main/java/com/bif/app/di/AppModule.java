@@ -5,17 +5,17 @@ import android.content.Context;
 import androidx.room.Room;
 
 import com.bif.app.core.auth.LocalSessionDataCleaner;
-import com.bif.app.data.source.local.AppDatabase;
-import com.bif.app.data.source.local.ChatMessageDao;
-import com.bif.app.data.source.local.FavoriteDao;
-import com.bif.app.data.source.local.FriendDao;
-import com.bif.app.data.source.local.FriendshipDao;
-import com.bif.app.data.source.local.GroupDao;
-import com.bif.app.data.source.local.PlaceDao;
-import com.bif.app.data.source.local.ProfileDao;
-import com.bif.app.data.source.local.SearchHistoryDao;
-import com.bif.app.data.source.local.SyncQueueDao;
-import com.bif.app.data.source.local.TripDao;
+import com.bif.app.data.source.local.database.AppDatabase;
+import com.bif.app.data.source.local.dao.ChatMessageDao;
+import com.bif.app.data.source.local.dao.FavoriteDao;
+import com.bif.app.data.source.local.dao.FriendDao;
+import com.bif.app.data.source.local.dao.FriendshipDao;
+import com.bif.app.data.source.local.dao.GroupDao;
+import com.bif.app.data.source.local.dao.PlaceDao;
+import com.bif.app.data.source.local.dao.ProfileDao;
+import com.bif.app.data.source.local.dao.SearchHistoryDao;
+import com.bif.app.data.source.local.dao.SyncQueueDao;
+import com.bif.app.data.source.local.dao.TripDao;
 
 import javax.inject.Singleton;
 
@@ -27,10 +27,13 @@ import dagger.Provides;
 import dagger.hilt.InstallIn;
 import dagger.hilt.android.qualifiers.ApplicationContext;
 import dagger.hilt.components.SingletonComponent;
+import timber.log.Timber;
 
 @Module
 @InstallIn(SingletonComponent.class)
 public class AppModule {
+
+    private static final String TAG = "AppModule";
 
     @Provides
     @Singleton
@@ -123,7 +126,9 @@ public class AppModule {
                             .edit()
                             .clear()
                             .apply();
-                } catch (Exception ignored) {
+                } catch (Exception exception) {
+                    Timber.tag(TAG).e(exception,
+                            "Failed to clear local session data");
                 }
             });
             executor.shutdown();

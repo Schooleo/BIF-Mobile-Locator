@@ -57,8 +57,8 @@ public class ProfileFragment extends Fragment {
     @Inject
     AuthSessionManager authSessionManager;
 
-    private final ActivityResultLauncher<String> pickAvatarLauncher =
-            registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
+    private final ActivityResultLauncher<String> pickAvatarLauncher = registerForActivityResult(
+            new ActivityResultContracts.GetContent(), uri -> {
                 if (uri == null || !isAdded() || getView() == null) {
                     return;
                 }
@@ -67,7 +67,7 @@ public class ProfileFragment extends Fragment {
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
-                             @Nullable Bundle savedInstanceState) {
+            @Nullable Bundle savedInstanceState) {
         viewModel = new ViewModelProvider(this).get(ProfileViewModel.class);
         return inflater.inflate(R.layout.fragment_profile, container, false);
     }
@@ -198,11 +198,11 @@ public class ProfileFragment extends Fragment {
         // Personal Information
         View menuPersonalInfo = view.findViewById(R.id.menuPersonalInfo);
         ((android.widget.ImageView) menuPersonalInfo.findViewById(com.bif.app.core.R.id.ivIcon))
-            .setImageResource(com.bif.app.core.R.drawable.ic_person);
+                .setImageResource(com.bif.app.core.R.drawable.ic_person);
         ((android.widget.TextView) menuPersonalInfo.findViewById(com.bif.app.core.R.id.tvTitle))
-            .setText(R.string.personal_information);
-        menuPersonalInfo.setOnClickListener(v ->
-            navController.navigate(UriUtils.buildUri(UriUtils.PathTo.PERSONAL_INFO)));
+                .setText(R.string.personal_information);
+        menuPersonalInfo
+                .setOnClickListener(v -> navController.navigate(UriUtils.buildUri(UriUtils.PathTo.PERSONAL_INFO)));
 
         // Privacy & Security
         View menuPrivacySecurity = view.findViewById(R.id.menuPrivacySecurity);
@@ -247,26 +247,25 @@ public class ProfileFragment extends Fragment {
     private void setupLogout(View view) {
         view.findViewById(R.id.btnLogout).setOnClickListener(v -> {
             DialogUtils.showConfirmDialog(requireContext(),
-                "Logout",
-                "Are you sure you want to logout?",
-                "Logout",
-                "Cancel",
-                ()-> {
-                    authSessionManager.logout(remoteSuccess -> {
-                        if (!isAdded()) {
-                            return;
-                        }
-
-                        requireActivity().runOnUiThread(() -> {
+                    "Logout",
+                    "Are you sure you want to logout?",
+                    "Logout",
+                    "Cancel",
+                    () -> {
+                        authSessionManager.logout(remoteSuccess -> {
                             if (!isAdded()) {
                                 return;
                             }
-                            Toast.makeText(requireContext(), R.string.logout_success, Toast.LENGTH_SHORT).show();
-                            navController.navigate(UriUtils.buildUri(UriUtils.PathTo.LOGIN));
+
+                            requireActivity().runOnUiThread(() -> {
+                                if (!isAdded()) {
+                                    return;
+                                }
+                                Toast.makeText(requireContext(), R.string.logout_success, Toast.LENGTH_SHORT).show();
+                                navController.navigate(UriUtils.buildUri(UriUtils.PathTo.LOGIN));
+                            });
                         });
                     });
-                }
-            );
         });
     }
 
@@ -298,17 +297,19 @@ public class ProfileFragment extends Fragment {
                     .listener(new RequestListener<Drawable>() {
                         @Override
                         public boolean onLoadFailed(@Nullable GlideException e,
-                                                    Object model,
-                                                    Target<Drawable> target,
-                                                    boolean isFirstResource) {
+                                Object model,
+                                Target<Drawable> target,
+                                boolean isFirstResource) {
                             if (isRemote) {
+                                String unavailableText = ivAvatarImage.getContext()
+                                        .getString(R.string.image_unavailable_offline);
                                 ivAvatarImage.setContentDescription(
-                                        getString(R.string.image_unavailable_offline));
+                                        unavailableText);
                                 ivAvatarImage.setOnClickListener(v -> {
                                     if (!isAdded()) {
                                         return;
                                     }
-                                    Toast.makeText(requireContext(),
+                                    Toast.makeText(v.getContext(),
                                             R.string.image_unavailable_offline,
                                             Toast.LENGTH_SHORT).show();
                                     viewModel.refreshProfileFromServer(true);
@@ -319,10 +320,10 @@ public class ProfileFragment extends Fragment {
 
                         @Override
                         public boolean onResourceReady(Drawable resource,
-                                                       Object model,
-                                                       Target<Drawable> target,
-                                                       DataSource dataSource,
-                                                       boolean isFirstResource) {
+                                Object model,
+                                Target<Drawable> target,
+                                DataSource dataSource,
+                                boolean isFirstResource) {
                             return false;
                         }
                     })
@@ -367,7 +368,7 @@ public class ProfileFragment extends Fragment {
                 Toast.makeText(requireContext(), R.string.username_required, Toast.LENGTH_SHORT).show();
                 return;
             }
-            
+
             // Logic quan trọng của bạn: Đẩy lên Backend thông qua ViewModel
             viewModel.updateProfile(updatedUsername);
             dialog.dismiss();

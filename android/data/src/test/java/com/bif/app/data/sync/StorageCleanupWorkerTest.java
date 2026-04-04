@@ -1,6 +1,9 @@
 package com.bif.app.data.sync;
 
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -10,8 +13,9 @@ import android.content.Context;
 import androidx.work.ListenableWorker;
 import androidx.work.WorkerParameters;
 
-import com.bif.app.data.source.local.ProfileDao;
-import com.bif.app.data.source.local.TripDao;
+import com.bif.app.data.sync.worker.StorageCleanupWorker;
+import com.bif.app.data.source.local.dao.ProfileDao;
+import com.bif.app.data.source.local.dao.TripDao;
 import com.bif.app.data.source.local.entity.ProfileEntity;
 import com.bif.app.data.source.local.entity.TripStopEntity;
 
@@ -93,19 +97,19 @@ public class StorageCleanupWorkerTest {
 
         ListenableWorker.Result result = worker.doWork();
 
-        assertTrue(result instanceof ListenableWorker.Result.Success);
-        assertTrue(!profileFile.exists());
-        assertTrue(!tripFile.exists());
-        assertTrue(!orphanFile.exists());
+        assertEquals(ListenableWorker.Result.Success.class, result.getClass());
+        assertFalse(profileFile.exists());
+        assertFalse(tripFile.exists());
+        assertFalse(orphanFile.exists());
         assertTrue(referencedFile.exists());
 
         ArgumentCaptor<ProfileEntity> profileCaptor = ArgumentCaptor.forClass(ProfileEntity.class);
         verify(profileDao, atLeastOnce()).upsert(profileCaptor.capture());
-        assertTrue(profileCaptor.getValue().localImagePath == null);
+        assertNull(profileCaptor.getValue().localImagePath);
 
         ArgumentCaptor<TripStopEntity> stopCaptor = ArgumentCaptor.forClass(TripStopEntity.class);
         verify(tripDao, atLeastOnce()).upsertStop(stopCaptor.capture());
-        assertTrue(stopCaptor.getValue().localImagePath == null);
+        assertNull(stopCaptor.getValue().localImagePath);
     }
 
     private void deleteRecursively(File file) {

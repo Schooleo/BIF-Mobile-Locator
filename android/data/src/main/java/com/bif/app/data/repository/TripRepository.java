@@ -7,11 +7,11 @@ import androidx.lifecycle.Transformations;
 
 import com.bif.app.core.network.dto.chat.ChatMessageDto;
 import com.bif.app.core.network.dto.trip.TripStopDto;
-import com.bif.app.data.source.local.TripDao;
+import com.bif.app.data.source.local.dao.TripDao;
 import com.bif.app.data.source.local.entity.TripStopEntity;
 import com.bif.app.data.source.local.entity.UploadStatus;
-import com.bif.app.data.sync.ImageUploadWorker;
-import com.bif.app.data.sync.SyncManager;
+import com.bif.app.data.sync.worker.ImageUploadWorker;
+import com.bif.app.data.sync.core.SyncManager;
 import com.bif.app.domain.model.TripPlan;
 import com.bif.app.domain.model.TripStop;
 import com.bif.app.domain.repository.ITripRepository;
@@ -277,7 +277,12 @@ public class TripRepository implements ITripRepository {
             return false;
         }
         String trimmed = localImagePath.trim();
-        return !trimmed.startsWith("http://") && !trimmed.startsWith("https://");
+        return !startsWithIgnoreCase(trimmed, "http://")
+                && !startsWithIgnoreCase(trimmed, "https://");
+    }
+
+    private boolean startsWithIgnoreCase(String value, String prefix) {
+        return value.regionMatches(true, 0, prefix, 0, prefix.length());
     }
 
     private void enqueueImageUploadIfPending(TripStopEntity entity) {
@@ -301,4 +306,5 @@ public class TripRepository implements ITripRepository {
         }
     }
 }
+
 

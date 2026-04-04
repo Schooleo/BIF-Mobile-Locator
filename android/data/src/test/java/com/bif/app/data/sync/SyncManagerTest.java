@@ -1,4 +1,4 @@
-package com.bif.app.data.sync;
+package com.bif.app.data.sync.core;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -14,7 +14,7 @@ import com.bif.app.core.network.dto.place.PlaceDto;
 import com.bif.app.core.network.dto.sync.SyncChangeDto;
 import com.bif.app.core.network.dto.sync.SyncRequestDto;
 import com.bif.app.core.network.dto.sync.SyncResponseDto;
-import com.bif.app.data.source.local.SyncQueueDao;
+import com.bif.app.data.source.local.dao.SyncQueueDao;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 
 import org.junit.After;

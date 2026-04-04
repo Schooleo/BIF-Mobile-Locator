@@ -6,7 +6,7 @@ import androidx.room.Index;
 import androidx.room.PrimaryKey;
 
 @Entity(tableName = "trip_plans", indices = {
-        @Index(value = {"groupId"})
+        @Index(value = { "groupId" })
 })
 public class TripPlanEntity {
     @PrimaryKey

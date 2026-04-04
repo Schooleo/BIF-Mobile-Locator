@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,11 +15,11 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
-import com.bif.app.data.source.local.TripDao;
+import com.bif.app.data.source.local.dao.TripDao;
 import com.bif.app.data.source.local.entity.TripPlanEntity;
 import com.bif.app.data.source.local.entity.TripStopEntity;
 import com.bif.app.data.source.local.entity.UploadStatus;
-import com.bif.app.data.sync.SyncManager;
+import com.bif.app.data.sync.core.SyncManager;
 import com.bif.app.domain.model.TripPlan;
 import com.bif.app.domain.model.TripStop;
 
@@ -173,6 +174,8 @@ public class TripRepositoryTest {
                 "/data/user/0/com.bif.app/files/image-staging/s1.jpg",
                 captor.getValue().localImagePath
         );
+        verify(mockSyncManager, never()).enqueueChange(anyString(), anyString(), anyString(), anyString(), any());
+        verify(mockSyncManager, never()).syncIfOnline();
     }
 
     @Test
@@ -287,3 +290,4 @@ public class TripRepositoryTest {
         assertEquals(0, liveData.getValue().size());
     }
 }
+

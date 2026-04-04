@@ -24,6 +24,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -123,5 +124,32 @@ class TripStopSyncEntityHandlerTest {
         assertEquals("s9", response.get("id").asText());
         assertEquals("trip-2", response.get("tripId").asText());
         assertEquals(12L, response.get("serverVersion").asLong());
+    }
+
+    @Test
+    void applyPushedChange_WhenPhotoUrlBlank_NormalizesToNull() {
+        TripStop existing = new TripStop();
+        existing.setId("s1");
+        existing.setPhotoUrl("https://res.cloudinary.com/demo/image/upload/v1/old.jpg");
+
+        TripPlan plan = new TripPlan();
+        plan.setId("trip-1");
+        plan.setStops(new ArrayList<>(List.of(existing)));
+
+        when(tripPlanRepository.findById("trip-1")).thenReturn(Optional.of(plan));
+        when(tripPlanRepository.save(any(TripPlan.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        SyncChange pushed = new SyncChange();
+        pushed.setEntityType("trip_stop");
+        pushed.setEntityId("s1");
+        pushed.setOperation("UPDATE");
+        pushed.setPayload("{\"id\":\"s1\",\"tripId\":\"trip-1\",\"photoUrl\":\"   \",\"orderIndex\":0}");
+
+        handler.applyPushedChange(pushed, "user-1", 20L);
+
+        ArgumentCaptor<TripPlan> captor = ArgumentCaptor.forClass(TripPlan.class);
+        verify(tripPlanRepository).save(captor.capture());
+        assertNull(captor.getValue().getStops().get(0).getPhotoUrl());
     }
 }

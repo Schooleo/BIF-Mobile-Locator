@@ -3,6 +3,7 @@ package com.bif.server.features.media.services;
 import com.bif.server.features.media.dto.rest.UploadSignatureResponse;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -17,13 +18,15 @@ public class CloudinarySignatureService {
     private final String cloudName;
     private final String apiKey;
     private final String apiSecret;
+    private final boolean failFast;
     private final Cloudinary cloudinary;
 
     public CloudinarySignatureService(
             @Value("${cloudinary.url:}") String cloudinaryUrl,
             @Value("${cloudinary.cloud-name:}") String cloudName,
             @Value("${cloudinary.api-key:}") String apiKey,
-            @Value("${cloudinary.api-secret:}") String apiSecret) {
+            @Value("${cloudinary.api-secret:}") String apiSecret,
+            @Value("${cloudinary.fail-fast:false}") boolean failFast) {
         String normalizedUrl = cloudinaryUrl != null ? cloudinaryUrl.trim() : "";
         String normalizedCloudName = cloudName != null ? cloudName.trim() : "";
         String normalizedApiKey = apiKey != null ? apiKey.trim() : "";
@@ -44,12 +47,18 @@ public class CloudinarySignatureService {
             this.cloudinary.config.apiKey);
         this.apiSecret = firstNonBlank(normalizedApiSecret,
             this.cloudinary.config.apiSecret);
+        this.failFast = failFast;
+    }
+
+    @PostConstruct
+    void validateConfigurationOnStartup() {
+        if (failFast) {
+            ensureConfigured();
+        }
     }
 
     public UploadSignatureResponse generateSignature(String folder, String tags) {
-        if (cloudName.isEmpty() || apiKey.isEmpty() || apiSecret.isEmpty()) {
-            throw new IllegalStateException("Cloudinary is not configured");
-        }
+        ensureConfigured();
         if (folder == null || folder.isBlank()) {
             throw new IllegalArgumentException("folder must not be blank");
         }
@@ -86,5 +95,11 @@ public class CloudinarySignatureService {
             return preferred;
         }
         return fallback != null ? fallback.trim() : "";
+    }
+
+    private void ensureConfigured() {
+        if (cloudName.isEmpty() || apiKey.isEmpty() || apiSecret.isEmpty()) {
+            throw new IllegalStateException("Cloudinary is not configured");
+        }
     }
 }

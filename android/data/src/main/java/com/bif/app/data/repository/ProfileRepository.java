@@ -6,17 +6,18 @@ import androidx.annotation.NonNull;
 
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.ProfileMapper;
-import com.bif.app.data.source.local.AppDatabase;
-import com.bif.app.data.source.local.ProfileDao;
-import com.bif.app.data.source.local.SyncQueueDao;
+import com.bif.app.data.source.local.database.AppDatabase;
+import com.bif.app.data.source.local.dao.ProfileDao;
+import com.bif.app.data.source.local.dao.SyncQueueDao;
 import com.bif.app.data.source.local.entity.ProfileEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 import com.bif.app.data.source.local.entity.UploadStatus;
-import com.bif.app.data.sync.ImageUploadWorker;
-import com.bif.app.data.sync.SyncManager;
+import com.bif.app.data.sync.worker.ImageUploadWorker;
+import com.bif.app.data.sync.core.SyncManager;
 import com.bif.app.domain.repository.IProfileRepository;
 import com.google.gson.Gson;
 
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 
@@ -38,11 +39,11 @@ public class ProfileRepository implements IProfileRepository {
 
     @Inject
     public ProfileRepository(@ApplicationContext Context appContext,
-                             ProfileDao profileDao,
-                             SyncQueueDao syncQueueDao,
-                             AppDatabase appDatabase,
-                             SyncManager syncManager,
-                             ExecutorService executorService) {
+            ProfileDao profileDao,
+            SyncQueueDao syncQueueDao,
+            AppDatabase appDatabase,
+            SyncManager syncManager,
+            ExecutorService executorService) {
         this.appContext = appContext;
         this.profileDao = profileDao;
         this.syncQueueDao = syncQueueDao;
@@ -87,8 +88,7 @@ public class ProfileRepository implements IProfileRepository {
                 UserPreferences.isLoggedIn(appContext),
                 username,
                 email,
-                resolveAvatarForUi(localEntity)
-        );
+                resolveAvatarForUi(localEntity));
     }
 
     @Override
@@ -105,6 +105,7 @@ public class ProfileRepository implements IProfileRepository {
             }
 
             syncManager.setUserContext(activeUserId, null);
+            final String[] avatarPathForPrefs = new String[1];
             appDatabase.runInTransaction(() -> {
                 ProfileEntity existing = profileDao.getByUserId(activeUserId);
                 ProfileEntity entity = existing != null ? existing : new ProfileEntity();
@@ -125,8 +126,12 @@ public class ProfileRepository implements IProfileRepository {
                 entity.updatedAt = System.currentTimeMillis();
                 entity.deleted = false;
                 profileDao.upsert(entity);
-                UserPreferences.setAvatarUri(appContext, normalizedPath);
+                avatarPathForPrefs[0] = normalizedPath;
             });
+
+            if (avatarPathForPrefs[0] != null) {
+                UserPreferences.setAvatarUri(appContext, avatarPathForPrefs[0]);
+            }
 
             ImageUploadWorker.enqueue(appContext);
         });
@@ -196,22 +201,28 @@ public class ProfileRepository implements IProfileRepository {
                     ProfileEntity existing = profileDao.getByUserId(
                             activeUserId);
                     ProfileEntity entity = existing != null
-                            ? existing : new ProfileEntity();
+                            ? existing
+                            : new ProfileEntity();
                     entity.userId = activeUserId;
                     entity.displayName = normalizedName;
                     entity.email = resolveEmail(existing);
                     entity.avatarLetter = resolveAvatarLetter(normalizedName,
                             entity.email, existing);
                     entity.avatarColor = existing != null
-                            ? existing.avatarColor : 0;
-                        entity.avatarUrl = existing != null
-                            ? existing.avatarUrl : null;
-                        entity.localImagePath = existing != null
-                            ? existing.localImagePath : null;
-                        entity.uploadStatus = existing != null
-                            ? existing.uploadStatus : UploadStatus.SYNCED;
+                            ? existing.avatarColor
+                            : 0;
+                    entity.avatarUrl = existing != null
+                            ? existing.avatarUrl
+                            : null;
+                    entity.localImagePath = existing != null
+                            ? existing.localImagePath
+                            : null;
+                    entity.uploadStatus = existing != null
+                            ? existing.uploadStatus
+                            : UploadStatus.SYNCED;
                     entity.serverVersion = existing != null
-                            ? existing.serverVersion : 0;
+                            ? existing.serverVersion
+                            : 0;
                     entity.updatedAt = System.currentTimeMillis();
                     entity.deleted = false;
 
@@ -222,8 +233,7 @@ public class ProfileRepository implements IProfileRepository {
                             "profile",
                             entity.userId,
                             "UPDATE",
-                            ProfileMapper.toDto(entity)
-                    );
+                            ProfileMapper.toDto(entity));
                     syncQueueDao.enqueue(syncEntry);
                 });
 
@@ -240,9 +250,9 @@ public class ProfileRepository implements IProfileRepository {
     }
 
     private SyncQueueEntity createSyncEntry(String entityType,
-                                            String entityId,
-                                            String operation,
-                                            Object payload) {
+            String entityId,
+            String operation,
+            Object payload) {
         SyncQueueEntity entry = new SyncQueueEntity();
         entry.entityType = entityType;
         entry.entityId = entityId;
@@ -273,16 +283,16 @@ public class ProfileRepository implements IProfileRepository {
     }
 
     private String resolveAvatarLetter(String displayName,
-                                       String email,
-                                       ProfileEntity existing) {
+            String email,
+            ProfileEntity existing) {
         String trimmedName = safe(displayName);
         if (!trimmedName.isEmpty()) {
-            return trimmedName.substring(0, 1).toUpperCase();
+            return trimmedName.substring(0, 1).toUpperCase(Locale.ROOT);
         }
 
         String trimmedEmail = safe(email);
         if (!trimmedEmail.isEmpty()) {
-            return trimmedEmail.substring(0, 1).toUpperCase();
+            return trimmedEmail.substring(0, 1).toUpperCase(Locale.ROOT);
         }
 
         if (existing != null && existing.avatarLetter != null
@@ -332,3 +342,4 @@ public class ProfileRepository implements IProfileRepository {
         return value.trim();
     }
 }
+

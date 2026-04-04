@@ -13,7 +13,7 @@ import androidx.lifecycle.MutableLiveData;
 
 import com.bif.app.data.LiveDataTestUtil;
 import com.bif.app.data.mapper.GroupMapper;
-import com.bif.app.data.source.local.GroupDao;
+import com.bif.app.data.source.local.dao.GroupDao;
 import com.bif.app.data.source.local.entity.GroupEntity;
 import com.bif.app.data.source.local.entity.GroupWithFriends;
 import com.bif.app.domain.model.Friend;

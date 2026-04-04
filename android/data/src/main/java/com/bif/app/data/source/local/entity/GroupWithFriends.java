@@ -10,14 +10,6 @@ public class GroupWithFriends {
     @Embedded
     public GroupEntity group;
 
-    @Relation(
-            parentColumn = "id",
-            entityColumn = "id",
-            associateBy = @Junction(
-                    value = GroupFriendCrossRef.class,
-                    parentColumn = "groupId",
-                    entityColumn = "friendId"
-            )
-    )
+    @Relation(parentColumn = "id", entityColumn = "id", associateBy = @Junction(value = GroupFriendCrossRef.class, parentColumn = "groupId", entityColumn = "friendId"))
     public List<FriendEntity> friends;
 }

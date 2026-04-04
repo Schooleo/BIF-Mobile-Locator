@@ -18,7 +18,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -95,6 +94,7 @@ import java.util.UUID;
 import com.google.android.material.button.MaterialButton;
 
 import dagger.hilt.android.AndroidEntryPoint;
+import timber.log.Timber;
 
 @AndroidEntryPoint
 public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
@@ -213,8 +213,8 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 }
             });
 
-    private final MapView.OnDidFailLoadingMapListener onDidFailLoadingMapListener = errorMessage -> Log.e(TAG,
-            "Map load failed: " + errorMessage);
+        private final MapView.OnDidFailLoadingMapListener onDidFailLoadingMapListener =
+            errorMessage -> Timber.tag(TAG).e("Map load failed: %s", errorMessage);
 
     @Nullable
     @Override
@@ -233,7 +233,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT));
         } catch (Throwable t) {
-            Log.e(TAG, "MapView initialization failed", t);
+            Timber.tag(TAG).e(t, "MapView initialization failed");
             mapView = null;
         }
 
@@ -997,7 +997,8 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         if (!TextUtils.equals(renderedRouteGeometryJson, geometryJson)) {
             Feature routeFeature = parseRouteFeature(geometryJson);
             if (routeFeature == null || !(routeFeature.geometry() instanceof LineString)) {
-                Log.w(TAG, "Route geometry could not be parsed for drawing. payload=" + truncateForLog(geometryJson));
+                Timber.tag(TAG).w("Route geometry could not be parsed for drawing. payload=%s",
+                    truncateForLog(geometryJson));
                 clearRouteFeatures();
                 return;
             }
@@ -1990,7 +1991,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                     showPlaceBottomSheet(clickedPlace, requireView());
                 });
             } catch (Exception e) {
-                Log.e(TAG, "Geocoding failed", e);
+                Timber.tag(TAG).e(e, "Geocoding failed");
             }
         }).start();
     }

@@ -1,11 +1,13 @@
 package com.bif.server.features.user.services;
 
-import com.bif.server.features.user.models.User;
-import com.bif.server.features.user.repositories.UserRepository;
-import org.springframework.stereotype.Service;
-
+import java.net.URI;
 import java.util.List;
 import java.util.Optional;
+
+import org.springframework.stereotype.Service;
+
+import com.bif.server.features.user.models.User;
+import com.bif.server.features.user.repositories.UserRepository;
 
 @Service
 public class UserService {
@@ -40,8 +42,7 @@ public class UserService {
             String username,
             String avatarLetter,
             Integer avatarColor,
-            String avatarUrl
-    ) {
+            String avatarUrl) {
         if (userId == null || userId.isBlank()) {
             throw new IllegalArgumentException("userId must not be blank");
         }
@@ -51,8 +52,12 @@ public class UserService {
         if (avatarLetter != null && avatarLetter.isBlank()) {
             throw new IllegalArgumentException("avatarLetter must not be blank");
         }
-        if (avatarUrl != null && avatarUrl.isBlank()) {
-            throw new IllegalArgumentException("avatarUrl must not be blank");
+        boolean avatarUrlProvided = avatarUrl != null;
+        String normalizedAvatarUrl = avatarUrlProvided ? avatarUrl.trim() : null;
+        if (avatarUrlProvided
+                && !normalizedAvatarUrl.isEmpty()
+                && !isValidHttpUrl(normalizedAvatarUrl)) {
+            throw new IllegalArgumentException("avatarUrl must be a valid http(s) URL");
         }
 
         return userRepository.findById(userId).map(user -> {
@@ -65,8 +70,10 @@ public class UserService {
             if (avatarColor != null) {
                 user.setAvatarColor(avatarColor);
             }
-            if (avatarUrl != null) {
-                user.setAvatarUrl(avatarUrl.trim());
+            if (avatarUrlProvided) {
+                user.setAvatarUrl(normalizedAvatarUrl.isEmpty()
+                        ? null
+                        : normalizedAvatarUrl);
             }
             return userRepository.save(user);
         });
@@ -93,5 +100,22 @@ public class UserService {
         }
 
         return (completed * 100) / total;
+    }
+
+    private boolean isValidHttpUrl(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        try {
+            URI uri = URI.create(value);
+            String scheme = uri.getScheme();
+            return scheme != null
+                    && ("http".equalsIgnoreCase(scheme)
+                            || "https".equalsIgnoreCase(scheme))
+                    && uri.getHost() != null
+                    && !uri.getHost().isBlank();
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
     }
 }

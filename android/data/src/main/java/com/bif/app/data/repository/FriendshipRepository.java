@@ -9,10 +9,10 @@ import com.bif.app.core.network.dto.friendship.CreateFriendRequestDto;
 import com.bif.app.core.network.dto.friendship.FriendshipApiModel;
 import com.bif.app.data.mapper.FriendMapper;
 import com.bif.app.data.mapper.FriendshipMapper;
-import com.bif.app.data.sync.NetworkMonitor;
-import com.bif.app.data.sync.SyncManager;
-import com.bif.app.data.source.local.FriendDao;
-import com.bif.app.data.source.local.FriendshipDao;
+import com.bif.app.data.sync.core.NetworkMonitor;
+import com.bif.app.data.sync.core.SyncManager;
+import com.bif.app.data.source.local.dao.FriendDao;
+import com.bif.app.data.source.local.dao.FriendshipDao;
 import com.bif.app.data.source.local.entity.FriendEntity;
 import com.bif.app.data.source.local.entity.FriendshipEntity;
 import com.bif.app.data.source.local.entity.FriendshipStatus;
@@ -499,3 +499,4 @@ public class FriendshipRepository implements IFriendshipRepository {
         return payload;
     }
 }
+

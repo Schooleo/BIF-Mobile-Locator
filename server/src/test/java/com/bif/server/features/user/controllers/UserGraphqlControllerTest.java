@@ -167,4 +167,22 @@ class UserGraphqlControllerTest {
         assertEquals("u1", result.getId());
         verify(userService).updateMyProfile("u1", "Alex", "A", 123, null);
     }
+
+    @Test
+    void updateMyProfile_WhenAvatarUrlProvided_ForwardsUrlUnchanged() {
+        User saved = new User();
+        saved.setId("u1");
+        String avatarUrl = "https://res.cloudinary.com/demo/image/upload/v1/avatar.jpg";
+
+        UpdateMyProfileInput input = new UpdateMyProfileInput("Alex", "A", 123, avatarUrl);
+
+        when(userService.updateMyProfile("u1", "Alex", "A", 123, avatarUrl))
+                .thenReturn(Optional.of(saved));
+
+        User result = controller.updateMyProfile("u1", input);
+
+        assertNotNull(result);
+        assertEquals("u1", result.getId());
+        verify(userService).updateMyProfile("u1", "Alex", "A", 123, avatarUrl);
+    }
 }

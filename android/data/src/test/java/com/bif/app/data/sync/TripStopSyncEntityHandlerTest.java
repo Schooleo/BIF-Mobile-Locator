@@ -4,8 +4,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.bif.app.core.network.dto.sync.SyncChangeDto;
-import com.bif.app.data.source.local.TripDao;
+import com.bif.app.data.sync.handler.TripStopSyncEntityHandler;
+import com.bif.app.data.source.local.dao.TripDao;
 import com.bif.app.data.source.local.entity.TripStopEntity;
+import com.bif.app.data.source.local.entity.UploadStatus;
 import com.google.gson.Gson;
 
 import org.junit.Before;
@@ -41,8 +43,7 @@ public class TripStopSyncEntityHandlerTest {
 
         handler.applyPulledChange(change, "user-1");
 
-        ArgumentCaptor<TripStopEntity> captor =
-                ArgumentCaptor.forClass(TripStopEntity.class);
+        ArgumentCaptor<TripStopEntity> captor = ArgumentCaptor.forClass(TripStopEntity.class);
         verify(mockTripDao).upsertStop(captor.capture());
         org.junit.Assert.assertTrue(captor.getValue().deleted);
         org.junit.Assert.assertEquals(7L, captor.getValue().serverVersion);
@@ -62,8 +63,7 @@ public class TripStopSyncEntityHandlerTest {
 
         handler.applyPulledChange(change, "user-1");
 
-        ArgumentCaptor<TripStopEntity> captor =
-                ArgumentCaptor.forClass(TripStopEntity.class);
+        ArgumentCaptor<TripStopEntity> captor = ArgumentCaptor.forClass(TripStopEntity.class);
         verify(mockTripDao).upsertStop(captor.capture());
         TripStopEntity saved = captor.getValue();
         org.junit.Assert.assertEquals("stop-1", saved.id);
@@ -72,5 +72,29 @@ public class TripStopSyncEntityHandlerTest {
         org.junit.Assert.assertEquals(2, saved.orderIndex);
         org.junit.Assert.assertEquals(10L, saved.serverVersion);
     }
-}
 
+    @Test
+    public void applyPulledChange_keepsPendingLocalUploadWhenRemotePhotoArrives() {
+        TripStopEntity existing = new TripStopEntity();
+        existing.id = "stop-2";
+        existing.localImagePath = "/files/image-staging/stop-2.jpg";
+        existing.uploadStatus = UploadStatus.ERROR;
+        when(mockTripDao.getStopByIdSync("stop-2")).thenReturn(existing);
+
+        SyncChangeDto change = new SyncChangeDto();
+        change.operation = "UPDATE";
+        change.serverVersion = 22L;
+        change.payload = "{\"id\":\"stop-2\",\"tripId\":\"trip-1\","
+                + "\"photoUrl\":\"https://cdn.example.com/stop-2.jpg\","
+                + "\"serverVersion\":22,\"deleted\":false}";
+
+        handler.applyPulledChange(change, "user-1");
+
+        ArgumentCaptor<TripStopEntity> captor = ArgumentCaptor.forClass(TripStopEntity.class);
+        verify(mockTripDao).upsertStop(captor.capture());
+        TripStopEntity saved = captor.getValue();
+        org.junit.Assert.assertEquals("/files/image-staging/stop-2.jpg",
+                saved.localImagePath);
+        org.junit.Assert.assertEquals(UploadStatus.ERROR, saved.uploadStatus);
+    }
+}

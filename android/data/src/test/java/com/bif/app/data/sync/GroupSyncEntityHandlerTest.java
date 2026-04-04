@@ -4,7 +4,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.bif.app.core.network.dto.sync.SyncChangeDto;
-import com.bif.app.data.source.local.GroupDao;
+import com.bif.app.data.sync.handler.GroupSyncEntityHandler;
+import com.bif.app.data.source.local.dao.GroupDao;
 import com.bif.app.data.source.local.entity.GroupEntity;
 import com.google.gson.Gson;
 

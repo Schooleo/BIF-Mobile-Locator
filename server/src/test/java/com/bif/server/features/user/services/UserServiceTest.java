@@ -1,18 +1,27 @@
 package com.bif.server.features.user.services;
 
-import com.bif.server.features.user.models.User;
-import com.bif.server.features.user.repositories.UserRepository;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+import java.util.Optional;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.List;
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import com.bif.server.features.user.models.User;
+import com.bif.server.features.user.repositories.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
@@ -110,6 +119,15 @@ class UserServiceTest {
     }
 
     @Test
+    void updateMyProfile_WhenAvatarUrlInvalid_ThrowsIllegalArgumentException() {
+        assertThrows(IllegalArgumentException.class,
+                () -> userService.updateMyProfile("u1", "Alex", "A", 123, "notaurl"));
+
+        verify(userRepository, never()).findById(anyString());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
     void updateMyProfile_WhenValid_UpdatesAllowedFieldsOnly() {
         User existing = new User();
         existing.setId("u1");
@@ -131,6 +149,49 @@ class UserServiceTest {
         assertEquals("old@bif.local", saved.getEmail());
         assertTrue(saved.isOnline());
         assertEquals(10, saved.getServerVersion());
+        verify(userRepository).save(existing);
+    }
+
+    @Test
+    void updateMyProfile_WhenAvatarUrlValid_SavesTrimmedUrl() {
+        User existing = new User();
+        existing.setId("u1");
+
+        when(userRepository.findById("u1")).thenReturn(Optional.of(existing));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Optional<User> result = userService.updateMyProfile(
+                "u1",
+                "Alex",
+                "A",
+                123,
+                " https://res.cloudinary.com/demo/image/upload/v1/avatar.jpg ");
+
+        assertTrue(result.isPresent());
+        assertEquals(
+                "https://res.cloudinary.com/demo/image/upload/v1/avatar.jpg",
+                result.get().getAvatarUrl());
+        verify(userRepository).save(existing);
+    }
+
+    @Test
+    void updateMyProfile_WhenAvatarUrlBlank_ClearsAvatarUrl() {
+        User existing = new User();
+        existing.setId("u1");
+        existing.setAvatarUrl("https://res.cloudinary.com/demo/image/upload/v1/avatar.jpg");
+
+        when(userRepository.findById("u1")).thenReturn(Optional.of(existing));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Optional<User> result = userService.updateMyProfile(
+                "u1",
+                "Alex",
+                "A",
+                123,
+                "   ");
+
+        assertTrue(result.isPresent());
+        assertEquals(null, result.get().getAvatarUrl());
         verify(userRepository).save(existing);
     }
 }

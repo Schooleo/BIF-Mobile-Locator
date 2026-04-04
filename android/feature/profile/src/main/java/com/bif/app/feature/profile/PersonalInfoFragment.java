@@ -45,19 +45,19 @@ public class PersonalInfoFragment extends Fragment {
         Toolbar toolbar = view.findViewById(R.id.toolbar);
         toolbar.setNavigationOnClickListener(v -> navController.popBackStack());
 
-        bindLocalProfileState(view);
+        bindLocalProfileState();
     }
 
     @Override
     public void onResume() {
         super.onResume();
         if (getView() != null) {
-            bindLocalProfileState(getView());
+            bindLocalProfileState();
             syncProfileMetadataFromServer();
         }
     }
 
-    private void bindLocalProfileState(@NonNull View view) {
+    private void bindLocalProfileState() {
         ioExecutor.execute(() -> {
             IProfileRepository.LocalProfile localProfile =
                     profileRepository.readLocalProfile();
@@ -74,9 +74,14 @@ public class PersonalInfoFragment extends Fragment {
                     return;
                 }
 
-                TextView tvAuthStatusValue = view.findViewById(R.id.tvAuthStatusValue);
-                TextView tvUsernameValue = view.findViewById(R.id.tvUsernameValue);
-                TextView tvEmailValue = view.findViewById(R.id.tvEmailValue);
+                View currentView = getView();
+                if (currentView == null) {
+                    return;
+                }
+
+                TextView tvAuthStatusValue = currentView.findViewById(R.id.tvAuthStatusValue);
+                TextView tvUsernameValue = currentView.findViewById(R.id.tvUsernameValue);
+                TextView tvEmailValue = currentView.findViewById(R.id.tvEmailValue);
 
                 tvAuthStatusValue.setText(isLoggedIn
                         ? R.string.logged_in_status
@@ -112,7 +117,7 @@ public class PersonalInfoFragment extends Fragment {
                     }
                     View currentView = getView();
                     if (currentView != null) {
-                        bindLocalProfileState(currentView);
+                        bindLocalProfileState();
                     }
                 });
             }

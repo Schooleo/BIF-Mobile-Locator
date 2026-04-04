@@ -17,7 +17,7 @@ public class FavoriteEntity {
     public String notes;
     public int rating;
     public String imagePath;
-    
+
     // Sync fields
     public String userId;
     public long serverVersion;

@@ -11,10 +11,10 @@ import androidx.work.Configuration;
 import com.cloudinary.android.MediaManager;
 import com.bif.app.core.auth.LocalSessionDataCleaner;
 import com.bif.app.core.utils.UserPreferences;
-import com.bif.app.data.sync.ImageUploadWorker;
-import com.bif.app.data.sync.StorageCleanupWorker;
-import com.bif.app.data.sync.SyncManager;
-import com.bif.app.data.sync.SyncWorker;
+import com.bif.app.data.sync.worker.ImageUploadWorker;
+import com.bif.app.data.sync.worker.StorageCleanupWorker;
+import com.bif.app.data.sync.core.SyncManager;
+import com.bif.app.data.sync.worker.SyncWorker;
 
 import javax.inject.Inject;
 

@@ -7,6 +7,9 @@ LOCAL_API_IP=10.0.2.2
 # Map style
 MAPLIBRE_STYLE_URL=https://demotiles.maplibre.org/style.json
 
+# Cloudinary
+CLOUDINARY_CLOUD_NAME=your-cloud-name
+
 # Optional overrides (uncomment if needed)
 # LOCAL_API_PORT=8080
 # LOCAL_API_PROTOCOL=http

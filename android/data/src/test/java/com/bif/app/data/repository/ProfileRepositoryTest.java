@@ -12,13 +12,13 @@ import static org.mockito.Mockito.when;
 import android.content.Context;
 
 import com.bif.app.core.utils.UserPreferences;
-import com.bif.app.data.source.local.AppDatabase;
-import com.bif.app.data.source.local.ProfileDao;
-import com.bif.app.data.source.local.SyncQueueDao;
+import com.bif.app.data.source.local.database.AppDatabase;
+import com.bif.app.data.source.local.dao.ProfileDao;
+import com.bif.app.data.source.local.dao.SyncQueueDao;
 import com.bif.app.data.source.local.entity.ProfileEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 import com.bif.app.data.source.local.entity.UploadStatus;
-import com.bif.app.data.sync.SyncManager;
+import com.bif.app.data.sync.core.SyncManager;
 import com.bif.app.domain.repository.IProfileRepository;
 
 import org.junit.Before;
@@ -276,3 +276,4 @@ public class ProfileRepositoryTest {
             }
             }
 }
+

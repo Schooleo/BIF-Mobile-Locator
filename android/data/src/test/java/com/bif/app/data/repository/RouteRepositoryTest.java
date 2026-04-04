@@ -17,7 +17,7 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.data.LiveDataTestUtil;
 import com.bif.app.data.routing.OfflineRoutingEngine;
-import com.bif.app.data.sync.NetworkMonitor;
+import com.bif.app.data.sync.core.NetworkMonitor;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.OfflineMapDownloadState;
 import com.bif.app.domain.model.Route;
@@ -144,3 +144,4 @@ public class RouteRepositoryTest {
         }
     }
 }
+

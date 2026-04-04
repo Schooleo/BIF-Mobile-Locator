@@ -6,7 +6,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.bif.app.core.network.dto.sync.SyncChangeDto;
-import com.bif.app.data.source.local.FavoriteDao;
+import com.bif.app.data.sync.handler.FavoriteSyncEntityHandler;
+import com.bif.app.data.source.local.dao.FavoriteDao;
 import com.bif.app.data.source.local.entity.FavoriteEntity;
 import com.google.gson.Gson;
 
@@ -65,4 +66,3 @@ public class FavoriteSyncEntityHandlerTest {
         verify(mockDao, never()).upsert(any(FavoriteEntity.class));
     }
 }
-

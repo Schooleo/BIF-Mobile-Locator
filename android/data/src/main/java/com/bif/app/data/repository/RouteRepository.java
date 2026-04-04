@@ -11,7 +11,7 @@ import com.bif.app.core.network.dto.route.RouteResponseDto;
 import com.bif.app.core.network.dto.route.RouteWaypointDto;
 import com.bif.app.core.utils.DistanceUtils;
 import com.bif.app.data.routing.OfflineRoutingEngine;
-import com.bif.app.data.sync.NetworkMonitor;
+import com.bif.app.data.sync.core.NetworkMonitor;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.OfflineMapDownloadState;
 import com.bif.app.domain.model.Route;
@@ -555,3 +555,4 @@ public class RouteRepository implements IRouteRepository {
         return points;
     }
 }
+

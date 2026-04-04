@@ -35,17 +35,17 @@ public class GroupEntity {
 
     @Ignore
     public GroupEntity(int id,
-                       String serverId,
-                       String name,
-                       String avatarLetter,
-                       int avatarColor,
-                       boolean isOwner,
-                       String ownerId,
-                       String memberIdsJson,
-                       String memberRolesJson,
-                       long serverVersion,
-                       boolean deleted,
-                       long lastSyncedAt) {
+            String serverId,
+            String name,
+            String avatarLetter,
+            int avatarColor,
+            boolean isOwner,
+            String ownerId,
+            String memberIdsJson,
+            String memberRolesJson,
+            long serverVersion,
+            boolean deleted,
+            long lastSyncedAt) {
         this.id = id;
         this.serverId = serverId;
         this.name = name;
@@ -60,34 +60,99 @@ public class GroupEntity {
         this.lastSyncedAt = lastSyncedAt;
     }
 
-    public int getId() { return id; }
-    public void setId(int id) { this.id = id; }
-    public String getServerId() { return serverId; }
-    public void setServerId(String serverId) { this.serverId = serverId; }
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
-    public String getAvatarLetter() { return avatarLetter; }
-    public void setAvatarLetter(String avatarLetter) { this.avatarLetter = avatarLetter; }
-    public int getAvatarColor() { return avatarColor; }
-    public void setAvatarColor(int avatarColor) { this.avatarColor = avatarColor; }
-    public boolean isOwner() { return isOwner; }
-    public void setOwner(boolean owner) { isOwner = owner; }
-    public String getOwnerId() { return ownerId; }
-    public void setOwnerId(String ownerId) { this.ownerId = ownerId; }
-    public String getMemberIdsJson() { return memberIdsJson; }
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public String getServerId() {
+        return serverId;
+    }
+
+    public void setServerId(String serverId) {
+        this.serverId = serverId;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getAvatarLetter() {
+        return avatarLetter;
+    }
+
+    public void setAvatarLetter(String avatarLetter) {
+        this.avatarLetter = avatarLetter;
+    }
+
+    public int getAvatarColor() {
+        return avatarColor;
+    }
+
+    public void setAvatarColor(int avatarColor) {
+        this.avatarColor = avatarColor;
+    }
+
+    public boolean isOwner() {
+        return isOwner;
+    }
+
+    public void setOwner(boolean owner) {
+        isOwner = owner;
+    }
+
+    public String getOwnerId() {
+        return ownerId;
+    }
+
+    public void setOwnerId(String ownerId) {
+        this.ownerId = ownerId;
+    }
+
+    public String getMemberIdsJson() {
+        return memberIdsJson;
+    }
+
     public void setMemberIdsJson(String memberIdsJson) {
         this.memberIdsJson = memberIdsJson;
     }
-    public String getMemberRolesJson() { return memberRolesJson; }
+
+    public String getMemberRolesJson() {
+        return memberRolesJson;
+    }
+
     public void setMemberRolesJson(String memberRolesJson) {
         this.memberRolesJson = memberRolesJson;
     }
-    public long getServerVersion() { return serverVersion; }
+
+    public long getServerVersion() {
+        return serverVersion;
+    }
+
     public void setServerVersion(long serverVersion) {
         this.serverVersion = serverVersion;
     }
-    public boolean isDeleted() { return deleted; }
-    public void setDeleted(boolean deleted) { this.deleted = deleted; }
-    public long getLastSyncedAt() { return lastSyncedAt; }
-    public void setLastSyncedAt(long lastSyncedAt) { this.lastSyncedAt = lastSyncedAt; }
+
+    public boolean isDeleted() {
+        return deleted;
+    }
+
+    public void setDeleted(boolean deleted) {
+        this.deleted = deleted;
+    }
+
+    public long getLastSyncedAt() {
+        return lastSyncedAt;
+    }
+
+    public void setLastSyncedAt(long lastSyncedAt) {
+        this.lastSyncedAt = lastSyncedAt;
+    }
 }

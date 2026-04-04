@@ -1,8 +1,8 @@
-package com.bif.app.data.sync;
+package com.bif.app.data.sync.worker;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -15,8 +15,9 @@ import androidx.work.WorkerParameters;
 
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.media.UploadSignatureResponseDto;
-import com.bif.app.data.source.local.ProfileDao;
-import com.bif.app.data.source.local.TripDao;
+import com.bif.app.data.sync.core.SyncManager;
+import com.bif.app.data.source.local.dao.ProfileDao;
+import com.bif.app.data.source.local.dao.TripDao;
 import com.bif.app.data.source.local.entity.ProfileEntity;
 import com.bif.app.data.source.local.entity.UploadStatus;
 
@@ -69,8 +70,7 @@ public class ImageUploadWorkerTest {
         signature.publicId = "   ";
 
         @SuppressWarnings("unchecked")
-        Call<UploadSignatureResponseDto> signatureCall =
-                (Call<UploadSignatureResponseDto>) mock(Call.class);
+        Call<UploadSignatureResponseDto> signatureCall = (Call<UploadSignatureResponseDto>) mock(Call.class);
 
         when(profileDao.getFirstPendingUpload()).thenReturn(pending);
         when(restApiService.getUploadSignature("avatar", null)).thenReturn(signatureCall);
@@ -112,12 +112,10 @@ public class ImageUploadWorkerTest {
         missingPublicId.folder = "folder";
         missingPublicId.publicId = " ";
 
-        try {
-            worker.buildUploadOptions(missingPublicId);
-            fail("Expected IllegalArgumentException for missing publicId");
-        } catch (IllegalArgumentException expected) {
-            assertTrue(expected.getMessage().contains("publicId"));
-        }
+        IllegalArgumentException expected = assertThrows(
+                IllegalArgumentException.class,
+                () -> worker.buildUploadOptions(missingPublicId));
+        assertTrue(expected.getMessage().contains("publicId"));
 
         UploadSignatureResponseDto valid = new UploadSignatureResponseDto();
         valid.signature = "sig2";
@@ -131,5 +129,16 @@ public class ImageUploadWorkerTest {
         assertEquals("server-signed-id", options.get("public_id"));
         assertEquals("bif/avatar", options.get("folder"));
         assertEquals("sig2", options.get("signature"));
+
+        UploadSignatureResponseDto missingFolder = new UploadSignatureResponseDto();
+        missingFolder.signature = "sig3";
+        missingFolder.timestamp = 789L;
+        missingFolder.apiKey = "api3";
+        missingFolder.publicId = "server-id";
+
+        IllegalArgumentException missingFolderEx = assertThrows(
+                IllegalArgumentException.class,
+                () -> worker.buildUploadOptions(missingFolder));
+        assertTrue(missingFolderEx.getMessage().contains("folder"));
     }
 }
