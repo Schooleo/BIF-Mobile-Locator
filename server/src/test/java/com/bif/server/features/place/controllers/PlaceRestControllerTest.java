@@ -1,7 +1,6 @@
 package com.bif.server.features.place.controllers;
 
 import com.bif.server.features.place.models.Place;
-import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.services.PlaceService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -112,18 +111,6 @@ class PlaceRestControllerTest {
 
         assertSame(input, result);
         verify(placeService).saveFromSearch(input);
-    }
-
-    @Test
-    void addReview_DelegatesToService() {
-        Place place = new Place();
-        PlaceReview review = new PlaceReview();
-        when(placeService.addReview("p1", review)).thenReturn(place);
-
-        Place result = controller.addReview("p1", review);
-
-        assertSame(place, result);
-        verify(placeService).addReview("p1", review);
     }
 
     @Test

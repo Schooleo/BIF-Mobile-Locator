@@ -1,7 +1,6 @@
 package com.bif.server.features.place.controllers;
 
 import com.bif.server.features.place.models.Place;
-import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.services.PlaceService;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -51,12 +50,6 @@ public class PlaceGraphqlController {
     @MutationMapping
     public Place saveFromSearch(@Argument Place input) {
         return placeService.saveFromSearch(input);
-    }
-
-    @MutationMapping
-    public Place addPlaceReview(@Argument String placeId,
-                                @Argument PlaceReview input) {
-        return placeService.addReview(placeId, input);
     }
 
     @MutationMapping

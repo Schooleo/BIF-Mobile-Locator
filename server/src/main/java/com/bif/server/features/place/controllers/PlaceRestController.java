@@ -1,7 +1,6 @@
 package com.bif.server.features.place.controllers;
 
 import com.bif.server.features.place.models.Place;
-import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.services.PlaceService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -52,12 +51,6 @@ public class PlaceRestController {
     @PostMapping("/from-search")
     public Place saveFromSearch(@RequestBody Place place) {
         return placeService.saveFromSearch(place);
-    }
-
-    @PostMapping("/{id}/reviews")
-    public Place addReview(@PathVariable String id,
-                           @RequestBody PlaceReview review) {
-        return placeService.addReview(id, review);
     }
 
     @DeleteMapping("/{id}")
