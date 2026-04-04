@@ -23,6 +23,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
+import android.widget.RatingBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -152,6 +153,15 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private MaterialButton btnCancelRoute;
     private MaterialButton btnFollowRoute;
     private ImageButton btnMapCompass;
+    
+    // Review and rating related views
+    private RecyclerView rvReviews;
+    private com.facebook.shimmer.ShimmerFrameLayout shimmerReviews;
+    private com.google.android.material.chip.ChipGroup chipGroupFilters;
+    private ReviewAdapter reviewAdapter;
+    private List<ReviewItem> allReviews = new ArrayList<>();
+    private androidx.recyclerview.widget.LinearSnapHelper snapHelper;
+    
     private final MapLibreMap.OnCameraMoveListener onCameraMoveListener = this::updateCompassButtonVisibility;
     private final MapLibreMap.OnCameraIdleListener onCameraIdleListener = this::updateCompassButtonVisibility;
     private MapViewModel viewModel;
@@ -2114,21 +2124,28 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         viewModel.cacheViewedPlace(place);
         showPlaceSheetOnly();
 
+        // Bind basic place details
         TextView tvName = root.findViewById(R.id.tv_place_name);
         TextView tvAddress = root.findViewById(R.id.tv_place_address);
-        TextView tvRating = root.findViewById(R.id.tv_place_rating);
+        TextView tvRatingValue = root.findViewById(R.id.tv_rating_value);
+        RatingBar rbPlaceRating = root.findViewById(R.id.rb_place_rating);
+        TextView tvRatingCount = root.findViewById(R.id.tv_rating_count);
         ImageButton btnAddFavorite = root.findViewById(R.id.btn_add_favorite);
         MaterialButton btnSharePlace = root.findViewById(R.id.btn_share_place);
         MaterialButton btnRoutePlace = root.findViewById(R.id.btn_navigate_place);
 
         tvName.setText(place.name);
         tvAddress.setText(place.address);
+        
+        // Update rating summary
         if (place.rating > 0) {
-            tvRating.setText(String.format(Locale.getDefault(), "* %.1f",
-                    place.rating));
+            tvRatingValue.setText(String.format(Locale.getDefault(), "%.1f", place.rating));
+            rbPlaceRating.setRating((float) place.rating);
         } else {
-            tvRating.setText(R.string.default_rating);
+            tvRatingValue.setText("0");
+            rbPlaceRating.setRating(0);
         }
+        tvRatingCount.setText("0 reviews"); // Update this when data is fetched
 
         btnAddFavorite.setEnabled(true);
         btnSharePlace.setEnabled(true);
@@ -2153,15 +2170,139 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         btnRoutePlace.setOnClickListener(v -> routeToPlace(place));
         btnSharePlace.setOnClickListener(v -> showShareToGroupDialog(place));
 
-        View layoutExtendedDetails = root.findViewById(R.id.layout_extended_details);
+        // Setup Reviews RecyclerView and Adapter
+        setupReviewsRecyclerView(root);
+        
+        // Setup Chip filters
+        setupChipFilters(root);
+
+        // Load reviews (simulated - replace with actual API call)
+        loadReviewsData();
+
         View layoutContainer = root.findViewById(R.id.layout_container);
-        layoutExtendedDetails.post(() -> {
-            int dynamicPeekHeight = layoutExtendedDetails.getTop()
-                    + layoutContainer.getPaddingBottom()
-                    - layoutContainer.getPaddingTop();
+        layoutContainer.post(() -> {
+            int dynamicPeekHeight = layoutContainer.getHeight() / 2;
             bottomSheetBehavior.setPeekHeight(dynamicPeekHeight);
             bottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
         });
+    }
+
+    private void setupReviewsRecyclerView(View root) {
+        rvReviews = root.findViewById(R.id.rv_reviews);
+        shimmerReviews = root.findViewById(R.id.shimmer_reviews);
+        
+        if (rvReviews == null) {
+            return;
+        }
+
+        // Initialize adapter
+        if (reviewAdapter == null) {
+            reviewAdapter = new ReviewAdapter();
+        }
+        rvReviews.setAdapter(reviewAdapter);
+
+        // Setup LinearLayoutManager for horizontal carousel
+        LinearLayoutManager layoutManager = new LinearLayoutManager(
+                requireContext(), 
+                LinearLayoutManager.HORIZONTAL, 
+                false);
+        rvReviews.setLayoutManager(layoutManager);
+
+        // Attach LinearSnapHelper for carousel snapping
+        if (snapHelper == null) {
+            snapHelper = new androidx.recyclerview.widget.LinearSnapHelper();
+            snapHelper.attachToRecyclerView(rvReviews);
+        }
+
+        // Set item width to 85% of screen width
+        int screenWidth = requireActivity().getResources().getDisplayMetrics().widthPixels;
+        int itemWidth = (int) (screenWidth * 0.85f);
+        rvReviews.addItemDecoration(new RecyclerView.ItemDecoration() {
+            @Override
+            public void getItemOffsets(@NonNull android.graphics.Rect outRect, @NonNull View view, 
+                    @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+                ViewGroup.LayoutParams lp = view.getLayoutParams();
+                if (lp instanceof ViewGroup.MarginLayoutParams) {
+                    ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
+                    mlp.width = itemWidth;
+                }
+            }
+        });
+    }
+
+    private void setupChipFilters(View root) {
+        chipGroupFilters = root.findViewById(R.id.chip_group_filters);
+        if (chipGroupFilters == null) {
+            return;
+        }
+
+        // Setup chip click listeners
+        chipGroupFilters.setOnCheckedStateChangeListener((group, checkedIds) -> {
+            if (checkedIds.isEmpty()) {
+                // All reviews
+                reviewAdapter.showAllReviews(allReviews);
+            } else {
+                int selectedChipId = checkedIds.get(0);
+                int starRating = 0;
+
+                if (selectedChipId == R.id.chip_filter_5) {
+                    starRating = 5;
+                } else if (selectedChipId == R.id.chip_filter_4) {
+                    starRating = 4;
+                } else if (selectedChipId == R.id.chip_filter_3) {
+                    starRating = 3;
+                } else if (selectedChipId == R.id.chip_filter_2) {
+                    starRating = 2;
+                } else if (selectedChipId == R.id.chip_filter_1) {
+                    starRating = 1;
+                }
+
+                reviewAdapter.filterByStarRating(allReviews, starRating);
+            }
+        });
+    }
+
+    private void loadReviewsData() {
+        // Mock data - replace with actual API call to fetch reviews
+        allReviews.clear();
+        
+        // Always add "Add Review" card at position 0
+        allReviews.add(new ReviewItem());
+
+        // Add sample reviews for demonstration
+        com.bif.app.core.network.dto.place.PlaceReviewDto review1 = 
+            new com.bif.app.core.network.dto.place.PlaceReviewDto();
+        review1.userId = "user123";
+        review1.userName = "John Doe";
+        review1.rating = 5;
+        review1.comment = "Amazing place! Great atmosphere and friendly staff.";
+        allReviews.add(new ReviewItem(ReviewItem.VIEW_TYPE_OTHERS, review1, false));
+
+        com.bif.app.core.network.dto.place.PlaceReviewDto review2 = 
+            new com.bif.app.core.network.dto.place.PlaceReviewDto();
+        review2.userId = "user456";
+        review2.userName = "Jane Smith";
+        review2.rating = 4;
+        review2.comment = "Good food and nice service. Will come back!";
+        allReviews.add(new ReviewItem(ReviewItem.VIEW_TYPE_OTHERS, review2, false));
+
+        // Update review count in UI
+        TextView tvRatingCount = placeDetailSheet.findViewById(R.id.tv_rating_count);
+        if (tvRatingCount != null && allReviews.size() > 1) {
+            tvRatingCount.setText(String.format(Locale.getDefault(), "%d reviews", allReviews.size() - 1));
+        }
+
+        // Stop shimmer and show reviews
+        if (shimmerReviews != null) {
+            shimmerReviews.stopShimmer();
+            shimmerReviews.setVisibility(View.GONE);
+        }
+        if (rvReviews != null) {
+            rvReviews.setVisibility(View.VISIBLE);
+        }
+
+        // Submit list to adapter
+        reviewAdapter.submitList(new ArrayList<>(allReviews));
     }
 
     private Favorite findFavoriteForPlace(Place place) {
