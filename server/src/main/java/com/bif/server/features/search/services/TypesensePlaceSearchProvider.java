@@ -58,6 +58,10 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
 
     @Override
     public List<Place> search(String query) {
+        return search(query, "name,address", 20);
+    }
+
+    public List<Place> search(String query, String queryBy, int perPage) {
         if (query == null || query.isBlank()) {
             return Collections.emptyList();
         }
@@ -75,7 +79,7 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(buildSearchUri(query))
+                    .uri(buildSearchUri(query, queryBy, perPage))
                     .timeout(Duration.ofMillis(
                             typesenseProperties.getReadTimeoutMs()))
                     .header("X-TYPESENSE-API-KEY", typesenseProperties.getApiKey())
@@ -102,19 +106,27 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
     }
 
     private URI buildSearchUri(String query) {
+        return buildSearchUri(query, "name,address", 20);
+    }
+
+    private URI buildSearchUri(String query, String queryBy, int perPage) {
         String protocol = safe(typesenseProperties.getProtocol(), "http");
         String host = safe(typesenseProperties.getHost(), "localhost");
         int port = typesenseProperties.getPort();
         String collection = encode(safe(typesenseProperties.getPlacesCollection(), "places"));
         String encodedQuery = encode(query);
+        String encodedQueryBy = encode(safe(queryBy, "name,address"));
+        int resolvedPerPage = perPage > 0 ? perPage : 20;
 
         String uri = String.format(
-                "%s://%s:%d/collections/%s/documents/search?q=%s&query_by=name,address&per_page=20",
+                "%s://%s:%d/collections/%s/documents/search?q=%s&query_by=%s&per_page=%d",
                 protocol,
                 host,
                 port,
                 collection,
-                encodedQuery
+                encodedQuery,
+                encodedQueryBy,
+                resolvedPerPage
         );
         return URI.create(uri);
     }
