@@ -44,6 +44,8 @@ type Mutation {
   removeTripStop(tripId: ID!, orderIndex: Int!): TripPlan
   rearrangeTripStops(tripId: ID!, stops: [TripStopInput!]!): TripPlan
   deleteTripPlan(id: ID!): Boolean!
+  suggestPlacesFromQuery(query: String!): AiPlaceSuggestionResult!
+  draftTripFromQuery(query: String!): AiTripDraftResult!
   sync(input: SyncRequestInput!): SyncResponse!
 }
 
@@ -131,6 +133,47 @@ type TripStop {
   arrivalTime: String
   departureTime: String
   orderIndex: Int
+}
+
+type AiPlaceSuggestionResult {
+  places: [Place!]!
+  extractedKeywords: [String!]!
+  category: String
+  vibe: String
+  warnings: [String!]!
+  failureCode: AiFailureCode
+}
+
+type AiTripDraftResult {
+  draft: AiTripDraft
+  candidatePlaces: [Place!]!
+  warnings: [String!]!
+  failureCode: AiFailureCode
+}
+
+type AiTripDraft {
+  title: String
+  summary: String
+  stops: [AiTripDraftStop!]!
+}
+
+type AiTripDraftStop {
+  placeId: ID!
+  place: Place!
+  durationMinutes: Int!
+  note: String
+}
+
+enum AiFailureCode {
+  UNAUTHORIZED
+  RATE_LIMITED
+  INVALID_QUERY
+  NO_RESULTS
+  NO_CANDIDATE_PLACES
+  AI_PARSE_FAILURE
+  AI_VALIDATION_FAILURE
+  AI_UPSTREAM_FAILURE
+  AI_FAILURE
 }
 
 type Location {

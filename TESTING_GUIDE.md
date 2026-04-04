@@ -132,6 +132,39 @@ start app/build/reports/tests/testDebugUnitTest/index.html
   start server/build/reports/jacoco/test/html/index.html
   ```
 
+### Live AI Smoke Verification
+
+Use this only when Docker services are running and you want end-to-end proof for the Ollama + Typesense AI flow.
+
+This smoke path is optional and is not part of the default server unit-test flow.
+
+Prerequisites:
+- In `.env`, set:
+  - `PLACE_SEARCH_PROVIDER=typesense`
+  - `TYPESENSE_ENABLED=true`
+  - `TYPESENSE_BOOTSTRAP_REINDEX_ON_STARTUP=true`
+- Start services:
+  ```bash
+  make up PROFILES="ollama typesense"
+  ```
+- Wait for the server, Ollama, and Typesense to become healthy.
+
+Run the smoke path:
+```bash
+make ai-smoke
+```
+
+The smoke test registers a fresh temporary user through `/api/auth/register`, then uses the returned bearer token for authenticated AI GraphQL calls.
+
+Optional overrides:
+- `AI_LIVE_SMOKE_BASE_URL`
+- `AI_LIVE_SMOKE_PASSWORD`
+
+What the smoke path proves:
+- unauthorized AI GraphQL access fails with `UNAUTHORIZED`
+- authenticated `suggestPlacesFromQuery` succeeds
+- authenticated `draftTripFromQuery` succeeds
+
 ---
 
 ## 4. CI/CD Integration

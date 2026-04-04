@@ -26,6 +26,31 @@ The project is built in Java end-to-end and is organized for scalability, testin
 - **Dual API surface** on backend: REST for straightforward CRUD and GraphQL for nested sync-friendly payloads.
 - **Comprehensive validation pipeline**: security scanning, linting, testing, checkstyle, and coverage gates.
 
+## AI Features
+
+The server includes an AI-assisted place suggestion and trip drafting flow under `server/src/main/java/com/bif/server/features/ai/`.
+
+### Current AI capabilities
+
+- **Structured place-query extraction** from natural language into `keywords`, `category`, and `vibe`
+- **Grounded place suggestions** that only return server-known `Place` entities
+- **Preview trip drafting** that only uses validated candidate `placeId` values from the grounded place pool
+- **Typed GraphQL wrapper responses** with warnings and explicit failure codes
+
+### AI hardening in place
+
+- **Schema-constrained generation** at the Ollama client and agent layer
+- **Post-generation validation** for stop count, duration bounds, total duration, unique `placeId` usage, and candidate membership
+- **AI request guardrails** for unauthorized and rate-limited requests
+- **Defensive transport handling** for malformed, empty, or error-bearing upstream Ollama payloads
+
+### Current AI GraphQL contract
+
+- `suggestPlacesFromQuery(query: String!): AiPlaceSuggestionResult!`
+- `draftTripFromQuery(query: String!): AiTripDraftResult!`
+
+Clients should always inspect `failureCode` and `warnings` before trusting the payload body.
+
 ## Technology Stack
 
 ### Android Application
@@ -48,7 +73,7 @@ The project is built in Java end-to-end and is organized for scalability, testin
 
 - **Framework**: Spring Boot 4.x
 - **Language**: Java (toolchain JDK 21)
-- **Build**: Gradle
+- **Build**: Gradle wrapper `9.3.1`
 - **Data Store**: MongoDB
 - **APIs**:
   - Spring Web (REST)
@@ -60,6 +85,7 @@ The project is built in Java end-to-end and is organized for scalability, testin
 
 ```text
 BIF-Mobile-App/
+├── .github/workflows/       # CI/CD and security automation
 ├── android/
 │   ├── app/                 # App shell, navigation, DI bootstrap
 │   ├── core/                # Shared utils, network, common UI resources
@@ -72,26 +98,35 @@ BIF-Mobile-App/
 │   │   ├── profile/
 │   │   └── social/
 │   └── config/checkstyle/
+├── init-scripts/             # Local map/routing/bootstrap helpers
+├── map-data/                 # Generated map, routing, and place seed artifacts
 ├── server/
 │   ├── src/main/java/com/bif/server/
 │   │   ├── common/           # Shared config/models (sync metadata, mongo config)
 │   │   └── features/
-│   │       ├── user/
-│   │       ├── group/
-│   │       ├── place/
-│   │       ├── favorite/
+│   │       ├── ai/
+│   │       ├── auth/
 │   │       ├── chat/
+│   │       ├── favorite/
+│   │       ├── friendship/
+│   │       ├── group/
+│   │       ├── map/
+│   │       ├── place/
+│   │       ├── route/
+│   │       ├── search/
+│   │       ├── sync/
 │   │       ├── trip/
-│   │       └── sync/
-│   ├── src/main/resources/graphql/
+│   │       └── user/
+│   ├── src/main/resources/
+│   │   ├── application.properties
+│   │   └── graphql/
 │   ├── src/test/             # Service and controller unit tests
+│   ├── gradle/wrapper/       # Server Gradle wrapper config
+│   ├── build.gradle
 │   └── Dockerfile
-└── .github/workflows/
-    ├── android-ci.yml
-    ├── android-cd.yml
-    ├── server-ci.yml
-    ├── server-cd.yml
-    └── security.yml
+├── Makefile                  # Local infrastructure shortcuts
+├── TESTING_GUIDE.md
+└── README.md
 ```
 
 ## CI/CD Pipeline
@@ -127,7 +162,7 @@ This project uses split CI and CD workflows with security as a prerequisite.
 1. **Clone the repository**:
 
     ```bash
-    git clone https://github.com/Schooleo/bif-mobile-locator.git
+    git clone https://github.com/Schooleo/bif-mobile-app.git
     ```
 
 2. **Android app setup**:
@@ -172,6 +207,15 @@ This project uses split CI and CD workflows with security as a prerequisite.
   make up-debug PROFILES="db ai logs"
   ```
 
+- Useful lifecycle shortcuts:
+
+  ```bash
+  make down          # stop and remove core services only
+  make down-all      # stop and remove all containers
+  make restart       # restart all non-debug containers
+  make restart-debug # restart all debug containers
+  ```
+
 1. **Initialize routing/place map data (OSRM + Overture)**:
 
   ```bash
@@ -211,6 +255,28 @@ This project uses split CI and CD workflows with security as a prerequisite.
     cd ../server
     ./gradlew test jacocoTestReport jacocoTestCoverageVerification
     ```
+
+## AI Local Verification
+
+Use the AI smoke path only when local AI/search infrastructure is intentionally running.
+
+### Recommended setup
+
+```bash
+make up PROFILES="ollama typesense"
+```
+
+### Optional smoke verification
+
+```bash
+make ai-smoke
+```
+
+### Notes
+
+- The AI smoke path is **opt-in** and is not part of the default server unit-test flow.
+- Default smoke credentials come from seeded dev bootstrap data or a freshly registered user during manual testing.
+- Smaller local models can be used for device-constrained development, but final integration should still be validated separately against the production-target model before release.
 
 ## Credits & Attribution
 
