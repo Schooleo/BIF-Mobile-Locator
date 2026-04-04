@@ -5,6 +5,7 @@ public class ProfileDto {
     public String displayName;
     public String email;
     public String avatarLetter;
+    public String avatarUrl;
     public int avatarColor;
     public long serverVersion;
     public long updatedAt;

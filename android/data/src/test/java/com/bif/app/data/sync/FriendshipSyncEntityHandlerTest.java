@@ -3,8 +3,9 @@ package com.bif.app.data.sync;
 import static org.mockito.Mockito.verify;
 
 import com.bif.app.core.network.dto.sync.SyncChangeDto;
-import com.bif.app.data.source.local.FriendDao;
-import com.bif.app.data.source.local.FriendshipDao;
+import com.bif.app.data.sync.handler.FriendshipSyncEntityHandler;
+import com.bif.app.data.source.local.dao.FriendDao;
+import com.bif.app.data.source.local.dao.FriendshipDao;
 import com.bif.app.data.source.local.entity.FriendEntity;
 import com.bif.app.data.source.local.entity.FriendshipEntity;
 import com.bif.app.data.source.local.entity.FriendshipStatus;

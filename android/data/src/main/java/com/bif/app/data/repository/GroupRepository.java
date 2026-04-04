@@ -14,10 +14,10 @@ import com.bif.app.core.network.dto.group.UpdateGroupRequestDto;
 import com.bif.app.core.network.dto.group.UpdateMemberRoleRequestDto;
 import com.bif.app.core.network.dto.user.UserApiModel;
 import com.bif.app.data.mapper.GroupMapper;
-import com.bif.app.data.sync.NetworkMonitor;
-import com.bif.app.data.sync.SyncManager;
-import com.bif.app.data.source.local.FriendDao;
-import com.bif.app.data.source.local.GroupDao;
+import com.bif.app.data.sync.core.NetworkMonitor;
+import com.bif.app.data.sync.core.SyncManager;
+import com.bif.app.data.source.local.dao.FriendDao;
+import com.bif.app.data.source.local.dao.GroupDao;
 import com.bif.app.data.source.local.entity.FriendEntity;
 import com.bif.app.data.source.local.entity.GroupEntity;
 import com.bif.app.data.source.local.entity.GroupFriendCrossRef;
@@ -27,11 +27,11 @@ import com.bif.app.domain.repository.IGroupRepository;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.lang.reflect.Type;
 import java.util.concurrent.ExecutorService;
@@ -66,10 +66,10 @@ public class GroupRepository implements IGroupRepository {
 
     @Inject
     public GroupRepository(RestApiService restApiService,
-                           GroupDao groupDao,
-                           SyncManager syncManager,
-                           NetworkMonitor networkMonitor,
-                           FriendDao friendDao) {
+            GroupDao groupDao,
+            SyncManager syncManager,
+            NetworkMonitor networkMonitor,
+            FriendDao friendDao) {
         this.restApiService = restApiService;
         this.syncManager = syncManager;
         this.networkMonitor = networkMonitor;
@@ -168,8 +168,7 @@ public class GroupRepository implements IGroupRepository {
     public void addMember(int groupId, int friendId) {
         if (!useApi) {
             executorService.execute(() -> groupDao.insertGroupFriendCrossRefs(
-                    Collections.singletonList(new GroupFriendCrossRef(groupId, friendId))
-            ));
+                    Collections.singletonList(new GroupFriendCrossRef(groupId, friendId))));
             return;
         }
 
@@ -368,10 +367,9 @@ public class GroupRepository implements IGroupRepository {
                 GroupEntity newGroup = new GroupEntity(
                         0,
                         name,
-                        name.substring(0, 1).toUpperCase(),
+                        name.substring(0, 1).toUpperCase(Locale.ROOT),
                         0xFF03DAC5,
-                        true
-                );
+                        true);
 
                 long newGroupId = groupDao.insertGroup(newGroup);
 
@@ -473,7 +471,7 @@ public class GroupRepository implements IGroupRepository {
         }
         deleteGroupByServerId(group);
     }
-    
+
     @Override
     public void refreshGroups() {
         refreshGroupsAsync();
@@ -568,8 +566,7 @@ public class GroupRepository implements IGroupRepository {
                     gson.toJson(apiGroup.memberRoles != null ? apiGroup.memberRoles : Collections.emptyMap()),
                     0L,
                     false,
-                    now
-            );
+                    now);
             replacement.add(entity);
         }
 
@@ -631,8 +628,7 @@ public class GroupRepository implements IGroupRepository {
                         friendName,
                         avatarLetter,
                         avatarColor,
-                        isOnline
-                ));
+                        isOnline));
 
                 String role = normalizeRole(rolesByServerId.get(memberId));
                 if (memberId.equals(entity.getOwnerId())) {
@@ -649,8 +645,7 @@ public class GroupRepository implements IGroupRepository {
                     entity.getAvatarColor(),
                     members,
                     entity.isOwner(),
-                    memberRoles
-            ));
+                    memberRoles));
         }
 
         return cachedGroups;
@@ -661,7 +656,8 @@ public class GroupRepository implements IGroupRepository {
             return Collections.emptyList();
         }
         try {
-            Type listType = new TypeToken<List<String>>() { }.getType();
+            Type listType = new TypeToken<List<String>>() {
+            }.getType();
             List<String> parsed = gson.fromJson(json, listType);
             return parsed != null ? parsed : Collections.emptyList();
         } catch (Exception ignored) {
@@ -674,7 +670,8 @@ public class GroupRepository implements IGroupRepository {
             return Collections.emptyMap();
         }
         try {
-            Type mapType = new TypeToken<Map<String, String>>() { }.getType();
+            Type mapType = new TypeToken<Map<String, String>>() {
+            }.getType();
             Map<String, String> parsed = gson.fromJson(json, mapType);
             return parsed != null ? parsed : Collections.emptyMap();
         } catch (Exception ignored) {
@@ -733,8 +730,7 @@ public class GroupRepository implements IGroupRepository {
                                         ? user.avatarLetter
                                         : safeAvatarLetter(user.name != null ? user.name : user.id),
                                 user.avatarColor,
-                                user.isOnline
-                        ));
+                                user.isOnline));
                     } else {
                         members.add(new Friend(
                                 memberLocalId,
@@ -742,8 +738,7 @@ public class GroupRepository implements IGroupRepository {
                                 memberId,
                                 safeAvatarLetter(memberId),
                                 0xFF03DAC5,
-                                false
-                        ));
+                                false));
                     }
 
                     String role = "MEMBER";
@@ -765,8 +760,7 @@ public class GroupRepository implements IGroupRepository {
                     apiGroup.avatarColor,
                     members,
                     actorId.equals(apiGroup.ownerId),
-                    memberRoles
-            ));
+                    memberRoles));
         }
         return result;
     }
@@ -775,7 +769,7 @@ public class GroupRepository implements IGroupRepository {
         if (isBlank(role)) {
             return "MEMBER";
         }
-        String normalized = role.trim().toUpperCase();
+        String normalized = role.trim().toUpperCase(Locale.ROOT);
         if ("ADMIN".equals(normalized)) {
             return "ADMIN";
         }
@@ -888,8 +882,8 @@ public class GroupRepository implements IGroupRepository {
 
     private String resolveActorId() {
         try {
-            Response<com.bif.app.core.network.dto.auth.AuthStateResponse> response =
-                    restApiService.getAuthState().execute();
+            Response<com.bif.app.core.network.dto.auth.AuthStateResponse> response = restApiService.getAuthState()
+                    .execute();
             if (!response.isSuccessful() || response.body() == null || !response.body().authenticated) {
                 return null;
             }
@@ -927,7 +921,7 @@ public class GroupRepository implements IGroupRepository {
         if (isBlank(value)) {
             return "G";
         }
-        return String.valueOf(value.trim().charAt(0)).toUpperCase();
+        return String.valueOf(value.trim().charAt(0)).toUpperCase(Locale.ROOT);
     }
 
     private boolean isBlank(String value) {
@@ -941,7 +935,7 @@ public class GroupRepository implements IGroupRepository {
     }
 
     private void enqueueGroupChange(String operation, String entityId,
-                                    Object payload) {
+            Object payload) {
         if (syncManager == null) {
             return;
         }

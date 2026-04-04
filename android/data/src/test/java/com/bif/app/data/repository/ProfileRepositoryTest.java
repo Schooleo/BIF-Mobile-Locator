@@ -12,12 +12,13 @@ import static org.mockito.Mockito.when;
 import android.content.Context;
 
 import com.bif.app.core.utils.UserPreferences;
-import com.bif.app.data.source.local.AppDatabase;
-import com.bif.app.data.source.local.ProfileDao;
-import com.bif.app.data.source.local.SyncQueueDao;
+import com.bif.app.data.source.local.database.AppDatabase;
+import com.bif.app.data.source.local.dao.ProfileDao;
+import com.bif.app.data.source.local.dao.SyncQueueDao;
 import com.bif.app.data.source.local.entity.ProfileEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
-import com.bif.app.data.sync.SyncManager;
+import com.bif.app.data.source.local.entity.UploadStatus;
+import com.bif.app.data.sync.core.SyncManager;
 import com.bif.app.domain.repository.IProfileRepository;
 
 import org.junit.Before;
@@ -208,4 +209,71 @@ public class ProfileRepositoryTest {
             assertFalse(failure[0]);
         }
     }
+
+            @Test
+            public void readLocalProfile_whenDaoThrowsMainThreadException_fallsBackToPreferences() {
+            when(profileDao.getByUserId("user-123"))
+                .thenThrow(new IllegalStateException("main thread query"));
+
+            try (MockedStatic<UserPreferences> prefs = org.mockito.Mockito
+                .mockStatic(UserPreferences.class)) {
+                prefs.when(() -> UserPreferences.getUserId(context))
+                    .thenReturn("user-123");
+                prefs.when(() -> UserPreferences.isLoggedIn(context))
+                    .thenReturn(true);
+                prefs.when(() -> UserPreferences.getUsername(context))
+                    .thenReturn("pref-user");
+                prefs.when(() -> UserPreferences.getEmail(context))
+                    .thenReturn("pref@bif.com");
+                prefs.when(() -> UserPreferences.getAvatarUri(context))
+                    .thenReturn("pref-avatar");
+
+                ProfileRepository repository = new ProfileRepository(context,
+                    profileDao, syncQueueDao, appDatabase,
+                    syncManager, executorService);
+
+                IProfileRepository.LocalProfile profile = repository.readLocalProfile();
+                assertTrue(profile.isLoggedIn);
+                assertEquals("pref-user", profile.username);
+                assertEquals("pref@bif.com", profile.email);
+                assertEquals("pref-avatar", profile.avatarUri);
+            }
+            }
+
+            @Test
+            public void readLocalProfile_prefersPendingLocalAvatarOverRemoteUrl() {
+            ProfileEntity entity = new ProfileEntity();
+            entity.userId = "user-123";
+            entity.displayName = "Alice";
+            entity.email = "alice@bif.com";
+            entity.avatarUrl = "https://cdn.example/avatar.jpg";
+            entity.localImagePath = "/data/user/0/com.bif.app/files/image-staging/avatar-1.jpg";
+            entity.uploadStatus = UploadStatus.PENDING;
+
+            when(profileDao.getByUserId("user-123")).thenReturn(entity);
+
+            try (MockedStatic<UserPreferences> prefs = org.mockito.Mockito
+                .mockStatic(UserPreferences.class)) {
+                prefs.when(() -> UserPreferences.getUserId(context))
+                    .thenReturn("user-123");
+                prefs.when(() -> UserPreferences.isLoggedIn(context))
+                    .thenReturn(true);
+                prefs.when(() -> UserPreferences.getUsername(context))
+                    .thenReturn("pref-user");
+                prefs.when(() -> UserPreferences.getEmail(context))
+                    .thenReturn("pref@bif.com");
+                prefs.when(() -> UserPreferences.getAvatarUri(context))
+                    .thenReturn("pref-avatar");
+
+                ProfileRepository repository = new ProfileRepository(context,
+                    profileDao, syncQueueDao, appDatabase,
+                    syncManager, executorService);
+
+                IProfileRepository.LocalProfile profile = repository.readLocalProfile();
+                assertEquals("Alice", profile.username);
+                assertEquals("alice@bif.com", profile.email);
+                assertEquals(entity.localImagePath, profile.avatarUri);
+            }
+            }
 }
+

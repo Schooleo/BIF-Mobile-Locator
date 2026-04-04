@@ -13,10 +13,10 @@ import com.bif.app.core.network.dto.chat.ChatMessageDto;
 import com.bif.app.core.network.dto.user.UserApiModel;
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.ChatMapper;
-import com.bif.app.data.sync.NetworkMonitor;
-import com.bif.app.data.source.local.ChatMessageDao;
+import com.bif.app.data.sync.core.NetworkMonitor;
+import com.bif.app.data.source.local.dao.ChatMessageDao;
 import com.bif.app.data.source.local.entity.ChatMessageEntity;
-import com.bif.app.data.sync.SyncManager;
+import com.bif.app.data.sync.core.SyncManager;
 import com.bif.app.domain.model.ChatMessage;
 import com.bif.app.domain.repository.IChatRepository;
 import com.google.gson.Gson;
@@ -473,4 +473,5 @@ public class ChatRepository implements IChatRepository {
         return "10.0.2.2";
     }
 }
+
 

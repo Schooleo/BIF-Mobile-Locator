@@ -16,6 +16,7 @@ public class GpsSensorDataSource {
 
     public interface LocationUpdateListener {
         void onLocation(Location location);
+
         void onError(String message);
     }
 

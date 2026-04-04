@@ -60,6 +60,7 @@ public class UserGraphqlController {
                         user.getUsername(),
                         user.getEmail(),
                         user.getAvatarLetter(),
+                    user.getAvatarUrl(),
                         user.getAvatarColor(),
                         user.isOnline(),
                         user.getServerVersion(),
@@ -79,7 +80,8 @@ public class UserGraphqlController {
                 userId,
                 input.name(),
                 input.avatarLetter(),
-                input.avatarColor()
+            input.avatarColor(),
+            input.avatarUrl()
         ).orElse(null);
     }
 }

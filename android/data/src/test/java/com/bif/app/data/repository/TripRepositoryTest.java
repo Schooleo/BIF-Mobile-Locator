@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,10 +15,11 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
-import com.bif.app.data.source.local.TripDao;
+import com.bif.app.data.source.local.dao.TripDao;
 import com.bif.app.data.source.local.entity.TripPlanEntity;
 import com.bif.app.data.source.local.entity.TripStopEntity;
-import com.bif.app.data.sync.SyncManager;
+import com.bif.app.data.source.local.entity.UploadStatus;
+import com.bif.app.data.sync.core.SyncManager;
 import com.bif.app.domain.model.TripPlan;
 import com.bif.app.domain.model.TripStop;
 
@@ -126,6 +128,54 @@ public class TripRepositoryTest {
         verify(mockSyncManager).enqueueChange(eq("trip_stop"),
                 eq("stop-1"), eq("UPDATE"), anyString(), any());
         verify(mockSyncManager).syncIfOnline();
+    }
+
+    @Test
+    public void addStopToTrip_withLocalImage_marksPending()
+            throws InterruptedException {
+        when(mockTripDao.getStopByIdSync("stop-1")).thenReturn(null);
+        when(mockTripDao.getActiveStopsByTripSync("trip-1"))
+                .thenReturn(new ArrayList<>());
+
+        TripStop stop = new TripStop("stop-1", "Museum", "note",
+                null, "/data/user/0/com.bif.app/files/image-staging/stop-1.jpg",
+                1.0, 2.0, 0L, 0L, 0);
+
+        tripRepository.addStopToTrip("trip-1", stop);
+        Thread.sleep(200);
+
+        ArgumentCaptor<TripStopEntity> captor =
+                ArgumentCaptor.forClass(TripStopEntity.class);
+        verify(mockTripDao).upsertStop(captor.capture());
+        assertEquals(UploadStatus.PENDING, captor.getValue().uploadStatus);
+    }
+
+    @Test
+    public void stageStopImageUpload_setsPendingWithoutSync()
+            throws InterruptedException {
+        TripStopEntity existing = new TripStopEntity();
+        existing.id = "s1";
+        existing.tripId = "trip-1";
+        existing.uploadStatus = UploadStatus.SYNCED;
+        when(mockTripDao.getStopByIdSync("s1")).thenReturn(existing);
+
+        tripRepository.stageStopImageUpload(
+                "trip-1",
+                "s1",
+                "/data/user/0/com.bif.app/files/image-staging/s1.jpg"
+        );
+        Thread.sleep(200);
+
+        ArgumentCaptor<TripStopEntity> captor =
+                ArgumentCaptor.forClass(TripStopEntity.class);
+        verify(mockTripDao).upsertStop(captor.capture());
+        assertEquals(UploadStatus.PENDING, captor.getValue().uploadStatus);
+        assertEquals(
+                "/data/user/0/com.bif.app/files/image-staging/s1.jpg",
+                captor.getValue().localImagePath
+        );
+        verify(mockSyncManager, never()).enqueueChange(anyString(), anyString(), anyString(), anyString(), any());
+        verify(mockSyncManager, never()).syncIfOnline();
     }
 
     @Test
@@ -240,3 +290,4 @@ public class TripRepositoryTest {
         assertEquals(0, liveData.getValue().size());
     }
 }
+

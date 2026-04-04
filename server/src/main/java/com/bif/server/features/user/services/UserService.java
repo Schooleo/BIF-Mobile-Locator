@@ -1,11 +1,13 @@
 package com.bif.server.features.user.services;
 
-import com.bif.server.features.user.models.User;
-import com.bif.server.features.user.repositories.UserRepository;
-import org.springframework.stereotype.Service;
-
+import java.net.URI;
 import java.util.List;
 import java.util.Optional;
+
+import org.springframework.stereotype.Service;
+
+import com.bif.server.features.user.models.User;
+import com.bif.server.features.user.repositories.UserRepository;
 
 @Service
 public class UserService {
@@ -39,8 +41,8 @@ public class UserService {
             String userId,
             String username,
             String avatarLetter,
-            Integer avatarColor
-    ) {
+            Integer avatarColor,
+            String avatarUrl) {
         if (userId == null || userId.isBlank()) {
             throw new IllegalArgumentException("userId must not be blank");
         }
@@ -49,6 +51,13 @@ public class UserService {
         }
         if (avatarLetter != null && avatarLetter.isBlank()) {
             throw new IllegalArgumentException("avatarLetter must not be blank");
+        }
+        boolean avatarUrlProvided = avatarUrl != null;
+        String normalizedAvatarUrl = avatarUrlProvided ? avatarUrl.trim() : null;
+        if (avatarUrlProvided
+                && !normalizedAvatarUrl.isEmpty()
+                && !isValidHttpUrl(normalizedAvatarUrl)) {
+            throw new IllegalArgumentException("avatarUrl must be a valid http(s) URL");
         }
 
         return userRepository.findById(userId).map(user -> {
@@ -61,13 +70,18 @@ public class UserService {
             if (avatarColor != null) {
                 user.setAvatarColor(avatarColor);
             }
+            if (avatarUrlProvided) {
+                user.setAvatarUrl(normalizedAvatarUrl.isEmpty()
+                        ? null
+                        : normalizedAvatarUrl);
+            }
             return userRepository.save(user);
         });
     }
 
     public int calculateProfileCompletion(User user) {
         int completed = 0;
-        int total = 4;
+        int total = 5;
 
         if (user.getUsername() != null && !user.getUsername().isBlank()) {
             completed++;
@@ -81,7 +95,27 @@ public class UserService {
         if (user.getAvatarColor() != 0) {
             completed++;
         }
+        if (user.getAvatarUrl() != null && !user.getAvatarUrl().isBlank()) {
+            completed++;
+        }
 
         return (completed * 100) / total;
+    }
+
+    private boolean isValidHttpUrl(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        try {
+            URI uri = URI.create(value);
+            String scheme = uri.getScheme();
+            return scheme != null
+                    && ("http".equalsIgnoreCase(scheme)
+                            || "https".equalsIgnoreCase(scheme))
+                    && uri.getHost() != null
+                    && !uri.getHost().isBlank();
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
     }
 }

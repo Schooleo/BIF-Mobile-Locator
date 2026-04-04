@@ -7,6 +7,7 @@ public record ProfileMetadataResponse(
         String displayName,
         String email,
         String avatarLetter,
+        String avatarUrl,
         int avatarColor,
         boolean online,
         long serverVersion,

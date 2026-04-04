@@ -24,8 +24,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext;
 
 public class AndroidGeocodingDataSource {
 
-    private static final String DEFAULT_NOMINATIM_BASE_URL =
-            "https://nominatim.openstreetmap.org";
+    private static final String DEFAULT_NOMINATIM_BASE_URL = "https://nominatim.openstreetmap.org";
     private static final String USER_AGENT = "bif-mobile-app-android/1.0";
     private static final int MAX_RESULTS = 5;
 
@@ -55,7 +54,7 @@ public class AndroidGeocodingDataSource {
                     + "/search?format=jsonv2&addressdetails=1&limit="
                     + MAX_RESULTS + "&q=" + encodedQuery;
 
-                connection = (HttpURLConnection) URI.create(requestUrl)
+            connection = (HttpURLConnection) URI.create(requestUrl)
                     .toURL()
                     .openConnection();
             connection.setRequestMethod("GET");

@@ -17,6 +17,9 @@ import com.bif.app.domain.repository.IProfileRepository;
 
 import javax.inject.Inject;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 import dagger.hilt.android.AndroidEntryPoint;
 
 @AndroidEntryPoint
@@ -24,6 +27,8 @@ public class PersonalInfoFragment extends Fragment {
 
     @Inject
     IProfileRepository profileRepository;
+
+    private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
@@ -40,32 +45,57 @@ public class PersonalInfoFragment extends Fragment {
         Toolbar toolbar = view.findViewById(R.id.toolbar);
         toolbar.setNavigationOnClickListener(v -> navController.popBackStack());
 
-        bindLocalProfileState(view);
+        bindLocalProfileState();
     }
 
     @Override
     public void onResume() {
         super.onResume();
         if (getView() != null) {
-            bindLocalProfileState(getView());
+            bindLocalProfileState();
             syncProfileMetadataFromServer();
         }
     }
 
-    private void bindLocalProfileState(@NonNull View view) {
-        IProfileRepository.LocalProfile localProfile =
-            profileRepository.readLocalProfile();
-        boolean isLoggedIn = localProfile.isLoggedIn;
-        String username = getStoredValue(localProfile.username);
-        String email = getStoredValue(localProfile.email);
+    private void bindLocalProfileState() {
+        ioExecutor.execute(() -> {
+            IProfileRepository.LocalProfile localProfile =
+                    profileRepository.readLocalProfile();
+            boolean isLoggedIn = localProfile.isLoggedIn;
+            String username = getStoredValue(localProfile.username);
+            String email = getStoredValue(localProfile.email);
 
-        TextView tvAuthStatusValue = view.findViewById(R.id.tvAuthStatusValue);
-        TextView tvUsernameValue = view.findViewById(R.id.tvUsernameValue);
-        TextView tvEmailValue = view.findViewById(R.id.tvEmailValue);
+            if (!isAdded()) {
+                return;
+            }
 
-        tvAuthStatusValue.setText(isLoggedIn ? R.string.logged_in_status : R.string.guest_status);
-        tvUsernameValue.setText(username);
-        tvEmailValue.setText(email);
+            requireActivity().runOnUiThread(() -> {
+                if (!isAdded()) {
+                    return;
+                }
+
+                View currentView = getView();
+                if (currentView == null) {
+                    return;
+                }
+
+                TextView tvAuthStatusValue = currentView.findViewById(R.id.tvAuthStatusValue);
+                TextView tvUsernameValue = currentView.findViewById(R.id.tvUsernameValue);
+                TextView tvEmailValue = currentView.findViewById(R.id.tvEmailValue);
+
+                tvAuthStatusValue.setText(isLoggedIn
+                        ? R.string.logged_in_status
+                        : R.string.guest_status);
+                tvUsernameValue.setText(username);
+                tvEmailValue.setText(email);
+            });
+        });
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        ioExecutor.shutdown();
     }
 
     private void syncProfileMetadataFromServer() {
@@ -87,7 +117,7 @@ public class PersonalInfoFragment extends Fragment {
                     }
                     View currentView = getView();
                     if (currentView != null) {
-                        bindLocalProfileState(currentView);
+                        bindLocalProfileState();
                     }
                 });
             }

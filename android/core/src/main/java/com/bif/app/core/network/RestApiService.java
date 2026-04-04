@@ -9,6 +9,7 @@ import com.bif.app.core.network.dto.favorite.FavoriteRequestDto;
 import com.bif.app.core.network.dto.favorite.FavoriteResponseDto;
 import com.bif.app.core.network.dto.friendship.CreateFriendRequestDto;
 import com.bif.app.core.network.dto.friendship.FriendshipApiModel;
+import com.bif.app.core.network.dto.media.UploadSignatureResponseDto;
 import com.bif.app.core.network.dto.profile.ProfileMetadataResponse;
 import com.bif.app.core.network.dto.profile.UpdateMyProfileRequest;
 import com.bif.app.core.network.dto.group.AddMemberRequestDto;
@@ -74,6 +75,11 @@ public interface RestApiService {
 
     @PATCH("users/me/profile")
     Call<ProfileMetadataResponse> updateMyProfile(@Body UpdateMyProfileRequest request);
+
+    @GET("v1/media/upload-signature")
+    Call<UploadSignatureResponseDto> getUploadSignature(
+            @Query("type") String type,
+            @Query("referenceId") String referenceId);
 
     // Example: A multipart POST request for uploading a profile picture
     @Multipart

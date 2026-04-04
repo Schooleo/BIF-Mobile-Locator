@@ -6,6 +6,7 @@ import com.bif.server.features.sync.models.SyncChangeEntry;
 import com.bif.server.features.trip.models.TripPlan;
 import com.bif.server.features.trip.models.TripStop;
 import com.bif.server.features.trip.repositories.TripPlanRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
@@ -74,6 +75,9 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         if (payload != null) {
             target.setTitle(payload.title);
             target.setNote(payload.note);
+            if (payload.photoUrlProvided) {
+                target.setPhotoUrl(normalizeNullable(payload.photoUrl));
+            }
             target.setOrderIndex(payload.orderIndex);
             target.setArrivalTime(payload.arrivalTime);
             target.setDepartureTime(payload.departureTime);
@@ -139,7 +143,10 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
             return null;
         }
         try {
-            return objectMapper.readValue(json, TripStopPayload.class);
+            JsonNode node = objectMapper.readTree(json);
+            TripStopPayload payload = objectMapper.treeToValue(node, TripStopPayload.class);
+            payload.photoUrlProvided = node.has("photoUrl");
+            return payload;
         } catch (Exception e) {
             return null;
         }
@@ -159,6 +166,7 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         payload.tripId = tripId;
         payload.title = stop.getTitle();
         payload.note = stop.getNote();
+        payload.photoUrl = stop.getPhotoUrl();
         payload.arrivalTime = stop.getArrivalTime();
         payload.departureTime = stop.getDepartureTime();
         payload.orderIndex = stop.getOrderIndex();
@@ -171,11 +179,20 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         return payload;
     }
 
+    private String normalizeNullable(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
     private static class TripStopPayload {
         public String id;
         public String tripId;
         public String title;
         public String note;
+        public String photoUrl;
         public Double latitude;
         public Double longitude;
         public Instant arrivalTime;
@@ -183,5 +200,6 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         public int orderIndex;
         public long serverVersion;
         public boolean deleted;
+        public boolean photoUrlProvided;
     }
 }

@@ -23,11 +23,11 @@ public class ChatMessageEntity {
     public boolean confirmed;
 
     public ChatMessageEntity(@NonNull String id, String groupId,
-                             String senderUserId, String senderName,
-                             String content, String type, long sentAt,
-                             String clientMessageId, double sharedLatitude,
-                             double sharedLongitude, String sharedAddress,
-                             boolean confirmed) {
+            String senderUserId, String senderName,
+            String content, String type, long sentAt,
+            String clientMessageId, double sharedLatitude,
+            double sharedLongitude, String sharedAddress,
+            boolean confirmed) {
         this.id = id;
         this.groupId = groupId;
         this.senderUserId = senderUserId;

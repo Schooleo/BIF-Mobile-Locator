@@ -13,12 +13,12 @@ import com.bif.app.core.network.dto.place.PlaceDto;
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.PlaceMapper;
 import com.bif.app.data.source.AndroidGeocodingDataSource;
-import com.bif.app.data.source.local.PlaceDao;
-import com.bif.app.data.source.local.SearchHistoryDao;
+import com.bif.app.data.source.local.dao.PlaceDao;
+import com.bif.app.data.source.local.dao.SearchHistoryDao;
 import com.bif.app.data.source.local.entity.PlaceEntity;
 import com.bif.app.data.source.local.entity.SearchHistoryEntity;
-import com.bif.app.data.sync.NetworkMonitor;
-import com.bif.app.data.sync.SyncManager;
+import com.bif.app.data.sync.core.NetworkMonitor;
+import com.bif.app.data.sync.core.SyncManager;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.repository.IPlaceRepository;
@@ -392,3 +392,4 @@ public class PlaceRepository implements IPlaceRepository {
         return left.equals(right);
     }
 }
+

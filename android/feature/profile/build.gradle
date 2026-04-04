@@ -31,6 +31,7 @@ android {
 dependencies {
     implementation libs.appcompat
     implementation libs.material
+    implementation libs.glide
     implementation libs.navigation.runtime
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
     testImplementation libs.junit

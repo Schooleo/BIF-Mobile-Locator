@@ -7,12 +7,12 @@ import androidx.lifecycle.Transformations;
 
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.FavoriteMapper;
-import com.bif.app.data.source.local.AppDatabase;
-import com.bif.app.data.source.local.FavoriteDao;
-import com.bif.app.data.source.local.SyncQueueDao;
+import com.bif.app.data.source.local.database.AppDatabase;
+import com.bif.app.data.source.local.dao.FavoriteDao;
+import com.bif.app.data.source.local.dao.SyncQueueDao;
 import com.bif.app.data.source.local.entity.FavoriteEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
-import com.bif.app.data.sync.SyncManager;
+import com.bif.app.data.sync.core.SyncManager;
 import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.repository.IFavoriteRepository;
 import com.google.gson.Gson;
@@ -212,3 +212,4 @@ public class FavoriteRepository implements IFavoriteRepository {
         return userId.trim();
     }
 }
+

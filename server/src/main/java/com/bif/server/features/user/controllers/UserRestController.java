@@ -69,6 +69,7 @@ public class UserRestController {
                         user.getUsername(),
                         user.getEmail(),
                         user.getAvatarLetter(),
+                    user.getAvatarUrl(),
                         user.getAvatarColor(),
                         user.isOnline(),
                         user.getServerVersion(),
@@ -93,12 +94,14 @@ public class UserRestController {
                     userId,
                     request.name(),
                     request.avatarLetter(),
-                    request.avatarColor()
+                    request.avatarColor(),
+                    request.avatarUrl()
             ).map(user -> ResponseEntity.ok(new ProfileMetadataResponse(
                     user.getId(),
                     user.getUsername(),
                     user.getEmail(),
                     user.getAvatarLetter(),
+                    user.getAvatarUrl(),
                     user.getAvatarColor(),
                     user.isOnline(),
                     user.getServerVersion(),

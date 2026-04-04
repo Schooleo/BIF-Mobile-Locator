@@ -30,12 +30,15 @@ lifecycleViewmodel = "2.10.0"
 bcrypt = "0.10.2"
 workRuntime = "2.11.2"
 startupRuntime = "1.2.0"
-maplibreAndroid = "13.0.1"
+maplibreAndroid = "13.0.2"
 stomp-protocol = "1.6.6"
 java-websocket = "1.6.0"
 rxjava2 = "2.2.21"
 rxandroid2 = "2.1.1"
 slf4jAndroid = "1.7.36"
+cloudinaryAndroid = "3.1.2"
+glide = "5.0.5"
+timber = "5.0.1"
 
 [libraries]
 apollo-java-client = { group = "com.apollographql.java", name = "client", version.ref = "apollo-java" }
@@ -77,6 +80,10 @@ java-websocket = { group = "org.java-websocket", name = "Java-WebSocket", versio
 rxjava2 = { group = "io.reactivex.rxjava2", name = "rxjava", version.ref = "rxjava2" }
 rxandroid2 = { group = "io.reactivex.rxjava2", name = "rxandroid", version.ref = "rxandroid2" }
 slf4j-android = { group = "org.slf4j", name = "slf4j-android", version.ref = "slf4jAndroid" }
+cloudinary-android = { group = "com.cloudinary", name = "cloudinary-android", version.ref = "cloudinaryAndroid" }
+glide = { group = "com.github.bumptech.glide", name = "glide", version.ref = "glide" }
+glide-compiler = { group = "com.github.bumptech.glide", name = "compiler", version.ref = "glide" }
+timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "timber" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

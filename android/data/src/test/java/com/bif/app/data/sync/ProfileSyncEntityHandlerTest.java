@@ -9,7 +9,8 @@ import static org.mockito.Mockito.verify;
 import android.content.Context;
 
 import com.bif.app.core.network.dto.sync.SyncChangeDto;
-import com.bif.app.data.source.local.ProfileDao;
+import com.bif.app.data.sync.handler.ProfileSyncEntityHandler;
+import com.bif.app.data.source.local.dao.ProfileDao;
 import com.bif.app.data.source.local.entity.ProfileEntity;
 import com.google.gson.Gson;
 

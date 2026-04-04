@@ -18,6 +18,7 @@ public class User extends SyncDocument {
     @JsonIgnore
     private String passwordHash;
     private String avatarLetter;
+    private String avatarUrl;
     private int avatarColor;
     private boolean isOnline;
 }

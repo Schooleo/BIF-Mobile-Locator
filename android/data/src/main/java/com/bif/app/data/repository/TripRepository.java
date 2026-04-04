@@ -1,13 +1,17 @@
 package com.bif.app.data.repository;
 
+import android.content.Context;
+
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.Transformations;
 
 import com.bif.app.core.network.dto.chat.ChatMessageDto;
 import com.bif.app.core.network.dto.trip.TripStopDto;
-import com.bif.app.data.source.local.TripDao;
+import com.bif.app.data.source.local.dao.TripDao;
 import com.bif.app.data.source.local.entity.TripStopEntity;
-import com.bif.app.data.sync.SyncManager;
+import com.bif.app.data.source.local.entity.UploadStatus;
+import com.bif.app.data.sync.worker.ImageUploadWorker;
+import com.bif.app.data.sync.core.SyncManager;
 import com.bif.app.domain.model.TripPlan;
 import com.bif.app.domain.model.TripStop;
 import com.bif.app.domain.repository.ITripRepository;
@@ -21,18 +25,29 @@ import java.util.concurrent.Executors;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
+import dagger.hilt.android.qualifiers.ApplicationContext;
+
 @Singleton
 public class TripRepository implements ITripRepository {
 
+    private final Context appContext;
     private final TripDao tripDao;
     private final SyncManager syncManager;
     private final ExecutorService executorService;
 
     @Inject
-    public TripRepository(TripDao tripDao, SyncManager syncManager) {
+    public TripRepository(@ApplicationContext Context appContext,
+                          TripDao tripDao,
+                          SyncManager syncManager) {
+        this.appContext = appContext;
         this.tripDao = tripDao;
         this.syncManager = syncManager;
         this.executorService = Executors.newSingleThreadExecutor();
+    }
+
+    // Visible for tests without Android context.
+    public TripRepository(TripDao tripDao, SyncManager syncManager) {
+        this(null, tripDao, syncManager);
     }
 
     @Override
@@ -52,8 +67,33 @@ public class TripRepository implements ITripRepository {
             entity.deleted = false;
 
             tripDao.upsertStop(entity);
+            enqueueImageUploadIfPending(entity);
             enqueueStopUpdate(entity);
             syncManager.syncIfOnline();
+        });
+    }
+
+    @Override
+    public void stageStopImageUpload(String tripId, String stopId, String localImagePath) {
+        executorService.execute(() -> {
+            if (tripId == null || tripId.trim().isEmpty()
+                    || stopId == null || stopId.trim().isEmpty()
+                    || localImagePath == null || localImagePath.trim().isEmpty()) {
+                return;
+            }
+
+            TripStopEntity entity = tripDao.getStopByIdSync(stopId.trim());
+            if (entity == null) {
+                entity = new TripStopEntity();
+                entity.id = stopId.trim();
+                entity.tripId = tripId.trim();
+            }
+
+            entity.localImagePath = localImagePath.trim();
+            entity.uploadStatus = UploadStatus.PENDING;
+            tripDao.upsertStop(entity);
+
+            enqueueImageUploadIfPending(entity);
         });
     }
 
@@ -125,6 +165,8 @@ public class TripRepository implements ITripRepository {
                             stop.id,
                             stop.title,
                             stop.note,
+                            stop.photoUrl,
+                            stop.localImagePath,
                             stop.latitude,
                             stop.longitude,
                             stop.arrivalTime,
@@ -190,6 +232,13 @@ public class TripRepository implements ITripRepository {
         entity.tripId = tripId;
         entity.title = stop.getTitle();
         entity.note = stop.getNote();
+        entity.photoUrl = stop.getPhotoUrl();
+        entity.localImagePath = stop.getLocalImagePath();
+        if (hasStagedLocalImage(stop.getLocalImagePath())) {
+            entity.uploadStatus = UploadStatus.PENDING;
+        } else if (entity.uploadStatus == null) {
+            entity.uploadStatus = UploadStatus.SYNCED;
+        }
         entity.latitude = stop.getLatitude();
         entity.longitude = stop.getLongitude();
         entity.arrivalTime = stop.getArrivalTime();
@@ -208,6 +257,7 @@ public class TripRepository implements ITripRepository {
         dto.tripId = entity.tripId;
         dto.title = entity.title;
         dto.note = entity.note;
+        dto.photoUrl = entity.photoUrl;
         dto.orderIndex = entity.orderIndex;
         dto.arrivalTime = formatInstant(entity.arrivalTime);
         dto.departureTime = formatInstant(entity.departureTime);
@@ -222,6 +272,29 @@ public class TripRepository implements ITripRepository {
         return dto;
     }
 
+    private boolean hasStagedLocalImage(String localImagePath) {
+        if (localImagePath == null || localImagePath.trim().isEmpty()) {
+            return false;
+        }
+        String trimmed = localImagePath.trim();
+        return !startsWithIgnoreCase(trimmed, "http://")
+                && !startsWithIgnoreCase(trimmed, "https://");
+    }
+
+    private boolean startsWithIgnoreCase(String value, String prefix) {
+        return value.regionMatches(true, 0, prefix, 0, prefix.length());
+    }
+
+    private void enqueueImageUploadIfPending(TripStopEntity entity) {
+        if (appContext == null || entity == null) {
+            return;
+        }
+        if (entity.uploadStatus == UploadStatus.PENDING
+                && hasStagedLocalImage(entity.localImagePath)) {
+            ImageUploadWorker.enqueue(appContext);
+        }
+    }
+
     private String formatInstant(long value) {
         if (value <= 0L) {
             return null;
@@ -233,4 +306,5 @@ public class TripRepository implements ITripRepository {
         }
     }
 }
+
 

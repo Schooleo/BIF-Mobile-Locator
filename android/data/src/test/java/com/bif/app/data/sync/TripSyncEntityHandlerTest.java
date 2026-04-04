@@ -7,7 +7,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 import com.bif.app.core.network.dto.sync.SyncChangeDto;
-import com.bif.app.data.source.local.TripDao;
+import com.bif.app.data.sync.handler.TripSyncEntityHandler;
+import com.bif.app.data.source.local.dao.TripDao;
 import com.bif.app.data.source.local.entity.TripPlanEntity;
 import com.google.gson.Gson;
 

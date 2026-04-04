@@ -7,13 +7,10 @@ import androidx.room.Index;
 import androidx.room.PrimaryKey;
 
 @Entity(tableName = "trip_stops", foreignKeys = {
-        @ForeignKey(entity = TripPlanEntity.class,
-                parentColumns = "id",
-                childColumns = "tripId",
-                onDelete = ForeignKey.CASCADE)
+        @ForeignKey(entity = TripPlanEntity.class, parentColumns = "id", childColumns = "tripId", onDelete = ForeignKey.CASCADE)
 }, indices = {
-        @Index(value = {"tripId"}),
-        @Index(value = {"tripId", "orderIndex"})
+        @Index(value = { "tripId" }),
+        @Index(value = { "tripId", "orderIndex" })
 })
 public class TripStopEntity {
     @PrimaryKey
@@ -23,6 +20,9 @@ public class TripStopEntity {
     public String tripId;
     public String title;
     public String note;
+    public String photoUrl;
+    public String localImagePath;
+    public UploadStatus uploadStatus = UploadStatus.SYNCED;
     public double latitude;
     public double longitude;
     public long arrivalTime;

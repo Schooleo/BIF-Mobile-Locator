@@ -17,6 +17,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -125,5 +126,25 @@ class ProfileSyncEntityHandlerTest {
         assertTrue(payload.contains("\"userId\":\"user-1\""));
         assertTrue(payload.contains("\"displayName\":\"Alice\""));
         assertTrue(payload.contains("\"serverVersion\":8"));
+    }
+
+    @Test
+    void applyPushedChange_WhenAvatarUrlProvidedAsBlank_ClearsAvatarUrl() {
+        SyncChange pushed = new SyncChange();
+        pushed.setOperation("UPDATE");
+        pushed.setEntityId("user-1");
+        pushed.setPayload("{\"avatarUrl\":\"   \",\"displayName\":\"Alice\"}");
+
+        User existing = new User();
+        existing.setId("user-1");
+        existing.setAvatarUrl("https://res.cloudinary.com/demo/image/upload/v1/avatar.jpg");
+
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(existing));
+
+        handler.applyPushedChange(pushed, "user-1", 11L);
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        assertNull(captor.getValue().getAvatarUrl());
     }
 }

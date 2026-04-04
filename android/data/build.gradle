@@ -48,6 +48,7 @@ dependencies {
     implementation libs.retrofit.core
     implementation libs.retrofit.gson
     implementation libs.slf4j.android
+    implementation libs.cloudinary.android
 
     // STOMP + RxJava2 for real-time WebSocket chat
     implementation(libs.stomp.protocol) {

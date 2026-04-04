@@ -4,7 +4,7 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.Transformations;
 
 import com.bif.app.data.mapper.FriendMapper;
-import com.bif.app.data.source.local.FriendDao;
+import com.bif.app.data.source.local.dao.FriendDao;
 import com.bif.app.domain.model.Friend;
 import com.bif.app.domain.repository.IFriendRepository;
 

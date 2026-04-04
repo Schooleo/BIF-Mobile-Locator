@@ -10,7 +10,7 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.MutableLiveData;
 
 import com.bif.app.data.LiveDataTestUtil;
-import com.bif.app.data.source.local.FriendDao;
+import com.bif.app.data.source.local.dao.FriendDao;
 import com.bif.app.data.source.local.entity.FriendEntity;
 import com.bif.app.domain.model.Friend;
 

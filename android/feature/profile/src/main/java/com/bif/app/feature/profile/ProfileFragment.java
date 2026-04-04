@@ -2,7 +2,7 @@ package com.bif.app.feature.profile;
 
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
-import android.net.Uri;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -34,9 +34,16 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.bif.app.core.auth.AuthSessionManager;
 import com.bif.app.core.utils.DialogUtils;
 import com.bif.app.core.utils.UriUtils;
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.DataSource;
+import com.bumptech.glide.load.engine.GlideException;
+import com.bumptech.glide.request.RequestListener;
+import com.bumptech.glide.request.target.Target;
 import com.google.android.material.button.MaterialButton;
 
 import javax.inject.Inject;
+
+import java.io.File;
 
 import dagger.hilt.android.AndroidEntryPoint;
 
@@ -50,8 +57,8 @@ public class ProfileFragment extends Fragment {
     @Inject
     AuthSessionManager authSessionManager;
 
-    private final ActivityResultLauncher<String> pickAvatarLauncher =
-            registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
+    private final ActivityResultLauncher<String> pickAvatarLauncher = registerForActivityResult(
+            new ActivityResultContracts.GetContent(), uri -> {
                 if (uri == null || !isAdded() || getView() == null) {
                     return;
                 }
@@ -60,7 +67,7 @@ public class ProfileFragment extends Fragment {
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
-                             @Nullable Bundle savedInstanceState) {
+            @Nullable Bundle savedInstanceState) {
         viewModel = new ViewModelProvider(this).get(ProfileViewModel.class);
         return inflater.inflate(R.layout.fragment_profile, container, false);
     }
@@ -191,11 +198,11 @@ public class ProfileFragment extends Fragment {
         // Personal Information
         View menuPersonalInfo = view.findViewById(R.id.menuPersonalInfo);
         ((android.widget.ImageView) menuPersonalInfo.findViewById(com.bif.app.core.R.id.ivIcon))
-            .setImageResource(com.bif.app.core.R.drawable.ic_person);
+                .setImageResource(com.bif.app.core.R.drawable.ic_person);
         ((android.widget.TextView) menuPersonalInfo.findViewById(com.bif.app.core.R.id.tvTitle))
-            .setText(R.string.personal_information);
-        menuPersonalInfo.setOnClickListener(v ->
-            navController.navigate(UriUtils.buildUri(UriUtils.PathTo.PERSONAL_INFO)));
+                .setText(R.string.personal_information);
+        menuPersonalInfo
+                .setOnClickListener(v -> navController.navigate(UriUtils.buildUri(UriUtils.PathTo.PERSONAL_INFO)));
 
         // Privacy & Security
         View menuPrivacySecurity = view.findViewById(R.id.menuPrivacySecurity);
@@ -240,32 +247,33 @@ public class ProfileFragment extends Fragment {
     private void setupLogout(View view) {
         view.findViewById(R.id.btnLogout).setOnClickListener(v -> {
             DialogUtils.showConfirmDialog(requireContext(),
-                "Logout",
-                "Are you sure you want to logout?",
-                "Logout",
-                "Cancel",
-                ()-> {
-                    authSessionManager.logout(remoteSuccess -> {
-                        if (!isAdded()) {
-                            return;
-                        }
-
-                        requireActivity().runOnUiThread(() -> {
+                    "Logout",
+                    "Are you sure you want to logout?",
+                    "Logout",
+                    "Cancel",
+                    () -> {
+                        authSessionManager.logout(remoteSuccess -> {
                             if (!isAdded()) {
                                 return;
                             }
-                            Toast.makeText(requireContext(), R.string.logout_success, Toast.LENGTH_SHORT).show();
-                            navController.navigate(UriUtils.buildUri(UriUtils.PathTo.LOGIN));
+
+                            requireActivity().runOnUiThread(() -> {
+                                if (!isAdded()) {
+                                    return;
+                                }
+                                Toast.makeText(requireContext(), R.string.logout_success, Toast.LENGTH_SHORT).show();
+                                navController.navigate(UriUtils.buildUri(UriUtils.PathTo.LOGIN));
+                            });
                         });
                     });
-                }
-            );
         });
     }
 
     private void bindAvatar(ImageView ivAvatarImage, TextView tvAvatar, String avatarUriString) {
         if (avatarUriString == null || avatarUriString.trim().isEmpty()) {
-            ivAvatarImage.setImageURI(null);
+            Glide.with(this).clear(ivAvatarImage);
+            ivAvatarImage.setOnClickListener(null);
+            ivAvatarImage.setContentDescription(null);
             ivAvatarImage.setImageDrawable(null);
             ivAvatarImage.setVisibility(View.GONE);
             tvAvatar.setVisibility(View.VISIBLE);
@@ -273,12 +281,56 @@ public class ProfileFragment extends Fragment {
         }
 
         try {
-            ivAvatarImage.setImageURI(Uri.parse(avatarUriString));
-            if (ivAvatarImage.getDrawable() != null) {
-                ivAvatarImage.setVisibility(View.VISIBLE);
-                tvAvatar.setVisibility(View.INVISIBLE);
-                return;
-            }
+            String trimmed = avatarUriString.trim();
+            boolean isRemote = (trimmed.startsWith("http://")
+                    || trimmed.startsWith("https://"));
+            Object imageSource = isRemote
+                    ? trimmed
+                    : new File(trimmed);
+
+            ivAvatarImage.setOnClickListener(null);
+            ivAvatarImage.setContentDescription(null);
+
+            Glide.with(this)
+                    .load(imageSource)
+                    .error(com.bif.app.core.R.drawable.bg_logo_placeholder)
+                    .listener(new RequestListener<Drawable>() {
+                        @Override
+                        public boolean onLoadFailed(@Nullable GlideException e,
+                                Object model,
+                                Target<Drawable> target,
+                                boolean isFirstResource) {
+                            if (isRemote) {
+                                String unavailableText = ivAvatarImage.getContext()
+                                        .getString(R.string.image_unavailable_offline);
+                                ivAvatarImage.setContentDescription(
+                                        unavailableText);
+                                ivAvatarImage.setOnClickListener(v -> {
+                                    if (!isAdded()) {
+                                        return;
+                                    }
+                                    Toast.makeText(v.getContext(),
+                                            R.string.image_unavailable_offline,
+                                            Toast.LENGTH_SHORT).show();
+                                    viewModel.refreshProfileFromServer(true);
+                                });
+                            }
+                            return false;
+                        }
+
+                        @Override
+                        public boolean onResourceReady(Drawable resource,
+                                Object model,
+                                Target<Drawable> target,
+                                DataSource dataSource,
+                                boolean isFirstResource) {
+                            return false;
+                        }
+                    })
+                    .into(ivAvatarImage);
+            ivAvatarImage.setVisibility(View.VISIBLE);
+            tvAvatar.setVisibility(View.INVISIBLE);
+            return;
         } catch (Exception ignored) {
             // Fall back to initial avatar when image cannot be resolved.
         }
@@ -316,7 +368,7 @@ public class ProfileFragment extends Fragment {
                 Toast.makeText(requireContext(), R.string.username_required, Toast.LENGTH_SHORT).show();
                 return;
             }
-            
+
             // Logic quan trọng của bạn: Đẩy lên Backend thông qua ViewModel
             viewModel.updateProfile(updatedUsername);
             dialog.dismiss();

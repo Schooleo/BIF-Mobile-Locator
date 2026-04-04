@@ -24,5 +24,6 @@ public class Place extends SyncDocument {
     private String persistedByAction;
     private String persistedByUserId;
     private int reviewCount;
+    private String photoUrl;
     private List<PlaceReview> reviews;
 }

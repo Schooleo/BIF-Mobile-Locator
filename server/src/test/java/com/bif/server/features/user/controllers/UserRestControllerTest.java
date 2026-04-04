@@ -194,39 +194,40 @@ class UserRestControllerTest {
 
     @Test
     void updateMyProfile_WhenHeaderMissing_ReturnsUnauthorized() {
-        UpdateMyProfileRequest request = new UpdateMyProfileRequest("Alex", "A", 123);
+        UpdateMyProfileRequest request = new UpdateMyProfileRequest("Alex", "A", 123, null);
 
         ResponseEntity<ProfileMetadataResponse> result = controller.updateMyProfile(null, request);
 
         assertEquals(HttpStatus.UNAUTHORIZED, result.getStatusCode());
-        verify(userService, never()).updateMyProfile(anyString(), any(), any(), any());
+        verify(userService, never()).updateMyProfile(anyString(), any(), any(), any(), any());
     }
 
     @Test
     void updateMyProfile_WhenUserNotFound_ReturnsNotFound() {
         Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
-        UpdateMyProfileRequest request = new UpdateMyProfileRequest("Alex", "A", 123);
+        UpdateMyProfileRequest request = new UpdateMyProfileRequest("Alex", "A", 123, null);
 
-        when(userService.updateMyProfile("u1", "Alex", "A", 123)).thenReturn(Optional.empty());
+        when(userService.updateMyProfile("u1", "Alex", "A", 123, null))
+            .thenReturn(Optional.empty());
 
         ResponseEntity<ProfileMetadataResponse> result = controller.updateMyProfile(auth, request);
 
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
-        verify(userService).updateMyProfile("u1", "Alex", "A", 123);
+        verify(userService).updateMyProfile("u1", "Alex", "A", 123, null);
     }
 
     @Test
     void updateMyProfile_WhenServiceThrowsBadInput_ReturnsBadRequest() {
         Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
-        UpdateMyProfileRequest request = new UpdateMyProfileRequest("   ", "A", 123);
+        UpdateMyProfileRequest request = new UpdateMyProfileRequest("   ", "A", 123, null);
 
-        when(userService.updateMyProfile("u1", "   ", "A", 123))
+        when(userService.updateMyProfile("u1", "   ", "A", 123, null))
                 .thenThrow(new IllegalArgumentException("name must not be blank"));
 
         ResponseEntity<ProfileMetadataResponse> result = controller.updateMyProfile(auth, request);
 
         assertEquals(HttpStatus.BAD_REQUEST, result.getStatusCode());
-        verify(userService).updateMyProfile("u1", "   ", "A", 123);
+        verify(userService).updateMyProfile("u1", "   ", "A", 123, null);
     }
 
     @Test
@@ -241,9 +242,10 @@ class UserRestControllerTest {
         saved.setOnline(true);
         saved.setUpdatedAt(java.time.Instant.parse("2026-03-24T10:30:00Z"));
 
-        UpdateMyProfileRequest request = new UpdateMyProfileRequest(" Alex ", " A ", 0xFF1E88E5);
+        UpdateMyProfileRequest request = new UpdateMyProfileRequest(" Alex ", " A ", 0xFF1E88E5, null);
 
-        when(userService.updateMyProfile("u1", " Alex ", " A ", 0xFF1E88E5)).thenReturn(Optional.of(saved));
+        when(userService.updateMyProfile("u1", " Alex ", " A ", 0xFF1E88E5, null))
+            .thenReturn(Optional.of(saved));
         when(userService.calculateProfileCompletion(saved)).thenReturn(80);
 
         ResponseEntity<ProfileMetadataResponse> result = controller.updateMyProfile(auth, request);
@@ -255,6 +257,33 @@ class UserRestControllerTest {
         assertEquals("alex@bif.local", result.getBody().email());
         assertEquals("A", result.getBody().avatarLetter());
         assertEquals(0xFF1E88E5, result.getBody().avatarColor());
-        verify(userService).updateMyProfile("u1", " Alex ", " A ", 0xFF1E88E5);
+        verify(userService).updateMyProfile("u1", " Alex ", " A ", 0xFF1E88E5, null);
+    }
+
+    @Test
+    void updateMyProfile_WhenAvatarUrlProvided_ForwardsUrlUnchanged() {
+        Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
+        String avatarUrl = "https://res.cloudinary.com/demo/image/upload/v1/avatar.jpg";
+
+        User saved = new User();
+        saved.setId("u1");
+        saved.setUsername("Alex");
+        saved.setAvatarUrl(avatarUrl);
+
+        UpdateMyProfileRequest request = new UpdateMyProfileRequest(
+                "Alex",
+                "A",
+                123,
+                avatarUrl
+        );
+
+        when(userService.updateMyProfile("u1", "Alex", "A", 123, avatarUrl))
+                .thenReturn(Optional.of(saved));
+        when(userService.calculateProfileCompletion(saved)).thenReturn(100);
+
+        ResponseEntity<ProfileMetadataResponse> result = controller.updateMyProfile(auth, request);
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        verify(userService).updateMyProfile("u1", "Alex", "A", 123, avatarUrl);
     }
 }
