@@ -161,7 +161,9 @@ public interface RestApiService {
     // Call<FeatureConfig> getFeatureConfig();
     // Places
     @GET("places/search")
-    Call<List<PlaceDto>> searchServerPlaces(@Query("q") String query);
+    Call<List<PlaceDto>> searchServerPlaces(@Query("lat") Double lat,
+            @Query("lng") Double lng,
+            @Query("q") String query);
 
     @POST("places")
     Call<PlaceDto> upsertPlace(@Body PlaceDto place);

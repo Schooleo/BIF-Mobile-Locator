@@ -68,7 +68,7 @@ public class MapViewModelInstrumentedTest {
         }
 
         @Override
-        public LiveData<List<Place>> searchPlaces(String query) {
+        public LiveData<List<Place>> searchPlaces(String query, Location userLocation) {
             return new MutableLiveData<>(Collections.emptyList());
         }
 

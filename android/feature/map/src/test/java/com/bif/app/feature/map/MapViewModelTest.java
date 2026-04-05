@@ -245,14 +245,14 @@ public class MapViewModelTest {
     public void searchForPlaces_validQuery_callsPlaceRepository() {
         // Arrange
         String query = "university";
-        Mockito.when(placeRepository.searchPlaces(query)).thenReturn(new MutableLiveData<>());
+        Mockito.when(placeRepository.searchPlaces(query, null)).thenReturn(new MutableLiveData<>());
         viewModel.searchResults.observeForever(list -> { });
 
         // Act
         viewModel.searchForPlaces(query);
 
         // Assert
-        Mockito.verify(placeRepository).searchPlaces(query);
+        Mockito.verify(placeRepository).searchPlaces(query, null);
     }
 
     // allFavorites

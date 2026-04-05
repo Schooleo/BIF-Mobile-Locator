@@ -96,7 +96,9 @@ public class MapViewModel extends ViewModel {
         this.reviewRepository = reviewRepository;
 
         this.searchResult = Transformations.switchMap(locationSearchQuery, placeRepository::searchLocation);
-        this.searchResults = Transformations.switchMap(placesSearchQuery, placeRepository::searchPlaces);
+        this.searchResults = Transformations.switchMap(
+            placesSearchQuery,
+            query -> placeRepository.searchPlaces(query, null));
         this.historySearchResults = Transformations.switchMap(
                 placesHistoryQuery, placeRepository::searchPlacesFromHistory);
         this.allFavorites = favoriteRepository.getAllFavorites();

@@ -8,7 +8,7 @@ import java.util.List;
 
 public interface IPlaceRepository {
     LiveData<Location> searchLocation(String query);
-    LiveData<List<Place>> searchPlaces(String query);
+    LiveData<List<Place>> searchPlaces(String query, Location userLocation);
     LiveData<List<Place>> searchPlacesFromHistory(String query);
     void persistPlace(Place place, String action);
     LiveData<List<Place>> getAllPersistedPlaces();

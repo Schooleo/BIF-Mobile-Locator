@@ -109,16 +109,17 @@ public class PlaceRepository implements IPlaceRepository {
     }
 
     @Override
-    public LiveData<List<Place>> searchPlaces(String query) {
-        return doSearch(query, true);
+    public LiveData<List<Place>> searchPlaces(String query, Location userLocation) {
+        return doSearch(query, true, userLocation);
     }
 
     @Override
     public LiveData<List<Place>> searchPlacesFromHistory(String query) {
-        return doSearch(query, false);
+        return doSearch(query, false, null);
     }
 
-    private LiveData<List<Place>> doSearch(String query, boolean saveToHistory) {
+    private LiveData<List<Place>> doSearch(String query, boolean saveToHistory,
+                                           Location userLocation) {
         MutableLiveData<List<Place>> result = new MutableLiveData<>();
 
         if (query == null || query.isEmpty()) {
@@ -132,8 +133,10 @@ public class PlaceRepository implements IPlaceRepository {
 
             if (networkMonitor.isOnline()) {
                 try {
+                    Double lat = userLocation != null ? userLocation.latitude : null;
+                    Double lng = userLocation != null ? userLocation.longitude : null;
                     Response<List<PlaceDto>> response = restApiService
-                            .searchServerPlaces(query).execute();
+                            .searchServerPlaces(lat, lng, query).execute();
                     if (response.isSuccessful() && response.body() != null) {
                         for (PlaceDto dto : response.body()) {
                             if (!seenIds.contains(dto.id)) {
