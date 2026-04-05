@@ -20,7 +20,7 @@ public class MongoPlaceSearchProviderTest {
         PlaceRepository repo = Mockito.mock(PlaceRepository.class);
         MongoPlaceSearchProvider provider = new MongoPlaceSearchProvider(repo);
 
-        List<Place> result1 = provider.search(null);
+        List<Place> result1 = provider.search((String) null);
         List<Place> result2 = provider.search("");
         List<Place> result3 = provider.search("   ");
 

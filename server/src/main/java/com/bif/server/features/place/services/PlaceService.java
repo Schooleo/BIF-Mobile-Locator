@@ -2,6 +2,7 @@ package com.bif.server.features.place.services;
 
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.repositories.PlaceRepository;
+import com.bif.server.features.search.dto.PlaceSearchRequestDTO;
 import com.bif.server.features.search.services.PlaceSearchIndexSyncService;
 import com.bif.server.features.search.services.PlaceSearchProvider;
 import com.bif.server.features.sync.services.SyncVersionService;
@@ -90,8 +91,14 @@ public class PlaceService {
         }).orElse(false);
     }
 
+    public List<Place> search(PlaceSearchRequestDTO request) {
+        return placeSearchProvider.search(request);
+    }
+
     public List<Place> search(String query) {
-        return placeSearchProvider.search(query);
+        PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
+        request.setQuery(query);
+        return search(request);
     }
 
     public List<Place> getByTag(String tag) {

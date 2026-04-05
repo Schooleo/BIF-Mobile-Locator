@@ -5,6 +5,7 @@ import com.bif.server.features.place.dto.rest.PlaceResolveResponse;
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.services.PlaceIdentityService;
 import com.bif.server.features.place.services.PlaceService;
+import com.bif.server.features.search.dto.PlaceSearchRequestDTO;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -33,9 +34,9 @@ public class PlaceRestController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    @GetMapping("/search")
-    public List<Place> searchPlaces(@RequestParam String q) {
-        return placeService.search(q);
+    @PostMapping("/search")
+    public List<Place> searchPlaces(@RequestBody PlaceSearchRequestDTO request) {
+        return placeService.search(request);
     }
 
     @GetMapping("/tag/{tag}")

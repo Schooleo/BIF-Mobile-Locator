@@ -3,6 +3,7 @@ package com.bif.server.features.search.services;
 import com.bif.server.common.models.Location;
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.search.config.TypesenseProperties;
+import com.bif.server.features.search.dto.PlaceSearchRequestDTO;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +22,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 @Component
 public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
@@ -32,9 +34,9 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
-        @Autowired
-        public TypesensePlaceSearchProvider(TypesenseProperties typesenseProperties,
-                        ObjectMapper objectMapper) {
+    @Autowired
+    public TypesensePlaceSearchProvider(TypesenseProperties typesenseProperties,
+                                        ObjectMapper objectMapper) {
         this.typesenseProperties = typesenseProperties;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
@@ -43,26 +45,38 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
                 .build();
     }
 
-
-        // Constructor overload for tests to inject a custom HttpClient
-        TypesensePlaceSearchProvider(TypesenseProperties typesenseProperties,
-                     ObjectMapper objectMapper,
-                     HttpClient httpClient) {
+    // Constructor overload for tests to inject a custom HttpClient
+    TypesensePlaceSearchProvider(TypesenseProperties typesenseProperties,
+                                 ObjectMapper objectMapper,
+                                 HttpClient httpClient) {
         this.typesenseProperties = typesenseProperties;
         this.objectMapper = objectMapper;
         this.httpClient = httpClient != null ? httpClient : HttpClient.newBuilder()
-            .connectTimeout(Duration.ofMillis(
-                typesenseProperties.getConnectTimeoutMs()))
-            .build();
-        }
+                .connectTimeout(Duration.ofMillis(
+                        typesenseProperties.getConnectTimeoutMs()))
+                .build();
+    }
 
     @Override
+    public List<Place> search(PlaceSearchRequestDTO request) {
+        return search(request, "name,address");
+    }
+
     public List<Place> search(String query) {
-        return search(query, "name,address", 20);
+        PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
+        request.setQuery(query);
+        return search(request);
     }
 
     public List<Place> search(String query, String queryBy, int perPage) {
-        if (query == null || query.isBlank()) {
+        PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
+        request.setQuery(query);
+        request.setPerPage(perPage);
+        return search(request, queryBy);
+    }
+
+    private List<Place> search(PlaceSearchRequestDTO request, String queryBy) {
+        if (request == null || request.getQuery() == null || request.getQuery().isBlank()) {
             return Collections.emptyList();
         }
 
@@ -78,8 +92,8 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
         }
 
         try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(buildSearchUri(query, queryBy, perPage))
+            HttpRequest httpRequest = HttpRequest.newBuilder()
+                    .uri(buildSearchUri(request, queryBy))
                     .timeout(Duration.ofMillis(
                             typesenseProperties.getReadTimeoutMs()))
                     .header("X-TYPESENSE-API-KEY", typesenseProperties.getApiKey())
@@ -87,7 +101,7 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
                     .build();
 
             HttpResponse<String> response = httpClient.send(
-                    request, HttpResponse.BodyHandlers.ofString());
+                    httpRequest, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 LOGGER.warn("Typesense search failed with status {}", response.statusCode());
@@ -106,19 +120,28 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
     }
 
     private URI buildSearchUri(String query) {
-        return buildSearchUri(query, "name,address", 20);
+        PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
+        request.setQuery(query);
+        return buildSearchUri(request, "name,address");
     }
 
     private URI buildSearchUri(String query, String queryBy, int perPage) {
+        PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
+        request.setQuery(query);
+        request.setPerPage(perPage);
+        return buildSearchUri(request, queryBy);
+    }
+
+    private URI buildSearchUri(PlaceSearchRequestDTO request, String queryBy) {
         String protocol = safe(typesenseProperties.getProtocol(), "http");
         String host = safe(typesenseProperties.getHost(), "localhost");
         int port = typesenseProperties.getPort();
         String collection = encode(safe(typesenseProperties.getPlacesCollection(), "places"));
-        String encodedQuery = encode(query);
+        String encodedQuery = encode(safe(request != null ? request.getQuery() : null, ""));
         String encodedQueryBy = encode(safe(queryBy, "name,address"));
-        int resolvedPerPage = perPage > 0 ? perPage : 20;
+        int resolvedPerPage = request != null ? request.getPerPage() : 5;
 
-        String uri = String.format(
+        StringBuilder uriBuilder = new StringBuilder(String.format(
                 "%s://%s:%d/collections/%s/documents/search?q=%s&query_by=%s&per_page=%d",
                 protocol,
                 host,
@@ -127,8 +150,25 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
                 encodedQuery,
                 encodedQueryBy,
                 resolvedPerPage
-        );
-        return URI.create(uri);
+        ));
+
+        if (hasCoordinates(request)) {
+            String filterBy = String.format(
+                    Locale.US,
+                    "location:(%s, %s, 50km)",
+                    request.getLatitude(),
+                    request.getLongitude());
+            String sortBy = String.format(
+                    Locale.US,
+                    "location(%s, %s):asc, rating:desc",
+                    request.getLatitude(),
+                    request.getLongitude());
+
+            uriBuilder.append("&filter_by=").append(encode(filterBy));
+            uriBuilder.append("&sort_by=").append(encode(sortBy));
+        }
+
+        return URI.create(uriBuilder.toString());
     }
 
     private List<Place> parsePlaces(String payload) throws IOException {
@@ -140,8 +180,8 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
 
         List<Place> places = new ArrayList<>();
         for (JsonNode hit : hits) {
-            JsonNode doc = hit.path("document");
-            if (doc.isMissingNode() || doc.isNull()) {
+            JsonNode doc = extractDocument(hit);
+            if (doc == null) {
                 continue;
             }
 
@@ -162,6 +202,19 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
             places.add(place);
         }
         return places;
+    }
+
+    private JsonNode extractDocument(JsonNode hit) {
+        if (hit == null || hit.isNull() || hit.isMissingNode()) {
+            return null;
+        }
+
+        JsonNode document = hit.path("document");
+        if (!document.isMissingNode() && !document.isNull()) {
+            return document;
+        }
+
+        return hit.isObject() ? hit : null;
     }
 
     private Location parseLocation(JsonNode locationNode) {
@@ -223,6 +276,12 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
             return fallback;
         }
         return value;
+    }
+
+    private boolean hasCoordinates(PlaceSearchRequestDTO request) {
+        return request != null
+                && request.getLatitude() != null
+                && request.getLongitude() != null;
     }
 
     private String encode(String value) {

@@ -2,6 +2,7 @@ package com.bif.server.features.place.controllers;
 
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.services.PlaceService;
+import com.bif.server.features.search.dto.PlaceSearchRequestDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -65,12 +66,14 @@ class PlaceRestControllerTest {
     @Test
     void searchPlaces_DelegatesToService() {
         Place item = new Place();
-        when(placeService.search("test")).thenReturn(List.of(item));
+        PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
+        request.setQuery("test");
+        when(placeService.search(request)).thenReturn(List.of(item));
 
-        List<Place> result = controller.searchPlaces("test");
+        List<Place> result = controller.searchPlaces(request);
 
         assertEquals(1, result.size());
-        verify(placeService).search("test");
+        verify(placeService).search(request);
     }
 
     @Test

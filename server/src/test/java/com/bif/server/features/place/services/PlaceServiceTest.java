@@ -3,6 +3,7 @@ package com.bif.server.features.place.services;
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.place.services.PlaceAddressEnrichmentService;
+import com.bif.server.features.search.dto.PlaceSearchRequestDTO;
 import com.bif.server.features.search.services.PlaceSearchIndexSyncService;
 import com.bif.server.features.search.services.PlaceSearchProvider;
 import com.bif.server.features.sync.services.SyncVersionService;
@@ -155,13 +156,15 @@ class PlaceServiceTest {
     @Test
     void search_DelegatesToRepository() {
         Place place = new Place();
-        when(placeSearchProvider.search("test"))
+        PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
+        request.setQuery("test");
+        when(placeSearchProvider.search(request))
                 .thenReturn(List.of(place));
 
-        List<Place> result = placeService.search("test");
+        List<Place> result = placeService.search(request);
 
         assertEquals(1, result.size());
-        verify(placeSearchProvider).search("test");
+        verify(placeSearchProvider).search(request);
     }
 
     @Test
