@@ -7,6 +7,7 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.Transformations;
 import androidx.lifecycle.ViewModel;
+import androidx.lifecycle.ViewModelKt;
 
 import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.model.Group;
@@ -24,12 +25,25 @@ import com.bif.app.domain.repository.IRouteRepository;
 import com.bif.app.domain.repository.IReviewRepository;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
 import javax.inject.Inject;
 
 import dagger.hilt.android.lifecycle.HiltViewModel;
+import kotlin.Unit;
+import kotlin.coroutines.EmptyCoroutineContext;
+import kotlin.coroutines.Continuation;
+import kotlin.jvm.functions.Function2;
+import kotlinx.coroutines.BuildersKt;
+import kotlinx.coroutines.CoroutineScope;
+import kotlinx.coroutines.CoroutineStart;
+import kotlinx.coroutines.Job;
+import kotlinx.coroutines.flow.Flow;
+import kotlinx.coroutines.flow.FlowKt;
+import kotlinx.coroutines.flow.MutableStateFlow;
+import kotlinx.coroutines.flow.StateFlowKt;
 
 @HiltViewModel
 public class MapViewModel extends ViewModel {
@@ -60,7 +74,9 @@ public class MapViewModel extends ViewModel {
     private final MutableLiveData<String> locationSearchQuery = new MutableLiveData<>();
     public final LiveData<Location> searchResult;
 
-    private final MutableLiveData<String> placesSearchQuery = new MutableLiveData<>();
+        private final MutableStateFlow<String> placesSearchQuery = StateFlowKt.MutableStateFlow("");
+        private final MutableLiveData<List<Place>> _searchResults =
+            new MutableLiveData<>(Collections.emptyList());
     public final LiveData<List<Place>> searchResults;
 
     private final MutableLiveData<String> placesHistoryQuery = new MutableLiveData<>();
@@ -76,6 +92,15 @@ public class MapViewModel extends ViewModel {
     public final LiveData<List<Favorite>> allFavorites;
     public final LiveData<List<Group>> allGroups;
     public final LiveData<List<String>> searchHistory;
+
+    @Nullable
+    private Location currentSearchUserLocation;
+    @Nullable
+    private LiveData<List<Place>> activeSearchSource;
+    @Nullable
+    private Observer<List<Place>> activeSearchObserver;
+    @Nullable
+    private Job searchCollectorJob;
 
     private final java.util.concurrent.atomic.AtomicBoolean activeSearchPending =
             new java.util.concurrent.atomic.AtomicBoolean(false);
@@ -96,9 +121,7 @@ public class MapViewModel extends ViewModel {
         this.reviewRepository = reviewRepository;
 
         this.searchResult = Transformations.switchMap(locationSearchQuery, placeRepository::searchLocation);
-        this.searchResults = Transformations.switchMap(
-            placesSearchQuery,
-            query -> placeRepository.searchPlaces(query, null));
+        this.searchResults = _searchResults;
         this.historySearchResults = Transformations.switchMap(
                 placesHistoryQuery, placeRepository::searchPlacesFromHistory);
         this.allFavorites = favoriteRepository.getAllFavorites();
@@ -107,6 +130,8 @@ public class MapViewModel extends ViewModel {
 
         this.currentPlaceReviews = Transformations.switchMap(_currentPlaceId, reviewRepository::getReviewsForPlace);
         this.currentMyReview = Transformations.switchMap(_currentPlaceId, reviewRepository::getMyReview);
+
+        startSearchCollector();
     }
 
     public void setStatusText(String text) {
@@ -119,7 +144,15 @@ public class MapViewModel extends ViewModel {
 
     public void searchForPlaces(String query) {
         activeSearchPending.set(true);
-        placesSearchQuery.setValue(query);
+        String normalized = query == null ? "" : query;
+        placesSearchQuery.setValue(normalized);
+        if (searchCollectorJob == null) {
+            dispatchSearchQuery(normalized);
+        }
+    }
+
+    public void updateSearchUserLocation(@Nullable Location userLocation) {
+        currentSearchUserLocation = cloneLocation(userLocation);
     }
 
     public void searchForPlacesFromHistory(String query) {
@@ -362,5 +395,99 @@ public class MapViewModel extends ViewModel {
             normalized += 360f;
         }
         return normalized;
+    }
+
+    @Override
+    protected void onCleared() {
+        clearActiveSearchSource();
+        if (searchCollectorJob != null) {
+            searchCollectorJob.cancel(null);
+            searchCollectorJob = null;
+        }
+        super.onCleared();
+    }
+
+    private void startSearchCollector() {
+        Flow<String> distinctQueries = FlowKt.distinctUntilChanged(placesSearchQuery);
+
+        Function2<String, Continuation<? super Boolean>, Object> isEmptyQuery =
+                (query, continuation) -> query == null || query.trim().isEmpty();
+        Function2<String, Continuation<? super Boolean>, Object> isNonEmptyQuery =
+                (query, continuation) -> query != null && !query.trim().isEmpty();
+
+        Flow<String> immediateEmptyQueries = FlowKt.filter(distinctQueries, isEmptyQuery);
+        Flow<String> debouncedNonEmptyQueries = FlowKt.debounce(
+                FlowKt.filter(distinctQueries, isNonEmptyQuery),
+                400L);
+        Flow<String> mergedQueries = FlowKt.merge(immediateEmptyQueries, debouncedNonEmptyQueries);
+
+        Function2<String, Continuation<? super Unit>, Object> performSearch =
+                (query, continuation) -> {
+                    dispatchSearchQuery(query);
+                    return Unit.INSTANCE;
+                };
+
+        Function2<CoroutineScope, Continuation<? super Unit>, Object> collector =
+                (scope, continuation) -> FlowKt.collectLatest(
+                        mergedQueries,
+                        performSearch,
+                        continuation);
+
+        try {
+            searchCollectorJob = BuildersKt.launch(
+                    ViewModelKt.getViewModelScope(this),
+                    EmptyCoroutineContext.INSTANCE,
+                    CoroutineStart.DEFAULT,
+                    collector);
+        } catch (IllegalStateException ignored) {
+            // Unit tests without a Main dispatcher fall back to direct dispatch in searchForPlaces.
+            searchCollectorJob = null;
+        }
+    }
+
+    private void dispatchSearchQuery(@Nullable String rawQuery) {
+        String query = rawQuery == null ? "" : rawQuery.trim();
+        if (query.isEmpty()) {
+            clearActiveSearchSource();
+            _searchResults.postValue(Collections.emptyList());
+            notifySearchDone(0);
+            return;
+        }
+
+        Location locationSnapshot = cloneLocation(currentSearchUserLocation);
+        LiveData<List<Place>> nextSource = placeRepository.searchPlaces(query, locationSnapshot);
+        if (nextSource == null) {
+            clearActiveSearchSource();
+            _searchResults.postValue(Collections.emptyList());
+            notifySearchDone(0);
+            return;
+        }
+
+        clearActiveSearchSource();
+        Observer<List<Place>> observer = places -> {
+            List<Place> safeResults = places != null ? places : Collections.emptyList();
+            _searchResults.postValue(safeResults);
+            notifySearchDone(safeResults.size());
+        };
+
+        activeSearchSource = nextSource;
+        activeSearchObserver = observer;
+        nextSource.observeForever(observer);
+    }
+
+    private void clearActiveSearchSource() {
+        if (activeSearchSource != null && activeSearchObserver != null) {
+            activeSearchSource.removeObserver(activeSearchObserver);
+        }
+        activeSearchSource = null;
+        activeSearchObserver = null;
+    }
+
+    @Nullable
+    private Location cloneLocation(@Nullable Location source) {
+        if (source == null) {
+            return null;
+        }
+        return new Location(source.latitude, source.longitude);
     }
 }

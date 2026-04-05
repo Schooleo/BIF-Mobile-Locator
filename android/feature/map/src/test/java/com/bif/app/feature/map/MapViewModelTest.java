@@ -7,6 +7,9 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -252,7 +255,7 @@ public class MapViewModelTest {
         viewModel.searchForPlaces(query);
 
         // Assert
-        Mockito.verify(placeRepository).searchPlaces(query, null);
+        Mockito.verify(placeRepository, timeout(1200)).searchPlaces(eq(query), isNull());
     }
 
     // allFavorites
