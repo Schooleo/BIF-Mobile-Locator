@@ -12,4 +12,5 @@ public interface RatingRepository extends MongoRepository<PlaceReview, String> {
     Optional<PlaceReview> findByUserIdAndPlaceId(String userId, String placeId);
 
     Page<PlaceReview> findByPlaceIdOrderByCreatedAtDesc(String placeId, Pageable pageable);
+    java.util.List<PlaceReview> findByPlaceIdOrderByCreatedAtDesc(String placeId);
 }

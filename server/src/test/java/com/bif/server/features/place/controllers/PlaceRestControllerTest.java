@@ -22,11 +22,14 @@ class PlaceRestControllerTest {
     @Mock
     private PlaceService placeService;
 
+    @Mock
+    private com.bif.server.features.place.services.PlaceIdentityService placeIdentityService;
+
     private PlaceRestController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new PlaceRestController(placeService);
+        controller = new PlaceRestController(placeService, placeIdentityService);
     }
 
     @Test

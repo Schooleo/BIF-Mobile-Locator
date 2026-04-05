@@ -12,21 +12,30 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.stream.Collectors;
+
+import com.bif.server.features.place.dto.rest.ReviewResponseDTO;
+import com.bif.server.features.user.models.User;
+import com.bif.server.features.user.repositories.UserRepository;
 
 @Service
 public class RatingService {
     private final RatingRepository ratingRepository;
     private final PlaceRatingCacheUpdater placeRatingCacheUpdater;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final UserRepository userRepository;
 
     public RatingService(RatingRepository ratingRepository,
                          PlaceRatingCacheUpdater placeRatingCacheUpdater,
-                         ApplicationEventPublisher applicationEventPublisher) {
+                         ApplicationEventPublisher applicationEventPublisher,
+                         UserRepository userRepository) {
         this.ratingRepository = ratingRepository;
         this.placeRatingCacheUpdater = placeRatingCacheUpdater;
         this.applicationEventPublisher = applicationEventPublisher;
+        this.userRepository = userRepository;
     }
 
     @Transactional
@@ -67,6 +76,39 @@ public class RatingService {
     public Page<PlaceReview> getPlaceReviews(String placeId, Pageable pageable) {
         String resolvedPlaceId = required(placeId, "placeId");
         return ratingRepository.findByPlaceIdOrderByCreatedAtDesc(resolvedPlaceId, pageable);
+    }
+
+    public List<PlaceReview> getPlaceReviewsAsList(String placeId) {
+        String resolvedPlaceId = required(placeId, "placeId");
+        return ratingRepository.findByPlaceIdOrderByCreatedAtDesc(resolvedPlaceId);
+    }
+
+    public List<ReviewResponseDTO> getPlaceReviewsWithUsers(String placeId) {
+        List<PlaceReview> reviews = getPlaceReviewsAsList(placeId);
+        return reviews.stream().map(this::mapToReviewResponseDTO).collect(Collectors.toList());
+    }
+
+    public Optional<ReviewResponseDTO> getUserReviewWithUser(String userId, String placeId) {
+        return getUserReview(userId, placeId).map(this::mapToReviewResponseDTO);
+    }
+
+    private ReviewResponseDTO mapToReviewResponseDTO(PlaceReview review) {
+        String userName = "Anonymous";
+        if (review.getUserId() != null) {
+            Optional<User> userOpt = userRepository.findById(review.getUserId());
+            if (userOpt.isPresent() && userOpt.get().getUsername() != null) {
+                userName = userOpt.get().getUsername();
+            }
+        }
+        return new ReviewResponseDTO(
+                review.getId(),
+                review.getPlaceId(),
+                review.getUserId(),
+                userName,
+                review.getStars(),
+                review.getComment(),
+                review.getCreatedAt()
+        );
     }
 
     @Transactional

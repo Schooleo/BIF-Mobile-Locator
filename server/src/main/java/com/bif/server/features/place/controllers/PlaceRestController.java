@@ -1,6 +1,9 @@
 package com.bif.server.features.place.controllers;
 
+import com.bif.server.features.place.dto.rest.PlaceResolveRequest;
+import com.bif.server.features.place.dto.rest.PlaceResolveResponse;
 import com.bif.server.features.place.models.Place;
+import com.bif.server.features.place.services.PlaceIdentityService;
 import com.bif.server.features.place.services.PlaceService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -11,9 +14,11 @@ import java.util.List;
 @RequestMapping("/api/places")
 public class PlaceRestController {
     private final PlaceService placeService;
+    private final PlaceIdentityService placeIdentityService;
 
-    public PlaceRestController(PlaceService placeService) {
+    public PlaceRestController(PlaceService placeService, PlaceIdentityService placeIdentityService) {
         this.placeService = placeService;
+        this.placeIdentityService = placeIdentityService;
     }
 
     @GetMapping
@@ -51,6 +56,18 @@ public class PlaceRestController {
     @PostMapping("/from-search")
     public Place saveFromSearch(@RequestBody Place place) {
         return placeService.saveFromSearch(place);
+    }
+
+    @PostMapping("/resolve")
+    public ResponseEntity<PlaceResolveResponse> resolvePlace(@RequestBody PlaceResolveRequest request) {
+        String internalId = placeIdentityService.resolveInternalPlaceId(
+                request.externalSource(),
+                request.externalId(),
+                request.lat(),
+                request.lng(),
+                request.name()
+        );
+        return ResponseEntity.ok(new PlaceResolveResponse(internalId, request.name()));
     }
 
     @DeleteMapping("/{id}")

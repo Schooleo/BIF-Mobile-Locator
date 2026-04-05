@@ -15,11 +15,13 @@ import com.bif.app.domain.model.MapState;
 import com.bif.app.domain.model.OfflineMapDownloadState;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.Route;
+import com.bif.app.domain.model.Review;
 import com.bif.app.domain.repository.IFavoriteRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.IRouteRepository;
+import com.bif.app.domain.repository.IReviewRepository;
 
 import java.util.Arrays;
 import java.util.List;
@@ -41,6 +43,7 @@ public class MapViewModel extends ViewModel {
     private final IFavoriteRepository favoriteRepository;
     private final IGroupRepository groupRepository;
     private final IRouteRepository routeRepository;
+    private final IReviewRepository reviewRepository;
 
     private final MutableLiveData<Event<String>> _statusText = new MutableLiveData<>();
     public final LiveData<Event<String>> statusText = _statusText;
@@ -63,6 +66,13 @@ public class MapViewModel extends ViewModel {
     private final MutableLiveData<String> placesHistoryQuery = new MutableLiveData<>();
     public final LiveData<List<Place>> historySearchResults;
 
+    private final MutableLiveData<String> _currentPlaceId = new MutableLiveData<>();
+    public final LiveData<List<Review>> currentPlaceReviews;
+    public final LiveData<Review> currentMyReview;
+
+    private final MutableLiveData<Boolean> _isLoadingReviews = new MutableLiveData<>(false);
+    public final LiveData<Boolean> isLoadingReviews = _isLoadingReviews;
+
     public final LiveData<List<Favorite>> allFavorites;
     public final LiveData<List<Group>> allGroups;
     public final LiveData<List<String>> searchHistory;
@@ -76,12 +86,14 @@ public class MapViewModel extends ViewModel {
             IPlaceRepository placeRepository,
             IFavoriteRepository favoriteRepository,
             IGroupRepository groupRepository,
-            IRouteRepository routeRepository) {
+            IRouteRepository routeRepository,
+            IReviewRepository reviewRepository) {
         this.mapRepository = mapRepository;
         this.placeRepository = placeRepository;
         this.favoriteRepository = favoriteRepository;
         this.groupRepository = groupRepository;
         this.routeRepository = routeRepository;
+        this.reviewRepository = reviewRepository;
 
         this.searchResult = Transformations.switchMap(locationSearchQuery, placeRepository::searchLocation);
         this.searchResults = Transformations.switchMap(placesSearchQuery, placeRepository::searchPlaces);
@@ -90,6 +102,9 @@ public class MapViewModel extends ViewModel {
         this.allFavorites = favoriteRepository.getAllFavorites();
         this.allGroups = groupRepository.getGroups();
         this.searchHistory = placeRepository.getSearchHistory();
+
+        this.currentPlaceReviews = Transformations.switchMap(_currentPlaceId, reviewRepository::getReviewsForPlace);
+        this.currentMyReview = Transformations.switchMap(_currentPlaceId, reviewRepository::getMyReview);
     }
 
     public void setStatusText(String text) {
@@ -148,6 +163,27 @@ public class MapViewModel extends ViewModel {
 
     public void cacheViewedPlace(Place place) {
         placeRepository.persistPlace(place, "viewed");
+    }
+
+    public void loadReviews(Place place) {
+        if (place == null || place.location == null) return;
+        _isLoadingReviews.setValue(true);
+        new Thread(() -> {
+            String internalId = reviewRepository.resolveInternalPlaceId(
+                place.placeSource, place.id, place.location.latitude, place.location.longitude, place.name);
+            _currentPlaceId.postValue(internalId);
+            reviewRepository.refreshReviews(internalId);
+            // After resolving and triggering refresh, we can consider "initial setup" done. 
+            // In a real app, refreshReviews callback would set this to false.
+            _isLoadingReviews.postValue(false);
+        }).start();
+    }
+
+    public void submitReview(int stars, String comment) {
+        String placeId = _currentPlaceId.getValue();
+        if (placeId != null) {
+            reviewRepository.submitReview(placeId, stars, comment);
+        }
     }
 
     public void removeFromFavorites(Favorite favorite) {
@@ -297,7 +333,6 @@ public class MapViewModel extends ViewModel {
                 sourceLabel);
     }
 
-    @NonNull
     private String formatDurationText(@NonNull Route route) {
         long totalMinutes = Math.max(1L, Math.round(route.getDurationSeconds() / 60.0));
         long hours = totalMinutes / 60L;
@@ -311,7 +346,6 @@ public class MapViewModel extends ViewModel {
         return String.format(Locale.getDefault(), "%d hr %d min", hours, minutes);
     }
 
-    @NonNull
     private String formatDistanceText(@NonNull Route route) {
         double distanceMeters = Math.max(0.0, route.getDistanceMeters());
         if (distanceMeters < 1000.0) {

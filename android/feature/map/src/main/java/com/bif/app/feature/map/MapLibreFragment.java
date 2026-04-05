@@ -52,6 +52,7 @@ import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
 import com.bif.app.domain.model.OfflineMapDownloadState;
 import com.bif.app.domain.model.Place;
+import com.bif.app.domain.model.Review;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.progressindicator.CircularProgressIndicator;
 
@@ -319,6 +320,19 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             viewModel.setStatusText("Map initialization failed on this device.");
         }
 
+        // Initialize adapter
+        reviewAdapter = new ReviewAdapter(new ReviewAdapter.OnReviewInteractionListener() {
+            @Override
+            public void onAddReviewClicked() {
+                showAddReviewDialog(null);
+            }
+
+            @Override
+            public void onEditReviewClicked(com.bif.app.domain.model.Review review) {
+                showAddReviewDialog(review);
+            }
+        });
+
         viewModel.allFavorites.observe(getViewLifecycleOwner(), favorites -> {
             currentFavorites = favorites != null ? favorites : new ArrayList<>();
             refreshFavoriteMarkers();
@@ -372,6 +386,14 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 return;
             }
             renderPlaceResults(places);
+        });
+
+        viewModel.currentPlaceReviews.observe(getViewLifecycleOwner(), reviews -> {
+            updateReviewList(reviews, viewModel.currentMyReview.getValue());
+        });
+
+        viewModel.currentMyReview.observe(getViewLifecycleOwner(), myReview -> {
+            updateReviewList(viewModel.currentPlaceReviews.getValue(), myReview);
         });
 
         if (mapView != null) {
@@ -2176,8 +2198,10 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         // Setup Chip filters
         setupChipFilters(root);
 
-        // Load reviews (simulated - replace with actual API call)
-        loadReviewsData();
+        // Load reviews via ViewModel
+        if (place != null) {
+            viewModel.loadReviews(place);
+        }
 
         View layoutContainer = root.findViewById(R.id.layout_container);
         layoutContainer.post(() -> {
@@ -2195,10 +2219,6 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             return;
         }
 
-        // Initialize adapter
-        if (reviewAdapter == null) {
-            reviewAdapter = new ReviewAdapter();
-        }
         rvReviews.setAdapter(reviewAdapter);
 
         // Setup LinearLayoutManager for horizontal carousel
@@ -2227,6 +2247,25 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                     mlp.width = itemWidth;
                 }
             }
+        });
+
+        rvReviews.addOnItemTouchListener(new RecyclerView.OnItemTouchListener() {
+            @Override
+            public boolean onInterceptTouchEvent(@NonNull RecyclerView rv, @NonNull android.view.MotionEvent e) {
+                int action = e.getActionMasked();
+                if (action == android.view.MotionEvent.ACTION_DOWN) {
+                    rv.getParent().requestDisallowInterceptTouchEvent(true);
+                } else if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) {
+                    rv.getParent().requestDisallowInterceptTouchEvent(false);
+                }
+                return false;
+            }
+
+            @Override
+            public void onTouchEvent(@NonNull RecyclerView rv, @NonNull android.view.MotionEvent e) {}
+
+            @Override
+            public void onRequestDisallowInterceptTouchEvent(boolean disallowIntercept) {}
         });
     }
 
@@ -2262,37 +2301,52 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         });
     }
 
-    private void loadReviewsData() {
-        // Mock data - replace with actual API call to fetch reviews
+    private void updateReviewList(java.util.List<com.bif.app.domain.model.Review> reviews, com.bif.app.domain.model.Review myReview) {
         allReviews.clear();
-        
-        // Always add "Add Review" card at position 0
-        allReviews.add(new ReviewItem());
 
-        // Add sample reviews for demonstration
-        com.bif.app.core.network.dto.place.PlaceReviewDto review1 = 
-            new com.bif.app.core.network.dto.place.PlaceReviewDto();
-        review1.userId = "user123";
-        review1.userName = "John Doe";
-        review1.rating = 5;
-        review1.comment = "Amazing place! Great atmosphere and friendly staff.";
-        allReviews.add(new ReviewItem(ReviewItem.VIEW_TYPE_OTHERS, review1, false));
-
-        com.bif.app.core.network.dto.place.PlaceReviewDto review2 = 
-            new com.bif.app.core.network.dto.place.PlaceReviewDto();
-        review2.userId = "user456";
-        review2.userName = "Jane Smith";
-        review2.rating = 4;
-        review2.comment = "Good food and nice service. Will come back!";
-        allReviews.add(new ReviewItem(ReviewItem.VIEW_TYPE_OTHERS, review2, false));
-
-        // Update review count in UI
-        TextView tvRatingCount = placeDetailSheet.findViewById(R.id.tv_rating_count);
-        if (tvRatingCount != null && allReviews.size() > 1) {
-            tvRatingCount.setText(String.format(Locale.getDefault(), "%d reviews", allReviews.size() - 1));
+        if (myReview != null) {
+            allReviews.add(new ReviewItem(ReviewItem.VIEW_TYPE_MINE, myReview, true));
+        } else {
+            allReviews.add(new ReviewItem());
         }
 
-        // Stop shimmer and show reviews
+        if (reviews != null) {
+            for (com.bif.app.domain.model.Review review : reviews) {
+                if (myReview != null && review.userId.equals(myReview.userId)) {
+                    continue;
+                }
+                allReviews.add(new ReviewItem(ReviewItem.VIEW_TYPE_OTHERS, review, false));
+            }
+        }
+
+        int count = (reviews != null ? reviews.size() : 0);
+        double totalStars = 0;
+
+        if (reviews != null) {
+            for (com.bif.app.domain.model.Review review : reviews) {
+                totalStars += review.stars;
+            }
+        }
+
+        double averageRating = count > 0 ? totalStars / count : 0.0;
+
+        TextView tvRatingCount = placeDetailSheet.findViewById(R.id.tv_rating_count);
+        if (tvRatingCount != null) {
+            tvRatingCount.setText(String.format(Locale.getDefault(), "%d reviews", count));
+        }
+
+        TextView tvRatingValue = placeDetailSheet.findViewById(R.id.tv_rating_value);
+        RatingBar rbPlaceRating = placeDetailSheet.findViewById(R.id.rb_place_rating);
+        if (tvRatingValue != null && rbPlaceRating != null) {
+            if (averageRating > 0) {
+                tvRatingValue.setText(String.format(Locale.getDefault(), "%.1f", averageRating));
+                rbPlaceRating.setRating((float) averageRating);
+            } else {
+                tvRatingValue.setText("0");
+                rbPlaceRating.setRating(0);
+            }
+        }
+
         if (shimmerReviews != null) {
             shimmerReviews.stopShimmer();
             shimmerReviews.setVisibility(View.GONE);
@@ -2301,8 +2355,54 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             rvReviews.setVisibility(View.VISIBLE);
         }
 
-        // Submit list to adapter
-        reviewAdapter.submitList(new ArrayList<>(allReviews));
+        int activeStarFilter = 0;
+        if (chipGroupFilters != null) {
+            List<Integer> checkedIds = chipGroupFilters.getCheckedChipIds();
+            if (!checkedIds.isEmpty()) {
+                int selectedId = checkedIds.get(0);
+                if (selectedId == R.id.chip_filter_5) activeStarFilter = 5;
+                else if (selectedId == R.id.chip_filter_4) activeStarFilter = 4;
+                else if (selectedId == R.id.chip_filter_3) activeStarFilter = 3;
+                else if (selectedId == R.id.chip_filter_2) activeStarFilter = 2;
+                else if (selectedId == R.id.chip_filter_1) activeStarFilter = 1;
+            }
+        }
+
+        if (reviewAdapter != null) {
+            if (activeStarFilter == 0) {
+                reviewAdapter.showAllReviews(allReviews);
+            } else {
+                reviewAdapter.filterByStarRating(allReviews, activeStarFilter);
+            }
+        }
+    }
+
+    private void showAddReviewDialog(@Nullable com.bif.app.domain.model.Review existingReview) {
+        View view = getLayoutInflater().inflate(R.layout.dialog_add_review, null);
+        RatingBar ratingBar = view.findViewById(R.id.feedback_rating_bar);
+        com.google.android.material.textfield.TextInputEditText etComment = view.findViewById(R.id.feedback_input);
+
+        if (existingReview != null) {
+            ratingBar.setRating(existingReview.stars);
+            if (existingReview.comment != null) {
+                etComment.setText(existingReview.comment);
+            }
+        }
+
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle(existingReview == null ? "Add Review" : "Edit Review")
+                .setView(view)
+                .setPositiveButton("Submit", (dialog, which) -> {
+                    int stars = (int) ratingBar.getRating();
+                    if (stars > 0) {
+                        String comment = etComment.getText() != null ? etComment.getText().toString().trim() : "";
+                        viewModel.submitReview(stars, comment);
+                    } else {
+                        Toast.makeText(getContext(), "Please provide a rating", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private Favorite findFavoriteForPlace(Place place) {

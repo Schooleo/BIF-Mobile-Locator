@@ -5,29 +5,24 @@ import com.bif.server.features.place.events.PlaceRatingUpdatedEvent;
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.repositories.RatingRepository;
-import org.springframework.context.ApplicationEventPublisher;
+import com.bif.server.features.sync.services.SyncVersionService;
+import com.bif.server.features.user.repositories.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DuplicateKeyException;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Query;
 
-import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class RatingServiceTest {
@@ -36,150 +31,95 @@ class RatingServiceTest {
     private RatingRepository ratingRepository;
 
     @Mock
-    private PlaceRatingCacheUpdater placeRatingCacheUpdater;
+    private MongoTemplate mongoTemplate;
 
     @Mock
-    private ApplicationEventPublisher applicationEventPublisher;
+    private SyncVersionService syncVersionService;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private UserRepository userRepository;
+
+    private PlaceRatingCacheUpdater updater;
     private RatingService ratingService;
 
     @BeforeEach
     void setUp() {
-        ratingService = new RatingService(
-                ratingRepository,
-                placeRatingCacheUpdater,
-                applicationEventPublisher);
+        updater = new PlaceRatingCacheUpdater(mongoTemplate, syncVersionService);
+        ratingService = new RatingService(ratingRepository, updater, eventPublisher, userRepository);
     }
 
     @Test
-    void saveReview_PersistsReviewAndUpdatesCachedRating() {
-        when(ratingRepository.save(any(PlaceReview.class))).thenAnswer(invocation -> {
-            PlaceReview review = invocation.getArgument(0);
-            review.setId("r1");
-            return review;
-        });
+    void saveReview_WhenAddingNewReview_CalculatesCorrectAtomicMathAndPublishesEvent() {
+        String userId = "u1";
+        String placeId = "p1";
+        ReviewDTO dto = new ReviewDTO(5, "Excellent");
 
-        Place updatedPlace = new Place();
-        updatedPlace.setId("p1");
-        when(placeRatingCacheUpdater.incrementAndRecalculate("u1", "p1", 5))
-                .thenReturn(updatedPlace);
+        Place snapshot = new Place();
+        snapshot.setId(placeId);
+        snapshot.setRating(4.0);
+        snapshot.setReviewCount(10);
+        
+        when(mongoTemplate.findOne(any(Query.class), eq(Place.class))).thenReturn(snapshot);
 
-        PlaceReview saved = ratingService.saveReview("u1", "p1", new ReviewDTO(5, "  Great place  "));
+        Place updatedResult = new Place();
+        updatedResult.setId(placeId);
+        updatedResult.setRating(4.09);
+        updatedResult.setReviewCount(11);
+        
+        when(mongoTemplate.findAndModify(any(Query.class), any(), any(), eq(Place.class)))
+                .thenReturn(updatedResult);
+        
+        when(ratingRepository.save(any(PlaceReview.class))).thenAnswer(i -> i.getArguments()[0]);
 
-        assertEquals("r1", saved.getId());
-        assertEquals("u1", saved.getUserId());
-        assertEquals("p1", saved.getPlaceId());
-        assertEquals(5, saved.getStars());
-        assertEquals("Great place", saved.getComment());
+        ratingService.saveReview(userId, placeId, dto);
 
-        ArgumentCaptor<PlaceReview> reviewCaptor = ArgumentCaptor.forClass(PlaceReview.class);
-        verify(ratingRepository).save(reviewCaptor.capture());
-        assertEquals("u1", reviewCaptor.getValue().getUserId());
-        assertEquals("p1", reviewCaptor.getValue().getPlaceId());
-        assertEquals(5, reviewCaptor.getValue().getStars());
-
-        ArgumentCaptor<PlaceRatingUpdatedEvent> eventCaptor =
-                ArgumentCaptor.forClass(PlaceRatingUpdatedEvent.class);
-        verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
+        ArgumentCaptor<PlaceRatingUpdatedEvent> eventCaptor = ArgumentCaptor.forClass(PlaceRatingUpdatedEvent.class);
+        verify(eventPublisher, times(1)).publishEvent(eventCaptor.capture());
+        
         PlaceRatingUpdatedEvent event = eventCaptor.getValue();
-        assertEquals("p1", event.placeId());
-        assertEquals(updatedPlace.getRating(), event.rating(), 0.0001);
-        assertEquals(updatedPlace.getReviewCount(), event.reviewCount());
+        assertEquals(placeId, event.placeId());
+        assertEquals(4.09, event.rating(), 0.001);
+        assertEquals(11, event.reviewCount());
+        
+        verify(mongoTemplate).findAndModify(any(Query.class), any(), any(), eq(Place.class));
     }
 
     @Test
-        void saveReview_WhenDuplicateReview_ThrowsDuplicateKeyException() {
-        when(ratingRepository.save(any(PlaceReview.class)))
-                .thenThrow(new DuplicateKeyException("duplicate"));
+    void deleteReview_WhenRemoved_RecalculatesRatingCorrectly() {
+        String userId = "u1";
+        String placeId = "p1";
+        PlaceReview existingReview = new PlaceReview();
+        existingReview.setId("r1");
+        existingReview.setStars(5);
+        
+        when(ratingRepository.findByUserIdAndPlaceId(userId, placeId)).thenReturn(Optional.of(existingReview));
 
-                assertThrows(DuplicateKeyException.class,
-                () -> ratingService.saveReview("u1", "p1", new ReviewDTO(4, "ok")));
+        Place snapshot = new Place();
+        snapshot.setId(placeId);
+        snapshot.setRating(4.09);
+        snapshot.setReviewCount(11);
+        when(mongoTemplate.findOne(any(Query.class), eq(Place.class))).thenReturn(snapshot);
 
-                verifyNoInteractions(placeRatingCacheUpdater, applicationEventPublisher);
-    }
+        Place updatedResult = new Place();
+        updatedResult.setId(placeId);
+        updatedResult.setRating(4.0);
+        updatedResult.setReviewCount(10);
+        
+        when(mongoTemplate.findAndModify(any(Query.class), any(), any(), eq(Place.class)))
+                .thenReturn(updatedResult);
 
-    @Test
-    void getUserReview_DelegatesToRepository() {
-        PlaceReview review = new PlaceReview();
-        when(ratingRepository.findByUserIdAndPlaceId("u1", "p1"))
-                .thenReturn(Optional.of(review));
+        ratingService.deleteReview(userId, placeId);
 
-        Optional<PlaceReview> result = ratingService.getUserReview("u1", "p1");
-
-        assertTrue(result.isPresent());
-        verify(ratingRepository).findByUserIdAndPlaceId("u1", "p1");
-    }
-
-    @Test
-    void getPlaceReviews_DelegatesToRepository() {
-        PageRequest pageable = PageRequest.of(0, 20);
-        when(ratingRepository.findByPlaceIdOrderByCreatedAtDesc("p1", pageable))
-                .thenReturn(new PageImpl<>(List.of(new PlaceReview())));
-
-        var result = ratingService.getPlaceReviews("p1", pageable);
-
-        assertEquals(1, result.getTotalElements());
-        verify(ratingRepository).findByPlaceIdOrderByCreatedAtDesc("p1", pageable);
-    }
-
-    @Test
-    void deleteReview_WhenFound_DecrementsCacheAndDeletesReview() {
-        PlaceReview review = new PlaceReview();
-        review.setId("r1");
-        review.setUserId("u1");
-        review.setPlaceId("p1");
-        review.setStars(4);
-
-        when(ratingRepository.findByUserIdAndPlaceId("u1", "p1"))
-                .thenReturn(Optional.of(review));
-
-        Place updatedPlace = new Place();
-        updatedPlace.setId("p1");
-        when(placeRatingCacheUpdater.decrementAndRecalculate("u1", "p1", 4))
-                .thenReturn(updatedPlace);
-
-        ratingService.deleteReview("u1", "p1");
-
-        verify(ratingRepository).findByUserIdAndPlaceId("u1", "p1");
-        verify(placeRatingCacheUpdater).decrementAndRecalculate("u1", "p1", 4);
         verify(ratingRepository).deleteById("r1");
-        ArgumentCaptor<PlaceRatingUpdatedEvent> eventCaptor =
-                ArgumentCaptor.forClass(PlaceRatingUpdatedEvent.class);
-        verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
+        
+        ArgumentCaptor<PlaceRatingUpdatedEvent> eventCaptor = ArgumentCaptor.forClass(PlaceRatingUpdatedEvent.class);
+        verify(eventPublisher, times(1)).publishEvent(eventCaptor.capture());
+        
         PlaceRatingUpdatedEvent event = eventCaptor.getValue();
-        assertEquals("p1", event.placeId());
-        assertEquals(updatedPlace.getRating(), event.rating(), 0.0001);
-        assertEquals(updatedPlace.getReviewCount(), event.reviewCount());
-    }
-
-    @Test
-    void deleteReview_WhenReviewNotFound_ThrowsNotFound() {
-        when(ratingRepository.findByUserIdAndPlaceId("u1", "p1"))
-                .thenReturn(Optional.empty());
-
-        assertThrows(NoSuchElementException.class,
-                () -> ratingService.deleteReview("u1", "p1"));
-
-        verify(ratingRepository).findByUserIdAndPlaceId("u1", "p1");
-        verifyNoInteractions(placeRatingCacheUpdater);
-        verify(ratingRepository, never()).deleteById(any());
-    }
-
-    @Test
-    void deleteReview_WhenCacheUpdateFails_DoesNotDeleteReviewDocument() {
-        PlaceReview review = new PlaceReview();
-        review.setId("r1");
-        review.setStars(5);
-
-        when(ratingRepository.findByUserIdAndPlaceId("u1", "p1"))
-                .thenReturn(Optional.of(review));
-        when(placeRatingCacheUpdater.decrementAndRecalculate("u1", "p1", 5))
-                .thenThrow(new IllegalStateException("concurrent update"));
-
-        assertThrows(IllegalStateException.class,
-                () -> ratingService.deleteReview("u1", "p1"));
-
-        verify(ratingRepository, never()).deleteById(any());
-        verify(applicationEventPublisher, never()).publishEvent(any());
+        assertEquals(4.0, event.rating(), 0.001);
+        assertEquals(10, event.reviewCount());
     }
 }

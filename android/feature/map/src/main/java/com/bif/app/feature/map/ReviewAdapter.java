@@ -5,12 +5,14 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.RatingBar;
 import android.widget.TextView;
+import com.bif.app.core.utils.DateTimeUtils;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.bif.app.domain.model.Review;
 import com.bif.app.feature.map.R;
 
 import java.util.ArrayList;
@@ -21,44 +23,33 @@ public class ReviewAdapter extends ListAdapter<ReviewItem, RecyclerView.ViewHold
     private static final DiffUtil.ItemCallback<ReviewItem> DIFF_CALLBACK = new DiffUtil.ItemCallback<ReviewItem>() {
         @Override
         public boolean areItemsTheSame(@NonNull ReviewItem oldItem, @NonNull ReviewItem newItem) {
-            if (oldItem.viewType != newItem.viewType) {
-                return false;
-            }
+            if (oldItem.viewType != newItem.viewType) return false;
+            if (oldItem.viewType == ReviewItem.VIEW_TYPE_ADD) return true;
 
-            if (oldItem.viewType == ReviewItem.VIEW_TYPE_ADD) {
-                return true;
-            }
-
-            if (oldItem.review == null || newItem.review == null) {
-                return false;
-            }
-
-            return oldItem.review.userId.equals(newItem.review.userId);
+            String oldId = oldItem.review != null ? oldItem.review.userId : null;
+            String newId = newItem.review != null ? newItem.review.userId : null;
+            return java.util.Objects.equals(oldId, newId);
         }
 
         @Override
         public boolean areContentsTheSame(@NonNull ReviewItem oldItem, @NonNull ReviewItem newItem) {
-            if (oldItem.viewType != newItem.viewType) {
-                return false;
-            }
-
-            if (oldItem.viewType == ReviewItem.VIEW_TYPE_ADD) {
-                return true;
-            }
-
-            if (oldItem.review == null || newItem.review == null) {
-                return oldItem.review == newItem.review;
-            }
-
-            return oldItem.review.userId.equals(newItem.review.userId) &&
-                    oldItem.review.rating == newItem.review.rating &&
-                    oldItem.review.comment.equals(newItem.review.comment) &&
-                    oldItem.review.userName.equals(newItem.review.userName);
+            if (oldItem.viewType != newItem.viewType) return false;
+            
+            // Simplified check after implementing equals() in Review domain class
+            return java.util.Objects.equals(oldItem.review, newItem.review);
         }
     };
 
-    public ReviewAdapter() {
+    public interface OnReviewInteractionListener {
+        void onAddReviewClicked();
+        void onEditReviewClicked(Review review);
+    }
+
+    private final OnReviewInteractionListener listener;
+
+    public ReviewAdapter(OnReviewInteractionListener listener) {
         super(DIFF_CALLBACK);
+        this.listener = listener;
     }
 
     @Override
@@ -91,11 +82,16 @@ public class ReviewAdapter extends ListAdapter<ReviewItem, RecyclerView.ViewHold
         ReviewItem item = getItem(position);
 
         if (holder instanceof AddReviewViewHolder) {
-            // No binding needed for add review card
+            holder.itemView.setOnClickListener(v -> {
+                if (listener != null) listener.onAddReviewClicked();
+            });
             return;
         } else if (holder instanceof MyReviewViewHolder && item.viewType == ReviewItem.VIEW_TYPE_MINE) {
             MyReviewViewHolder viewHolder = (MyReviewViewHolder) holder;
             viewHolder.bind(item.review);
+            viewHolder.itemView.setOnClickListener(v -> {
+                if (listener != null) listener.onEditReviewClicked(item.review);
+            });
         } else if (holder instanceof OthersReviewViewHolder && item.viewType == ReviewItem.VIEW_TYPE_OTHERS) {
             OthersReviewViewHolder viewHolder = (OthersReviewViewHolder) holder;
             viewHolder.bind(item.review);
@@ -123,14 +119,17 @@ public class ReviewAdapter extends ListAdapter<ReviewItem, RecyclerView.ViewHold
             tvReviewDate = itemView.findViewById(R.id.tv_review_date);
         }
 
-        public void bind(com.bif.app.core.network.dto.place.PlaceReviewDto review) {
+        public void bind(Review review) {
             if (review == null) {
                 return;
             }
 
-            rbReviewRating.setRating(review.rating);
+            rbReviewRating.setRating(review.stars);
             tvReviewComment.setText(review.comment != null ? review.comment : "");
-            tvReviewDate.setText("Today"); // You can calculate relative time here
+            
+            tvReviewDate.setText(DateTimeUtils.getRelativeTimeEnglish(review.createdAt));
+            
+            itemView.setAlpha(review.pendingSync ? 0.5f : 1.0f);
         }
     }
 
@@ -148,15 +147,18 @@ public class ReviewAdapter extends ListAdapter<ReviewItem, RecyclerView.ViewHold
             tvReviewDate = itemView.findViewById(R.id.tv_review_date);
         }
 
-        public void bind(com.bif.app.core.network.dto.place.PlaceReviewDto review) {
+        public void bind(Review review) {
             if (review == null) {
                 return;
             }
 
-            rbReviewRating.setRating(review.rating);
+            rbReviewRating.setRating(review.stars);
             tvReviewAuthor.setText(review.userName != null ? review.userName : "Anonymous");
             tvReviewComment.setText(review.comment != null ? review.comment : "");
-            tvReviewDate.setText("1 week ago"); // You can calculate relative time here
+            
+            tvReviewDate.setText(DateTimeUtils.getRelativeTimeEnglish(review.createdAt));
+            
+            itemView.setAlpha(review.pendingSync ? 0.5f : 1.0f);
         }
     }
 
@@ -179,7 +181,7 @@ public class ReviewAdapter extends ListAdapter<ReviewItem, RecyclerView.ViewHold
             if (starRating == 0) {
                 // Show all
                 filteredList.add(item);
-            } else if (item.review != null && item.review.rating == starRating) {
+            } else if (item.review != null && item.review.stars == starRating) {
                 filteredList.add(item);
             }
         }

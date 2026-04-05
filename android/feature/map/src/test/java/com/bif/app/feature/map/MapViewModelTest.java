@@ -5,6 +5,10 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.MutableLiveData;
@@ -15,10 +19,12 @@ import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.Route;
+import com.bif.app.domain.model.Review;
 import com.bif.app.domain.repository.IFavoriteRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
+import com.bif.app.domain.repository.IReviewRepository;
 import com.bif.app.domain.repository.IRouteRepository;
 
 import java.util.Collections;
@@ -56,6 +62,9 @@ public class MapViewModelTest {
     private IRouteRepository routeRepository;
 
     @Mock
+    private IReviewRepository reviewRepository;
+
+    @Mock
     private Observer<Location> searchResultObserver;
 
     @Mock
@@ -74,13 +83,18 @@ public class MapViewModelTest {
             .thenReturn(new MutableLiveData<>(Collections.emptyList()));
         Mockito.lenient().when(routeRepository.getRoute(ArgumentMatchers.anyList()))
             .thenReturn(new MutableLiveData<>());
+        Mockito.lenient().when(reviewRepository.getReviewsForPlace(ArgumentMatchers.anyString()))
+            .thenReturn(new MutableLiveData<>());
+        Mockito.lenient().when(reviewRepository.getMyReview(ArgumentMatchers.anyString()))
+            .thenReturn(new MutableLiveData<>());
 
         viewModel = new MapViewModel(
                 mapRepository,
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
-                routeRepository);
+                routeRepository,
+                reviewRepository);
         viewModel.searchResult.observeForever(searchResultObserver);
         viewModel.statusText.observeForever(statusTextObserver);
     }
@@ -255,7 +269,8 @@ public class MapViewModelTest {
             placeRepository,
             favoriteRepository,
             groupRepository,
-            routeRepository);
+            routeRepository,
+            reviewRepository);
 
         Observer<List<Favorite>> observer = Mockito.mock(Observer.class);
         vm.allFavorites.observeForever(observer);
@@ -400,11 +415,52 @@ public class MapViewModelTest {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
-                routeRepository);
+                routeRepository,
+                reviewRepository);
 
         assertEquals(RouteSession.Status.IDLE, freshViewModel.getCurrentRouteSession().status);
         assertFalse(freshViewModel.hasActiveRouteSession());
         assertNull(freshViewModel.routeSummary.getValue());
         assertNull(freshViewModel.routeGeometryJson.getValue());
+    }
+
+    @Test
+    public void loadReviews_WhenCalled_SetsLoadingStateAndTriggersResolution() throws InterruptedException {
+        // Arrange
+        Place place = new Place("ext-1", "Central Park", "NY", 4.8, new Location(40.78, -73.96));
+        place.placeSource = "GOOGLE";
+        
+        when(reviewRepository.resolveInternalPlaceId(any(), any(), anyDouble(), anyDouble(), any()))
+            .thenReturn("internal-123");
+
+        // Act
+        viewModel.loadReviews(place);
+
+        // Assert - immediate loading state
+        assertTrue(viewModel.isLoadingReviews.getValue());
+        
+        // Wait for thread completion (resolution is in a new Thread)
+        Thread.sleep(100); 
+
+        verify(reviewRepository).resolveInternalPlaceId("GOOGLE", "ext-1", 40.78, -73.96, "Central Park");
+        verify(reviewRepository).refreshReviews("internal-123");
+        assertFalse(viewModel.isLoadingReviews.getValue());
+    }
+
+    @Test
+    public void submitReview_WhenCalled_TriggersRepositoryAction() {
+        // Arrange - set current place
+        when(reviewRepository.resolveInternalPlaceId(any(), any(), anyDouble(), anyDouble(), any()))
+            .thenReturn("internal-123");
+        viewModel.loadReviews(new Place("ext-1", "Park", "Loc", 4.0, new Location(0,0)));
+        
+        // Wait for thread completion (resolution is in a new Thread)
+        try { Thread.sleep(100); } catch (InterruptedException e) {} 
+        
+        // Act
+        viewModel.submitReview(5, "Excellent!");
+
+        // Assert
+        verify(reviewRepository).submitReview("internal-123", 5, "Excellent!");
     }
 }

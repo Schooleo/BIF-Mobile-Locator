@@ -29,6 +29,9 @@ public interface PlaceDao {
     @Query("SELECT * FROM places WHERE id = :id AND ownerUserId = :ownerUserId LIMIT 1")
     PlaceEntity getByIdSync(String id, String ownerUserId);
 
+    @Query("SELECT * FROM places WHERE ABS(latitude - :lat) < 0.0001 AND ABS(longitude - :lng) < 0.0001 LIMIT 1")
+    PlaceEntity getByLocationSync(double lat, double lng);
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void upsert(PlaceEntity place);
 

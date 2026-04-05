@@ -15,6 +15,8 @@ import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 import java.util.Optional;
+import com.bif.server.features.place.dto.rest.ReviewResponseDTO;
+import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -57,43 +59,39 @@ class PlaceReviewControllerTest {
     }
 
     @Test
-    void getReviews_UsesPagingParams() {
-        when(ratingService.getPlaceReviews(eq("p1"), any()))
-                .thenReturn(new PageImpl<>(List.of(new PlaceReview())));
+    void getReviews_ReturnsList() {
+        ReviewResponseDTO dto = new ReviewResponseDTO("r1", "p1", "u1", "Anonymous", 5, "good", LocalDateTime.now());
+        when(ratingService.getPlaceReviewsWithUsers("p1")).thenReturn(List.of(dto));
 
-        var result = controller.getReviews("p1", 2, 10);
+        var result = controller.getReviews("p1");
 
-        assertEquals(1, result.getTotalElements());
-
-        var captor = ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
-        verify(ratingService).getPlaceReviews(eq("p1"), captor.capture());
-        assertEquals(2, captor.getValue().getPageNumber());
-        assertEquals(10, captor.getValue().getPageSize());
+        assertEquals(1, result.size());
+        assertEquals("r1", result.get(0).id());
     }
 
     @Test
     void getMyReview_WhenUnauthorized_Returns401() {
-        ResponseEntity<PlaceReview> result = controller.getMyReview(null, "p1");
+        ResponseEntity<ReviewResponseDTO> result = controller.getMyReview(null, "p1");
 
         assertEquals(HttpStatus.UNAUTHORIZED, result.getStatusCode());
     }
 
     @Test
     void getMyReview_WhenFound_ReturnsOk() {
-        PlaceReview review = new PlaceReview();
-        when(ratingService.getUserReview("u1", "p1")).thenReturn(Optional.of(review));
+        ReviewResponseDTO dto = new ReviewResponseDTO("r1", "p1", "u1", "Me", 5, "great", LocalDateTime.now());
+        when(ratingService.getUserReviewWithUser("u1", "p1")).thenReturn(Optional.of(dto));
 
-        ResponseEntity<PlaceReview> result = controller.getMyReview("u1", "p1");
+        ResponseEntity<ReviewResponseDTO> result = controller.getMyReview("u1", "p1");
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertSame(review, result.getBody());
+        assertSame(dto, result.getBody());
     }
 
     @Test
     void getMyReview_WhenMissing_Returns404() {
-        when(ratingService.getUserReview("u1", "p1")).thenReturn(Optional.empty());
+        when(ratingService.getUserReviewWithUser("u1", "p1")).thenReturn(Optional.empty());
 
-        ResponseEntity<PlaceReview> result = controller.getMyReview("u1", "p1");
+        ResponseEntity<ReviewResponseDTO> result = controller.getMyReview("u1", "p1");
 
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
     }
@@ -108,17 +106,5 @@ class PlaceReviewControllerTest {
         assertEquals(HttpStatus.CONFLICT, result.getStatusCode());
     }
 
-    @Test
-    void getReviews_ClampsPageAndSize() {
-        when(ratingService.getPlaceReviews(eq("p1"), any()))
-                .thenReturn(new PageImpl<>(List.of()));
-
-        controller.getReviews("p1", -1, 1000);
-
-        var captor = ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
-        verify(ratingService).getPlaceReviews(eq("p1"), captor.capture());
-        assertEquals(0, captor.getValue().getPageNumber());
-        assertEquals(100, captor.getValue().getPageSize());
-        assertTrue(captor.getValue().isPaged());
-    }
+    // paging test removed because getReviews no longer utilizes paging parameters
 }

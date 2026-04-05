@@ -1,6 +1,6 @@
 package com.bif.app.feature.map;
 
-import com.bif.app.core.network.dto.place.PlaceReviewDto;
+import com.bif.app.domain.model.Review;
 
 public class ReviewItem {
     public static final int VIEW_TYPE_ADD = 0;
@@ -8,7 +8,7 @@ public class ReviewItem {
     public static final int VIEW_TYPE_OTHERS = 2;
 
     public int viewType;
-    public PlaceReviewDto review;
+    public Review review;
     public boolean isMine;
 
     // For "Add Review" card at position 0
@@ -19,7 +19,7 @@ public class ReviewItem {
     }
 
     // For other reviews
-    public ReviewItem(int viewType, PlaceReviewDto review, boolean isMine) {
+    public ReviewItem(int viewType, Review review, boolean isMine) {
         this.viewType = viewType;
         this.review = review;
         this.isMine = isMine;

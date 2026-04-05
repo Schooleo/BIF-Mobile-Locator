@@ -6,6 +6,7 @@ import com.bif.server.features.chat.repositories.ChatMessageRepository;
 import com.bif.server.features.favorite.repositories.FavoriteRepository;
 import com.bif.server.features.friendship.repositories.FriendshipRepository;
 import com.bif.server.features.group.repositories.GroupRepository;
+import com.bif.server.features.place.repositories.PlaceMappingRepository;
 import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.place.repositories.RatingRepository;
 import com.bif.server.features.search.services.PlaceSearchIndexSyncService;
@@ -61,6 +62,9 @@ class ServerApplicationTests {
 
     @MockitoBean
     private PlaceRepository placeRepository;
+
+    @MockitoBean
+    private PlaceMappingRepository placeMappingRepository;
 
     @MockitoBean
     private RatingRepository ratingRepository;

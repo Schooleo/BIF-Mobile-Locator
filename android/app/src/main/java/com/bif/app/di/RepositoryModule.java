@@ -9,6 +9,7 @@ import com.bif.app.data.repository.LocationRepository;
 import com.bif.app.data.repository.MapRepository;
 import com.bif.app.data.repository.PlaceRepository;
 import com.bif.app.data.repository.ProfileRepository;
+import com.bif.app.data.repository.ReviewRepository;
 import com.bif.app.data.repository.RouteRepository;
 import com.bif.app.data.repository.TripRepository;
 import com.bif.app.data.routing.EmbeddedBRouterEngine;
@@ -22,6 +23,7 @@ import com.bif.app.domain.repository.ILocationRepository;
 import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.IProfileRepository;
+import com.bif.app.domain.repository.IReviewRepository;
 import com.bif.app.domain.repository.IRouteRepository;
 import com.bif.app.domain.repository.ITripRepository;
 
@@ -75,6 +77,10 @@ public abstract class RepositoryModule {
     @Binds
     @Singleton
     public abstract IProfileRepository bindProfileRepository(ProfileRepository repository);
+
+    @Binds
+    @Singleton
+    public abstract IReviewRepository bindReviewRepository(ReviewRepository repository);
 
     @Binds
     @Singleton
