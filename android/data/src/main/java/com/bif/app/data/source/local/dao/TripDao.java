@@ -31,6 +31,14 @@ public interface TripDao {
             + "AND deleted = 0 ORDER BY startAt ASC")
     LiveData<List<TripPlanWithStops>> getTripsWithStopsByGroup(String groupId);
 
+    @Transaction
+    @Query("SELECT * FROM trip_plans WHERE deleted = 0 ORDER BY startAt ASC")
+    LiveData<List<TripPlanWithStops>> getAllTripsWithStops();
+
+    @Transaction
+    @Query("SELECT * FROM trip_plans WHERE id = :tripId AND deleted = 0 LIMIT 1")
+    LiveData<TripPlanWithStops> getTripWithStopsById(String tripId);
+
     @Query("SELECT * FROM trip_stops WHERE tripId = :tripId "
             + "AND deleted = 0 ORDER BY orderIndex ASC")
     List<TripStopEntity> getActiveStopsByTripSync(String tripId);

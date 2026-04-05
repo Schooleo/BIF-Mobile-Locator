@@ -6,6 +6,9 @@ import com.bif.app.domain.model.TripStop;
 import java.util.List;
 
 public interface ITripRepository {
+    LiveData<List<TripPlan>> getAllTrips();
+    LiveData<TripPlan> getTripById(String tripId);
+    void createTrip(String title, String description, long startAt, long endAt);
     LiveData<List<TripPlan>> getTripsByGroup(String groupId);
     void addStopToTrip(String tripId, TripStop stop);
     void stageStopImageUpload(String tripId, String stopId, String localImagePath);

@@ -1,6 +1,7 @@
 package com.bif.app.feature.social;
 
 import android.annotation.SuppressLint;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -24,11 +25,15 @@ import com.bif.app.core.utils.DialogUtils;
 import com.bif.app.core.utils.UriUtils;
 import com.bif.app.domain.model.Friend;
 import com.bif.app.domain.model.Friendship;
-import com.bif.app.domain.model.Group;
+import com.bif.app.domain.model.TripPlan;
+import com.google.android.material.datepicker.MaterialDatePicker;
 import com.google.android.material.tabs.TabLayout;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 import dagger.hilt.android.AndroidEntryPoint;
 
@@ -42,13 +47,15 @@ public class SocialFragment extends Fragment {
     private TextView tvStateMessage;
     private Button btnRetry;
     private FriendsAdapter friendsAdapter;
-    private GroupsAdapter groupsAdapter;
+    private TripListAdapter tripListAdapter;
     private SocialViewModel viewModel;
     private boolean isActionLoading = false;
 
     @Nullable
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater,
+                             @Nullable ViewGroup container,
+                             @Nullable Bundle savedInstanceState) {
         return inflater.inflate(R.layout.fragment_social, container, false);
     }
 
@@ -56,9 +63,9 @@ public class SocialFragment extends Fragment {
     public void onResume() {
         super.onResume();
         if (viewModel != null) {
+            viewModel.retryTrips();
             viewModel.retryFriends();
             viewModel.refreshRequestsOnly();
-            viewModel.retryGroups();
         }
     }
 
@@ -66,9 +73,9 @@ public class SocialFragment extends Fragment {
     public void onHiddenChanged(boolean hidden) {
         super.onHiddenChanged(hidden);
         if (!hidden && viewModel != null) {
+            viewModel.retryTrips();
             viewModel.retryFriends();
             viewModel.refreshRequestsOnly();
-            viewModel.retryGroups();
         }
     }
 
@@ -87,32 +94,33 @@ public class SocialFragment extends Fragment {
 
         btnRetry.setOnClickListener(v -> {
             if (tabLayout.getSelectedTabPosition() == 0) {
-                viewModel.retryFriends();
+                viewModel.retryTrips();
             } else {
-                viewModel.retryGroups();
+                viewModel.retryFriends();
             }
             renderCurrentTabState();
         });
 
         setupRecyclerView();
         setupTabs();
-
         observeViewModel();
-
-        // Listen for result from GroupDetailFragment to switch to Groups tab
-        getParentFragmentManager().setFragmentResultListener("groupDetailResult",
-                getViewLifecycleOwner(), (requestKey, result) -> {
-                    TabLayout.Tab groupsTab = tabLayout.getTabAt(1);
-                    if (groupsTab != null) {
-                        groupsTab.select();
-                    }
-                });
     }
 
     private void setupRecyclerView() {
         recyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
 
-        // Setup Friends Adapter
+        tripListAdapter = new TripListAdapter(new TripListAdapter.OnTripActionListener() {
+            @Override
+            public void onCreateTripClick() {
+                showCreateTripDialog();
+            }
+
+            @Override
+            public void onTripClick(TripPlan trip) {
+                navigateToTripDetail(trip);
+            }
+        });
+
         friendsAdapter = new FriendsAdapter(new FriendsAdapter.OnFriendActionListener() {
             @Override
             public void onAddFriendClick() {
@@ -150,33 +158,20 @@ public class SocialFragment extends Fragment {
             }
         });
 
-        // Setup Groups Adapter
-        groupsAdapter = new GroupsAdapter(new GroupsAdapter.OnGroupActionListener() {
-            @Override
-            public void onCreateGroupClick() {
-                showCreateGroupWithFriendsDialog();
-            }
-
-            @Override
-            public void onGroupClick(Group group) {
-                navigateToChatFromGroup(group);
-            }
-
-            @Override
-            public void onRenameGroupClick(Group group) {
-                showRenameGroupDialog(group);
-            }
-
-            @Override
-            public void onGroupOptionsClick(Group group, int position) {
-                handleGroupOptions(group);
-            }
-        });
-
-        recyclerView.setAdapter(friendsAdapter);
+        recyclerView.setAdapter(tripListAdapter);
     }
 
     private void observeViewModel() {
+        viewModel.getTripActionMessage().observe(getViewLifecycleOwner(), message -> {
+            if (message != null && !message.isEmpty()) {
+                int textRes = "__MSG_TRIP_CREATE_SUCCESS__".equals(message)
+                        ? R.string.trip_create_success
+                        : R.string.trip_create_failed;
+                Toast.makeText(requireContext(), getString(textRes), Toast.LENGTH_SHORT).show();
+                viewModel.clearTripActionMessage();
+            }
+        });
+
         viewModel.getFriendActionMessage().observe(getViewLifecycleOwner(), message -> {
             if (message != null && !message.isEmpty()) {
                 String toastMessage = message;
@@ -233,68 +228,28 @@ public class SocialFragment extends Fragment {
             }
         });
 
+        viewModel.getTripActionLoading().observe(getViewLifecycleOwner(), isLoading -> {
+            isActionLoading = isLoading != null && isLoading;
+            updateActionLoadingUi();
+        });
+
         viewModel.getFriendActionLoading().observe(getViewLifecycleOwner(), isLoading -> {
             isActionLoading = isLoading != null && isLoading;
             updateActionLoadingUi();
         });
 
-        viewModel.getGroupActionLoading().observe(getViewLifecycleOwner(), isLoading -> {
-            isActionLoading = isLoading != null && isLoading;
-            updateActionLoadingUi();
-        });
-
-        viewModel.getGroupActionMessage().observe(getViewLifecycleOwner(), message -> {
-            if (message != null && !message.isEmpty()) {
-                String toastMessage = message;
-                switch (message) {
-                    case "__MSG_GROUP_CREATE_SUCCESS__":
-                        toastMessage = getString(R.string.group_create_success);
-                        break;
-                    case "__MSG_GROUP_CREATE_FAILED__":
-                        toastMessage = getString(R.string.group_create_failed);
-                        break;
-                    case "__MSG_GROUP_CREATE_REQUIRES_ONLINE__":
-                        toastMessage = getString(R.string.group_create_requires_online);
-                        break;
-                    case "__MSG_GROUP_DISBAND_SUCCESS__":
-                        toastMessage = getString(R.string.group_disbanded);
-                        break;
-                    case "__MSG_GROUP_DISBAND_FAILED__":
-                        toastMessage = getString(R.string.group_disband_failed);
-                        break;
-                    case "__MSG_GROUP_DELETE_REQUIRES_ONLINE__":
-                        toastMessage = getString(R.string.group_delete_requires_online);
-                        break;
-                    case "__MSG_GROUP_LEAVE_SUCCESS__":
-                        toastMessage = getString(R.string.group_leave_success);
-                        break;
-                    case "__MSG_GROUP_LEAVE_FAILED__":
-                        toastMessage = getString(R.string.group_leave_failed);
-                        break;
-                    case "__MSG_GROUP_RENAME_SUCCESS__":
-                        toastMessage = getString(R.string.group_updated);
-                        break;
-                    case "__MSG_GROUP_RENAME_FAILED__":
-                        toastMessage = getString(R.string.group_update_failed);
-                        break;
-                }
-                Toast.makeText(requireContext(), toastMessage, Toast.LENGTH_SHORT).show();
-                viewModel.clearGroupActionMessage();
-            }
-        });
-
         viewModel.getPendingRequests().observe(getViewLifecycleOwner(), requests ->
                 friendsAdapter.setPendingRequests(requests != null ? requests : new ArrayList<>()));
 
-        viewModel.getFriendUiState().observe(getViewLifecycleOwner(), state -> {
+        viewModel.getTripUiState().observe(getViewLifecycleOwner(), state -> {
             if (tabLayout.getSelectedTabPosition() == 0) {
-                renderFriendState(state);
+                renderTripState(state);
             }
         });
 
-        viewModel.getGroupUiState().observe(getViewLifecycleOwner(), state -> {
+        viewModel.getFriendUiState().observe(getViewLifecycleOwner(), state -> {
             if (tabLayout.getSelectedTabPosition() == 1) {
-                renderGroupState(state);
+                renderFriendState(state);
             }
         });
     }
@@ -320,10 +275,31 @@ public class SocialFragment extends Fragment {
 
     private void renderCurrentTabState() {
         if (tabLayout.getSelectedTabPosition() == 0) {
-            renderFriendState(viewModel.getFriendUiState().getValue());
+            renderTripState(viewModel.getTripUiState().getValue());
         } else {
-            renderGroupState(viewModel.getGroupUiState().getValue());
+            renderFriendState(viewModel.getFriendUiState().getValue());
         }
+    }
+
+    private void renderTripState(UiState<List<TripPlan>> state) {
+        if (state == null || state instanceof UiState.Loading) {
+            showLoading();
+            return;
+        }
+        if (state instanceof UiState.Empty) {
+            tripListAdapter.setTrips(new ArrayList<>());
+            showList(tripListAdapter);
+            return;
+        }
+        if (state instanceof UiState.Error) {
+            UiState.Error<List<TripPlan>> error = (UiState.Error<List<TripPlan>>) state;
+            showState(error.getMessage());
+            return;
+        }
+
+        UiState.Success<List<TripPlan>> success = (UiState.Success<List<TripPlan>>) state;
+        tripListAdapter.setTrips(success.getData());
+        showList(tripListAdapter);
     }
 
     private void renderFriendState(UiState<List<Friend>> state) {
@@ -332,7 +308,6 @@ public class SocialFragment extends Fragment {
             return;
         }
         if (state instanceof UiState.Empty) {
-            // Keep list visible so the first action row (Add New Friend) is always accessible.
             friendsAdapter.setFriends(new ArrayList<>());
             showList(friendsAdapter);
             return;
@@ -346,28 +321,6 @@ public class SocialFragment extends Fragment {
         UiState.Success<List<Friend>> success = (UiState.Success<List<Friend>>) state;
         friendsAdapter.setFriends(success.getData());
         showList(friendsAdapter);
-    }
-
-    private void renderGroupState(UiState<List<Group>> state) {
-        if (state == null || state instanceof UiState.Loading) {
-            showLoading();
-            return;
-        }
-        if (state instanceof UiState.Empty) {
-            // Keep list visible so the action row (Create New Group) is always accessible.
-            groupsAdapter.setGroups(new ArrayList<>());
-            showList(groupsAdapter);
-            return;
-        }
-        if (state instanceof UiState.Error) {
-            UiState.Error<List<Group>> error = (UiState.Error<List<Group>>) state;
-            showState(error.getMessage());
-            return;
-        }
-
-        UiState.Success<List<Group>> success = (UiState.Success<List<Group>>) state;
-        groupsAdapter.setGroups(success.getData());
-        showList(groupsAdapter);
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -400,9 +353,9 @@ public class SocialFragment extends Fragment {
 
     @SuppressLint("ClickableViewAccessibility")
     private void updateActionLoadingUi() {
-        boolean isFriendTab = tabLayout != null && tabLayout.getSelectedTabPosition() == 0;
-        boolean isGroupTab = tabLayout != null && tabLayout.getSelectedTabPosition() == 1;
-        boolean canOverlay = (isFriendTab || isGroupTab) && recyclerView.getVisibility() == View.VISIBLE;
+        boolean tabActive = tabLayout != null
+                && (tabLayout.getSelectedTabPosition() == 0 || tabLayout.getSelectedTabPosition() == 1);
+        boolean canOverlay = tabActive && recyclerView.getVisibility() == View.VISIBLE;
 
         if (canOverlay && isActionLoading) {
             progressLoading.setVisibility(View.VISIBLE);
@@ -434,89 +387,76 @@ public class SocialFragment extends Fragment {
         );
     }
 
-    private void showCreateGroupWithFriendsDialog() {
-        List<Friend> currentFriends = viewModel.getFriends().getValue();
-        List<Friend> friendList = currentFriends != null ? currentFriends : new ArrayList<>();
-
+    private void showCreateTripDialog() {
         DialogUtils.showCustomViewDialog(
                 requireContext(),
-                R.layout.dialog_create_group,
+                R.layout.dialog_create_trip,
                 R.id.btn_close,
                 (dialogView, dialog) -> {
-                    EditText etGroupName = dialogView.findViewById(R.id.et_group_name);
-                    RecyclerView rvFriends = dialogView.findViewById(R.id.rv_friends_select);
-                    Button btnCreate = dialogView.findViewById(R.id.btn_create_group);
+                    EditText etTitle = dialogView.findViewById(R.id.et_trip_title);
+                    EditText etDescription = dialogView.findViewById(R.id.et_trip_description);
+                    TextView tvStartDate = dialogView.findViewById(R.id.tv_start_date);
+                    TextView tvEndDate = dialogView.findViewById(R.id.tv_end_date);
+                    Button btnCreate = dialogView.findViewById(R.id.btn_create_trip);
 
-                    SelectFriendAdapter selectAdapter = new SelectFriendAdapter(friendList);
-                    rvFriends.setLayoutManager(new LinearLayoutManager(requireContext()));
-                    rvFriends.setAdapter(selectAdapter);
+                    final long[] startMillis = {0L};
+                    final long[] endMillis = {0L};
+
+                    tvStartDate.setOnClickListener(v -> {
+                        MaterialDatePicker<Long> picker = MaterialDatePicker.Builder.datePicker()
+                                .setTitleText(R.string.start_date)
+                                .build();
+                        picker.addOnPositiveButtonClickListener(selection -> {
+                            startMillis[0] = selection != null ? selection : 0L;
+                            tvStartDate.setText(formatDate(startMillis[0]));
+                        });
+                        picker.show(getParentFragmentManager(), "start_date_picker");
+                    });
+
+                    tvEndDate.setOnClickListener(v -> {
+                        MaterialDatePicker<Long> picker = MaterialDatePicker.Builder.datePicker()
+                                .setTitleText(R.string.end_date)
+                                .build();
+                        picker.addOnPositiveButtonClickListener(selection -> {
+                            endMillis[0] = selection != null ? selection : 0L;
+                            tvEndDate.setText(formatDate(endMillis[0]));
+                        });
+                        picker.show(getParentFragmentManager(), "end_date_picker");
+                    });
 
                     btnCreate.setOnClickListener(v -> {
-                        String groupName = etGroupName.getText().toString().trim();
-                        List<Friend> selectedFriends = selectAdapter.getSelectedFriends();
+                        String title = etTitle.getText().toString().trim();
+                        String description = etDescription.getText().toString().trim();
 
-                        if (groupName.isEmpty()) {
-                            Toast.makeText(requireContext(), "Please input group name", Toast.LENGTH_SHORT).show();
+                        if (title.isEmpty()) {
+                            Toast.makeText(requireContext(), R.string.trip_title_required, Toast.LENGTH_SHORT).show();
                             return;
                         }
-                        if (selectedFriends.isEmpty()) {
-                            Toast.makeText(requireContext(), "Please choose at least 1 member", Toast.LENGTH_SHORT).show();
+                        if (startMillis[0] == 0L || endMillis[0] == 0L) {
+                            Toast.makeText(requireContext(), R.string.trip_dates_required, Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        if (endMillis[0] < startMillis[0]) {
+                            Toast.makeText(requireContext(), R.string.trip_dates_invalid, Toast.LENGTH_SHORT).show();
                             return;
                         }
 
-                        viewModel.createGroup(groupName, selectedFriends);
+                        viewModel.createTrip(title, description, startMillis[0], endMillis[0]);
                         dialog.dismiss();
                     });
                 }
         );
     }
 
-    private void handleGroupOptions(Group group) {
-        String title = group.isOwner() ? "Disband Group" : "Leave Group";
-        String message = group.isOwner()
-                ? "Do you want to disband the group '" + group.getName() + "'?"
-                : "Do you want to leave the group '" + group.getName() + "'?";
-        String actionBtn = group.isOwner() ? "Disband" : "Leave";
-
-        DialogUtils.showConfirmDialog(requireContext(),
-                title,
-                message,
-                actionBtn,
-                "Cancel",
-                () -> viewModel.handleGroupAction(group));
-    }
-
-    private void showRenameGroupDialog(Group group) {
-        if (group == null || !group.isOwner()) {
-            return;
+    private String formatDate(long millis) {
+        if (millis <= 0L) {
+            return "";
         }
-
-        EditText input = new EditText(requireContext());
-        input.setText(group.getName());
-        input.setSelection(input.getText().length());
-        input.setHint(R.string.group_name);
-        input.setSingleLine(true);
-
-        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
-                .setTitle(R.string.rename_group)
-                .setView(input)
-                .setNegativeButton(R.string.cancel, (dialog, which) -> dialog.dismiss())
-                .setPositiveButton(R.string.save, (dialog, which) -> {
-                    String newName = input.getText().toString().trim();
-                    if (newName.isEmpty()) {
-                        Toast.makeText(requireContext(), R.string.enter_group_name, Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    if (newName.equals(group.getName())) {
-                        return;
-                    }
-                    viewModel.renameGroup(group, newName);
-                })
-                .show();
+        return new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(new Date(millis));
     }
 
     private void navigateToChatFromFriend(Friend friend) {
-        android.net.Uri destUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL_CHAT).buildUpon()
+        Uri destUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL_CHAT).buildUpon()
                 .appendQueryParameter("chatType", "friend")
                 .appendQueryParameter("chatId", String.valueOf(friend.getId()))
                 .appendQueryParameter("chatName", friend.getName())
@@ -527,21 +467,14 @@ public class SocialFragment extends Fragment {
         Navigation.findNavController(requireView()).navigate(destUri);
     }
 
-    private void navigateToChatFromGroup(Group group) {
-        if (group == null || group.getServerId() == null
-            || group.getServerId().trim().isEmpty()) {
-            Toast.makeText(requireContext(),
-                "Group is not synced yet. Please reconnect and try again.",
-                Toast.LENGTH_SHORT).show();
+    private void navigateToTripDetail(TripPlan trip) {
+        if (trip == null || trip.getId() == null || trip.getId().trim().isEmpty()) {
             return;
         }
-        android.net.Uri destUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL_CHAT).buildUpon()
-                .appendQueryParameter("chatType", "group")
-                .appendQueryParameter("chatId", group.getServerId())
-                .appendQueryParameter("chatName", group.getName())
-                .appendQueryParameter("avatarLetter", group.getAvatarLetter())
-                .appendQueryParameter("avatarColor", String.valueOf(group.getAvatarColor()))
-                .appendQueryParameter("memberCount", String.valueOf(group.getMemberCount()))
+
+        Uri destUri = UriUtils.buildUri(UriUtils.PathTo.TRIP_DETAIL).buildUpon()
+                .appendQueryParameter("tripId", trip.getId())
+                .appendQueryParameter("tripTitle", trip.getTitle() == null ? "" : trip.getTitle())
                 .build();
         Navigation.findNavController(requireView()).navigate(destUri);
     }

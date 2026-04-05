@@ -40,7 +40,8 @@ public class TripOverviewFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         TextView tvTitle = view.findViewById(R.id.tv_overview_title);
-        TextView tvStats = view.findViewById(R.id.tv_overview_stats);
+        TextView tvStops = view.findViewById(R.id.tv_overview_stops);
+        TextView tvTravelers = view.findViewById(R.id.tv_overview_travelers);
         TextView tvDates = view.findViewById(R.id.tv_overview_dates);
         TextView tvDescription = view.findViewById(R.id.tv_overview_description);
 
@@ -48,30 +49,45 @@ public class TripOverviewFragment extends Fragment {
                 .get(TripDetailViewModel.class);
 
         if (viewModel.getTrip() != null) {
-            viewModel.getTrip().observe(getViewLifecycleOwner(), trip -> bindTrip(trip, tvTitle, tvStats, tvDates, tvDescription));
+            viewModel.getTrip().observe(getViewLifecycleOwner(), trip -> bindTrip(
+                trip,
+                tvTitle,
+                tvStops,
+                tvTravelers,
+                tvDates,
+                tvDescription
+            ));
         }
     }
 
     private void bindTrip(TripPlan trip,
                           TextView tvTitle,
-                          TextView tvStats,
+                  TextView tvStops,
+                  TextView tvTravelers,
                           TextView tvDates,
                           TextView tvDescription) {
         if (trip == null) {
             return;
         }
 
-        tvTitle.setText(trip.getTitle());
+        String title = trip.getTitle() == null || trip.getTitle().trim().isEmpty()
+            ? getString(R.string.trip_title_hint)
+            : trip.getTitle().trim();
+        tvTitle.setText(title);
+
+        tvStops.setText(String.valueOf(trip.getStopCount()));
         int travelers = trip.getParticipantIds() == null ? 0 : trip.getParticipantIds().size();
-        tvStats.setText(getString(R.string.stops_count) + ": " + trip.getStopCount() + "  •  "
-                + getString(R.string.travelers_count) + ": " + travelers);
+        tvTravelers.setText(String.valueOf(travelers));
 
         SimpleDateFormat formatter = new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault());
         String start = trip.getStartAt() > 0 ? formatter.format(new Date(trip.getStartAt())) : "-";
         String end = trip.getEndAt() > 0 ? formatter.format(new Date(trip.getEndAt())) : "-";
         tvDates.setText(start + " - " + end);
 
-        tvDescription.setText(trip.getDescription() == null ? "" : trip.getDescription());
+        String description = trip.getDescription() == null || trip.getDescription().trim().isEmpty()
+            ? getString(R.string.trip_overview_no_description)
+            : trip.getDescription().trim();
+        tvDescription.setText(description);
     }
 }
 

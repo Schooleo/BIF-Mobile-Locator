@@ -89,28 +89,10 @@ public class CommonChatFragment extends Fragment {
         tvTitle.setText(chatName);
         if ("group".equalsIgnoreCase(chatType)) {
             tvSubtitle.setText(getString(R.string.chat_member_count, Math.max(memberCount, 1)));
-            btnGroupSettings.setVisibility(View.VISIBLE);
-            btnGroupSettings.setOnClickListener(v -> {
-                android.net.Uri settingsUri = UriUtils.buildUri(UriUtils.PathTo.GROUP_SETTINGS_PLANS)
-                        .buildUpon()
-                        .appendQueryParameter("groupId", chatId)
-                        .build();
-                Navigation.findNavController(view).navigate(settingsUri);
-            });
         } else {
             tvSubtitle.setText(R.string.chat_direct_subtitle);
-            btnGroupSettings.setVisibility(View.VISIBLE);
-            btnGroupSettings.setOnClickListener(v -> {
-                android.net.Uri settingsUri = UriUtils.buildUri(UriUtils.PathTo.FRIEND_SETTINGS_LOCATIONS)
-                        .buildUpon()
-                        .appendQueryParameter("friendId", chatId)
-                        .appendQueryParameter("friendName", chatName)
-                        .appendQueryParameter("avatarLetter", avatarLetter)
-                        .appendQueryParameter("avatarColor", String.valueOf(avatarColor))
-                        .build();
-                Navigation.findNavController(view).navigate(settingsUri);
-            });
         }
+        btnGroupSettings.setVisibility(View.GONE);
 
         btnBack.setOnClickListener(v -> navigateBackFromChat(view));
         view.setOnClickListener(v -> focusInputAndShowKeyboard(etMessage));

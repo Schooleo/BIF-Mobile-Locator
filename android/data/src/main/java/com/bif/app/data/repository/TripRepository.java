@@ -8,6 +8,7 @@ import androidx.lifecycle.Transformations;
 import com.bif.app.core.network.dto.chat.ChatMessageDto;
 import com.bif.app.core.network.dto.trip.TripStopDto;
 import com.bif.app.data.source.local.dao.TripDao;
+import com.bif.app.data.source.local.entity.TripPlanEntity;
 import com.bif.app.data.source.local.entity.TripStopEntity;
 import com.bif.app.data.source.local.entity.UploadStatus;
 import com.bif.app.data.sync.worker.ImageUploadWorker;
@@ -17,6 +18,7 @@ import com.bif.app.domain.model.TripStop;
 import com.bif.app.domain.repository.ITripRepository;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -48,6 +50,43 @@ public class TripRepository implements ITripRepository {
     // Visible for tests without Android context.
     public TripRepository(TripDao tripDao, SyncManager syncManager) {
         this(null, tripDao, syncManager);
+    }
+
+    @Override
+    public LiveData<List<TripPlan>> getAllTrips() {
+        executorService.execute(syncManager::syncIfOnline);
+        return Transformations.map(tripDao.getAllTripsWithStops(), this::mapToDomain);
+    }
+
+    @Override
+    public LiveData<TripPlan> getTripById(String tripId) {
+        return Transformations.map(tripDao.getTripWithStopsById(tripId), item -> {
+            if (item == null || item.trip == null || item.trip.deleted) {
+                return null;
+            }
+
+            List<TripPlan> list = mapToDomain(Collections.singletonList(item));
+            return list.isEmpty() ? null : list.get(0);
+        });
+    }
+
+    @Override
+    public void createTrip(String title, String description, long startAt, long endAt) {
+        executorService.execute(() -> {
+            TripPlanEntity entity = new TripPlanEntity();
+            entity.id = UUID.randomUUID().toString();
+            entity.groupId = entity.id;
+            entity.title = title;
+            entity.description = description;
+            entity.startAt = startAt;
+            entity.endAt = endAt;
+            entity.serverVersion = 0L;
+            entity.deleted = false;
+
+            tripDao.upsertTrip(entity);
+            syncManager.enqueueChange("trip", entity.id, "CREATE", UUID.randomUUID().toString(), null);
+            syncManager.syncIfOnline();
+        });
     }
 
     @Override
