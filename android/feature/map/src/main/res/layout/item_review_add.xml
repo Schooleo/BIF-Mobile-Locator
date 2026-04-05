@@ -21,7 +21,7 @@
             android:layout_height="32dp"
             android:layout_marginBottom="8dp"
             android:src="@drawable/ic_add"
-            android:tint="?attr/colorPrimary"
+            app:tint="?attr/colorPrimary"
             android:contentDescription="@string/default_place_name" />
 
         <TextView

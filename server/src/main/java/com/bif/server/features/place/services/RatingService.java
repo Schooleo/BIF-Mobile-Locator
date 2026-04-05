@@ -1,11 +1,11 @@
 package com.bif.server.features.place.services;
 
 import com.bif.server.features.place.dto.rest.ReviewDTO;
+import com.bif.server.features.place.events.PlaceRatingUpdatedEvent;
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.repositories.RatingRepository;
-import com.bif.server.features.search.services.PlaceSearchIndexSyncService;
-import org.springframework.dao.DuplicateKeyException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -19,14 +19,14 @@ import java.util.Optional;
 public class RatingService {
     private final RatingRepository ratingRepository;
     private final PlaceRatingCacheUpdater placeRatingCacheUpdater;
-    private final PlaceSearchIndexSyncService placeSearchIndexSyncService;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     public RatingService(RatingRepository ratingRepository,
                          PlaceRatingCacheUpdater placeRatingCacheUpdater,
-                         PlaceSearchIndexSyncService placeSearchIndexSyncService) {
+                         ApplicationEventPublisher applicationEventPublisher) {
         this.ratingRepository = ratingRepository;
         this.placeRatingCacheUpdater = placeRatingCacheUpdater;
-        this.placeSearchIndexSyncService = placeSearchIndexSyncService;
+        this.applicationEventPublisher = applicationEventPublisher;
     }
 
     @Transactional
@@ -42,28 +42,21 @@ public class RatingService {
         review.setComment(normalizeComment(dto.comment()));
         review.setCreatedAt(LocalDateTime.now());
 
-        final PlaceReview persistedReview;
-        try {
-            persistedReview = ratingRepository.save(review);
-        } catch (DuplicateKeyException e) {
-            throw new IllegalStateException("User has already reviewed this place", e);
-        }
+        // Lưu review (Nếu trùng userId+placeId sẽ văng DuplicateKeyException và tự Rollback)
+        PlaceReview persistedReview = ratingRepository.save(review);
 
-        try {
-            Place updatedPlace = placeRatingCacheUpdater.incrementAndRecalculate(
-                    resolvedUserId,
-                    resolvedPlaceId,
-                    dto.stars());
-            placeSearchIndexSyncService.upsert(updatedPlace);
-            return persistedReview;
-        } catch (RuntimeException e) {
-            ratingRepository.deleteById(persistedReview.getId());
-            if (e instanceof NoSuchElementException) {
-                throw e;
-            }
-            throw new IllegalStateException("Unable to update place rating cache", e);
-        }
-    }
+        // Cập nhật cache (Nếu lỗi ở đây, DB cũng tự Rollback review vừa lưu trên)
+        Place updatedPlace = placeRatingCacheUpdater.incrementAndRecalculate(
+                resolvedUserId, resolvedPlaceId, dto.stars());
+
+        // Phát sự kiện
+        applicationEventPublisher.publishEvent(new PlaceRatingUpdatedEvent(
+                updatedPlace.getId(),
+                updatedPlace.getRating(),
+                updatedPlace.getReviewCount()));
+
+        return persistedReview;
+    }  
 
     public Optional<PlaceReview> getUserReview(String userId, String placeId) {
         String resolvedUserId = required(userId, "userId");
@@ -91,7 +84,10 @@ public class RatingService {
                 review.getStars());
 
         ratingRepository.deleteById(review.getId());
-        placeSearchIndexSyncService.upsert(updatedPlace);
+        applicationEventPublisher.publishEvent(new PlaceRatingUpdatedEvent(
+            updatedPlace.getId(),
+            updatedPlace.getRating(),
+            updatedPlace.getReviewCount()));
     }
 
     private void validateStars(int stars) {

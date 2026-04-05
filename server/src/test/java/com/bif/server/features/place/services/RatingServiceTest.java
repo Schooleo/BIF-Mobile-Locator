@@ -1,10 +1,11 @@
 package com.bif.server.features.place.services;
 
 import com.bif.server.features.place.dto.rest.ReviewDTO;
+import com.bif.server.features.place.events.PlaceRatingUpdatedEvent;
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.repositories.RatingRepository;
-import com.bif.server.features.search.services.PlaceSearchIndexSyncService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,7 +39,7 @@ class RatingServiceTest {
     private PlaceRatingCacheUpdater placeRatingCacheUpdater;
 
     @Mock
-    private PlaceSearchIndexSyncService placeSearchIndexSyncService;
+    private ApplicationEventPublisher applicationEventPublisher;
 
     private RatingService ratingService;
 
@@ -47,7 +48,7 @@ class RatingServiceTest {
         ratingService = new RatingService(
                 ratingRepository,
                 placeRatingCacheUpdater,
-                placeSearchIndexSyncService);
+                applicationEventPublisher);
     }
 
     @Test
@@ -77,16 +78,24 @@ class RatingServiceTest {
         assertEquals("p1", reviewCaptor.getValue().getPlaceId());
         assertEquals(5, reviewCaptor.getValue().getStars());
 
-        verify(placeSearchIndexSyncService).upsert(updatedPlace);
+        ArgumentCaptor<PlaceRatingUpdatedEvent> eventCaptor =
+                ArgumentCaptor.forClass(PlaceRatingUpdatedEvent.class);
+        verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
+        PlaceRatingUpdatedEvent event = eventCaptor.getValue();
+        assertEquals("p1", event.placeId());
+        assertEquals(updatedPlace.getRating(), event.rating(), 0.0001);
+        assertEquals(updatedPlace.getReviewCount(), event.reviewCount());
     }
 
     @Test
-    void saveReview_WhenDuplicateReview_ThrowsIllegalState() {
+        void saveReview_WhenDuplicateReview_ThrowsDuplicateKeyException() {
         when(ratingRepository.save(any(PlaceReview.class)))
                 .thenThrow(new DuplicateKeyException("duplicate"));
 
-        assertThrows(IllegalStateException.class,
+                assertThrows(DuplicateKeyException.class,
                 () -> ratingService.saveReview("u1", "p1", new ReviewDTO(4, "ok")));
+
+                verifyNoInteractions(placeRatingCacheUpdater, applicationEventPublisher);
     }
 
     @Test
@@ -113,8 +122,8 @@ class RatingServiceTest {
         verify(ratingRepository).findByPlaceIdOrderByCreatedAtDesc("p1", pageable);
     }
 
-        @Test
-        void deleteReview_WhenFound_DecrementsCacheAndDeletesReview() {
+    @Test
+    void deleteReview_WhenFound_DecrementsCacheAndDeletesReview() {
         PlaceReview review = new PlaceReview();
         review.setId("r1");
         review.setUserId("u1");
@@ -122,49 +131,55 @@ class RatingServiceTest {
         review.setStars(4);
 
         when(ratingRepository.findByUserIdAndPlaceId("u1", "p1"))
-            .thenReturn(Optional.of(review));
+                .thenReturn(Optional.of(review));
 
         Place updatedPlace = new Place();
         updatedPlace.setId("p1");
         when(placeRatingCacheUpdater.decrementAndRecalculate("u1", "p1", 4))
-            .thenReturn(updatedPlace);
+                .thenReturn(updatedPlace);
 
         ratingService.deleteReview("u1", "p1");
 
         verify(ratingRepository).findByUserIdAndPlaceId("u1", "p1");
         verify(placeRatingCacheUpdater).decrementAndRecalculate("u1", "p1", 4);
         verify(ratingRepository).deleteById("r1");
-        verify(placeSearchIndexSyncService).upsert(updatedPlace);
-        }
+        ArgumentCaptor<PlaceRatingUpdatedEvent> eventCaptor =
+                ArgumentCaptor.forClass(PlaceRatingUpdatedEvent.class);
+        verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
+        PlaceRatingUpdatedEvent event = eventCaptor.getValue();
+        assertEquals("p1", event.placeId());
+        assertEquals(updatedPlace.getRating(), event.rating(), 0.0001);
+        assertEquals(updatedPlace.getReviewCount(), event.reviewCount());
+    }
 
-        @Test
-        void deleteReview_WhenReviewNotFound_ThrowsNotFound() {
+    @Test
+    void deleteReview_WhenReviewNotFound_ThrowsNotFound() {
         when(ratingRepository.findByUserIdAndPlaceId("u1", "p1"))
-            .thenReturn(Optional.empty());
+                .thenReturn(Optional.empty());
 
         assertThrows(NoSuchElementException.class,
-            () -> ratingService.deleteReview("u1", "p1"));
+                () -> ratingService.deleteReview("u1", "p1"));
 
         verify(ratingRepository).findByUserIdAndPlaceId("u1", "p1");
         verifyNoInteractions(placeRatingCacheUpdater);
         verify(ratingRepository, never()).deleteById(any());
-        }
+    }
 
-        @Test
-        void deleteReview_WhenCacheUpdateFails_DoesNotDeleteReviewDocument() {
+    @Test
+    void deleteReview_WhenCacheUpdateFails_DoesNotDeleteReviewDocument() {
         PlaceReview review = new PlaceReview();
         review.setId("r1");
         review.setStars(5);
 
         when(ratingRepository.findByUserIdAndPlaceId("u1", "p1"))
-            .thenReturn(Optional.of(review));
+                .thenReturn(Optional.of(review));
         when(placeRatingCacheUpdater.decrementAndRecalculate("u1", "p1", 5))
-            .thenThrow(new IllegalStateException("concurrent update"));
+                .thenThrow(new IllegalStateException("concurrent update"));
 
         assertThrows(IllegalStateException.class,
-            () -> ratingService.deleteReview("u1", "p1"));
+                () -> ratingService.deleteReview("u1", "p1"));
 
         verify(ratingRepository, never()).deleteById(any());
-        verify(placeSearchIndexSyncService, never()).upsert(any());
-        }
+        verify(applicationEventPublisher, never()).publishEvent(any());
+    }
 }
