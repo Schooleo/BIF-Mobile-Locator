@@ -20,6 +20,7 @@ import com.bif.app.data.source.local.dao.ReviewDao;
 
 import javax.inject.Singleton;
 
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -40,6 +41,12 @@ public class AppModule {
     @Singleton
     public ExecutorService provideExecutorService() {
         return Executors.newFixedThreadPool(4);
+    }
+
+    @Provides
+    @Singleton
+    public Executor provideExecutor(ExecutorService executorService) {
+        return executorService;
     }
 
     @Provides
@@ -123,7 +130,8 @@ public class AppModule {
     @Singleton
     public LocalSessionDataCleaner provideLocalSessionDataCleaner(
             AppDatabase appDatabase,
-            @ApplicationContext Context context) {
+            @ApplicationContext Context context,
+            ExecutorService executor) {
         return new LocalSessionDataCleaner() {
             @Override
             public void clearLocalUserData() {
@@ -132,24 +140,25 @@ public class AppModule {
 
             @Override
             public void clearLocalUserData(Runnable onComplete) {
-                ExecutorService executor = Executors.newSingleThreadExecutor();
                 executor.execute(() -> {
                     try {
                         appDatabase.clearAllTables();
-                        context.getSharedPreferences("SYNC_PREF", Context.MODE_PRIVATE)
+                        boolean prefsCleared = context.getSharedPreferences(
+                                "SYNC_PREF", Context.MODE_PRIVATE)
                                 .edit()
                                 .clear()
-                                .apply();
-                    } catch (Exception exception) {
-                        Timber.tag(TAG).e(exception,
-                                "Failed to clear local session data");
-                    } finally {
+                                .commit();
+                        if (!prefsCleared) {
+                            throw new IllegalStateException("Failed to clear SYNC_PREF");
+                        }
                         if (onComplete != null) {
                             new android.os.Handler(android.os.Looper.getMainLooper()).post(onComplete);
                         }
+                    } catch (Exception exception) {
+                        Timber.tag(TAG).e(exception,
+                                "Failed to clear local session data");
                     }
                 });
-                executor.shutdown();
             }
         };
     }

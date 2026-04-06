@@ -10,6 +10,9 @@ public interface IReviewRepository {
     void submitReview(String placeId, int stars, String comment);
     void updateReview(String placeId, int stars, String comment);
     void deleteMyReview(String placeId);
-    void refreshReviews(String placeId);
+    default void refreshReviews(String placeId) {
+        refreshReviews(placeId, null);
+    }
+    void refreshReviews(String placeId, Runnable onComplete);
     String resolveInternalPlaceId(String externalSource, String externalId, double lat, double lng, String name);
 }

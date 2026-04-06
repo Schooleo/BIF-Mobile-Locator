@@ -50,4 +50,15 @@
     <string name="download_map_failed">Could not download offline map data</string>
     <string name="download_map_location_required">Current location unavailable for map download.</string>
     <string name="download_map_in_progress">Downloading...</string>
+    <string-array name="search_area_patterns">
+        <item>phan thiet|Phan Thiet</item>
+        <item>da lat|Da Lat</item>
+        <item>dalat|Da Lat</item>
+        <item>ha noi|Ha Noi</item>
+        <item>hanoi|Ha Noi</item>
+        <item>ho chi minh|TPHCM</item>
+        <item>saigon|TPHCM</item>
+        <item>sai gon|TPHCM</item>
+        <item>tphcm|TPHCM</item>
+    </string-array>
 </resources>

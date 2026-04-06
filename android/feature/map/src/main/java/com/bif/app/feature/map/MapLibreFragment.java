@@ -196,6 +196,8 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private long lastRemoteToastAtMs;
     private Runnable hideHistory = () -> {
     };
+    private boolean suppressQueryTextChange;
+    private boolean rvReviewsTouchListenerRegistered = false;
 
     private final Handler locationHandler = new Handler(Looper.getMainLooper());
     private final Runnable locationTimeoutRunnable = () -> {
@@ -632,7 +634,12 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         };
 
         SearchHistoryAdapter historyAdapter = new SearchHistoryAdapter(query -> {
-            searchView.setQuery(query, false);
+            suppressQueryTextChange = true;
+            try {
+                searchView.setQuery(query, false);
+            } finally {
+                suppressQueryTextChange = false;
+            }
             viewModel.searchForPlacesFromHistory(query);
             hideHistory.run();
         });
@@ -659,6 +666,9 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
             @Override
             public boolean onQueryTextChange(String newText) {
+                if (suppressQueryTextChange) {
+                    return true;
+                }
                 viewModel.searchForPlaces(newText);
                 if (TextUtils.isEmpty(newText)) {
                     clearSearchResultMarkers();
@@ -936,20 +946,13 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         String haystack = ((place.name != null ? place.name : "") + " "
                 + (place.address != null ? place.address : ""))
                 .toLowerCase(Locale.ROOT);
-        if (haystack.contains("phan thiet")) {
-            return "Phan Thiet";
-        }
-        if (haystack.contains("da lat") || haystack.contains("dalat")) {
-            return "Da Lat";
-        }
-        if (haystack.contains("ha noi") || haystack.contains("hanoi")) {
-            return "Ha Noi";
-        }
-        if (haystack.contains("ho chi minh")
-                || haystack.contains("saigon")
-                || haystack.contains("sai gon")
-                || haystack.contains("tphcm")) {
-            return "TPHCM";
+                
+        String[] patterns = getResources().getStringArray(R.array.search_area_patterns);
+        for (String patternDef : patterns) {
+            String[] parts = patternDef.split("\\|");
+            if (parts.length == 2 && haystack.contains(parts[0])) {
+                return parts[1];
+            }
         }
 
         if (place.address != null && !place.address.isBlank()) {
@@ -2497,9 +2500,22 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         // Setup Chip filters
         setupChipFilters(root);
 
-        // Load reviews via ViewModel
-        if (place != null) {
+        allReviews.clear();
+        if (reviewAdapter != null) {
+            reviewAdapter.showAllReviews(allReviews);
+        }
+        if (rvReviews != null) {
+            rvReviews.setVisibility(View.INVISIBLE);
+        }
+        if (shimmerReviews != null) {
+            shimmerReviews.setVisibility(View.VISIBLE);
+            shimmerReviews.startShimmer();
+        }
+        if (!TextUtils.isEmpty(place.placeSource)) {
             viewModel.loadReviews(place);
+        } else if (shimmerReviews != null) {
+            shimmerReviews.stopShimmer();
+            shimmerReviews.setVisibility(View.GONE);
         }
 
         View layoutContainer = root.findViewById(R.id.layout_container);
@@ -2518,6 +2534,11 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             return;
         }
 
+        // Set item width to 85% of screen width (adapter owns view sizing).
+        int screenWidth = requireActivity().getResources().getDisplayMetrics().widthPixels;
+        int itemWidth = (int) (screenWidth * 0.85f);
+        reviewAdapter.setItemWidthPx(itemWidth);
+
         rvReviews.setAdapter(reviewAdapter);
 
         // Setup LinearLayoutManager for horizontal carousel
@@ -2533,39 +2554,27 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             snapHelper.attachToRecyclerView(rvReviews);
         }
 
-        // Set item width to 85% of screen width
-        int screenWidth = requireActivity().getResources().getDisplayMetrics().widthPixels;
-        int itemWidth = (int) (screenWidth * 0.85f);
-        rvReviews.addItemDecoration(new RecyclerView.ItemDecoration() {
-            @Override
-            public void getItemOffsets(@NonNull android.graphics.Rect outRect, @NonNull View view, 
-                    @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
-                ViewGroup.LayoutParams lp = view.getLayoutParams();
-                if (lp instanceof ViewGroup.MarginLayoutParams) {
-                    ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
-                    mlp.width = itemWidth;
+        if (!rvReviewsTouchListenerRegistered) {
+            rvReviews.addOnItemTouchListener(new RecyclerView.OnItemTouchListener() {
+                @Override
+                public boolean onInterceptTouchEvent(@NonNull RecyclerView rv, @NonNull android.view.MotionEvent e) {
+                    int action = e.getActionMasked();
+                    if (action == android.view.MotionEvent.ACTION_DOWN) {
+                        rv.getParent().requestDisallowInterceptTouchEvent(true);
+                    } else if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) {
+                        rv.getParent().requestDisallowInterceptTouchEvent(false);
+                    }
+                    return false;
                 }
-            }
-        });
 
-        rvReviews.addOnItemTouchListener(new RecyclerView.OnItemTouchListener() {
-            @Override
-            public boolean onInterceptTouchEvent(@NonNull RecyclerView rv, @NonNull android.view.MotionEvent e) {
-                int action = e.getActionMasked();
-                if (action == android.view.MotionEvent.ACTION_DOWN) {
-                    rv.getParent().requestDisallowInterceptTouchEvent(true);
-                } else if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) {
-                    rv.getParent().requestDisallowInterceptTouchEvent(false);
-                }
-                return false;
-            }
+                @Override
+                public void onTouchEvent(@NonNull RecyclerView rv, @NonNull android.view.MotionEvent e) {}
 
-            @Override
-            public void onTouchEvent(@NonNull RecyclerView rv, @NonNull android.view.MotionEvent e) {}
-
-            @Override
-            public void onRequestDisallowInterceptTouchEvent(boolean disallowIntercept) {}
-        });
+                @Override
+                public void onRequestDisallowInterceptTouchEvent(boolean disallowIntercept) {}
+            });
+            rvReviewsTouchListenerRegistered = true;
+        }
     }
 
     private void setupChipFilters(View root) {
@@ -2611,7 +2620,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
         if (reviews != null) {
             for (com.bif.app.domain.model.Review review : reviews) {
-                if (myReview != null && review.userId.equals(myReview.userId)) {
+                if (myReview != null && java.util.Objects.equals(review.userId, myReview.userId)) {
                     continue;
                 }
                 allReviews.add(new ReviewItem(ReviewItem.VIEW_TYPE_OTHERS, review, false));
@@ -2695,7 +2704,11 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                     int stars = (int) ratingBar.getRating();
                     if (stars > 0) {
                         String comment = etComment.getText() != null ? etComment.getText().toString().trim() : "";
-                        viewModel.submitReview(stars, comment);
+                        if (existingReview != null) {
+                            viewModel.updateReview(existingReview, stars, comment);
+                        } else {
+                            viewModel.submitReview(stars, comment);
+                        }
                     } else {
                         Toast.makeText(getContext(), "Please provide a rating", Toast.LENGTH_SHORT).show();
                     }
@@ -3072,6 +3085,33 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         clearSelectedMarker();
         clearRouteFeatures();
         stopFollowLocationUpdates();
+        if (reviewAdapter != null) {
+            reviewAdapter.clear();
+        }
+        if (rvReviews != null) {
+            rvReviews.setAdapter(null);
+            rvReviews.setOnFlingListener(null);
+        }
+        rvReviewsTouchListenerRegistered = false;
+        if (snapHelper != null) {
+            snapHelper.attachToRecyclerView(null);
+            snapHelper = null;
+        }
+        if (shimmerReviews != null) {
+            shimmerReviews.stopShimmer();
+        }
+        if (chipGroupFilters != null) {
+            chipGroupFilters.clearCheck();
+            chipGroupFilters.setOnCheckedStateChangeListener(null);
+        }
+        if (allReviews != null) {
+            allReviews.clear();
+        }
+        rvReviews = null;
+        shimmerReviews = null;
+        chipGroupFilters = null;
+        reviewAdapter = null;
+        suppressQueryTextChange = false;
         bottomSheetContainer = null;
         placeDetailSheet = null;
         routeDetailSheet = null;

@@ -22,6 +22,7 @@ import com.bif.app.core.network.dto.chat.ChatMessageDto;
 import com.bif.app.core.network.dto.trip.TripPlanDto;
 import com.bif.app.core.network.dto.trip.TripStopDto;
 import com.bif.app.core.network.dto.place.PlaceDto;
+import com.bif.app.core.network.dto.place.PlaceSearchRequestDTO;
 import com.bif.app.core.network.dto.place.PlaceReviewDto;
 import com.bif.app.core.network.dto.place.PlaceResolveRequestDto;
 import com.bif.app.core.network.dto.place.PlaceResolveResponseDto;
@@ -160,10 +161,8 @@ public interface RestApiService {
     // @GET("config/features")
     // Call<FeatureConfig> getFeatureConfig();
     // Places
-    @GET("places/search")
-    Call<List<PlaceDto>> searchServerPlaces(@Query("lat") Double lat,
-            @Query("lng") Double lng,
-            @Query("q") String query);
+        @POST("places/search")
+        Call<List<PlaceDto>> searchServerPlaces(@Body PlaceSearchRequestDTO request);
 
     @POST("places")
     Call<PlaceDto> upsertPlace(@Body PlaceDto place);
@@ -181,7 +180,7 @@ public interface RestApiService {
     Call<List<PlaceReviewDto>> getPlaceReviews(@Path("id") String placeId);
 
     @POST("places/{id}/reviews")
-    Call<PlaceDto> addReview(@Path("id") String placeId,
+    Call<PlaceReviewDto> addReview(@Path("id") String placeId,
             @Body PlaceReviewDto review);
 
     @PUT("places/{id}/reviews/me")

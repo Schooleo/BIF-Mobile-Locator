@@ -6,6 +6,7 @@ import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.repositories.RatingRepository;
 import com.bif.server.features.sync.services.SyncVersionService;
+import com.bif.server.features.user.models.User;
 import com.bif.server.features.user.repositories.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,12 +15,18 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Query;
 
+import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -121,5 +128,89 @@ class RatingServiceTest {
         PlaceRatingUpdatedEvent event = eventCaptor.getValue();
         assertEquals(4.0, event.rating(), 0.001);
         assertEquals(10, event.reviewCount());
+    }
+
+    @Test
+    void getPlaceReviewsWithUsers_FetchesUsersInBulkAndMapsUserNames() {
+        PlaceReview review1 = new PlaceReview();
+        review1.setId("r1");
+        review1.setPlaceId("p1");
+        review1.setUserId("u1");
+        review1.setStars(5);
+        review1.setComment("great");
+
+        PlaceReview review2 = new PlaceReview();
+        review2.setId("r2");
+        review2.setPlaceId("p1");
+        review2.setUserId("u2");
+        review2.setStars(4);
+        review2.setComment("nice");
+
+        User user1 = new User();
+        user1.setId("u1");
+        user1.setUsername("Alice");
+
+        User user2 = new User();
+        user2.setId("u2");
+        user2.setUsername("Bob");
+
+        when(ratingRepository.findByPlaceIdOrderByCreatedAtDesc("p1"))
+                .thenReturn(List.of(review1, review2));
+        when(userRepository.findAllById(any()))
+                .thenReturn(List.of(user1, user2));
+
+        var result = ratingService.getPlaceReviewsWithUsers("p1");
+
+        assertEquals(2, result.size());
+        assertEquals("Alice", result.get(0).userName());
+        assertEquals("Bob", result.get(1).userName());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Iterable<String>> idsCaptor =
+                (ArgumentCaptor<Iterable<String>>) (ArgumentCaptor<?>) ArgumentCaptor.forClass(Iterable.class);
+        verify(userRepository, times(1)).findAllById(idsCaptor.capture());
+        verify(userRepository, never()).findById(any());
+
+        Set<String> capturedIds = new HashSet<>();
+        for (String id : idsCaptor.getValue()) {
+            capturedIds.add(id);
+        }
+        assertTrue(capturedIds.contains("u1"));
+        assertTrue(capturedIds.contains("u2"));
+    }
+
+    @Test
+    void saveReview_WhenDuplicateKey_ThrowsAndSkipsCacheAndEvent() {
+        when(ratingRepository.save(any(PlaceReview.class)))
+                .thenThrow(new DuplicateKeyException("duplicate key"));
+
+        assertThrows(DuplicateKeyException.class,
+                () -> ratingService.saveReview("u1", "p1", new ReviewDTO(5, "Excellent")));
+
+        verify(mongoTemplate, never()).findAndModify(any(Query.class), any(), any(), eq(Place.class));
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void getUserReviewWithUser_WhenUsernameBlank_ReturnsAnonymous() {
+        PlaceReview review = new PlaceReview();
+        review.setId("r1");
+        review.setPlaceId("p1");
+        review.setUserId("u1");
+        review.setStars(5);
+
+        User user = new User();
+        user.setId("u1");
+        user.setUsername("   ");
+
+        when(ratingRepository.findByUserIdAndPlaceId("u1", "p1"))
+                .thenReturn(Optional.of(review));
+        when(userRepository.findById("u1"))
+                .thenReturn(Optional.of(user));
+
+        var result = ratingService.getUserReviewWithUser("u1", "p1");
+
+        assertTrue(result.isPresent());
+        assertEquals("Anonymous", result.get().userName());
     }
 }

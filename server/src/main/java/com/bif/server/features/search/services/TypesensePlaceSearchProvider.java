@@ -29,32 +29,6 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(
             TypesensePlaceSearchProvider.class);
-        private static final int SEARCH_PER_PAGE = 10;
-        private static final List<String> LOCATION_HINT_TOKENS = List.of(
-            "phan thiet",
-            "da lat",
-            "dalat",
-            "ha noi",
-            "hanoi",
-            "ho chi minh",
-            "sai gon",
-            "saigon",
-            "tphcm",
-            "hcm",
-            "da nang",
-            "danang",
-            "nha trang",
-            "vung tau",
-            "can tho",
-            "hai phong",
-            "district",
-            "ward",
-            "city",
-            "province",
-            "quan",
-            "phuong",
-            "tinh"
-        );
 
     private final TypesenseProperties typesenseProperties;
     private final ObjectMapper objectMapper;
@@ -151,13 +125,6 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
         return buildSearchUri(request, "name,address");
     }
 
-    private URI buildSearchUri(String query, String queryBy, int perPage) {
-        PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
-        request.setQuery(query);
-        request.setPerPage(perPage);
-        return buildSearchUri(request, queryBy);
-    }
-
     private URI buildSearchUri(PlaceSearchRequestDTO request, String queryBy) {
         String protocol = safe(typesenseProperties.getProtocol(), "http");
         String host = safe(typesenseProperties.getHost(), "localhost");
@@ -165,7 +132,9 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
         String collection = encode(safe(typesenseProperties.getPlacesCollection(), "places"));
         String encodedQuery = encode(safe(request != null ? request.getQuery() : null, ""));
         String encodedQueryBy = encode(safe(queryBy, "name,address"));
-        int resolvedPerPage = SEARCH_PER_PAGE;
+        int resolvedPerPage = request != null
+                ? request.getPerPage()
+                : new PlaceSearchRequestDTO().getPerPage();
 
         StringBuilder uriBuilder = new StringBuilder(String.format(
                 "%s://%s:%d/collections/%s/documents/search?q=%s&query_by=%s&per_page=%d",
@@ -177,24 +146,24 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
                 encodedQueryBy,
                 resolvedPerPage
         ));
-            uriBuilder.append("&prioritize_exact_match=true");
+        uriBuilder.append("&prioritize_exact_match=true");
 
         if (hasCoordinates(request)) {
             String sortBy = String.format(
                     Locale.US,
-                    "_geo_distance(%s, %s):asc, rating:desc",
+                    "_geo_distance(%s,%s):asc,rating:desc",
                     request.getLatitude(),
                     request.getLongitude());
-                uriBuilder.append("&sort_by=").append(encode(sortBy));
+            uriBuilder.append("&sort_by=").append(encode(sortBy));
 
-                if (shouldApplyGeoRadiusFilter(request)) {
+            if (shouldApplyGeoRadiusFilter(request)) {
                 String filterBy = String.format(
-                    Locale.US,
-                    "location:(%s, %s, 50km)",
-                    request.getLatitude(),
-                    request.getLongitude());
+                        Locale.US,
+                        "location:(%s,%s,50km)",
+                        request.getLatitude(),
+                        request.getLongitude());
                 uriBuilder.append("&filter_by=").append(encode(filterBy));
-                }
+            }
         }
 
         return URI.create(uriBuilder.toString());
@@ -308,40 +277,20 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
     }
 
     private boolean hasCoordinates(PlaceSearchRequestDTO request) {
-        return request != null
-                && request.getLatitude() != null
-                && request.getLongitude() != null;
+        if (request == null) {
+            return false;
+        }
+
+        Double latitude = request.getLatitude();
+        Double longitude = request.getLongitude();
+        return latitude != null
+                && longitude != null
+                && Double.isFinite(latitude)
+                && Double.isFinite(longitude);
     }
 
     private boolean shouldApplyGeoRadiusFilter(PlaceSearchRequestDTO request) {
-        if (!hasCoordinates(request)) {
-            return false;
-        }
-        String query = request != null ? request.getQuery() : null;
-        return !isSpecificOrLocationQuery(query);
-    }
-
-    private boolean isSpecificOrLocationQuery(String query) {
-        if (query == null) {
-            return false;
-        }
-
-        String normalized = query.trim().toLowerCase(Locale.ROOT);
-        if (normalized.length() > 10) {
-            return true;
-        }
-
-        if (normalized.contains(",")) {
-            return true;
-        }
-
-        for (String token : LOCATION_HINT_TOKENS) {
-            if (normalized.contains(token)) {
-                return true;
-            }
-        }
-
-        return false;
+        return hasCoordinates(request);
     }
 
     private String encode(String value) {

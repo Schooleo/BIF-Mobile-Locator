@@ -1,17 +1,14 @@
 package com.bif.server.features.sync.services;
 
-import com.bif.server.features.place.models.PlaceReview;
-import com.bif.server.features.place.repositories.RatingRepository;
+import com.bif.server.features.place.dto.rest.ReviewResponseDTO;
+import com.bif.server.features.place.services.RatingService;
 import com.bif.server.features.sync.models.SyncChange;
 import com.bif.server.features.sync.models.SyncChangeEntry;
-import com.bif.server.features.user.models.User;
-import com.bif.server.features.user.repositories.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -19,13 +16,13 @@ import java.util.Optional;
 public class ReviewSyncEntityHandler implements SyncEntityHandler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ReviewSyncEntityHandler.class);
-    private final RatingRepository ratingRepository;
-    private final UserRepository userRepository;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final RatingService ratingService;
+    private final ObjectMapper objectMapper;
 
-    public ReviewSyncEntityHandler(RatingRepository ratingRepository, UserRepository userRepository) {
-        this.ratingRepository = ratingRepository;
-        this.userRepository = userRepository;
+    public ReviewSyncEntityHandler(RatingService ratingService,
+                                   ObjectMapper objectMapper) {
+        this.ratingService = ratingService;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -35,28 +32,46 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
 
     @Override
     public String applyPushedChange(SyncChange pushed, String userId, long newVersion) {
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("Review sync: missing authenticated userId");
+        }
+
         String operation = pushed.getOperation() != null
                 ? pushed.getOperation().toUpperCase(Locale.ROOT)
                 : "CREATE";
+
+        if (!"CREATE".equals(operation) && !"UPDATE".equals(operation) && !"DELETE".equals(operation)) {
+            throw new IllegalArgumentException("Review sync: unsupported operation '" + operation + "'");
+        }
 
         // entityId format: "placeId:userId"
         String[] parts = pushed.getEntityId() != null
                 ? pushed.getEntityId().split(":")
                 : new String[0];
-        String placeId = parts.length >= 1 ? parts[0] : null;
-        String reviewUserId = parts.length >= 2 ? parts[1] : userId;
+        if (parts.length < 2) {
+            throw new IllegalArgumentException("Review sync: malformed entityId '" + pushed.getEntityId() + "'");
+        }
+        String placeId = parts[0];
+        String entityUserId = parts[1];
 
         if (placeId == null || placeId.isBlank()) {
-            LOGGER.warn("Review sync: missing placeId in entityId '{}'", pushed.getEntityId());
-            return pushed.getPayload();
+            throw new IllegalArgumentException("Review sync: blank placeId in entityId");
+        }
+        if (entityUserId == null || entityUserId.isBlank()) {
+            throw new IllegalArgumentException("Review sync: blank userId in entityId");
         }
 
+        if (!userId.equals(entityUserId)) {
+            throw new IllegalArgumentException(
+                "Review sync: entity userId does not match authenticated userId");
+        }
+        String reviewUserId = userId;
+
         if ("DELETE".equals(operation)) {
-            Optional<PlaceReview> existing = ratingRepository
-                    .findByUserIdAndPlaceId(reviewUserId, placeId);
+            Optional<ReviewResponseDTO> existing = ratingService.getUserReviewWithUser(reviewUserId, placeId);
             if (existing.isPresent()) {
-                ratingRepository.deleteById(existing.get().getId());
-                LOGGER.info("Review sync: deleted review for user={} place={}", reviewUserId, placeId);
+                ratingService.deleteReview(reviewUserId, placeId);
+                LOGGER.debug("Review sync: deleted review for place={}", placeId);
             }
             ReviewPayload response = new ReviewPayload();
             response.placeId = placeId;
@@ -68,43 +83,29 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
 
         // CREATE or UPDATE
         ReviewPayload payload = parsePayload(pushed.getPayload());
-
-        int stars = 3;
-        String comment = null;
-        if (payload != null) {
-            stars = payload.rating > 0 ? payload.rating : payload.stars;
-            comment = payload.comment;
-            if (payload.placeId != null && !payload.placeId.isBlank()) {
-                placeId = payload.placeId;
-            }
-            if (payload.userId != null && !payload.userId.isBlank()) {
-                reviewUserId = payload.userId;
-            }
+        if (payload == null) {
+            throw new IllegalArgumentException("Review sync: invalid review payload");
         }
 
-        // Validate stars
-        if (stars < 1) stars = 1;
-        if (stars > 5) stars = 5;
-
-        Optional<PlaceReview> existing = ratingRepository
-                .findByUserIdAndPlaceId(reviewUserId, placeId);
-
-        PlaceReview review;
-        if (existing.isPresent()) {
-            review = existing.get();
-        } else {
-            review = new PlaceReview();
-            review.setUserId(reviewUserId);
-            review.setPlaceId(placeId);
-            review.setCreatedAt(LocalDateTime.now());
+        int stars = payload.rating > 0 ? payload.rating : payload.stars;
+        if (stars < 1 || stars > 5) {
+            throw new IllegalArgumentException("Review sync: stars/rating must be between 1 and 5");
         }
-        review.setStars(stars);
-        review.setComment(comment);
-        ratingRepository.save(review);
+        String comment = payload.comment;
+        if (comment == null || comment.isBlank()) {
+            throw new IllegalArgumentException("Review sync: comment cannot be empty");
+        }
 
-        LOGGER.info("Review sync: saved review for user={} place={} stars={}", reviewUserId, placeId, stars);
+        ReviewResponseDTO savedReview = ratingService.saveOrUpdateReview(
+                stars,
+                comment,
+                reviewUserId,
+                placeId,
+                newVersion);
 
-        ReviewPayload responsePayload = toPayload(review);
+        LOGGER.debug("Review sync: saved review for place={} stars={}", placeId, stars);
+
+        ReviewPayload responsePayload = toPayload(savedReview);
         responsePayload.serverVersion = newVersion;
         return writePayload(responsePayload);
     }
@@ -122,8 +123,14 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
             return null;
         }
 
-        Optional<PlaceReview> reviewOpt = ratingRepository
-                .findByUserIdAndPlaceId(parts[1], parts[0]);
+        String placeId = parts[0].trim();
+        String reviewUserId = parts[1].trim();
+        if (placeId.isEmpty() || reviewUserId.isEmpty()) {
+            return null;
+        }
+
+        Optional<ReviewResponseDTO> reviewOpt = ratingService
+            .getUserReviewWithUser(reviewUserId, placeId);
         if (reviewOpt.isEmpty()) {
             return null;
         }
@@ -149,29 +156,24 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (Exception e) {
+            LOGGER.warn("Review sync: failed to write payload", e);
             return null;
         }
     }
 
-    private ReviewPayload toPayload(PlaceReview review) {
+    private ReviewPayload toPayload(ReviewResponseDTO review) {
         ReviewPayload payload = new ReviewPayload();
-        payload.placeId = review.getPlaceId();
-        payload.userId = review.getUserId();
-        
-        String userName = "Anonymous";
-        if (review.getUserId() != null) {
-            Optional<User> userOpt = userRepository.findById(review.getUserId());
-            if (userOpt.isPresent() && userOpt.get().getUsername() != null) {
-                userName = userOpt.get().getUsername();
-            }
-        }
-        payload.userName = userName;
-        
-        payload.stars = review.getStars();
-        payload.rating = review.getStars();
-        payload.comment = review.getComment();
-        payload.createdAt = review.getCreatedAt() != null
-                ? review.getCreatedAt().toString()
+        payload.placeId = review.placeId();
+        payload.userId = review.userId();
+        payload.userName = review.userName() != null && !review.userName().isBlank()
+                ? review.userName()
+                : "Anonymous";
+
+        payload.stars = review.stars();
+        payload.rating = review.stars();
+        payload.comment = review.comment();
+        payload.createdAt = review.createdAt() != null
+                ? review.createdAt().toString()
                 : null;
         return payload;
     }

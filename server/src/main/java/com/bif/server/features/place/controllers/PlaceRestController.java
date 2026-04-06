@@ -68,6 +68,9 @@ public class PlaceRestController {
                 request.lng(),
                 request.name()
         );
+        if (internalId == null || internalId.isBlank()) {
+            return ResponseEntity.notFound().build();
+        }
         return ResponseEntity.ok(new PlaceResolveResponse(internalId, request.name()));
     }
 

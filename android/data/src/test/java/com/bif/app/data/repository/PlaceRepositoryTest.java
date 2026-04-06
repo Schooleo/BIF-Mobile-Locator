@@ -20,6 +20,7 @@ import androidx.lifecycle.LiveData;
 
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.place.PlaceDto;
+import com.bif.app.core.network.dto.place.PlaceSearchRequestDTO;
 import com.bif.app.data.source.AndroidGeocodingDataSource;
 import com.bif.app.data.source.local.dao.PlaceDao;
 import com.bif.app.data.source.local.dao.SearchHistoryDao;
@@ -163,7 +164,7 @@ public class PlaceRepositoryTest {
         Call<List<PlaceDto>> mockCall = mock(Call.class);
         when(mockCall.execute())
                 .thenReturn(Response.success(new ArrayList<>()));
-        when(mockRestApiService.searchServerPlaces(10.5, 106.7, "test"))
+        when(mockRestApiService.searchServerPlaces(any(PlaceSearchRequestDTO.class)))
                 .thenReturn(mockCall);
         when(mockGeocodingDataSource.geocodeLocation("test"))
                 .thenReturn(new ArrayList<>());
@@ -172,7 +173,12 @@ public class PlaceRepositoryTest {
         placeRepository.searchPlaces("test", new Location(10.5, 106.7));
         Thread.sleep(300);
 
-        verify(mockRestApiService).searchServerPlaces(10.5, 106.7, "test");
+        ArgumentCaptor<PlaceSearchRequestDTO> requestCaptor =
+                ArgumentCaptor.forClass(PlaceSearchRequestDTO.class);
+        verify(mockRestApiService).searchServerPlaces(requestCaptor.capture());
+        assertEquals("test", requestCaptor.getValue().query);
+        assertEquals(Double.valueOf(10.5), requestCaptor.getValue().latitude);
+        assertEquals(Double.valueOf(106.7), requestCaptor.getValue().longitude);
     }
 
     @Test
@@ -196,7 +202,7 @@ public class PlaceRepositoryTest {
         when(mockCall.execute())
                 .thenReturn(Response.success(
                         Collections.singletonList(serverDto)));
-        when(mockRestApiService.searchServerPlaces(null, null, "test"))
+        when(mockRestApiService.searchServerPlaces(any(PlaceSearchRequestDTO.class)))
                 .thenReturn(mockCall);
 
         // Geocoder returns one additional place
@@ -243,7 +249,7 @@ public class PlaceRepositoryTest {
         Call<List<PlaceDto>> searchCall = mock(Call.class);
         when(searchCall.execute())
                 .thenReturn(Response.success(Collections.singletonList(serverDto)));
-        when(mockRestApiService.searchServerPlaces(null, null, "museum"))
+        when(mockRestApiService.searchServerPlaces(any(PlaceSearchRequestDTO.class)))
                 .thenReturn(searchCall);
 
         Address osmAddr = mock(Address.class);
@@ -293,7 +299,7 @@ public class PlaceRepositoryTest {
         Call<List<PlaceDto>> mockCall = mock(Call.class);
         when(mockCall.execute())
                 .thenReturn(Response.success(new ArrayList<>()));
-        when(mockRestApiService.searchServerPlaces(null, null, "cafe"))
+        when(mockRestApiService.searchServerPlaces(any(PlaceSearchRequestDTO.class)))
                 .thenReturn(mockCall);
         when(mockGeocodingDataSource.geocodeLocation("cafe"))
                 .thenReturn(new ArrayList<>());
@@ -317,7 +323,7 @@ public class PlaceRepositoryTest {
         Call<List<PlaceDto>> mockCall = mock(Call.class);
         when(mockCall.execute())
                 .thenReturn(Response.success(new ArrayList<>()));
-        when(mockRestApiService.searchServerPlaces(null, null, "cafe"))
+        when(mockRestApiService.searchServerPlaces(any(PlaceSearchRequestDTO.class)))
                 .thenReturn(mockCall);
         when(mockGeocodingDataSource.geocodeLocation("cafe"))
                 .thenReturn(new ArrayList<>());
@@ -342,7 +348,7 @@ public class PlaceRepositoryTest {
         Call<List<PlaceDto>> mockCall = mock(Call.class);
         when(mockCall.execute())
                 .thenReturn(Response.success(new ArrayList<>()));
-        when(mockRestApiService.searchServerPlaces(null, null, "test"))
+        when(mockRestApiService.searchServerPlaces(any(PlaceSearchRequestDTO.class)))
                 .thenReturn(mockCall);
         when(mockGeocodingDataSource.geocodeLocation("test"))
                 .thenReturn(new ArrayList<>());

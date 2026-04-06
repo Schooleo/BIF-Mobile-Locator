@@ -11,6 +11,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.typesense.api.Client;
 import org.typesense.api.Collection;
 import org.typesense.api.Document;
+import org.typesense.api.exceptions.ServiceUnavailable;
 
 import java.util.Map;
 import java.util.Set;
@@ -74,5 +75,17 @@ class PlaceRatingUpdatedEventListenerTest {
 
         assertDoesNotThrow(() -> new SyncTaskExecutor().execute(() -> listener.onPlaceRatingUpdated(event)));
         verify(typesenseDocument, times(1)).update(anyMap());
+    }
+
+    @Test
+    void onPlaceRatingUpdated_WhenServiceUnavailable_RetriesThenSucceeds() throws Exception {
+        when(typesenseDocument.update(anyMap()))
+                .thenThrow(new ServiceUnavailable("busy", 503))
+                .thenReturn(Map.of("id", "p1"));
+
+        PlaceRatingUpdatedEvent event = new PlaceRatingUpdatedEvent("p1", 4.7, 20);
+
+        assertDoesNotThrow(() -> new SyncTaskExecutor().execute(() -> listener.onPlaceRatingUpdated(event)));
+        verify(typesenseDocument, times(2)).update(anyMap());
     }
 }

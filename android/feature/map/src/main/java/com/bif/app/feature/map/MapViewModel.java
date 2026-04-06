@@ -28,22 +28,12 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.Executor;
 
 import javax.inject.Inject;
 
 import dagger.hilt.android.lifecycle.HiltViewModel;
-import kotlin.Unit;
-import kotlin.coroutines.EmptyCoroutineContext;
-import kotlin.coroutines.Continuation;
-import kotlin.jvm.functions.Function2;
-import kotlinx.coroutines.BuildersKt;
-import kotlinx.coroutines.CoroutineScope;
-import kotlinx.coroutines.CoroutineStart;
-import kotlinx.coroutines.Job;
-import kotlinx.coroutines.flow.Flow;
-import kotlinx.coroutines.flow.FlowKt;
-import kotlinx.coroutines.flow.MutableStateFlow;
-import kotlinx.coroutines.flow.StateFlowKt;
+
 
 @HiltViewModel
 public class MapViewModel extends ViewModel {
@@ -58,6 +48,7 @@ public class MapViewModel extends ViewModel {
     private final IGroupRepository groupRepository;
     private final IRouteRepository routeRepository;
     private final IReviewRepository reviewRepository;
+    private final Executor reviewExecutor;
 
     private final MutableLiveData<Event<String>> _statusText = new MutableLiveData<>();
     public final LiveData<Event<String>> statusText = _statusText;
@@ -74,7 +65,7 @@ public class MapViewModel extends ViewModel {
     private final MutableLiveData<String> locationSearchQuery = new MutableLiveData<>();
     public final LiveData<Location> searchResult;
 
-        private final MutableStateFlow<String> placesSearchQuery = StateFlowKt.MutableStateFlow("");
+    private String lastSearchQuery = null;
         private final MutableLiveData<List<Place>> _searchResults =
             new MutableLiveData<>(Collections.emptyList());
     public final LiveData<List<Place>> searchResults;
@@ -100,10 +91,12 @@ public class MapViewModel extends ViewModel {
     @Nullable
     private Observer<List<Place>> activeSearchObserver;
     @Nullable
-    private Job searchCollectorJob;
+    private android.os.Handler searchHandler;
 
     private final java.util.concurrent.atomic.AtomicBoolean activeSearchPending =
             new java.util.concurrent.atomic.AtomicBoolean(false);
+        private final java.util.concurrent.atomic.AtomicLong reviewLoadRequestId =
+            new java.util.concurrent.atomic.AtomicLong(0L);
 
     @Inject
     public MapViewModel(
@@ -112,13 +105,15 @@ public class MapViewModel extends ViewModel {
             IFavoriteRepository favoriteRepository,
             IGroupRepository groupRepository,
             IRouteRepository routeRepository,
-            IReviewRepository reviewRepository) {
+            IReviewRepository reviewRepository,
+            Executor reviewExecutor) {
         this.mapRepository = mapRepository;
         this.placeRepository = placeRepository;
         this.favoriteRepository = favoriteRepository;
         this.groupRepository = groupRepository;
         this.routeRepository = routeRepository;
         this.reviewRepository = reviewRepository;
+        this.reviewExecutor = reviewExecutor;
 
         this.searchResult = Transformations.switchMap(locationSearchQuery, placeRepository::searchLocation);
         this.searchResults = _searchResults;
@@ -131,7 +126,11 @@ public class MapViewModel extends ViewModel {
         this.currentPlaceReviews = Transformations.switchMap(_currentPlaceId, reviewRepository::getReviewsForPlace);
         this.currentMyReview = Transformations.switchMap(_currentPlaceId, reviewRepository::getMyReview);
 
-        startSearchCollector();
+        try {
+            this.searchHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        } catch (Exception ignored) {
+            this.searchHandler = null;
+        }
     }
 
     public void setStatusText(String text) {
@@ -144,10 +143,26 @@ public class MapViewModel extends ViewModel {
 
     public void searchForPlaces(String query) {
         activeSearchPending.set(true);
-        String normalized = query == null ? "" : query;
-        placesSearchQuery.setValue(normalized);
-        if (searchCollectorJob == null) {
+        String normalized = query == null ? "" : query.trim();
+        Location loc = currentSearchUserLocation;
+        String locKey = loc == null ? "none" : String.format(Locale.US, "%.4f,%.4f", loc.latitude, loc.longitude);
+        String dedupeKey = normalized + "|" + locKey;
+        
+        if (dedupeKey.equals(lastSearchQuery)) {
+            return;
+        }
+        lastSearchQuery = dedupeKey;
+ 
+        if (searchHandler == null) {
             dispatchSearchQuery(normalized);
+            return;
+        }
+ 
+        searchHandler.removeCallbacksAndMessages(null);
+        if (normalized.isEmpty()) {
+            searchHandler.post(() -> dispatchSearchQuery(normalized));
+        } else {
+            searchHandler.postDelayed(() -> dispatchSearchQuery(normalized), 400L);
         }
     }
 
@@ -156,6 +171,10 @@ public class MapViewModel extends ViewModel {
     }
 
     public void searchForPlacesFromHistory(String query) {
+        if (searchHandler != null) {
+            searchHandler.removeCallbacksAndMessages(null);
+        }
+        clearActiveSearchSource();
         activeSearchPending.set(true);
         placesHistoryQuery.setValue(query);
     }
@@ -201,24 +220,83 @@ public class MapViewModel extends ViewModel {
     }
 
     public void loadReviews(Place place) {
-        if (place == null || place.location == null) return;
+        if (place == null || place.location == null) {
+            return;
+        }
+
+        final long requestId = reviewLoadRequestId.incrementAndGet();
         _isLoadingReviews.setValue(true);
-        new Thread(() -> {
+        _currentPlaceId.setValue(null);
+        reviewExecutor.execute(() -> {
             String internalId = reviewRepository.resolveInternalPlaceId(
                 place.placeSource, place.id, place.location.latitude, place.location.longitude, place.name);
+
+            if (requestId != reviewLoadRequestId.get()) {
+                return;
+            }
+
+            if (internalId == null || internalId.trim().isEmpty()) {
+                _isLoadingReviews.postValue(false);
+                return;
+            }
+
             _currentPlaceId.postValue(internalId);
-            reviewRepository.refreshReviews(internalId);
-            // After resolving and triggering refresh, we can consider "initial setup" done. 
-            // In a real app, refreshReviews callback would set this to false.
-            _isLoadingReviews.postValue(false);
-        }).start();
+            reviewRepository.refreshReviews(internalId, () -> {
+                if (requestId == reviewLoadRequestId.get()) {
+                    _isLoadingReviews.postValue(false);
+                }
+            });
+        });
     }
 
     public void submitReview(int stars, String comment) {
-        String placeId = _currentPlaceId.getValue();
-        if (placeId != null) {
-            reviewRepository.submitReview(placeId, stars, comment);
+        submitOrUpdateReview(null, stars, comment, false);
+    }
+
+    public void updateReview(@Nullable Review existingReview, int stars, String comment) {
+        String expectedPlaceId = existingReview != null ? existingReview.placeId : null;
+        submitOrUpdateReview(expectedPlaceId, stars, comment, true);
+    }
+
+    private void submitOrUpdateReview(@Nullable String expectedPlaceId,
+                                      int stars,
+                                      String comment,
+                                      boolean isUpdate) {
+        if (Boolean.TRUE.equals(_isLoadingReviews.getValue())) {
+            return;
         }
+
+        final long submitRequestId = reviewLoadRequestId.get();
+        final String placeId = _currentPlaceId.getValue();
+        if (placeId == null || placeId.trim().isEmpty()) {
+            return;
+        }
+
+        if (expectedPlaceId != null
+                && !expectedPlaceId.trim().isEmpty()
+                && !placeId.equals(expectedPlaceId.trim())) {
+            return;
+        }
+
+        reviewExecutor.execute(() -> {
+            if (submitRequestId != reviewLoadRequestId.get()) {
+                return;
+            }
+            if (Boolean.TRUE.equals(_isLoadingReviews.getValue())) {
+                return;
+            }
+
+            String latestPlaceId = _currentPlaceId.getValue();
+            if (latestPlaceId == null || !latestPlaceId.equals(placeId)) {
+                return;
+            }
+
+            if (isUpdate) {
+                reviewRepository.updateReview(placeId, stars, comment);
+            } else {
+                reviewRepository.submitReview(placeId, stars, comment);
+            }
+        });
     }
 
     public void removeFromFavorites(Favorite favorite) {
@@ -400,50 +478,13 @@ public class MapViewModel extends ViewModel {
     @Override
     protected void onCleared() {
         clearActiveSearchSource();
-        if (searchCollectorJob != null) {
-            searchCollectorJob.cancel(null);
-            searchCollectorJob = null;
+        if (searchHandler != null) {
+            searchHandler.removeCallbacksAndMessages(null);
         }
         super.onCleared();
     }
 
-    private void startSearchCollector() {
-        Flow<String> distinctQueries = FlowKt.distinctUntilChanged(placesSearchQuery);
 
-        Function2<String, Continuation<? super Boolean>, Object> isEmptyQuery =
-                (query, continuation) -> query == null || query.trim().isEmpty();
-        Function2<String, Continuation<? super Boolean>, Object> isNonEmptyQuery =
-                (query, continuation) -> query != null && !query.trim().isEmpty();
-
-        Flow<String> immediateEmptyQueries = FlowKt.filter(distinctQueries, isEmptyQuery);
-        Flow<String> debouncedNonEmptyQueries = FlowKt.debounce(
-                FlowKt.filter(distinctQueries, isNonEmptyQuery),
-                400L);
-        Flow<String> mergedQueries = FlowKt.merge(immediateEmptyQueries, debouncedNonEmptyQueries);
-
-        Function2<String, Continuation<? super Unit>, Object> performSearch =
-                (query, continuation) -> {
-                    dispatchSearchQuery(query);
-                    return Unit.INSTANCE;
-                };
-
-        Function2<CoroutineScope, Continuation<? super Unit>, Object> collector =
-                (scope, continuation) -> FlowKt.collectLatest(
-                        mergedQueries,
-                        performSearch,
-                        continuation);
-
-        try {
-            searchCollectorJob = BuildersKt.launch(
-                    ViewModelKt.getViewModelScope(this),
-                    EmptyCoroutineContext.INSTANCE,
-                    CoroutineStart.DEFAULT,
-                    collector);
-        } catch (IllegalStateException ignored) {
-            // Unit tests without a Main dispatcher fall back to direct dispatch in searchForPlaces.
-            searchCollectorJob = null;
-        }
-    }
 
     private void dispatchSearchQuery(@Nullable String rawQuery) {
         String query = rawQuery == null ? "" : rawQuery.trim();

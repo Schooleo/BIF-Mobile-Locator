@@ -1,10 +1,12 @@
 package com.bif.server.features.place.controllers;
 
+import com.bif.server.common.dto.ErrorDTO;
 import com.bif.server.features.place.dto.rest.ReviewDTO;
 import com.bif.server.features.place.dto.rest.ReviewResponseDTO;
-import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.services.RatingService;
+import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -28,24 +30,26 @@ public class PlaceReviewController {
     }
 
     @PostMapping
-    public ResponseEntity<PlaceReview> saveReview(
+    public ResponseEntity<?> saveReview(
             @AuthenticationPrincipal String userId,
             @PathVariable String placeId,
-            @RequestBody ReviewDTO dto
+            @RequestBody @Valid ReviewDTO dto
     ) {
         if (userId == null || userId.isBlank()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
         try {
-            PlaceReview saved = ratingService.saveReview(userId, placeId, dto);
+            ReviewResponseDTO saved = ratingService.saveReview(userId, placeId, dto);
             return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+        } catch (DuplicateKeyException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorDTO(e.getMessage()));
         } catch (NoSuchElementException e) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorDTO(e.getMessage()));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(new ErrorDTO(e.getMessage()));
         } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorDTO(e.getMessage()));
         }
     }
 

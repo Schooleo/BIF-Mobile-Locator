@@ -1,10 +1,13 @@
 package com.bif.app.data.repository;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -42,7 +45,13 @@ import java.util.concurrent.ExecutorService;
 import retrofit2.Call;
 import retrofit2.Response;
 
+import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
+import org.junit.Rule;
+
 public class ReviewRepositoryTest {
+
+    @Rule
+    public InstantTaskExecutorRule instantTaskExecutorRule = new InstantTaskExecutorRule();
 
     @Mock
     private ReviewDao mockReviewDao;
@@ -115,6 +124,20 @@ public class ReviewRepositoryTest {
     }
 
     @Test
+    public void resolveInternalPlaceId_WhenApiFails_ReturnsDeterministicFallback() throws IOException {
+        Call<PlaceResolveResponseDto> mockCall = mock(Call.class);
+        when(mockCall.execute()).thenThrow(new IOException("offline"));
+        when(mockApiService.resolvePlace(any(PlaceResolveRequestDto.class))).thenReturn(mockCall);
+
+        String first = repository.resolveInternalPlaceId("OSM", "ext-1", 1.0, 1.0, "Test");
+        String second = repository.resolveInternalPlaceId("OSM", "ext-1", 1.0, 1.0, "Test");
+        String third = repository.resolveInternalPlaceId("OSM", "ext-1", 1.0, 1.0, "Other");
+
+        assertEquals(first, second);
+        assertNotEquals(first, third);
+    }
+
+    @Test
     public void submitReview_WhenCalled_UpsertsToRoomAndEnqueuesInSyncQueue() {
         String placeId = "p1";
         int stars = 5;
@@ -161,7 +184,47 @@ public class ReviewRepositoryTest {
         verify(mockReviewDao).upsert(any(ReviewEntity.class));
     }
 
-    private void assertTrue(boolean value) {
-        if (!value) throw new AssertionError("Condition expected to be true");
+    @Test
+    public void refreshReviews_ReconcilesAndDeletesOnlyMissingNonPendingLocalReviews() throws IOException {
+        String placeId = "p1";
+
+        List<PlaceReviewDto> serverBody = new ArrayList<>();
+        PlaceReviewDto serverReview = new PlaceReviewDto();
+        serverReview.userId = "u1";
+        serverReview.rating = 5;
+        serverReview.comment = "Great";
+        serverBody.add(serverReview);
+
+        Call<List<PlaceReviewDto>> mockCall = mock(Call.class);
+        when(mockCall.execute()).thenReturn(Response.success(serverBody));
+        when(mockApiService.getPlaceReviews(placeId)).thenReturn(mockCall);
+        when(mockReviewDao.getReviewSync(placeId, "u1")).thenReturn(null);
+
+        ReviewEntity localInServer = new ReviewEntity();
+        localInServer.placeId = placeId;
+        localInServer.userId = "u1";
+        localInServer.pendingSync = false;
+
+        ReviewEntity localPendingOnly = new ReviewEntity();
+        localPendingOnly.placeId = placeId;
+        localPendingOnly.userId = "u2";
+        localPendingOnly.pendingSync = true;
+
+        ReviewEntity localMissingAndSynced = new ReviewEntity();
+        localMissingAndSynced.placeId = placeId;
+        localMissingAndSynced.userId = "u3";
+        localMissingAndSynced.pendingSync = false;
+
+        List<ReviewEntity> localReviews = new ArrayList<>();
+        localReviews.add(localInServer);
+        localReviews.add(localPendingOnly);
+        localReviews.add(localMissingAndSynced);
+        when(mockReviewDao.getByPlaceIdSync(placeId)).thenReturn(localReviews);
+
+        repository.refreshReviews(placeId);
+
+        verify(mockReviewDao).deleteByPlaceAndUserId(placeId, "u3");
+        verify(mockReviewDao, never()).deleteByPlaceAndUserId(placeId, "u1");
+        verify(mockReviewDao, never()).deleteByPlaceAndUserId(placeId, "u2");
     }
 }

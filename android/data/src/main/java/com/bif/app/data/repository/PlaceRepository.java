@@ -10,6 +10,7 @@ import androidx.lifecycle.Transformations;
 
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.place.PlaceDto;
+import com.bif.app.core.network.dto.place.PlaceSearchRequestDTO;
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.PlaceMapper;
 import com.bif.app.data.source.AndroidGeocodingDataSource;
@@ -133,10 +134,20 @@ public class PlaceRepository implements IPlaceRepository {
 
             if (networkMonitor.isOnline()) {
                 try {
-                    Double lat = userLocation != null ? userLocation.latitude : null;
-                    Double lng = userLocation != null ? userLocation.longitude : null;
+                    Location validLocation = null;
+                    if (userLocation != null 
+                            && userLocation.latitude >= -90 && userLocation.latitude <= 90
+                            && userLocation.longitude >= -180 && userLocation.longitude <= 180) {
+                        validLocation = userLocation;
+                    }
+                    Double lat = validLocation != null ? validLocation.latitude : null;
+                    Double lng = validLocation != null ? validLocation.longitude : null;
+                    PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
+                    request.query = query;
+                    request.latitude = lat;
+                    request.longitude = lng;
                     Response<List<PlaceDto>> response = restApiService
-                            .searchServerPlaces(lat, lng, query).execute();
+                        .searchServerPlaces(request).execute();
                     if (response.isSuccessful() && response.body() != null) {
                         for (PlaceDto dto : response.body()) {
                             if (!seenIds.contains(dto.id)) {

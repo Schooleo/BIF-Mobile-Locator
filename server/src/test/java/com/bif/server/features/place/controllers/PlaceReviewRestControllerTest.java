@@ -1,29 +1,23 @@
 package com.bif.server.features.place.controllers;
 
 import com.bif.server.features.place.dto.rest.ReviewDTO;
-import com.bif.server.features.place.models.PlaceReview;
+import com.bif.server.features.place.dto.rest.ReviewResponseDTO;
 import com.bif.server.features.place.services.RatingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.PageImpl;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import com.bif.server.features.place.dto.rest.ReviewResponseDTO;
-import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -41,18 +35,17 @@ class PlaceReviewControllerTest {
 
     @Test
     void saveReview_WhenUnauthorized_Returns401() {
-        ResponseEntity<PlaceReview> result = controller.saveReview("", "p1", new ReviewDTO(5, "ok"));
+        ResponseEntity<?> result = controller.saveReview("", "p1", new ReviewDTO(5, "ok"));
 
         assertEquals(HttpStatus.UNAUTHORIZED, result.getStatusCode());
     }
 
     @Test
     void saveReview_WhenValid_ReturnsCreated() {
-        PlaceReview saved = new PlaceReview();
-        saved.setId("r1");
+        ReviewResponseDTO saved = new ReviewResponseDTO("r1", "p1", "u1", "Anonymous", 5, "nice", Instant.now());
         when(ratingService.saveReview("u1", "p1", new ReviewDTO(5, "nice"))).thenReturn(saved);
 
-        ResponseEntity<PlaceReview> result = controller.saveReview("u1", "p1", new ReviewDTO(5, "nice"));
+        ResponseEntity<?> result = controller.saveReview("u1", "p1", new ReviewDTO(5, "nice"));
 
         assertEquals(HttpStatus.CREATED, result.getStatusCode());
         assertSame(saved, result.getBody());
@@ -60,7 +53,7 @@ class PlaceReviewControllerTest {
 
     @Test
     void getReviews_ReturnsList() {
-        ReviewResponseDTO dto = new ReviewResponseDTO("r1", "p1", "u1", "Anonymous", 5, "good", LocalDateTime.now());
+        ReviewResponseDTO dto = new ReviewResponseDTO("r1", "p1", "u1", "Anonymous", 5, "good", Instant.now());
         when(ratingService.getPlaceReviewsWithUsers("p1")).thenReturn(List.of(dto));
 
         var result = controller.getReviews("p1");
@@ -78,7 +71,7 @@ class PlaceReviewControllerTest {
 
     @Test
     void getMyReview_WhenFound_ReturnsOk() {
-        ReviewResponseDTO dto = new ReviewResponseDTO("r1", "p1", "u1", "Me", 5, "great", LocalDateTime.now());
+        ReviewResponseDTO dto = new ReviewResponseDTO("r1", "p1", "u1", "Me", 5, "great", Instant.now());
         when(ratingService.getUserReviewWithUser("u1", "p1")).thenReturn(Optional.of(dto));
 
         ResponseEntity<ReviewResponseDTO> result = controller.getMyReview("u1", "p1");
@@ -101,7 +94,17 @@ class PlaceReviewControllerTest {
         when(ratingService.saveReview("u1", "p1", new ReviewDTO(5, "ok")))
                 .thenThrow(new IllegalStateException("duplicate"));
 
-        ResponseEntity<PlaceReview> result = controller.saveReview("u1", "p1", new ReviewDTO(5, "ok"));
+        ResponseEntity<?> result = controller.saveReview("u1", "p1", new ReviewDTO(5, "ok"));
+
+        assertEquals(HttpStatus.CONFLICT, result.getStatusCode());
+    }
+
+    @Test
+    void saveReview_WhenDuplicateKeyException_ReturnsConflict() {
+        when(ratingService.saveReview("u1", "p1", new ReviewDTO(5, "ok")))
+                .thenThrow(new DuplicateKeyException("duplicate key"));
+
+        ResponseEntity<?> result = controller.saveReview("u1", "p1", new ReviewDTO(5, "ok"));
 
         assertEquals(HttpStatus.CONFLICT, result.getStatusCode());
     }

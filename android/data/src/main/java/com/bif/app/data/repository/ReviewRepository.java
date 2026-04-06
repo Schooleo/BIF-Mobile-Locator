@@ -25,10 +25,13 @@ import com.bif.app.domain.repository.IReviewRepository;
 import com.google.gson.Gson;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -50,6 +53,12 @@ public class ReviewRepository implements IReviewRepository {
     private final ExecutorService executorService;
     private final Gson gson;
     private final Context appContext;
+    private final androidx.lifecycle.MutableLiveData<String> activeUserIdLiveData = new androidx.lifecycle.MutableLiveData<>();
+    private final android.content.SharedPreferences.OnSharedPreferenceChangeListener prefListener = (prefs, key) -> {
+        if ("user_id".equals(key)) {
+            activeUserIdLiveData.postValue(getActiveUserId());
+        }
+    };
 
     @Inject
     public ReviewRepository(ReviewDao reviewDao,
@@ -69,6 +78,9 @@ public class ReviewRepository implements IReviewRepository {
         this.executorService = executorService;
         this.gson = new Gson();
         this.appContext = appContext;
+        this.activeUserIdLiveData.setValue(getActiveUserId());
+        this.appContext.getSharedPreferences("USER_PREF", Context.MODE_PRIVATE)
+                .registerOnSharedPreferenceChangeListener(prefListener);
     }
 
     /** Lấy userId hiện tại động theo từng request, không cache tĩnh */
@@ -85,33 +97,42 @@ public class ReviewRepository implements IReviewRepository {
 
     @Override
     public LiveData<Review> getMyReview(String placeId) {
-        return Transformations.map(reviewDao.getReview(placeId, getActiveUserId()), ReviewMapper::toDomain);
+        return Transformations.switchMap(activeUserIdLiveData, userId ->
+                Transformations.map(reviewDao.getReview(placeId, userId), ReviewMapper::toDomain));
     }
 
     @Override
     public void submitReview(String placeId, int stars, String comment) {
-        executeReviewAction(placeId, stars, comment, "CREATE");
+        String captureUserId = getActiveUserId();
+        executeReviewAction(placeId, stars, comment, "CREATE", captureUserId);
     }
 
     @Override
     public void updateReview(String placeId, int stars, String comment) {
-        executeReviewAction(placeId, stars, comment, "UPDATE");
+        String captureUserId = getActiveUserId();
+        executeReviewAction(placeId, stars, comment, "UPDATE", captureUserId);
     }
 
-    private void executeReviewAction(String placeId, int stars, String comment, String operation) {
+    private void executeReviewAction(String placeId, int stars, String comment, String operation, String userId) {
         executorService.execute(() -> {
-            String userId = getActiveUserId();
             Review review = new Review();
             review.placeId = placeId;
             review.userId = userId;
             review.userName = "Me";
             review.stars = stars;
             review.comment = comment;
-            review.createdAt = System.currentTimeMillis();
             review.pendingSync = true;
             review.deleted = false;
 
             appDatabase.runInTransaction(() -> {
+                long timestamp = System.currentTimeMillis();
+                if ("UPDATE".equals(operation)) {
+                    ReviewEntity existing = reviewDao.getReviewSync(placeId, userId);
+                    if (existing != null) {
+                        timestamp = existing.createdAt;
+                    }
+                }
+                review.createdAt = timestamp;
                 ReviewEntity entity = ReviewMapper.toEntity(review);
                 reviewDao.upsert(entity);
 
@@ -153,23 +174,65 @@ public class ReviewRepository implements IReviewRepository {
 
     @Override
     public void refreshReviews(String placeId) {
+        refreshReviews(placeId, null);
+    }
+
+    @Override
+    public void refreshReviews(String placeId, Runnable onComplete) {
         executorService.execute(() -> {
             try {
                 Response<List<PlaceReviewDto>> response = restApiService.getPlaceReviews(placeId).execute();
                 if (response.isSuccessful() && response.body() != null) {
+                    List<PlaceReviewDto> serverReviews = response.body();
                     appDatabase.runInTransaction(() -> {
-                        for (PlaceReviewDto dto : response.body()) {
+                        Set<String> serverUserIds = new HashSet<>();
+
+                        for (PlaceReviewDto dto : serverReviews) {
+                            if (dto == null || dto.userId == null || dto.userId.trim().isEmpty()) {
+                                continue;
+                            }
+
+                            String serverUserId = dto.userId.trim();
+                            serverUserIds.add(serverUserId);
+
                             ReviewEntity entity = ReviewMapper.fromDto(dto, placeId);
                             // Avoid overwriting a locally modified pending item
-                            ReviewEntity local = reviewDao.getReviewSync(placeId, dto.userId);
+                            ReviewEntity local = reviewDao.getReviewSync(placeId, serverUserId);
                             if (local == null || !local.pendingSync) {
                                 reviewDao.upsert(entity);
+                            }
+                        }
+
+                        List<ReviewEntity> localReviews = reviewDao.getByPlaceIdSync(placeId);
+                        if (localReviews == null) {
+                            return;
+                        }
+
+                        for (ReviewEntity localReview : localReviews) {
+                            if (localReview == null || localReview.pendingSync) {
+                                continue;
+                            }
+                            if (localReview.userId == null || localReview.userId.trim().isEmpty()) {
+                                continue;
+                            }
+
+                            String localUserId = localReview.userId.trim();
+                            if (!serverUserIds.contains(localUserId)) {
+                                reviewDao.deleteByPlaceAndUserId(placeId, localUserId);
                             }
                         }
                     });
                 }
             } catch (IOException e) {
                 Log.e(TAG, "Failed to fetch reviews for place " + placeId, e);
+            } finally {
+                if (onComplete != null) {
+                    try {
+                        onComplete.run();
+                    } catch (Exception callbackError) {
+                        Log.e(TAG, "refreshReviews completion callback failed", callbackError);
+                    }
+                }
             }
         });
     }
@@ -186,13 +249,34 @@ public class ReviewRepository implements IReviewRepository {
 
             Response<PlaceResolveResponseDto> res = restApiService.resolvePlace(request).execute();
             if (res.isSuccessful() && res.body() != null) {
-                return res.body().internalPlaceId;
+                String internalId = res.body().internalPlaceId;
+                if (internalId != null && !internalId.trim().isEmpty()) {
+                    return internalId;
+                }
             }
         } catch (IOException e) {
             Log.e(TAG, "Failed to resolve placeId", e);
         }
-        return UUID.randomUUID().toString(); // Fallback isolated offline case
+        return buildDeterministicFallbackPlaceId(externalSource, externalId, lat, lng, name);
     }
+
+        private String buildDeterministicFallbackPlaceId(String externalSource,
+                                 String externalId,
+                                 double lat,
+                                 double lng,
+                                 String name) {
+        String source = externalSource == null
+            ? ""
+            : externalSource.trim().toLowerCase(Locale.ROOT);
+        String extId = externalId == null
+            ? ""
+            : externalId.trim().toLowerCase(Locale.ROOT);
+        String placeName = name == null
+            ? ""
+            : name.trim().toLowerCase(Locale.ROOT);
+        String seed = source + "|" + extId + "|" + lat + "|" + lng + "|" + placeName;
+        return UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8)).toString();
+        }
 
     private SyncQueueEntity createSyncEntry(String entityType, String entityId, String operation, Object payload) {
         SyncQueueEntity entry = new SyncQueueEntity();
@@ -205,12 +289,5 @@ public class ReviewRepository implements IReviewRepository {
         entry.retryCount = 0;
         entry.createdAt = System.currentTimeMillis();
         return entry;
-    }
-
-    private String resolveActiveUserId(Context context) {
-        if (context == null) return "anonymous";
-        String userId = UserPreferences.getUserId(context);
-        if (userId == null || userId.trim().isEmpty()) return "anonymous";
-        return userId.trim();
     }
 }

@@ -18,6 +18,9 @@ public interface ReviewDao {
     @Query("SELECT * FROM reviews WHERE placeId = :placeId AND userId = :userId LIMIT 1")
     ReviewEntity getReviewSync(String placeId, String userId);
 
+    @Query("SELECT * FROM reviews WHERE placeId = :placeId")
+    List<ReviewEntity> getByPlaceIdSync(String placeId);
+
     @Query("SELECT * FROM reviews WHERE placeId = :placeId AND userId = :userId AND deleted = 0 LIMIT 1")
     LiveData<ReviewEntity> getReview(String placeId, String userId);
 
@@ -26,6 +29,9 @@ public interface ReviewDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void upsertAll(List<ReviewEntity> reviews);
+
+    @Query("DELETE FROM reviews WHERE placeId = :placeId AND userId = :userId AND deleted = 0")
+    void deleteByPlaceAndUserId(String placeId, String userId);
 
     @Query("SELECT * FROM reviews WHERE pendingSync = 1")
     List<ReviewEntity> getPendingSync();

@@ -119,4 +119,56 @@ public class PlaceRatingCacheUpdater {
         throw new IllegalStateException(
             "Unable to update place rating after " + MAX_RETRY_ATTEMPTS + " attempts");
     }
+
+    public Place replaceAndRecalculate(String userId, String placeId, int oldStars, int newStars) {
+        for (int attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt++) {
+            Query snapshotQuery = Query.query(
+                Criteria.where("_id").is(placeId)
+                    .and("deleted").ne(true));
+            snapshotQuery.fields()
+                .include("reviewCount")
+                .include("rating")
+                .include("serverVersion");
+
+            Place snapshot = mongoTemplate.findOne(snapshotQuery, Place.class);
+            if (snapshot == null) {
+                throw new NoSuchElementException("Place not found: " + placeId);
+            }
+
+            int reviewCount = Math.max(snapshot.getReviewCount(), 0);
+            if (reviewCount <= 0) {
+                throw new IllegalStateException(
+                    "Cannot replace stars when reviewCount is zero for place " + placeId);
+            }
+
+            double oldRating = snapshot.getRating();
+            double totalStars = (oldRating * reviewCount) - oldStars + newStars;
+            double recalculatedRating = Math.max(0.0, Math.min(5.0, totalStars / reviewCount));
+
+            Query compareAndSetQuery = Query.query(
+                Criteria.where("_id").is(placeId)
+                    .and("deleted").ne(true)
+                    .and("reviewCount").is(reviewCount)
+                    .and("serverVersion").is(snapshot.getServerVersion()));
+
+            Update update = new Update()
+                .set("rating", recalculatedRating)
+                .set("lastModifiedBy", userId)
+                .set("serverVersion", syncVersionService.nextVersion())
+                .set("updatedAt", Instant.now());
+
+            Place updated = mongoTemplate.findAndModify(
+                compareAndSetQuery,
+                update,
+                FindAndModifyOptions.options().returnNew(true),
+                Place.class);
+
+            if (updated != null) {
+                return updated;
+            }
+        }
+
+        throw new IllegalStateException(
+            "Unable to update place rating after " + MAX_RETRY_ATTEMPTS + " attempts");
+    }
 }

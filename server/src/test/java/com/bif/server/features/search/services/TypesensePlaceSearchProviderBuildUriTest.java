@@ -13,15 +13,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class TypesensePlaceSearchProviderBuildUriTest {
 
-    @Test
-    void buildSearchUri_encodesQueryAndCollection() throws Exception {
+    private TypesensePlaceSearchProvider createProvider() {
         TypesenseProperties props = new TypesenseProperties();
         props.setProtocol("https");
         props.setHost("example.com");
         props.setPort(1234);
         props.setPlacesCollection("my places");
+        return new TypesensePlaceSearchProvider(props, new ObjectMapper());
+    }
 
-        TypesensePlaceSearchProvider provider = new TypesensePlaceSearchProvider(props, new ObjectMapper());
+    @Test
+    void buildSearchUri_encodesQueryAndCollection() throws Exception {
+        TypesensePlaceSearchProvider provider = createProvider();
 
         Method m = TypesensePlaceSearchProvider.class.getDeclaredMethod("buildSearchUri", String.class);
         m.setAccessible(true);
@@ -30,24 +33,17 @@ public class TypesensePlaceSearchProviderBuildUriTest {
         String s = uri.toString();
 
         assertTrue(s.startsWith("https://example.com:1234/collections/"));
-        // collection should be URL-encoded (space -> +)
         assertTrue(s.contains("collections/my+places/documents/search?q="));
-        // query should be URL-encoded
-        assertTrue(s.contains("q=a%2Bb+%26%2F%3F") || s.contains("q=a%2Bb+%2526%2F%3F") || s.contains("q=a%2Bb+%26%2F%3F"));
-        assertTrue(s.contains("per_page=10"));
+        assertTrue(s.contains("q=a%2Bb+%26%2F%3F") || s.contains("q=a%2Bb+%2526%2F%3F"));
+        assertTrue(s.contains("per_page=5"));
         assertTrue(s.contains("prioritize_exact_match=true"));
-        assertTrue(!s.contains("filter_by=") && !s.contains("sort_by="));
+        org.junit.jupiter.api.Assertions.assertFalse(s.contains("filter_by="));
+        org.junit.jupiter.api.Assertions.assertFalse(s.contains("sort_by="));
     }
 
     @Test
     void buildSearchUri_includesEncodedGeoParamsWhenCoordinatesPresent() throws Exception {
-        TypesenseProperties props = new TypesenseProperties();
-        props.setProtocol("https");
-        props.setHost("example.com");
-        props.setPort(1234);
-        props.setPlacesCollection("my places");
-
-        TypesensePlaceSearchProvider provider = new TypesensePlaceSearchProvider(props, new ObjectMapper());
+        TypesensePlaceSearchProvider provider = createProvider();
 
         Method m = TypesensePlaceSearchProvider.class.getDeclaredMethod(
                 "buildSearchUri",
@@ -64,21 +60,15 @@ public class TypesensePlaceSearchProviderBuildUriTest {
         URI uri = (URI) m.invoke(provider, request, "name,address");
         String s = uri.toString();
 
-        assertTrue(s.contains("per_page=10"));
+        assertTrue(s.contains("per_page=7"));
         assertTrue(s.contains("prioritize_exact_match=true"));
-        assertTrue(s.contains("filter_by=location%3A%2821.0278%2C+105.8342%2C+50km%29"));
-        assertTrue(s.contains("sort_by=_geo_distance%2821.0278%2C+105.8342%29%3Aasc%2C+rating%3Adesc"));
+        assertTrue(s.contains("filter_by=location%3A%2821.0278%2C105.8342%2C50km%29"));
+        assertTrue(s.contains("sort_by=_geo_distance%2821.0278%2C105.8342%29%3Aasc%2Crating%3Adesc"));
     }
 
     @Test
-    void buildSearchUri_skipsGeoRadiusWhenQueryIsSpecificOrHasLocationHint() throws Exception {
-        TypesenseProperties props = new TypesenseProperties();
-        props.setProtocol("https");
-        props.setHost("example.com");
-        props.setPort(1234);
-        props.setPlacesCollection("my places");
-
-        TypesensePlaceSearchProvider provider = new TypesensePlaceSearchProvider(props, new ObjectMapper());
+    void buildSearchUri_keepsGeoRadiusWhenCoordinatesArePresentEvenForLongQueries() throws Exception {
+        TypesensePlaceSearchProvider provider = createProvider();
 
         Method m = TypesensePlaceSearchProvider.class.getDeclaredMethod(
                 "buildSearchUri",
@@ -94,9 +84,9 @@ public class TypesensePlaceSearchProviderBuildUriTest {
         URI uri = (URI) m.invoke(provider, request, "name,address");
         String s = uri.toString();
 
-        assertTrue(s.contains("per_page=10"));
+        assertTrue(s.contains("per_page=5"));
         assertTrue(s.contains("prioritize_exact_match=true"));
-        assertTrue(s.contains("sort_by=_geo_distance%2821.0278%2C+105.8342%29%3Aasc%2C+rating%3Adesc"));
-        assertTrue(!s.contains("filter_by="));
+        assertTrue(s.contains("sort_by=_geo_distance%2821.0278%2C105.8342%29%3Aasc%2Crating%3Adesc"));
+        assertTrue(s.contains("filter_by=location%3A%2821.0278%2C105.8342%2C50km%29"));
     }
 }

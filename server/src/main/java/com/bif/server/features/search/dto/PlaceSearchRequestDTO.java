@@ -3,6 +3,7 @@ package com.bif.server.features.search.dto;
 public class PlaceSearchRequestDTO {
 
     private static final int DEFAULT_PER_PAGE = 5;
+    private static final int MAX_PER_PAGE = 50;
 
     private String query;
     private Double latitude;
@@ -48,7 +49,7 @@ public class PlaceSearchRequestDTO {
         if (perPage == null || perPage <= 0) {
             return DEFAULT_PER_PAGE;
         }
-        return perPage;
+        return Math.min(perPage, MAX_PER_PAGE);
     }
 
     public void setPerPage(Integer perPage) {

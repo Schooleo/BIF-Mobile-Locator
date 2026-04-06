@@ -28,7 +28,9 @@ public class ReviewAdapter extends ListAdapter<ReviewItem, RecyclerView.ViewHold
 
             String oldId = oldItem.review != null ? oldItem.review.userId : null;
             String newId = newItem.review != null ? newItem.review.userId : null;
-            return java.util.Objects.equals(oldId, newId);
+            String oldPlaceId = oldItem.review != null ? oldItem.review.placeId : null;
+            String newPlaceId = newItem.review != null ? newItem.review.placeId : null;
+            return java.util.Objects.equals(oldId, newId) && java.util.Objects.equals(oldPlaceId, newPlaceId);
         }
 
         @Override
@@ -46,10 +48,20 @@ public class ReviewAdapter extends ListAdapter<ReviewItem, RecyclerView.ViewHold
     }
 
     private final OnReviewInteractionListener listener;
+    private int itemWidthPx = ViewGroup.LayoutParams.WRAP_CONTENT;
 
     public ReviewAdapter(OnReviewInteractionListener listener) {
         super(DIFF_CALLBACK);
         this.listener = listener;
+    }
+
+    public void setItemWidthPx(int itemWidthPx) {
+        if (itemWidthPx <= 0) {
+            this.itemWidthPx = ViewGroup.LayoutParams.WRAP_CONTENT;
+        } else {
+            this.itemWidthPx = itemWidthPx;
+        }
+        notifyItemRangeChanged(0, getItemCount());
     }
 
     @Override
@@ -67,12 +79,15 @@ public class ReviewAdapter extends ListAdapter<ReviewItem, RecyclerView.ViewHold
 
         if (viewType == ReviewItem.VIEW_TYPE_ADD) {
             View view = inflater.inflate(R.layout.item_review_add, parent, false);
+            applyItemWidth(view);
             return new AddReviewViewHolder(view);
         } else if (viewType == ReviewItem.VIEW_TYPE_MINE) {
             View view = inflater.inflate(R.layout.item_review_mine, parent, false);
+            applyItemWidth(view);
             return new MyReviewViewHolder(view);
         } else {
             View view = inflater.inflate(R.layout.item_review_others, parent, false);
+            applyItemWidth(view);
             return new OthersReviewViewHolder(view);
         }
     }
@@ -80,6 +95,7 @@ public class ReviewAdapter extends ListAdapter<ReviewItem, RecyclerView.ViewHold
     @Override
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
         ReviewItem item = getItem(position);
+        applyItemWidth(holder.itemView);
 
         if (holder instanceof AddReviewViewHolder) {
             holder.itemView.setOnClickListener(v -> {
@@ -195,5 +211,24 @@ public class ReviewAdapter extends ListAdapter<ReviewItem, RecyclerView.ViewHold
     public void showAllReviews(List<ReviewItem> allReviews) {
         List<ReviewItem> displayList = new ArrayList<>(allReviews);
         submitList(displayList);
+    }
+
+    public void clear() {
+        submitList(new ArrayList<>());
+    }
+
+    private void applyItemWidth(@NonNull View itemView) {
+        ViewGroup.LayoutParams params = itemView.getLayoutParams();
+        if (params == null) {
+            params = new RecyclerView.LayoutParams(itemWidthPx,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            itemView.setLayoutParams(params);
+            return;
+        }
+
+        if (params.width != itemWidthPx) {
+            params.width = itemWidthPx;
+            itemView.setLayoutParams(params);
+        }
     }
 }

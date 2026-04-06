@@ -1,6 +1,6 @@
 package com.bif.server.features.place.dto.rest;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record ReviewResponseDTO(
         String id,
@@ -9,5 +9,5 @@ public record ReviewResponseDTO(
         String userName,
         int stars,
         String comment,
-        LocalDateTime createdAt
+        Instant createdAt
 ) {}
