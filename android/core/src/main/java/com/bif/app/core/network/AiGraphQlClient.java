@@ -44,7 +44,13 @@ public class AiGraphQlClient {
                     latch.countDown();
                 });
 
-        boolean completed = latch.await(15, TimeUnit.SECONDS);
+        boolean completed;
+        try {
+            completed = latch.await(15, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new AiPlaceSuggestionPayload(new ArrayList<>(), new ArrayList<>(), "AI_FAILURE");
+        }
         if (!completed) {
             return new AiPlaceSuggestionPayload(new ArrayList<>(), new ArrayList<>(), "AI_FAILURE");
         }

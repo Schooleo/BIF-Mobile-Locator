@@ -201,4 +201,7 @@
     <string name="trip_delete_owner_only">Only the trip owner can delete this trip</string>
     <string name="trip_stop_address_coordinates">Lat %.5f, Lng %.5f</string>
     <string name="trip_stop_no_address">No address</string>
+    <string name="trip_untitled">Untitled Trip</string>
+    <string name="trip_no_date">No Date</string>
+    <string name="trip_stop_rating_format">Rating %.1f</string>
 </resources>

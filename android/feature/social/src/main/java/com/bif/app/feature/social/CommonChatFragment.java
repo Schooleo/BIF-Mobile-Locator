@@ -446,13 +446,27 @@ public class CommonChatFragment extends Fragment {
             double lat = stop.optDouble("latitude", 0d);
             double lng = stop.optDouble("longitude", 0d);
             if (hasPrev) {
-                total += Math.abs(lat - prevLat) + Math.abs(lng - prevLng);
+                total += haversineDistanceKm(prevLat, prevLng, lat, lng);
             }
             prevLat = lat;
             prevLng = lng;
             hasPrev = true;
         }
         return total;
+    }
+
+    private double haversineDistanceKm(double fromLat, double fromLng, double toLat, double toLng) {
+        final double earthRadiusKm = 6371d;
+        double dLat = Math.toRadians(toLat - fromLat);
+        double dLng = Math.toRadians(toLng - fromLng);
+        double lat1 = Math.toRadians(fromLat);
+        double lat2 = Math.toRadians(toLat);
+
+        double a = Math.sin(dLat / 2d) * Math.sin(dLat / 2d)
+                + Math.cos(lat1) * Math.cos(lat2)
+                * Math.sin(dLng / 2d) * Math.sin(dLng / 2d);
+        double c = 2d * Math.atan2(Math.sqrt(a), Math.sqrt(1d - a));
+        return earthRadiusKm * c;
     }
 
     private String formatDistanceLabel(double distance) {

@@ -7,11 +7,37 @@ import com.bif.app.domain.model.TripStop;
 import java.util.List;
 
 public interface ITripRepository {
+    interface OperationCallback {
+        void onComplete(boolean success);
+    }
+
     LiveData<List<TripPlan>> getAllTrips();
     LiveData<TripPlan> getTripById(String tripId);
-    void createTrip(String title, String description, long startAt, long endAt);
-    void updateTrip(String tripId, String title, String description, long startAt, long endAt);
-    void deleteTrip(String tripId);
+
+    default void createTrip(String title, String description, long startAt, long endAt) {
+        createTrip(title, description, startAt, endAt, null);
+    }
+
+    default void updateTrip(String tripId, String title, String description, long startAt, long endAt) {
+        updateTrip(tripId, title, description, startAt, endAt, null);
+    }
+
+    default void deleteTrip(String tripId) {
+        deleteTrip(tripId, null);
+    }
+
+    void createTrip(String title,
+                    String description,
+                    long startAt,
+                    long endAt,
+                    OperationCallback callback);
+    void updateTrip(String tripId,
+                    String title,
+                    String description,
+                    long startAt,
+                    long endAt,
+                    OperationCallback callback);
+    void deleteTrip(String tripId, OperationCallback callback);
     LiveData<List<TripPlan>> getTripsByGroup(String groupId);
     LiveData<List<TripMember>> getTripMembers(String tripId);
     void addStopToTrip(String tripId, TripStop stop);

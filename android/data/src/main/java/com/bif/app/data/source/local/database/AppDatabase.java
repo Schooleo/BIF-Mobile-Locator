@@ -1,8 +1,12 @@
 package com.bif.app.data.source.local.database;
 
+import android.database.Cursor;
+
 import androidx.room.Database;
 import androidx.room.RoomDatabase;
 import androidx.room.TypeConverters;
+import androidx.room.migration.Migration;
+import androidx.sqlite.db.SupportSQLiteDatabase;
 import com.bif.app.data.source.local.converter.FriendshipStatusConverter;
 import com.bif.app.data.source.local.converter.UploadStatusConverter;
 import com.bif.app.data.source.local.dao.ChatMessageDao;
@@ -43,9 +47,37 @@ import com.bif.app.data.source.local.entity.TripStopEntity;
         TripPlanEntity.class,
         TripMemberCrossRef.class,
         TripStopEntity.class
-    }, version = 15, exportSchema = false)
+    }, version = 16, exportSchema = false)
 @TypeConverters({ FriendshipStatusConverter.class, UploadStatusConverter.class })
 public abstract class AppDatabase extends RoomDatabase {
+    public static final Migration MIGRATION_15_16 = new Migration(15, 16) {
+        @Override
+        public void migrate(SupportSQLiteDatabase database) {
+            if (!hasColumn(database, "trip_stops", "address")) {
+                database.execSQL("ALTER TABLE trip_stops ADD COLUMN address TEXT");
+            }
+        }
+
+        private boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
+            Cursor cursor = database.query("PRAGMA table_info(`" + tableName + "`)");
+            try {
+                int nameIndex = cursor.getColumnIndex("name");
+                if (nameIndex < 0) {
+                    nameIndex = 1;
+                }
+                while (cursor.moveToNext()) {
+                    String existing = cursor.getString(nameIndex);
+                    if (columnName.equals(existing)) {
+                        return true;
+                    }
+                }
+                return false;
+            } finally {
+                cursor.close();
+            }
+        }
+    };
+
     public abstract FriendDao friendDao();
 
     public abstract FriendshipDao friendshipDao();

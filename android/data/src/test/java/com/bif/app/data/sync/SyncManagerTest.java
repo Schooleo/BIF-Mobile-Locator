@@ -318,8 +318,7 @@ public class SyncManagerTest {
         } catch (Exception e) {
             // Expected when REST mock isn't fully set up
         }
-                Thread.sleep(150);
-        verify(mockSyncQueueDao).resetInFlight();
+        verify(mockSyncQueueDao, timeout(1000)).resetInFlight();
     }
 
     @Test
@@ -327,9 +326,8 @@ public class SyncManagerTest {
         when(mockNetworkMonitor.isOnline()).thenReturn(false);
 
         syncManager.syncIfOnline();
-                Thread.sleep(150);
-
-        verify(mockSyncQueueDao, never()).resetInFlight();
+        // Give async path time to potentially execute (it shouldn't)
+        verify(mockSyncQueueDao, timeout(150).times(0)).resetInFlight();
     }
 }
 

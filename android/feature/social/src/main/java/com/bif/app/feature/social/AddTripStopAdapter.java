@@ -12,7 +12,6 @@ import com.bif.app.domain.model.Place;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 public class AddTripStopAdapter extends RecyclerView.Adapter<AddTripStopAdapter.PlaceViewHolder> {
 
@@ -52,7 +51,9 @@ public class AddTripStopAdapter extends RecyclerView.Adapter<AddTripStopAdapter.
         holder.tvPlaceName.setText(title);
 
         double rating = place != null ? place.rating : 0d;
-        holder.tvPlaceRating.setText(String.format(Locale.getDefault(), "Rating %.1f", rating));
+        holder.tvPlaceRating.setText(holder.itemView.getContext().getString(
+            R.string.trip_stop_rating_format,
+            rating));
         holder.tvAddedCount.setText(holder.itemView.getContext().getString(
                 R.string.trip_stop_added_count,
                 item.addedToTripCount));

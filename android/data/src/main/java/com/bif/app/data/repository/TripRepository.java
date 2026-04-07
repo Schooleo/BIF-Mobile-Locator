@@ -86,39 +86,58 @@ public class TripRepository implements ITripRepository {
 
     @Override
     public void createTrip(String title, String description, long startAt, long endAt) {
+        createTrip(title, description, startAt, endAt, null);
+    }
+
+    @Override
+    public void createTrip(String title,
+                           String description,
+                           long startAt,
+                           long endAt,
+                           ITripRepository.OperationCallback callback) {
         executorService.execute(() -> {
-            TripPlanEntity entity = new TripPlanEntity();
-            entity.id = UUID.randomUUID().toString();
-            entity.groupId = entity.id;
-            entity.title = title;
-            entity.description = description;
-            entity.startAt = startAt;
-            entity.endAt = endAt;
-            entity.serverVersion = 0L;
-            entity.deleted = false;
+            boolean success = false;
+            try {
+                TripPlanEntity entity = new TripPlanEntity();
+                entity.id = UUID.randomUUID().toString();
+                entity.groupId = entity.id;
+                entity.title = title;
+                entity.description = description;
+                entity.startAt = startAt;
+                entity.endAt = endAt;
+                entity.serverVersion = 0L;
+                entity.deleted = false;
 
-            tripDao.upsertTrip(entity);
-            String ownerId = resolveCurrentUserId();
-            if (!ownerId.isEmpty()) {
-                tripDao.upsertTripMember(new TripMemberCrossRef(
-                        entity.id,
-                        ownerId,
-                        "OWNER"
-                ));
+                tripDao.upsertTrip(entity);
+                String ownerId = resolveCurrentUserId();
+                if (!ownerId.isEmpty()) {
+                    tripDao.upsertTripMember(new TripMemberCrossRef(
+                            entity.id,
+                            ownerId,
+                            "OWNER"
+                    ));
 
-                String ownerName = appContext == null
-                        ? ""
-                        : normalize(UserPreferences.getUsername(appContext));
-                if (ownerName.isEmpty()) {
-                    ownerName = ownerId;
+                    String ownerName = appContext == null
+                            ? ""
+                            : normalize(UserPreferences.getUsername(appContext));
+                    if (ownerName.isEmpty()) {
+                        ownerName = ownerId;
+                    }
+                    upsertFriendCache(ownerId,
+                            ownerName,
+                            ownerName.substring(0, 1).toUpperCase(),
+                            0xFF9C27B0);
                 }
-                upsertFriendCache(ownerId,
-                        ownerName,
-                        ownerName.substring(0, 1).toUpperCase(),
-                        0xFF9C27B0);
+                enqueueTripPlanChange(entity.id, "CREATE");
+                syncManager.syncIfOnline();
+                success = true;
+            } catch (Exception ignored) {
+                success = false;
             }
-            enqueueTripPlanChange(entity.id, "CREATE");
-            syncManager.syncIfOnline();
+
+            if (callback != null) {
+                callback.onComplete(success);
+            }
         });
     }
 
@@ -128,47 +147,94 @@ public class TripRepository implements ITripRepository {
                            String description,
                            long startAt,
                            long endAt) {
+        updateTrip(tripId, title, description, startAt, endAt, null);
+    }
+
+    @Override
+    public void updateTrip(String tripId,
+                           String title,
+                           String description,
+                           long startAt,
+                           long endAt,
+                           ITripRepository.OperationCallback callback) {
         executorService.execute(() -> {
-            String safeTripId = normalize(tripId);
-            if (safeTripId.isEmpty()) {
-                return;
+            boolean success = false;
+            try {
+                String safeTripId = normalize(tripId);
+                if (safeTripId.isEmpty()) {
+                    if (callback != null) {
+                        callback.onComplete(false);
+                    }
+                    return;
+                }
+
+                TripPlanEntity entity = tripDao.getTripByIdSync(safeTripId);
+                if (entity == null) {
+                    if (callback != null) {
+                        callback.onComplete(false);
+                    }
+                    return;
+                }
+
+                entity.title = title;
+                entity.description = description;
+                entity.startAt = startAt;
+                entity.endAt = endAt;
+                entity.deleted = false;
+
+                tripDao.upsertTrip(entity);
+                enqueueTripPlanChange(safeTripId, "UPDATE");
+                syncManager.syncIfOnline();
+                success = true;
+            } catch (Exception ignored) {
+                success = false;
             }
 
-            TripPlanEntity entity = tripDao.getTripByIdSync(safeTripId);
-            if (entity == null) {
-                return;
+            if (callback != null) {
+                callback.onComplete(success);
             }
-
-            entity.title = title;
-            entity.description = description;
-            entity.startAt = startAt;
-            entity.endAt = endAt;
-            entity.deleted = false;
-
-            tripDao.upsertTrip(entity);
-            enqueueTripPlanChange(safeTripId, "UPDATE");
-            syncManager.syncIfOnline();
         });
     }
 
     @Override
     public void deleteTrip(String tripId) {
+        deleteTrip(tripId, null);
+    }
+
+    @Override
+    public void deleteTrip(String tripId, ITripRepository.OperationCallback callback) {
         executorService.execute(() -> {
-            String safeTripId = normalize(tripId);
-            if (safeTripId.isEmpty()) {
-                return;
+            boolean success = false;
+            try {
+                String safeTripId = normalize(tripId);
+                if (safeTripId.isEmpty()) {
+                    if (callback != null) {
+                        callback.onComplete(false);
+                    }
+                    return;
+                }
+
+                TripPlanEntity entity = tripDao.getTripByIdSync(safeTripId);
+                if (entity == null) {
+                    if (callback != null) {
+                        callback.onComplete(false);
+                    }
+                    return;
+                }
+
+                entity.deleted = true;
+                tripDao.upsertTrip(entity);
+
+                enqueueTripPlanChange(safeTripId, "DELETE");
+                syncManager.syncIfOnline();
+                success = true;
+            } catch (Exception ignored) {
+                success = false;
             }
 
-            TripPlanEntity entity = tripDao.getTripByIdSync(safeTripId);
-            if (entity == null) {
-                return;
+            if (callback != null) {
+                callback.onComplete(success);
             }
-
-            entity.deleted = true;
-            tripDao.upsertTrip(entity);
-
-            enqueueTripPlanChange(safeTripId, "DELETE");
-            syncManager.syncIfOnline();
         });
     }
 
@@ -208,8 +274,10 @@ public class TripRepository implements ITripRepository {
         executorService.execute(() -> {
             TripStopEntity entity = toStopEntity(tripId, stop);
             List<TripStopEntity> existing = tripDao.getActiveStopsByTripSync(tripId);
-            entity.orderIndex = existing != null ? existing.size() : 0;
+            int nextOrder = existing != null ? existing.size() : 0;
+            entity.orderIndex = nextOrder;
             entity.deleted = false;
+            entity.serverVersion = Math.max(1L, entity.serverVersion + 1L);
 
             tripDao.upsertStop(entity);
             // Ensure the trip exists/refreshes on server before trip_stop mutations are applied.
@@ -275,6 +343,7 @@ public class TripRepository implements ITripRepository {
             }
 
             entity.deleted = true;
+            entity.serverVersion = Math.max(1L, entity.serverVersion + 1L);
             tripDao.upsertStop(entity);
             enqueueStopUpdate(entity);
 
@@ -338,6 +407,7 @@ public class TripRepository implements ITripRepository {
                 TripStopEntity entity = toStopEntity(tripId, newStops.get(i));
                 entity.orderIndex = i;
                 entity.deleted = false;
+                entity.serverVersion = Math.max(1L, entity.serverVersion + 1L);
                 tripDao.upsertStop(entity);
                 enqueueStopUpdate(entity);
             }
@@ -450,9 +520,22 @@ public class TripRepository implements ITripRepository {
                 String stopId = normalize(stopDto.id);
                 TripStopEntity existingStop = tripDao.getStopByIdSync(stopId);
                 TripStopEntity stopEntity = existingStop != null ? existingStop : new TripStopEntity();
+                long incomingVersion = Math.max(stopDto.serverVersion, 0L);
+                if (existingStop != null && existingStop.serverVersion > incomingVersion) {
+                    mappedStops.add(existingStop);
+                    continue;
+                }
                 stopEntity.id = stopId;
                 stopEntity.tripId = tripId;
                 stopEntity.title = stopDto.title;
+                String incomingAddress = normalize(stopDto.address);
+                if (incomingAddress.isEmpty() && existingStop != null) {
+                    incomingAddress = normalize(existingStop.address);
+                }
+                if (incomingAddress.isEmpty() && stopDto.note != null && !stopDto.note.trim().isEmpty()) {
+                    incomingAddress = stopDto.note.trim();
+                }
+                stopEntity.address = incomingAddress;
                 stopEntity.note = stopDto.note;
                 stopEntity.photoUrl = stopDto.photoUrl;
                 if (stopEntity.uploadStatus == null || stopEntity.uploadStatus == UploadStatus.SYNCED) {
@@ -464,7 +547,7 @@ public class TripRepository implements ITripRepository {
                 stopEntity.arrivalTime = parseInstant(stopDto.arrivalTime);
                 stopEntity.departureTime = parseInstant(stopDto.departureTime);
                 stopEntity.orderIndex = stopDto.orderIndex;
-                stopEntity.serverVersion = Math.max(stopEntity.serverVersion, stopDto.serverVersion);
+                stopEntity.serverVersion = Math.max(stopEntity.serverVersion, incomingVersion);
                 stopEntity.deleted = stopDto.deleted;
                 mappedStops.add(stopEntity);
             }
@@ -473,7 +556,9 @@ public class TripRepository implements ITripRepository {
             }
         }
 
-        tripDao.replaceTripMembersFromParticipantIds(tripId, dto.participantIds, activeUserId);
+        if (dto.participantIds != null) {
+            tripDao.replaceTripMembersFromParticipantIds(tripId, dto.participantIds, activeUserId);
+        }
     }
 
     private List<TripPlan> mapToDomain(List<TripDao.TripPlanWithStops> items) {
@@ -500,6 +585,7 @@ public class TripRepository implements ITripRepository {
                     stops.add(new TripStop(
                             stop.id,
                             stop.title,
+                            stop.address,
                             stop.note,
                             stop.photoUrl,
                             stop.localImagePath,
@@ -574,7 +660,7 @@ public class TripRepository implements ITripRepository {
             participantIds.add(ownerId);
         }
         for (TripMemberCrossRef member : members) {
-            if (member == null || member.userId.trim().isEmpty()) {
+            if (member == null || member.userId == null || member.userId.trim().isEmpty()) {
                 continue;
             }
             if (ownerId != null && ownerId.equals(member.userId)) {
@@ -596,6 +682,7 @@ public class TripRepository implements ITripRepository {
         entity.id = stopId;
         entity.tripId = tripId;
         entity.title = stop.getTitle();
+        entity.address = stop.getAddress();
         entity.note = stop.getNote();
         entity.photoUrl = stop.getPhotoUrl();
         entity.localImagePath = stop.getLocalImagePath();
@@ -686,6 +773,7 @@ public class TripRepository implements ITripRepository {
         dto.id = entity.id;
         dto.tripId = entity.tripId;
         dto.title = entity.title;
+        dto.address = entity.address;
         dto.note = entity.note;
         dto.photoUrl = entity.photoUrl;
         dto.orderIndex = entity.orderIndex;
@@ -761,5 +849,3 @@ public class TripRepository implements ITripRepository {
         }
     }
 }
-
-

@@ -7,6 +7,9 @@ public class AiTripDraftStop {
     private final String note;
 
     public AiTripDraftStop(String placeId, Place place, int durationMinutes, String note) {
+        if (durationMinutes < 0) {
+            throw new IllegalArgumentException("durationMinutes must be >= 0");
+        }
         this.placeId = placeId;
         this.place = place;
         this.durationMinutes = durationMinutes;

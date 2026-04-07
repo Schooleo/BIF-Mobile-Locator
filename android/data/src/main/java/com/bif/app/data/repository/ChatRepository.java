@@ -523,7 +523,7 @@ public class ChatRepository implements IChatRepository {
         }
 
         long now = System.currentTimeMillis();
-        if (!false && (now - userNameCacheUpdatedAtMs) < USER_NAME_CACHE_TTL_MS) {
+        if ((now - userNameCacheUpdatedAtMs) < USER_NAME_CACHE_TTL_MS) {
             return;
         }
 

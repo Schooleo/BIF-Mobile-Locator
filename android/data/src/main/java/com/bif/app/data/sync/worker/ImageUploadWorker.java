@@ -369,6 +369,7 @@ public class ImageUploadWorker extends Worker {
         dto.id = entity.id;
         dto.tripId = entity.tripId;
         dto.title = entity.title;
+        dto.address = entity.address;
         dto.note = entity.note;
         dto.photoUrl = entity.photoUrl;
         dto.arrivalTime = formatInstant(entity.arrivalTime);

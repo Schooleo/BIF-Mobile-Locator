@@ -124,7 +124,7 @@ public class TripListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
 
         void bind(TripPlan trip) {
             String title = trip.getTitle() == null || trip.getTitle().trim().isEmpty()
-                    ? "Untitled Trip"
+                    ? itemView.getContext().getString(R.string.trip_untitled)
                     : trip.getTitle().trim();
 
             tvTripTitle.setText(title);

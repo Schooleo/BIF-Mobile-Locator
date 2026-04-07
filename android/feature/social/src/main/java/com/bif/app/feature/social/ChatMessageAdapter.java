@@ -1,6 +1,5 @@
 package com.bif.app.feature.social;
 
-import android.annotation.SuppressLint;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,7 +14,6 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 
 public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
@@ -89,7 +87,7 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                                                   TripCreatedCard card) {
             return new ChatMessage(
                     sender,
-                    "Trip created",
+                    "",
                     "",
                     "",
                     "",
@@ -107,7 +105,7 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                                                       SuggestedPlacesCard card) {
             return new ChatMessage(
                     sender,
-                    "AI suggested places",
+                    "",
                     "",
                     "",
                     "",
@@ -281,7 +279,6 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         this.actionCallback = actionCallback;
     }
 
-    @SuppressLint("NotifyDataSetChanged")
     public void submit(List<ChatMessage> newMessages) {
         messages.clear();
         if (newMessages != null) {
@@ -433,7 +430,7 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                 tvSender.setText(message.getSender());
             }
 
-            tvTitle.setText(message.getTitle());
+            tvTitle.setText(itemView.getContext().getString(R.string.chat_trip_created_title));
             tvTime.setText(message.getTime());
 
             TripCreatedCard card = message.getTripCreatedCard();
@@ -468,6 +465,7 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         private final TextView tvSender;
         private final TextView tvTitle;
         private final TextView tvTime;
+        private final RecyclerView rvSuggestedPlaces;
         private final SuggestedPlaceCardAdapter nestedAdapter;
 
         SuggestedPlacesMessageViewHolder(@NonNull View itemView, ChatActionCallback actionCallback) {
@@ -475,7 +473,7 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             tvSender = itemView.findViewById(R.id.tv_sender);
             tvTitle = itemView.findViewById(R.id.tv_suggested_places_title);
             tvTime = itemView.findViewById(R.id.tv_message_time);
-            RecyclerView rvSuggestedPlaces = itemView.findViewById(R.id.rv_suggested_places);
+            rvSuggestedPlaces = itemView.findViewById(R.id.rv_suggested_places);
 
             rvSuggestedPlaces.setLayoutManager(
                     new LinearLayoutManager(itemView.getContext(), RecyclerView.HORIZONTAL, false));
@@ -491,7 +489,7 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                 tvSender.setText(message.getSender());
             }
 
-            tvTitle.setText(message.getTitle());
+            tvTitle.setText(itemView.getContext().getString(R.string.chat_suggested_places_title));
             tvTime.setText(message.getTime());
 
             SuggestedPlacesCard card = message.getSuggestedPlacesCard();
@@ -512,7 +510,6 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             this.actionCallback = actionCallback;
         }
 
-        @SuppressLint("NotifyDataSetChanged")
         void submit(List<PlaceCard> newPlaces, String tripId) {
             places.clear();
             if (newPlaces != null) {
@@ -563,7 +560,9 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                 tvAddress.setText(place.getAddress());
                 if (place.getRating() > 0d) {
                     tvRating.setVisibility(View.VISIBLE);
-                    tvRating.setText(String.format(Locale.US, "Rating %.1f", place.getRating()));
+                    tvRating.setText(itemView.getContext().getString(
+                            R.string.trip_stop_rating_format,
+                            place.getRating()));
                 } else {
                     tvRating.setVisibility(View.GONE);
                 }

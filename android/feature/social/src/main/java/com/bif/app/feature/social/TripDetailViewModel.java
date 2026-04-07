@@ -2,6 +2,7 @@ package com.bif.app.feature.social;
 
 import android.content.Context;
 
+import androidx.annotation.NonNull;
 import androidx.lifecycle.MediatorLiveData;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
@@ -100,29 +101,25 @@ public class TripDetailViewModel extends ViewModel {
         if (currentTripId == null || currentTripId.trim().isEmpty() || stop == null) {
             return;
         }
-        TripPlan currentTrip = trip == null ? null : trip.getValue();
-        if (currentTrip == null || currentTrip.getStops() == null || currentTrip.getStops().isEmpty()) {
+        String targetId = stop.getId();
+        if (targetId == null) {
             return;
         }
 
-        List<TripStop> updatedStops = new ArrayList<>();
-        for (TripStop item : currentTrip.getStops()) {
-            if (item != null && stop.getId().equals(item.getId())) {
-                updatedStops.add(new TripStop(
-                        item.getId(),
-                        item.getTitle(),
-                    item.getAddress(),
-                        item.getNote(),
-                        item.getPhotoUrl(),
-                        item.getLocalImagePath(),
-                        item.getLatitude(),
-                        item.getLongitude(),
-                        scheduledAtMillis,
-                        scheduledAtMillis,
-                        item.getOrderIndex()));
-            } else {
-                updatedStops.add(item);
-            }
+        List<TripStop> updatedStops = rebuildStopsWithUpdate(targetId, item -> new TripStop(
+                item.getId(),
+                item.getTitle(),
+                item.getAddress(),
+                item.getNote(),
+                item.getPhotoUrl(),
+                item.getLocalImagePath(),
+                item.getLatitude(),
+                item.getLongitude(),
+                scheduledAtMillis,
+                scheduledAtMillis,
+                item.getOrderIndex()));
+        if (updatedStops == null) {
+            return;
         }
 
         tripRepository.rearrangeStopsInTrip(currentTripId, updatedStops);
@@ -132,33 +129,51 @@ public class TripDetailViewModel extends ViewModel {
         if (currentTripId == null || currentTripId.trim().isEmpty() || stop == null) {
             return;
         }
-        TripPlan currentTrip = trip == null ? null : trip.getValue();
-        if (currentTrip == null || currentTrip.getStops() == null || currentTrip.getStops().isEmpty()) {
+        String targetId = stop.getId();
+        if (targetId == null) {
             return;
         }
 
         String nextNote = note == null ? "" : note.trim();
+        List<TripStop> updatedStops = rebuildStopsWithUpdate(targetId, item -> new TripStop(
+                item.getId(),
+                item.getTitle(),
+                item.getAddress(),
+                nextNote,
+                item.getPhotoUrl(),
+                item.getLocalImagePath(),
+                item.getLatitude(),
+                item.getLongitude(),
+                scheduledAtMillis,
+                scheduledAtMillis,
+                item.getOrderIndex()));
+        if (updatedStops == null) {
+            return;
+        }
+
+        tripRepository.rearrangeStopsInTrip(currentTripId, updatedStops);
+    }
+
+    private List<TripStop> rebuildStopsWithUpdate(@NonNull String targetId, @NonNull StopUpdater updater) {
+        TripPlan currentTrip = trip == null ? null : trip.getValue();
+        if (currentTrip == null || currentTrip.getStops() == null || currentTrip.getStops().isEmpty()) {
+            return null;
+        }
+
         List<TripStop> updatedStops = new ArrayList<>();
         for (TripStop item : currentTrip.getStops()) {
-            if (item != null && stop.getId().equals(item.getId())) {
-                updatedStops.add(new TripStop(
-                        item.getId(),
-                        item.getTitle(),
-                    item.getAddress(),
-                        nextNote,
-                        item.getPhotoUrl(),
-                        item.getLocalImagePath(),
-                        item.getLatitude(),
-                        item.getLongitude(),
-                        scheduledAtMillis,
-                        scheduledAtMillis,
-                        item.getOrderIndex()));
+            if (item != null && targetId.equals(item.getId())) {
+                updatedStops.add(updater.apply(item));
             } else {
                 updatedStops.add(item);
             }
         }
+        return updatedStops;
+    }
 
-        tripRepository.rearrangeStopsInTrip(currentTripId, updatedStops);
+    private interface StopUpdater {
+        @NonNull
+        TripStop apply(@NonNull TripStop original);
     }
 
     private void recomputeUnreadState() {

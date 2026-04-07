@@ -165,6 +165,7 @@ type AiTripDraftStop {
 }
 
 enum AiFailureCode {
+  OFFLINE
   UNAUTHORIZED
   RATE_LIMITED
   INVALID_QUERY

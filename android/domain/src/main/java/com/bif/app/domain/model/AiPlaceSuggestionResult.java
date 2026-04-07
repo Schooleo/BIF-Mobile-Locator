@@ -18,11 +18,11 @@ public class AiPlaceSuggestionResult {
     }
 
     public List<AiPlaceSuggestion> getPlaces() {
-        return places;
+        return new ArrayList<>(places);
     }
 
     public List<String> getWarnings() {
-        return warnings;
+        return new ArrayList<>(warnings);
     }
 
     public String getFailureCode() {

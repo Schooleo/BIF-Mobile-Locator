@@ -48,7 +48,7 @@ public class AppModule {
                 context,
                 AppDatabase.class,
                 "bif_database")
-                .fallbackToDestructiveMigration(true)
+            .addMigrations(AppDatabase.MIGRATION_15_16)
                 .build();
     }
 

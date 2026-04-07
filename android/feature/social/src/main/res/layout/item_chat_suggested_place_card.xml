@@ -11,7 +11,7 @@
         android:id="@+id/tv_place_name"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="@android:color/black"
+        android:textColor="?attr/colorTextPrimary"
         android:textSize="15sp"
         android:textStyle="bold" />
 
@@ -20,7 +20,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:textColor="#4F5660"
+        android:textColor="?attr/colorTextPrimary"
         android:textSize="12sp" />
 
     <TextView
@@ -28,7 +28,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="3dp"
-        android:textColor="#4F5660"
+        android:textColor="?attr/colorTextPrimary"
         android:textSize="12sp" />
 
     <LinearLayout
@@ -43,7 +43,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:backgroundTint="@color/primary_blue"
-            android:minHeight="0dp"
+            android:minHeight="48dp"
             android:text="@string/chat_add_to_trip"
             android:textAllCaps="false"
             android:textColor="@color/white"
@@ -56,7 +56,7 @@
             android:layout_marginStart="6dp"
             android:layout_weight="1"
             android:backgroundTint="@color/white"
-            android:minHeight="0dp"
+            android:minHeight="48dp"
             android:text="@string/chat_view_place"
             android:textAllCaps="false"
             android:textColor="@color/primary_blue"

@@ -105,7 +105,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:backgroundTint="@color/primary_blue"
-            android:minHeight="0dp"
+            android:minHeight="48dp"
             android:paddingStart="14dp"
             android:paddingEnd="14dp"
             android:text="@string/chat_save_trip"

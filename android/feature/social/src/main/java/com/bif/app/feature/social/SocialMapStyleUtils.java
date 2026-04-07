@@ -54,14 +54,15 @@ public final class SocialMapStyleUtils {
                 } else if (layer instanceof CircleLayer) {
                     applyCirclePalette((CircleLayer) layer, key, darkMode);
                 }
-            } catch (Exception ignored) {
-                // Ignore unsupported layer/property combinations in third-party styles.
+            } catch (RuntimeException e) {
+                // Log but continue on unsupported layer/property combinations in third-party styles.
+                android.util.Log.w("SocialMapStyleUtils","Failed to apply palette to layer: " + layer.getId(), e);
             }
         }
     }
 
     private static String buildLayerKey(Layer layer) {
-        String sourceLayer = "";
+        String sourceLayer = null;
         if (layer instanceof FillLayer) {
             sourceLayer = ((FillLayer) layer).getSourceLayer();
         } else if (layer instanceof LineLayer) {
@@ -71,7 +72,11 @@ public final class SocialMapStyleUtils {
         } else if (layer instanceof CircleLayer) {
             sourceLayer = ((CircleLayer) layer).getSourceLayer();
         }
-        return (layer.getId() + " " + sourceLayer).toLowerCase(Locale.ROOT);
+        String layerKey = layer.getId();
+        if (sourceLayer != null) {
+            layerKey += " " + sourceLayer;
+        }
+        return layerKey.toLowerCase(Locale.ROOT);
     }
 
     private static void applyFillPalette(FillLayer layer, String key, boolean darkMode) {

@@ -90,18 +90,7 @@ public class PlaceRepository implements IPlaceRepository {
                            SyncManager syncManager,
                            NetworkMonitor networkMonitor) {
         this(geocodingDataSource, restApiService, placeDao,
-                    searchHistoryDao, syncManager, networkMonitor, null, null);
-                }
-
-                public PlaceRepository(AndroidGeocodingDataSource geocodingDataSource,
-                           RestApiService restApiService,
-                           PlaceDao placeDao,
-                           SearchHistoryDao searchHistoryDao,
-                           SyncManager syncManager,
-                           NetworkMonitor networkMonitor,
-                           AiGraphQlClient aiGraphQlClient) {
-                this(geocodingDataSource, restApiService, placeDao,
-                    searchHistoryDao, syncManager, networkMonitor, aiGraphQlClient, null);
+                searchHistoryDao, syncManager, networkMonitor, null, null);
     }
 
     @Override

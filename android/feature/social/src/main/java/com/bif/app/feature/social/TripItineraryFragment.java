@@ -2,6 +2,7 @@ package com.bif.app.feature.social;
 
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
+import android.content.Context;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
@@ -74,7 +75,7 @@ public class TripItineraryFragment extends Fragment {
         }
         String finalTripId = tripId;
 
-        adapter = new ItineraryAdapter(new ItineraryAdapter.StopActionListener() {
+        adapter = new ItineraryAdapter(requireContext(), new ItineraryAdapter.StopActionListener() {
             @Override
             public void onDeleteStop(@NonNull TripStop stop) {
                 confirmDeleteStop(stop);
@@ -316,12 +317,14 @@ public class TripItineraryFragment extends Fragment {
 
         private final List<RowItem> items = new ArrayList<>();
         private final Set<String> expandedStopIds = new HashSet<>();
+        private final Context context;
         private final StopActionListener stopActionListener;
         private final SimpleDateFormat dateHeaderFormatter =
                 new SimpleDateFormat("EEE, MMM dd, yyyy", Locale.getDefault());
         private final SimpleDateFormat timeFormatter = new SimpleDateFormat("HH:mm", Locale.getDefault());
 
-        ItineraryAdapter(@NonNull StopActionListener stopActionListener) {
+        ItineraryAdapter(@NonNull Context context, @NonNull StopActionListener stopActionListener) {
+            this.context = context;
             this.stopActionListener = stopActionListener;
         }
 
@@ -440,7 +443,7 @@ public class TripItineraryFragment extends Fragment {
                     dayLabel = dayKey;
                 } else {
                     dayKey = "NO_DATE";
-                    dayLabel = "No Date";
+                    dayLabel = context.getString(R.string.trip_no_date);
                 }
 
                 if (!dayKey.equals(currentKey)) {

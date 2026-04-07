@@ -273,7 +273,7 @@ public class SyncManager {
     }
 
     public void syncIfOnline() {
-        enqueueExecutor.execute(() -> {
+        reconnectSyncExecutor.execute(() -> {
             if (networkMonitor.isOnline()) {
                 sync();
             }
