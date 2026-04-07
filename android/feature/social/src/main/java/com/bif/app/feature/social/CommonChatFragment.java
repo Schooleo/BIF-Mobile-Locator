@@ -150,7 +150,7 @@ public class CommonChatFragment extends Fragment {
         viewModel.getMessages().observe(getViewLifecycleOwner(), this::onMessagesUpdated);
         viewModel.getSavedTripCardIds().observe(getViewLifecycleOwner(), savedIds -> {
             if (!latestMessages.isEmpty()) {
-                onMessagesUpdated(latestMessages);
+                renderMessages(latestMessages, false);
             }
         });
         viewModel.getAiBadgesEnabled().observe(getViewLifecycleOwner(), enabled -> {
@@ -252,6 +252,10 @@ public class CommonChatFragment extends Fragment {
     // ─── LiveData observers ────────────────────────────────────────────────────
 
     private void onMessagesUpdated(List<ChatMessage> messages) {
+        renderMessages(messages, true);
+    }
+
+    private void renderMessages(List<ChatMessage> messages, boolean withSideEffects) {
         if (messages == null) return;
         latestMessages = new ArrayList<>(messages);
         List<ChatMessageAdapter.ChatMessage> adapterMessages = new ArrayList<>();
@@ -259,8 +263,10 @@ public class CommonChatFragment extends Fragment {
             adapterMessages.add(domainToAdapterMessage(msg));
         }
         adapter.submit(adapterMessages);
-        markGroupChatReadIfNeeded();
-        scrollToBottom();
+        if (withSideEffects) {
+            markGroupChatReadIfNeeded();
+            scrollToBottom();
+        }
     }
 
     private ChatMessageAdapter.ChatMessage domainToAdapterMessage(ChatMessage msg) {

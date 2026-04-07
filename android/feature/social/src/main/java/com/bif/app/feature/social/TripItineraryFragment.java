@@ -133,38 +133,6 @@ public class TripItineraryFragment extends Fragment {
         tvEmpty.setVisibility(stops.isEmpty() ? View.VISIBLE : View.GONE);
     }
 
-    private void showStopDateTimePicker(@NonNull TripStop stop) {
-        Calendar selected = Calendar.getInstance();
-        long anchor = stop.getArrivalTime() > 0 ? stop.getArrivalTime() : stop.getDepartureTime();
-        if (anchor > 0) {
-            selected.setTimeInMillis(anchor);
-        }
-
-        DatePickerDialog dateDialog = new DatePickerDialog(
-                requireContext(),
-                (picker, year, month, dayOfMonth) -> {
-                    selected.set(Calendar.YEAR, year);
-                    selected.set(Calendar.MONTH, month);
-                    selected.set(Calendar.DAY_OF_MONTH, dayOfMonth);
-                    showStopTimePicker(stop, selected);
-                },
-                selected.get(Calendar.YEAR),
-                selected.get(Calendar.MONTH),
-                selected.get(Calendar.DAY_OF_MONTH)
-        );
-
-        if (currentTrip != null) {
-            if (currentTrip.getStartAt() > 0) {
-                dateDialog.getDatePicker().setMinDate(currentTrip.getStartAt());
-            }
-            if (currentTrip.getEndAt() > 0) {
-                dateDialog.getDatePicker().setMaxDate(currentTrip.getEndAt());
-            }
-        }
-
-        dateDialog.show();
-    }
-
     private void showStopEditDialog(@NonNull TripStop stop) {
         View content = LayoutInflater.from(requireContext())
                 .inflate(R.layout.dialog_edit_trip_stop, null, false);
@@ -272,30 +240,6 @@ public class TripItineraryFragment extends Fragment {
                     Toast.makeText(requireContext(), R.string.remove, Toast.LENGTH_SHORT).show();
                 }
         );
-    }
-
-    private void showStopTimePicker(@NonNull TripStop stop, @NonNull Calendar selected) {
-        TimePickerDialog timeDialog = new TimePickerDialog(
-                requireContext(),
-                (picker, hourOfDay, minute) -> {
-                    selected.set(Calendar.HOUR_OF_DAY, hourOfDay);
-                    selected.set(Calendar.MINUTE, minute);
-                    selected.set(Calendar.SECOND, 0);
-                    selected.set(Calendar.MILLISECOND, 0);
-
-                    long selectedMillis = selected.getTimeInMillis();
-                    if (!isWithinTripRange(selectedMillis)) {
-                        Toast.makeText(requireContext(), R.string.trip_dates_invalid, Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    viewModel.updateStopSchedule(stop, selectedMillis);
-                    Toast.makeText(requireContext(), R.string.save, Toast.LENGTH_SHORT).show();
-                },
-                selected.get(Calendar.HOUR_OF_DAY),
-                selected.get(Calendar.MINUTE),
-                true
-        );
-        timeDialog.show();
     }
 
     private boolean isWithinTripRange(long selectedMillis) {

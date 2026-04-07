@@ -48,7 +48,7 @@ public class TripDetailViewModel extends ViewModel {
 
     public void loadTrip(String tripId) {
         currentTripId = tripId == null ? "" : tripId;
-        trip = tripRepository.getTripById(tripId);
+        trip = tripRepository.getTripById(currentTripId);
 
         if (groupMessages != null) {
             hasUnreadGroupMessages.removeSource(groupMessages);

@@ -53,8 +53,29 @@ public abstract class AppDatabase extends RoomDatabase {
     public static final Migration MIGRATION_15_16 = new Migration(15, 16) {
         @Override
         public void migrate(SupportSQLiteDatabase database) {
+            if (!hasTable(database, "trip_members")) {
+                database.execSQL("CREATE TABLE trip_members ("
+                        + "tripId TEXT NOT NULL, "
+                        + "userId TEXT NOT NULL, "
+                        + "PRIMARY KEY(tripId, userId), "
+                        + "FOREIGN KEY(tripId) REFERENCES trip_plans(id) ON DELETE CASCADE"
+                        + ")");
+                database.execSQL("CREATE INDEX index_trip_members_tripId ON trip_members(tripId)");
+                database.execSQL("CREATE INDEX index_trip_members_userId ON trip_members(userId)");
+            }
+
             if (!hasColumn(database, "trip_stops", "address")) {
                 database.execSQL("ALTER TABLE trip_stops ADD COLUMN address TEXT");
+            }
+        }
+
+        private boolean hasTable(SupportSQLiteDatabase database, String tableName) {
+            Cursor cursor = database.query("SELECT name FROM sqlite_master "
+                    + "WHERE type='table' AND name=?", new Object[]{tableName});
+            try {
+                return cursor.moveToFirst();
+            } finally {
+                cursor.close();
             }
         }
 

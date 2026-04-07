@@ -29,6 +29,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.util.Collections;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class ChatViewModelTest {
 
@@ -130,17 +131,22 @@ public class ChatViewModelTest {
     @Test
     public void sendMessage_AiModeFailureCode_ShowsSnackbarAndDoesNotInsertCard() {
         viewModel.init("group1", "Group 1", "u1");
+        AiTripDraft placeholderDraft = new AiTripDraft("", "", Collections.emptyList());
         MutableLiveData<AiTripDraftResult> aiResult = new MutableLiveData<>(
-                new AiTripDraftResult(null, Collections.emptyList(), Collections.emptyList(), "AI_FAILURE")
+            new AiTripDraftResult(placeholderDraft, Collections.emptyList(), Collections.emptyList(), "AI_FAILURE")
         );
         when(mockChatRepository.draftTripFromQuery("draft me a weekend trip")).thenReturn(aiResult);
+
+        AtomicReference<String> snackbar = new AtomicReference<>();
+        viewModel.getSnackbarMessage().observeForever(snackbar::set);
 
         viewModel.enterAiDraftMode();
         viewModel.sendMessage("draft me a weekend trip");
 
         verify(mockChatRepository).draftTripFromQuery("draft me a weekend trip");
         verify(mockChatRepository, org.mockito.Mockito.never()).insertLocalMessage(any());
-        assertTrue(viewModel.getSnackbarMessage().getValue().contains("AI_FAILURE"));
+        String snackbarMessage = snackbar.get();
+        assertTrue(snackbarMessage != null && snackbarMessage.contains("AI_FAILURE"));
     }
 
     @Test

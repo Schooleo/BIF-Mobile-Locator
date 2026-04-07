@@ -1,3 +1,5 @@
+scalar Long
+
 type Query {
   users: [User!]!
   user(id: ID!): User
@@ -20,7 +22,7 @@ type Query {
   tripPlans: [TripPlan!]!
   tripPlan(id: ID!): TripPlan
   tripPlansByGroup(groupId: ID!): [TripPlan!]!
-  syncPreview(lastPulledVersion: Int): SyncResponse!
+  syncPreview(lastPulledVersion: Long): SyncResponse!
 }
 
 type Mutation {
@@ -183,7 +185,7 @@ type Location {
 }
 
 type SyncResponse {
-  currentServerVersion: Int!
+  currentServerVersion: Long!
   pulledChanges: [SyncChange!]!
   conflicts: [SyncConflict!]
 }
@@ -191,18 +193,19 @@ type SyncResponse {
 type SyncChange {
   entityType: String
   entityId: String
-  serverVersion: Int
+  serverVersion: Long
   operation: String
   clientChangeId: String
   timestamp: String
+  payload: String
 }
 
 type SyncConflict {
   entityType: String
   entityId: String
   clientChangeId: String
-  clientVersion: Int
-  serverVersion: Int
+  clientVersion: Long
+  serverVersion: Long
   resolution: String
 }
 
@@ -313,7 +316,7 @@ type ProfileMetadata {
   avatarLetter: String
   avatarColor: Int
   online: Boolean
-  serverVersion: Int
+  serverVersion: Long
   updatedAt: String
   profileCompletionPercent: Int!
 }
@@ -327,14 +330,16 @@ input UpdateMyProfileInput {
 input SyncRequestInput {
   userId: ID
   deviceId: ID
-  lastPulledVersion: Int!
+  lastPulledVersion: Long!
   pushedChanges: [SyncChangeInput!]
 }
 
 input SyncChangeInput {
   entityType: String
   entityId: String
-  serverVersion: Int
+  serverVersion: Long
   operation: String
   clientChangeId: String
+  timestamp: String
+  payload: String
 }
