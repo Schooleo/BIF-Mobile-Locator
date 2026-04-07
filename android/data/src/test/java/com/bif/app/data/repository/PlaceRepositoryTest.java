@@ -13,6 +13,7 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.content.Context;
 import android.location.Address;
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
@@ -69,6 +70,8 @@ public class PlaceRepositoryTest {
     private NetworkMonitor mockNetworkMonitor;
         @Mock
         private AiGraphQlClient mockAiGraphQlClient;
+        @Mock
+        private Context mockContext;
 
     private PlaceRepository placeRepository;
     private AutoCloseable closeable;
@@ -83,7 +86,8 @@ public class PlaceRepositoryTest {
                 mockSearchHistoryDao,
                 mockSyncManager,
                 mockNetworkMonitor,
-                mockAiGraphQlClient);
+                mockAiGraphQlClient,
+                mockContext);
     }
 
     @After
