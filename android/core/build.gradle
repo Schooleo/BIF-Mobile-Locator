@@ -53,6 +53,14 @@ apollo {
     }
 }
 
+def generateApolloSourcesTask = tasks.named("generateServiceApolloSources")
+
 tasks.withType(JavaCompile).configureEach {
-    dependsOn(tasks.named("generateServiceApolloSources"))
+    dependsOn(generateApolloSourcesTask)
+}
+
+tasks.matching { task ->
+    task.name.startsWith("extract") && task.name.endsWith("Annotations")
+}.configureEach {
+    dependsOn(generateApolloSourcesTask)
 }
