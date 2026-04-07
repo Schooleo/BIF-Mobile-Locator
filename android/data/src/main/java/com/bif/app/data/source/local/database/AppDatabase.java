@@ -25,6 +25,7 @@ import com.bif.app.data.source.local.entity.PlaceEntity;
 import com.bif.app.data.source.local.entity.ProfileEntity;
 import com.bif.app.data.source.local.entity.SearchHistoryEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
+import com.bif.app.data.source.local.entity.TripMemberCrossRef;
 import com.bif.app.data.source.local.entity.TripPlanEntity;
 import com.bif.app.data.source.local.entity.TripStopEntity;
 
@@ -40,8 +41,9 @@ import com.bif.app.data.source.local.entity.TripStopEntity;
         SearchHistoryEntity.class,
         ChatMessageEntity.class,
         TripPlanEntity.class,
+        TripMemberCrossRef.class,
         TripStopEntity.class
-}, version = 13, exportSchema = false)
+    }, version = 14, exportSchema = false)
 @TypeConverters({ FriendshipStatusConverter.class, UploadStatusConverter.class })
 public abstract class AppDatabase extends RoomDatabase {
     public abstract FriendDao friendDao();

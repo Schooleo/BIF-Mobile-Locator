@@ -19,6 +19,9 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.LiveData;
 
 import com.bif.app.core.network.RestApiService;
+import com.bif.app.core.network.AiGraphQlClient;
+import com.bif.app.core.network.dto.ai.AiPlaceSuggestionPayload;
+import com.bif.app.core.network.dto.ai.AiSuggestedPlacePayload;
 import com.bif.app.core.network.dto.place.PlaceDto;
 import com.bif.app.data.source.AndroidGeocodingDataSource;
 import com.bif.app.data.source.local.dao.PlaceDao;
@@ -27,6 +30,7 @@ import com.bif.app.data.source.local.entity.PlaceEntity;
 import com.bif.app.data.sync.core.NetworkMonitor;
 import com.bif.app.data.sync.core.SyncManager;
 import com.bif.app.domain.model.Location;
+import com.bif.app.domain.model.AiPlaceSuggestionResult;
 import com.bif.app.domain.model.Place;
 
 import org.junit.After;
@@ -63,6 +67,8 @@ public class PlaceRepositoryTest {
     private SyncManager mockSyncManager;
     @Mock
     private NetworkMonitor mockNetworkMonitor;
+        @Mock
+        private AiGraphQlClient mockAiGraphQlClient;
 
     private PlaceRepository placeRepository;
     private AutoCloseable closeable;
@@ -76,7 +82,8 @@ public class PlaceRepositoryTest {
                 mockPlaceDao,
                 mockSearchHistoryDao,
                 mockSyncManager,
-                mockNetworkMonitor);
+                mockNetworkMonitor,
+                mockAiGraphQlClient);
     }
 
     @After
@@ -334,6 +341,68 @@ public class PlaceRepositoryTest {
     }
 
     // --- persistPlace Tests ---
+
+    @Test
+    public void suggestPlacesFromQuery_offline_returnsOfflineFailureCode() {
+        when(mockNetworkMonitor.isOnline()).thenReturn(false);
+
+        LiveData<AiPlaceSuggestionResult> result =
+                placeRepository.suggestPlacesFromQuery("ramen");
+
+        assertNotNull(result.getValue());
+        assertEquals("OFFLINE", result.getValue().getFailureCode());
+        assertTrue(result.getValue().getPlaces().isEmpty());
+    }
+
+    @Test
+    public void suggestPlacesFromQuery_failureCode_doesNotReturnPlaces()
+            throws Exception, InterruptedException {
+        when(mockNetworkMonitor.isOnline()).thenReturn(true);
+        when(mockAiGraphQlClient.suggestPlacesFromQuery("late night food"))
+                .thenReturn(new AiPlaceSuggestionPayload(
+                        Collections.emptyList(),
+                        Collections.singletonList("warning"),
+                        "RATE_LIMITED"));
+
+        LiveData<AiPlaceSuggestionResult> result =
+                placeRepository.suggestPlacesFromQuery("late night food");
+        Thread.sleep(250);
+
+        assertNotNull(result.getValue());
+        assertEquals("RATE_LIMITED", result.getValue().getFailureCode());
+        assertTrue(result.getValue().getPlaces().isEmpty());
+    }
+
+    @Test
+    public void suggestPlacesFromQuery_success_mapsPlaces()
+            throws Exception, InterruptedException {
+        when(mockNetworkMonitor.isOnline()).thenReturn(true);
+        when(mockAiGraphQlClient.suggestPlacesFromQuery("best coffee"))
+                .thenReturn(new AiPlaceSuggestionPayload(
+                        Collections.singletonList(
+                                new AiSuggestedPlacePayload(
+                                        "p-ai-1",
+                                        "Morning Brew",
+                                        "101 Bean St",
+                                        4.7,
+                                        14,
+                                        10.11,
+                                        106.22)),
+                        Collections.singletonList("minor"),
+                        null));
+
+        LiveData<AiPlaceSuggestionResult> result =
+                placeRepository.suggestPlacesFromQuery("best coffee");
+        Thread.sleep(250);
+
+        assertNotNull(result.getValue());
+        assertNull(result.getValue().getFailureCode());
+        assertEquals(1, result.getValue().getPlaces().size());
+        assertEquals("Morning Brew",
+                result.getValue().getPlaces().get(0).getPlace().name);
+        assertEquals(14,
+                result.getValue().getPlaces().get(0).getAddedToTripCount());
+    }
 
     @Test
     public void persistPlace_cachesLocallyAndEnqueuesSync()

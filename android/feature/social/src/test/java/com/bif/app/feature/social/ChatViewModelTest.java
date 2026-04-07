@@ -1,6 +1,7 @@
 package com.bif.app.feature.social;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -9,7 +10,13 @@ import static org.mockito.Mockito.when;
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.MutableLiveData;
 
+import com.bif.app.data.sync.core.NetworkMonitor;
+import com.bif.app.domain.model.AiTripDraft;
+import com.bif.app.domain.model.AiTripDraftResult;
+import com.bif.app.domain.model.AiTripDraftStop;
 import com.bif.app.domain.model.ChatMessage;
+import com.bif.app.domain.model.Location;
+import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.TripStop;
 import com.bif.app.domain.repository.IChatRepository;
 import com.bif.app.domain.repository.ITripRepository;
@@ -20,6 +27,8 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+
+import java.util.Collections;
 
 public class ChatViewModelTest {
 
@@ -32,16 +41,24 @@ public class ChatViewModelTest {
     @Mock
     private ITripRepository mockTripRepository;
 
+    @Mock
+    private NetworkMonitor networkMonitor;
+
+    private MutableLiveData<Boolean> connectivityLiveData;
+
     private ChatViewModel viewModel;
 
     @Before
     public void setup() {
         MockitoAnnotations.initMocks(this);
+        connectivityLiveData = new MutableLiveData<>(true);
         
         when(mockChatRepository.getMessagesByGroup(any())).thenReturn(new MutableLiveData<>());
         when(mockTripRepository.getTripsByGroup(any())).thenReturn(new MutableLiveData<>());
+        when(networkMonitor.isOnline()).thenReturn(true);
+        when(networkMonitor.observeConnectivity()).thenReturn(connectivityLiveData);
         
-        viewModel = new ChatViewModel(mockChatRepository, mockTripRepository);
+        viewModel = new ChatViewModel(mockChatRepository, mockTripRepository, networkMonitor);
     }
 
     @Test
@@ -108,5 +125,45 @@ public class ChatViewModelTest {
         viewModel.refreshMessages();
 
         verify(mockChatRepository, org.mockito.Mockito.times(2)).refreshMessages("group1"); // Twice total: init + here
+    }
+
+    @Test
+    public void sendMessage_AiModeFailureCode_ShowsSnackbarAndDoesNotInsertCard() {
+        viewModel.init("group1", "Group 1", "u1");
+        MutableLiveData<AiTripDraftResult> aiResult = new MutableLiveData<>(
+                new AiTripDraftResult(null, Collections.emptyList(), Collections.emptyList(), "AI_FAILURE")
+        );
+        when(mockChatRepository.draftTripFromQuery("draft me a weekend trip")).thenReturn(aiResult);
+
+        viewModel.enterAiDraftMode();
+        viewModel.sendMessage("draft me a weekend trip");
+
+        verify(mockChatRepository).draftTripFromQuery("draft me a weekend trip");
+        verify(mockChatRepository, org.mockito.Mockito.never()).insertLocalMessage(any());
+        assertTrue(viewModel.getSnackbarMessage().getValue().contains("AI_FAILURE"));
+    }
+
+    @Test
+    public void sendMessage_AiModeSuccess_InsertsTripCreatedCardLocally() {
+        viewModel.init("group1", "Group 1", "u1");
+
+        Place place = new Place("place1", "Cafe", "Addr", 4.5, new Location(10.0, 20.0));
+        AiTripDraftStop stop = new AiTripDraftStop("place1", place, 90, "Morning coffee");
+        AiTripDraft draft = new AiTripDraft("Weekend plan", "Relaxed trip", Collections.singletonList(stop));
+        MutableLiveData<AiTripDraftResult> aiResult = new MutableLiveData<>(
+                new AiTripDraftResult(draft, Collections.singletonList(place), Collections.emptyList(), null)
+        );
+        when(mockChatRepository.draftTripFromQuery("draft me a weekend trip")).thenReturn(aiResult);
+
+        viewModel.enterAiDraftMode();
+        viewModel.sendMessage("draft me a weekend trip");
+
+        ArgumentCaptor<ChatMessage> captor = ArgumentCaptor.forClass(ChatMessage.class);
+        verify(mockChatRepository).insertLocalMessage(captor.capture());
+
+        ChatMessage message = captor.getValue();
+        assertEquals("TRIP_CREATED_CARD", message.getType());
+        assertTrue(message.getContent().contains("\"isSaved\":false"));
+        assertTrue(message.getContent().contains("candidatePlaces"));
     }
 }

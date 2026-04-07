@@ -139,6 +139,7 @@ public class SocialViewModel extends ViewModel {
 
     public void retryTrips() {
         mapTripState(trips.getValue());
+        tripRepository.refreshTrips("");
     }
 
     public void addFriend(String receiverId) {

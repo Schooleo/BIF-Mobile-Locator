@@ -156,5 +156,17 @@
         <deepLink app:uri="app://bif.app/social/trip-detail?tripId={tripId}&amp;tripTitle={tripTitle}" />
     </fragment>
 
+    <fragment
+        android:id="@+id/nav_add_trip_stop"
+        android:name="com.bif.app.feature.social.AddTripStopFragment"
+        android:label="Add Trip Stop"
+        app:route="/social/add-trip-stop"
+        tools:layout="@layout/fragment_add_trip_stop">
+
+        <argument android:name="tripId" app:argType="string" android:defaultValue="" />
+
+        <deepLink app:uri="app://bif.app/social/add-trip-stop?tripId={tripId}" />
+    </fragment>
+
 </navigation>
 

@@ -14,6 +14,7 @@ import com.bif.app.domain.repository.IFavoriteRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.IRouteRepository;
 import com.bif.app.domain.model.Friend;
+import com.bif.app.domain.model.AiPlaceSuggestionResult;
 import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
@@ -75,6 +76,14 @@ public class MapViewModelInstrumentedTest {
         @Override
         public LiveData<List<Place>> searchPlacesFromHistory(String query) {
             return new MutableLiveData<>(Collections.emptyList());
+        }
+
+        @Override
+        public LiveData<AiPlaceSuggestionResult> suggestPlacesFromQuery(String query) {
+            return new MutableLiveData<>(new AiPlaceSuggestionResult(
+                    Collections.emptyList(),
+                    Collections.emptyList(),
+                    null));
         }
 
         @Override

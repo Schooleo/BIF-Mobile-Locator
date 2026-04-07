@@ -1,0 +1,20 @@
+mutation SuggestPlacesFromQuery($query: String!) {
+  suggestPlacesFromQuery(query: $query) {
+    extractedKeywords
+    category
+    vibe
+    warnings
+    failureCode
+    places {
+      id
+      name
+      address
+      rating
+      addedToTripCount: reviewCount
+      location {
+        latitude
+        longitude
+      }
+    }
+  }
+}

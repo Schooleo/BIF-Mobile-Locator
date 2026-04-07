@@ -1,11 +1,12 @@
 package com.bif.app.feature.social;
 
+import android.app.DatePickerDialog;
+import android.app.TimePickerDialog;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -13,22 +14,29 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.bif.app.core.utils.UriUtils;
 import com.bif.app.domain.model.TripPlan;
 import com.bif.app.domain.model.TripStop;
+import com.google.android.material.button.MaterialButton;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 public class TripItineraryFragment extends Fragment {
 
+    private TripDetailViewModel viewModel;
+    private TripPlan currentTrip;
     private ItineraryAdapter adapter;
 
     public static TripItineraryFragment newInstance(String tripId) {
@@ -51,21 +59,41 @@ public class TripItineraryFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        Button btnAddStop = view.findViewById(R.id.btn_add_stop);
+        MaterialButton btnAddStop = view.findViewById(R.id.btn_add_stop);
         RecyclerView rvItinerary = view.findViewById(R.id.rv_itinerary);
         TextView tvEmpty = view.findViewById(R.id.tv_itinerary_empty);
 
-        adapter = new ItineraryAdapter();
+        String tripId = "";
+        Bundle args = getArguments();
+        if (args != null) {
+            tripId = args.getString("tripId", "");
+        }
+        String finalTripId = tripId;
+
+        adapter = new ItineraryAdapter(new ItineraryAdapter.StopActionListener() {
+            @Override
+            public void onDeleteStop(@NonNull TripStop stop) {
+                viewModel.removeStop(stop.getId());
+                Toast.makeText(requireContext(), R.string.remove, Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onEditStop(@NonNull TripStop stop) {
+                showStopDateTimePicker(stop);
+            }
+        });
         rvItinerary.setLayoutManager(new LinearLayoutManager(requireContext()));
         rvItinerary.setAdapter(adapter);
 
-        btnAddStop.setOnClickListener(v -> Toast.makeText(
-                requireContext(),
-                R.string.trip_feature_add_stop_soon,
-                Toast.LENGTH_SHORT
-        ).show());
+        btnAddStop.setOnClickListener(v -> {
+            android.net.Uri destination = UriUtils.buildUri("/social/add-trip-stop")
+                    .buildUpon()
+                    .appendQueryParameter("tripId", finalTripId)
+                    .build();
+            Navigation.findNavController(v).navigate(destination);
+        });
 
-        TripDetailViewModel viewModel = new ViewModelProvider(requireParentFragment())
+        viewModel = new ViewModelProvider(requireParentFragment())
                 .get(TripDetailViewModel.class);
 
         if (viewModel.getTrip() != null) {
@@ -74,55 +102,202 @@ public class TripItineraryFragment extends Fragment {
     }
 
     private void bindTrip(@Nullable TripPlan trip, @NonNull TextView tvEmpty) {
+        currentTrip = trip;
         List<TripStop> stops = trip == null || trip.getStops() == null
                 ? Collections.emptyList()
                 : new ArrayList<>(trip.getStops());
 
-        stops.sort(Comparator.comparingInt(TripStop::getOrderIndex));
+        stops.sort((left, right) -> {
+            long leftAnchor = left.getArrivalTime() > 0 ? left.getArrivalTime() : left.getDepartureTime();
+            long rightAnchor = right.getArrivalTime() > 0 ? right.getArrivalTime() : right.getDepartureTime();
+            if (leftAnchor == 0L && rightAnchor == 0L) {
+                return Integer.compare(left.getOrderIndex(), right.getOrderIndex());
+            }
+            if (leftAnchor == 0L) {
+                return 1;
+            }
+            if (rightAnchor == 0L) {
+                return -1;
+            }
+            int compare = Long.compare(leftAnchor, rightAnchor);
+            if (compare != 0) {
+                return compare;
+            }
+            return Integer.compare(left.getOrderIndex(), right.getOrderIndex());
+        });
         adapter.setItems(stops);
         tvEmpty.setVisibility(stops.isEmpty() ? View.VISIBLE : View.GONE);
     }
 
-    private static class ItineraryAdapter extends RecyclerView.Adapter<ItineraryAdapter.StopViewHolder> {
+    private void showStopDateTimePicker(@NonNull TripStop stop) {
+        Calendar selected = Calendar.getInstance();
+        long anchor = stop.getArrivalTime() > 0 ? stop.getArrivalTime() : stop.getDepartureTime();
+        if (anchor > 0) {
+            selected.setTimeInMillis(anchor);
+        }
 
-        private final List<TripStop> items = new ArrayList<>();
-        private final SimpleDateFormat formatter = new SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault());
+        DatePickerDialog dateDialog = new DatePickerDialog(
+                requireContext(),
+                (picker, year, month, dayOfMonth) -> {
+                    selected.set(Calendar.YEAR, year);
+                    selected.set(Calendar.MONTH, month);
+                    selected.set(Calendar.DAY_OF_MONTH, dayOfMonth);
+                    showStopTimePicker(stop, selected);
+                },
+                selected.get(Calendar.YEAR),
+                selected.get(Calendar.MONTH),
+                selected.get(Calendar.DAY_OF_MONTH)
+        );
+
+        if (currentTrip != null) {
+            if (currentTrip.getStartAt() > 0) {
+                dateDialog.getDatePicker().setMinDate(currentTrip.getStartAt());
+            }
+            if (currentTrip.getEndAt() > 0) {
+                dateDialog.getDatePicker().setMaxDate(currentTrip.getEndAt());
+            }
+        }
+
+        dateDialog.show();
+    }
+
+    private void showStopTimePicker(@NonNull TripStop stop, @NonNull Calendar selected) {
+        TimePickerDialog timeDialog = new TimePickerDialog(
+                requireContext(),
+                (picker, hourOfDay, minute) -> {
+                    selected.set(Calendar.HOUR_OF_DAY, hourOfDay);
+                    selected.set(Calendar.MINUTE, minute);
+                    selected.set(Calendar.SECOND, 0);
+                    selected.set(Calendar.MILLISECOND, 0);
+
+                    long selectedMillis = selected.getTimeInMillis();
+                    if (!isWithinTripRange(selectedMillis)) {
+                        Toast.makeText(requireContext(), R.string.trip_dates_invalid, Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    viewModel.updateStopSchedule(stop, selectedMillis);
+                    Toast.makeText(requireContext(), R.string.save, Toast.LENGTH_SHORT).show();
+                },
+                selected.get(Calendar.HOUR_OF_DAY),
+                selected.get(Calendar.MINUTE),
+                true
+        );
+        timeDialog.show();
+    }
+
+    private boolean isWithinTripRange(long selectedMillis) {
+        if (currentTrip == null) {
+            return true;
+        }
+        long startAt = currentTrip.getStartAt();
+        long endAt = currentTrip.getEndAt();
+        if (startAt > 0 && selectedMillis < startAt) {
+            return false;
+        }
+        return endAt <= 0 || selectedMillis <= endAt;
+    }
+
+    private static class ItineraryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+
+        private static final int TYPE_DAY_HEADER = 0;
+        private static final int TYPE_STOP = 1;
+
+        private final List<RowItem> items = new ArrayList<>();
+        private final Set<String> expandedStopIds = new HashSet<>();
+        private final StopActionListener stopActionListener;
+        private final SimpleDateFormat dateHeaderFormatter =
+                new SimpleDateFormat("EEE, MMM dd, yyyy", Locale.getDefault());
+        private final SimpleDateFormat timeFormatter = new SimpleDateFormat("HH:mm", Locale.getDefault());
+
+        ItineraryAdapter(@NonNull StopActionListener stopActionListener) {
+            this.stopActionListener = stopActionListener;
+        }
+
+        @Override
+        public int getItemViewType(int position) {
+            RowItem item = items.get(position);
+            return item.type == RowItem.Type.DAY_HEADER ? TYPE_DAY_HEADER : TYPE_STOP;
+        }
 
         @NonNull
         @Override
-        public StopViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View view = LayoutInflater.from(parent.getContext())
-                    .inflate(android.R.layout.simple_list_item_2, parent, false);
+        public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            LayoutInflater inflater = LayoutInflater.from(parent.getContext());
+            if (viewType == TYPE_DAY_HEADER) {
+                View view = inflater.inflate(R.layout.item_itinerary_day_header, parent, false);
+                return new DayHeaderViewHolder(view);
+            }
+            View view = inflater.inflate(R.layout.item_itinerary_stop, parent, false);
             return new StopViewHolder(view);
         }
 
         @Override
-        public void onBindViewHolder(@NonNull StopViewHolder holder, int position) {
-            TripStop stop = items.get(position);
+        public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+            RowItem rowItem = items.get(position);
+            if (holder instanceof DayHeaderViewHolder) {
+                DayHeaderViewHolder dayHolder = (DayHeaderViewHolder) holder;
+                dayHolder.header.setText(rowItem.dayLabel);
+                String label = rowItem.stopCount == 1
+                    ? dayHolder.itemView.getContext().getString(R.string.trip_stop_count_single, rowItem.stopCount)
+                    : dayHolder.itemView.getContext().getString(R.string.trip_stop_count_plural, rowItem.stopCount);
+                dayHolder.count.setText(label);
+                return;
+            }
+
+            if (!(holder instanceof StopViewHolder) || rowItem.stop == null) {
+                return;
+            }
+
+            StopViewHolder stopHolder = (StopViewHolder) holder;
+            TripStop stop = rowItem.stop;
+            stopHolder.index.setText(String.valueOf(rowItem.dayOrderIndex));
 
             String title = stop.getTitle();
             if (title == null || title.trim().isEmpty()) {
-                title = holder.itemView.getContext().getString(R.string.trip_stop_untitled);
+                title = stopHolder.itemView.getContext().getString(R.string.trip_stop_untitled);
             }
-            holder.title.setText((position + 1) + ". " + title);
-
-            String note = stop.getNote();
-            if (TextUtils.isEmpty(note)) {
-                note = holder.itemView.getContext().getString(R.string.trip_stop_no_note);
-            }
+            stopHolder.title.setText(title);
 
             String timePart = "";
             if (stop.getArrivalTime() > 0) {
-                timePart = formatter.format(new Date(stop.getArrivalTime()));
+                timePart = timeFormatter.format(new Date(stop.getArrivalTime()));
             } else if (stop.getDepartureTime() > 0) {
-                timePart = formatter.format(new Date(stop.getDepartureTime()));
+                timePart = timeFormatter.format(new Date(stop.getDepartureTime()));
+            }
+            stopHolder.time.setText(timePart.isEmpty()
+                    ? stopHolder.itemView.getContext().getString(R.string.trip_stop_no_note)
+                    : timePart);
+
+            String address = stop.getNote();
+            if (TextUtils.isEmpty(address)) {
+                address = stopHolder.itemView.getContext().getString(R.string.trip_stop_no_note);
             }
 
-            if (timePart.isEmpty()) {
-                holder.subtitle.setText(note);
-            } else {
-                holder.subtitle.setText(note + "  •  " + timePart);
-            }
+            boolean expanded = expandedStopIds.contains(stop.getId());
+            stopHolder.detailsContainer.setVisibility(expanded ? View.VISIBLE : View.GONE);
+            stopHolder.subtitle.setVisibility(expanded ? View.GONE : View.VISIBLE);
+            stopHolder.subtitle.setText(address);
+            stopHolder.address.setText(stopHolder.itemView.getContext().getString(R.string.trip_stop_address_label, address));
+            stopHolder.notes.setText(stopHolder.itemView.getContext().getString(
+                    R.string.trip_stop_notes_label,
+                    stopHolder.itemView.getContext().getString(R.string.trip_stop_no_note)));
+            stopHolder.rating.setText(R.string.trip_stop_rating_none);
+            stopHolder.expandLabel.setText(expanded ? R.string.collapse_less : R.string.expand_more);
+
+            stopHolder.itemView.setOnClickListener(v -> {
+                if (expanded) {
+                    expandedStopIds.remove(stop.getId());
+                } else {
+                    expandedStopIds.add(stop.getId());
+                }
+                int adapterPosition = stopHolder.getBindingAdapterPosition();
+                if (adapterPosition != RecyclerView.NO_POSITION) {
+                    notifyItemChanged(adapterPosition);
+                }
+            });
+
+            stopHolder.btnDelete.setOnClickListener(v -> stopActionListener.onDeleteStop(stop));
+            stopHolder.btnEdit.setOnClickListener(v -> stopActionListener.onEditStop(stop));
         }
 
         @Override
@@ -132,18 +307,116 @@ public class TripItineraryFragment extends Fragment {
 
         void setItems(@NonNull List<TripStop> data) {
             items.clear();
-            items.addAll(data);
+
+            String currentKey = null;
+            int dayCount = 0;
+            int dayStartIndex = -1;
+            for (TripStop stop : data) {
+                long anchorTime = stop.getArrivalTime() > 0
+                        ? stop.getArrivalTime()
+                        : stop.getDepartureTime();
+                String dayKey;
+                String dayLabel;
+                if (anchorTime > 0) {
+                    dayKey = dateHeaderFormatter.format(new Date(anchorTime));
+                    dayLabel = dayKey;
+                } else {
+                    dayKey = "NO_DATE";
+                    dayLabel = "No Date";
+                }
+
+                if (!dayKey.equals(currentKey)) {
+                    if (dayStartIndex >= 0) {
+                        RowItem previous = items.get(dayStartIndex);
+                        previous.stopCount = dayCount;
+                    }
+                    dayCount = 0;
+                    items.add(RowItem.dayHeader(dayLabel));
+                    dayStartIndex = items.size() - 1;
+                    currentKey = dayKey;
+                }
+                dayCount++;
+                items.add(RowItem.stop(stop, dayCount));
+            }
+
+            if (dayStartIndex >= 0) {
+                RowItem previous = items.get(dayStartIndex);
+                previous.stopCount = dayCount;
+            }
+
             notifyDataSetChanged();
         }
 
+        static class DayHeaderViewHolder extends RecyclerView.ViewHolder {
+            final TextView header;
+            final TextView count;
+
+            DayHeaderViewHolder(@NonNull View itemView) {
+                super(itemView);
+                header = itemView.findViewById(R.id.tv_day_header);
+                count = itemView.findViewById(R.id.tv_day_stop_count);
+            }
+        }
+
         static class StopViewHolder extends RecyclerView.ViewHolder {
+            final TextView index;
             final TextView title;
+            final TextView time;
+            final TextView expandLabel;
             final TextView subtitle;
+            final View detailsContainer;
+            final TextView address;
+            final TextView notes;
+            final TextView rating;
+            final MaterialButton btnEdit;
+            final MaterialButton btnDelete;
 
             StopViewHolder(@NonNull View itemView) {
                 super(itemView);
-                title = itemView.findViewById(android.R.id.text1);
-                subtitle = itemView.findViewById(android.R.id.text2);
+                index = itemView.findViewById(R.id.tv_stop_index);
+                title = itemView.findViewById(R.id.tv_stop_title);
+                time = itemView.findViewById(R.id.tv_stop_time);
+                expandLabel = itemView.findViewById(R.id.tv_stop_expand_label);
+                subtitle = itemView.findViewById(R.id.tv_stop_subtitle);
+                detailsContainer = itemView.findViewById(R.id.layout_stop_details);
+                address = itemView.findViewById(R.id.tv_stop_address);
+                notes = itemView.findViewById(R.id.tv_stop_notes);
+                rating = itemView.findViewById(R.id.tv_stop_rating);
+                btnEdit = itemView.findViewById(R.id.btn_edit_stop);
+                btnDelete = itemView.findViewById(R.id.btn_delete_stop);
+            }
+        }
+
+        interface StopActionListener {
+            void onDeleteStop(@NonNull TripStop stop);
+            void onEditStop(@NonNull TripStop stop);
+        }
+
+        static class RowItem {
+            enum Type {
+                DAY_HEADER,
+                STOP
+            }
+
+            final Type type;
+            final String dayLabel;
+            final TripStop stop;
+            int stopCount;
+            final int dayOrderIndex;
+
+            private RowItem(Type type, String dayLabel, TripStop stop, int dayOrderIndex) {
+                this.type = type;
+                this.dayLabel = dayLabel;
+                this.stop = stop;
+                this.dayOrderIndex = dayOrderIndex;
+            }
+
+            static RowItem dayHeader(String dayLabel) {
+                return new RowItem(Type.DAY_HEADER, dayLabel, null, 0);
+            }
+
+            static RowItem stop(TripStop stop, int dayOrderIndex) {
+                return new RowItem(Type.STOP, null, stop, dayOrderIndex);
             }
         }
     }
