@@ -28,6 +28,7 @@ navigationRuntime = "2.9.7"
 lifecycleLivedataCore = "2.10.0"
 lifecycleViewmodel = "2.10.0"
 bcrypt = "0.10.2"
+shimmerVersion = "0.5.0"
 workRuntime = "2.11.2"
 startupRuntime = "1.2.0"
 maplibreAndroid = "13.0.2"
@@ -42,6 +43,7 @@ timber = "5.0.1"
 
 [libraries]
 apollo-java-client = { group = "com.apollographql.java", name = "client", version.ref = "apollo-java" }
+facebook-shimmer = { module = "com.facebook.shimmer:shimmer", version.ref = "shimmerVersion" }
 retrofit-core = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
 retrofit-gson = { group = "com.squareup.retrofit2", name = "converter-gson", version.ref = "retrofit" }
 okhttp-logging = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }

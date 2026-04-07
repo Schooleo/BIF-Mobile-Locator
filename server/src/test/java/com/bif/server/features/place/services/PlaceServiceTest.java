@@ -1,9 +1,9 @@
 package com.bif.server.features.place.services;
 
 import com.bif.server.features.place.models.Place;
-import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.place.services.PlaceAddressEnrichmentService;
+import com.bif.server.features.search.dto.PlaceSearchRequestDTO;
 import com.bif.server.features.search.services.PlaceSearchIndexSyncService;
 import com.bif.server.features.search.services.PlaceSearchProvider;
 import com.bif.server.features.sync.services.SyncVersionService;
@@ -13,9 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -158,13 +156,15 @@ class PlaceServiceTest {
     @Test
     void search_DelegatesToRepository() {
         Place place = new Place();
-        when(placeSearchProvider.search("test"))
+        PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
+        request.setQuery("test");
+        when(placeSearchProvider.search(request))
                 .thenReturn(List.of(place));
 
-        List<Place> result = placeService.search("test");
+        List<Place> result = placeService.search(request);
 
         assertEquals(1, result.size());
-        verify(placeSearchProvider).search("test");
+        verify(placeSearchProvider).search(request);
     }
 
     @Test
@@ -187,60 +187,5 @@ class PlaceServiceTest {
         List<Place> result = placeService.getByUserId("u1");
 
         assertEquals(1, result.size());
-    }
-
-    @Test
-    void addReview_AppendsReviewAndRecalculatesRating() {
-        Place place = new Place();
-        place.setId("p1");
-        place.setReviews(new ArrayList<>());
-        PlaceReview existingReview = new PlaceReview();
-        existingReview.setRating(4);
-        place.getReviews().add(existingReview);
-
-        PlaceReview newReview = new PlaceReview();
-        newReview.setRating(2);
-        newReview.setUserId("u2");
-
-        when(placeRepository.findById("p1")).thenReturn(Optional.of(place));
-        when(syncVersionService.nextVersion()).thenReturn(12L);
-        when(placeRepository.save(place)).thenReturn(place);
-
-        Place result = placeService.addReview("p1", newReview);
-
-        assertEquals(2, result.getReviewCount());
-        assertEquals(3.0, result.getRating(), 0.01);
-        assertNotNull(newReview.getCreatedAt());
-        verify(placeRepository).save(place);
-        verify(placeSearchIndexSyncService).upsert(place);
-    }
-
-    @Test
-    void addReview_WhenPlaceNotFound_ThrowsException() {
-        when(placeRepository.findById("missing")).thenReturn(Optional.empty());
-        PlaceReview review = new PlaceReview();
-
-        assertThrows(NoSuchElementException.class,
-                () -> placeService.addReview("missing", review));
-    }
-
-    @Test
-    void addReview_WhenReviewsNull_InitializesListAndAdds() {
-        Place place = new Place();
-        place.setId("p1");
-        place.setReviews(null);
-
-        PlaceReview review = new PlaceReview();
-        review.setRating(5);
-
-        when(placeRepository.findById("p1")).thenReturn(Optional.of(place));
-        when(syncVersionService.nextVersion()).thenReturn(1L);
-        when(placeRepository.save(place)).thenReturn(place);
-
-        Place result = placeService.addReview("p1", review);
-
-        assertEquals(1, result.getReviewCount());
-        assertEquals(5.0, result.getRating(), 0.01);
-        verify(placeSearchIndexSyncService).upsert(place);
     }
 }

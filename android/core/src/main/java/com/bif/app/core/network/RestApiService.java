@@ -22,7 +22,10 @@ import com.bif.app.core.network.dto.chat.ChatMessageDto;
 import com.bif.app.core.network.dto.trip.TripPlanDto;
 import com.bif.app.core.network.dto.trip.TripStopDto;
 import com.bif.app.core.network.dto.place.PlaceDto;
+import com.bif.app.core.network.dto.place.PlaceSearchRequestDTO;
 import com.bif.app.core.network.dto.place.PlaceReviewDto;
+import com.bif.app.core.network.dto.place.PlaceResolveRequestDto;
+import com.bif.app.core.network.dto.place.PlaceResolveResponseDto;
 import com.bif.app.core.network.dto.route.RouteRequestDto;
 import com.bif.app.core.network.dto.route.RouteResponseDto;
 import com.bif.app.core.network.dto.sync.SyncRequestDto;
@@ -158,8 +161,8 @@ public interface RestApiService {
     // @GET("config/features")
     // Call<FeatureConfig> getFeatureConfig();
     // Places
-    @GET("places/search")
-    Call<List<PlaceDto>> searchServerPlaces(@Query("q") String query);
+        @POST("places/search")
+        Call<List<PlaceDto>> searchServerPlaces(@Body PlaceSearchRequestDTO request);
 
     @POST("places")
     Call<PlaceDto> upsertPlace(@Body PlaceDto place);
@@ -170,9 +173,22 @@ public interface RestApiService {
     @DELETE("places/{id}")
     Call<Void> deletePlace(@Path("id") String id);
 
+    @POST("places/resolve")
+    Call<PlaceResolveResponseDto> resolvePlace(@Body PlaceResolveRequestDto request);
+
+    @GET("places/{id}/reviews")
+    Call<List<PlaceReviewDto>> getPlaceReviews(@Path("id") String placeId);
+
     @POST("places/{id}/reviews")
-    Call<PlaceDto> addReview(@Path("id") String placeId,
+    Call<PlaceReviewDto> addReview(@Path("id") String placeId,
             @Body PlaceReviewDto review);
+
+    @PUT("places/{id}/reviews/me")
+    Call<PlaceReviewDto> updateMyReview(@Path("id") String placeId,
+            @Body PlaceReviewDto review);
+
+    @DELETE("places/{id}/reviews/me")
+    Call<Void> deleteMyReview(@Path("id") String placeId);
 
     @GET("chat/group/{groupId}")
     Call<List<ChatMessageDto>> getChatMessages(@Path("groupId") String groupId);

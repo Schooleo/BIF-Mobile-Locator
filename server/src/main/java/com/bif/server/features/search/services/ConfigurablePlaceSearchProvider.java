@@ -1,6 +1,7 @@
 package com.bif.server.features.search.services;
 
 import com.bif.server.features.place.models.Place;
+import com.bif.server.features.search.dto.PlaceSearchRequestDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,8 +33,8 @@ public class ConfigurablePlaceSearchProvider implements PlaceSearchProvider {
     }
 
     @Override
-    public List<Place> search(String query) {
-        if (query == null || query.isBlank()) {
+    public List<Place> search(PlaceSearchRequestDTO request) {
+        if (request == null || request.getQuery() == null || request.getQuery().isBlank()) {
             return Collections.emptyList();
         }
 
@@ -42,12 +43,21 @@ public class ConfigurablePlaceSearchProvider implements PlaceSearchProvider {
                 : provider.trim().toLowerCase(Locale.ROOT);
 
         if ("typesense".equals(resolvedProvider)) {
-            return typesensePlaceSearchProvider.search(query);
+            return typesensePlaceSearchProvider.search(request);
         }
 
         if (!"mongo".equals(resolvedProvider)) {
             LOGGER.warn("Unknown place.search.provider='{}'; falling back to mongo", provider);
         }
-        return mongoPlaceSearchProvider.search(query);
+        return mongoPlaceSearchProvider.search(request);
+    }
+
+    public List<Place> search(String query) {
+        if (query == null || query.isBlank()) {
+            return Collections.emptyList();
+        }
+        PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
+        request.setQuery(query);
+        return search(request);
     }
 }

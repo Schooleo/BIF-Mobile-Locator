@@ -20,6 +20,7 @@ import androidx.lifecycle.LiveData;
 
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.place.PlaceDto;
+import com.bif.app.core.network.dto.place.PlaceSearchRequestDTO;
 import com.bif.app.data.source.AndroidGeocodingDataSource;
 import com.bif.app.data.source.local.dao.PlaceDao;
 import com.bif.app.data.source.local.dao.SearchHistoryDao;
@@ -138,7 +139,7 @@ public class PlaceRepositoryTest {
 
     @Test
     public void searchPlaces_nullQuery_returnsEmptyList() {
-        LiveData<List<Place>> result = placeRepository.searchPlaces(null);
+        LiveData<List<Place>> result = placeRepository.searchPlaces(null, null);
         assertNotNull(result);
         assertNotNull(result.getValue());
         assertTrue(result.getValue().isEmpty());
@@ -146,10 +147,38 @@ public class PlaceRepositoryTest {
 
     @Test
     public void searchPlaces_emptyQuery_returnsEmptyList() {
-        LiveData<List<Place>> result = placeRepository.searchPlaces("");
+        LiveData<List<Place>> result = placeRepository.searchPlaces("", null);
         assertNotNull(result);
         assertNotNull(result.getValue());
         assertTrue(result.getValue().isEmpty());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void searchPlaces_withUserLocation_passesLatLngToApi()
+            throws IOException, InterruptedException {
+        when(mockNetworkMonitor.isOnline()).thenReturn(true);
+        when(mockPlaceDao.searchByName(anyString(), anyString()))
+                .thenReturn(new ArrayList<>());
+
+        Call<List<PlaceDto>> mockCall = mock(Call.class);
+        when(mockCall.execute())
+                .thenReturn(Response.success(new ArrayList<>()));
+        when(mockRestApiService.searchServerPlaces(any(PlaceSearchRequestDTO.class)))
+                .thenReturn(mockCall);
+        when(mockGeocodingDataSource.geocodeLocation("test"))
+                .thenReturn(new ArrayList<>());
+        when(mockPlaceDao.count(anyString())).thenReturn(0);
+
+        placeRepository.searchPlaces("test", new Location(10.5, 106.7));
+        Thread.sleep(300);
+
+        ArgumentCaptor<PlaceSearchRequestDTO> requestCaptor =
+                ArgumentCaptor.forClass(PlaceSearchRequestDTO.class);
+        verify(mockRestApiService).searchServerPlaces(requestCaptor.capture());
+        assertEquals("test", requestCaptor.getValue().query);
+        assertEquals(Double.valueOf(10.5), requestCaptor.getValue().latitude);
+        assertEquals(Double.valueOf(106.7), requestCaptor.getValue().longitude);
     }
 
     @Test
@@ -173,7 +202,7 @@ public class PlaceRepositoryTest {
         when(mockCall.execute())
                 .thenReturn(Response.success(
                         Collections.singletonList(serverDto)));
-        when(mockRestApiService.searchServerPlaces("test"))
+        when(mockRestApiService.searchServerPlaces(any(PlaceSearchRequestDTO.class)))
                 .thenReturn(mockCall);
 
         // Geocoder returns one additional place
@@ -196,7 +225,7 @@ public class PlaceRepositoryTest {
         when(mockPlaceDao.count(anyString())).thenReturn(2);
 
         LiveData<List<Place>> result =
-                placeRepository.searchPlaces("test");
+                placeRepository.searchPlaces("test", null);
         Thread.sleep(500);
 
         assertNotNull(result.getValue());
@@ -220,7 +249,7 @@ public class PlaceRepositoryTest {
         Call<List<PlaceDto>> searchCall = mock(Call.class);
         when(searchCall.execute())
                 .thenReturn(Response.success(Collections.singletonList(serverDto)));
-        when(mockRestApiService.searchServerPlaces("museum"))
+        when(mockRestApiService.searchServerPlaces(any(PlaceSearchRequestDTO.class)))
                 .thenReturn(searchCall);
 
         Address osmAddr = mock(Address.class);
@@ -249,7 +278,7 @@ public class PlaceRepositoryTest {
 
         when(mockPlaceDao.count(anyString())).thenReturn(3);
 
-        LiveData<List<Place>> result = placeRepository.searchPlaces("museum");
+        LiveData<List<Place>> result = placeRepository.searchPlaces("museum", null);
         Thread.sleep(600);
 
         assertNotNull(result.getValue());
@@ -270,13 +299,13 @@ public class PlaceRepositoryTest {
         Call<List<PlaceDto>> mockCall = mock(Call.class);
         when(mockCall.execute())
                 .thenReturn(Response.success(new ArrayList<>()));
-        when(mockRestApiService.searchServerPlaces("cafe"))
+        when(mockRestApiService.searchServerPlaces(any(PlaceSearchRequestDTO.class)))
                 .thenReturn(mockCall);
         when(mockGeocodingDataSource.geocodeLocation("cafe"))
                 .thenReturn(new ArrayList<>());
         when(mockPlaceDao.count(anyString())).thenReturn(0);
 
-        placeRepository.searchPlaces("cafe");
+        placeRepository.searchPlaces("cafe", null);
         Thread.sleep(300);
 
         verify(mockSearchHistoryDao).insert(any());
@@ -294,7 +323,7 @@ public class PlaceRepositoryTest {
         Call<List<PlaceDto>> mockCall = mock(Call.class);
         when(mockCall.execute())
                 .thenReturn(Response.success(new ArrayList<>()));
-        when(mockRestApiService.searchServerPlaces("cafe"))
+        when(mockRestApiService.searchServerPlaces(any(PlaceSearchRequestDTO.class)))
                 .thenReturn(mockCall);
         when(mockGeocodingDataSource.geocodeLocation("cafe"))
                 .thenReturn(new ArrayList<>());
@@ -319,7 +348,7 @@ public class PlaceRepositoryTest {
         Call<List<PlaceDto>> mockCall = mock(Call.class);
         when(mockCall.execute())
                 .thenReturn(Response.success(new ArrayList<>()));
-        when(mockRestApiService.searchServerPlaces("test"))
+        when(mockRestApiService.searchServerPlaces(any(PlaceSearchRequestDTO.class)))
                 .thenReturn(mockCall);
         when(mockGeocodingDataSource.geocodeLocation("test"))
                 .thenReturn(new ArrayList<>());
@@ -327,7 +356,7 @@ public class PlaceRepositoryTest {
         // Simulate 505 places in local cache
         when(mockPlaceDao.count(anyString())).thenReturn(505);
 
-        placeRepository.searchPlaces("test");
+        placeRepository.searchPlaces("test", null);
         Thread.sleep(300);
 
         verify(mockPlaceDao, timeout(1500)).evictOldest(eq(5), anyString());

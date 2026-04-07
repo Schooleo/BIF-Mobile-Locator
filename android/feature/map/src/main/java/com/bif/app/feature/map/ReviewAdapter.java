@@ -1,0 +1,234 @@
+package com.bif.app.feature.map;
+
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.RatingBar;
+import android.widget.TextView;
+import com.bif.app.core.utils.DateTimeUtils;
+
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
+import androidx.recyclerview.widget.ListAdapter;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.bif.app.domain.model.Review;
+import com.bif.app.feature.map.R;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class ReviewAdapter extends ListAdapter<ReviewItem, RecyclerView.ViewHolder> {
+
+    private static final DiffUtil.ItemCallback<ReviewItem> DIFF_CALLBACK = new DiffUtil.ItemCallback<ReviewItem>() {
+        @Override
+        public boolean areItemsTheSame(@NonNull ReviewItem oldItem, @NonNull ReviewItem newItem) {
+            if (oldItem.viewType != newItem.viewType) return false;
+            if (oldItem.viewType == ReviewItem.VIEW_TYPE_ADD) return true;
+
+            String oldId = oldItem.review != null ? oldItem.review.userId : null;
+            String newId = newItem.review != null ? newItem.review.userId : null;
+            String oldPlaceId = oldItem.review != null ? oldItem.review.placeId : null;
+            String newPlaceId = newItem.review != null ? newItem.review.placeId : null;
+            return java.util.Objects.equals(oldId, newId) && java.util.Objects.equals(oldPlaceId, newPlaceId);
+        }
+
+        @Override
+        public boolean areContentsTheSame(@NonNull ReviewItem oldItem, @NonNull ReviewItem newItem) {
+            if (oldItem.viewType != newItem.viewType) return false;
+            
+            // Simplified check after implementing equals() in Review domain class
+            return java.util.Objects.equals(oldItem.review, newItem.review);
+        }
+    };
+
+    public interface OnReviewInteractionListener {
+        void onAddReviewClicked();
+        void onEditReviewClicked(Review review);
+    }
+
+    private final OnReviewInteractionListener listener;
+    private int itemWidthPx = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+    public ReviewAdapter(OnReviewInteractionListener listener) {
+        super(DIFF_CALLBACK);
+        this.listener = listener;
+    }
+
+    public void setItemWidthPx(int itemWidthPx) {
+        if (itemWidthPx <= 0) {
+            this.itemWidthPx = ViewGroup.LayoutParams.WRAP_CONTENT;
+        } else {
+            this.itemWidthPx = itemWidthPx;
+        }
+        notifyItemRangeChanged(0, getItemCount());
+    }
+
+    @Override
+    public int getItemViewType(int position) {
+        if (position >= getItemCount()) {
+            return ReviewItem.VIEW_TYPE_OTHERS;
+        }
+        return getItem(position).viewType;
+    }
+
+    @NonNull
+    @Override
+    public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        LayoutInflater inflater = LayoutInflater.from(parent.getContext());
+
+        if (viewType == ReviewItem.VIEW_TYPE_ADD) {
+            View view = inflater.inflate(R.layout.item_review_add, parent, false);
+            applyItemWidth(view);
+            return new AddReviewViewHolder(view);
+        } else if (viewType == ReviewItem.VIEW_TYPE_MINE) {
+            View view = inflater.inflate(R.layout.item_review_mine, parent, false);
+            applyItemWidth(view);
+            return new MyReviewViewHolder(view);
+        } else {
+            View view = inflater.inflate(R.layout.item_review_others, parent, false);
+            applyItemWidth(view);
+            return new OthersReviewViewHolder(view);
+        }
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+        ReviewItem item = getItem(position);
+        applyItemWidth(holder.itemView);
+
+        if (holder instanceof AddReviewViewHolder) {
+            holder.itemView.setOnClickListener(v -> {
+                if (listener != null) listener.onAddReviewClicked();
+            });
+            return;
+        } else if (holder instanceof MyReviewViewHolder && item.viewType == ReviewItem.VIEW_TYPE_MINE) {
+            MyReviewViewHolder viewHolder = (MyReviewViewHolder) holder;
+            viewHolder.bind(item.review);
+            viewHolder.itemView.setOnClickListener(v -> {
+                if (listener != null) listener.onEditReviewClicked(item.review);
+            });
+        } else if (holder instanceof OthersReviewViewHolder && item.viewType == ReviewItem.VIEW_TYPE_OTHERS) {
+            OthersReviewViewHolder viewHolder = (OthersReviewViewHolder) holder;
+            viewHolder.bind(item.review);
+        }
+    }
+
+    // =============== ViewHolder Classes ===============
+
+    private static class AddReviewViewHolder extends RecyclerView.ViewHolder {
+        public AddReviewViewHolder(@NonNull View itemView) {
+            super(itemView);
+            // No special initialization needed
+        }
+    }
+
+    private static class MyReviewViewHolder extends RecyclerView.ViewHolder {
+        private final RatingBar rbReviewRating;
+        private final TextView tvReviewComment;
+        private final TextView tvReviewDate;
+
+        public MyReviewViewHolder(@NonNull View itemView) {
+            super(itemView);
+            rbReviewRating = itemView.findViewById(R.id.rb_review_rating);
+            tvReviewComment = itemView.findViewById(R.id.tv_review_comment);
+            tvReviewDate = itemView.findViewById(R.id.tv_review_date);
+        }
+
+        public void bind(Review review) {
+            if (review == null) {
+                return;
+            }
+
+            rbReviewRating.setRating(review.stars);
+            tvReviewComment.setText(review.comment != null ? review.comment : "");
+            
+            tvReviewDate.setText(DateTimeUtils.getRelativeTimeEnglish(review.createdAt));
+            
+            itemView.setAlpha(review.pendingSync ? 0.5f : 1.0f);
+        }
+    }
+
+    private static class OthersReviewViewHolder extends RecyclerView.ViewHolder {
+        private final RatingBar rbReviewRating;
+        private final TextView tvReviewAuthor;
+        private final TextView tvReviewComment;
+        private final TextView tvReviewDate;
+
+        public OthersReviewViewHolder(@NonNull View itemView) {
+            super(itemView);
+            rbReviewRating = itemView.findViewById(R.id.rb_review_rating);
+            tvReviewAuthor = itemView.findViewById(R.id.tv_review_author);
+            tvReviewComment = itemView.findViewById(R.id.tv_review_comment);
+            tvReviewDate = itemView.findViewById(R.id.tv_review_date);
+        }
+
+        public void bind(Review review) {
+            if (review == null) {
+                return;
+            }
+
+            rbReviewRating.setRating(review.stars);
+            tvReviewAuthor.setText(review.userName != null ? review.userName : "Anonymous");
+            tvReviewComment.setText(review.comment != null ? review.comment : "");
+            
+            tvReviewDate.setText(DateTimeUtils.getRelativeTimeEnglish(review.createdAt));
+            
+            itemView.setAlpha(review.pendingSync ? 0.5f : 1.0f);
+        }
+    }
+
+    // =============== Utility Methods ===============
+
+    /**
+     * Filter reviews by star rating while keeping the "Add/Mine" card at position 0
+     */
+    public void filterByStarRating(List<ReviewItem> allReviews, int starRating) {
+        List<ReviewItem> filteredList = new ArrayList<>();
+
+        // Always keep the first item (Add/Mine card)
+        if (!allReviews.isEmpty()) {
+            filteredList.add(allReviews.get(0));
+        }
+
+        // Filter by rating
+        for (int i = 1; i < allReviews.size(); i++) {
+            ReviewItem item = allReviews.get(i);
+            if (starRating == 0) {
+                // Show all
+                filteredList.add(item);
+            } else if (item.review != null && item.review.stars == starRating) {
+                filteredList.add(item);
+            }
+        }
+
+        submitList(filteredList);
+    }
+
+    /**
+     * Show all reviews including the "Add/Mine" card at position 0
+     */
+    public void showAllReviews(List<ReviewItem> allReviews) {
+        List<ReviewItem> displayList = new ArrayList<>(allReviews);
+        submitList(displayList);
+    }
+
+    public void clear() {
+        submitList(new ArrayList<>());
+    }
+
+    private void applyItemWidth(@NonNull View itemView) {
+        ViewGroup.LayoutParams params = itemView.getLayoutParams();
+        if (params == null) {
+            params = new RecyclerView.LayoutParams(itemWidthPx,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            itemView.setLayoutParams(params);
+            return;
+        }
+
+        if (params.width != itemWidthPx) {
+            params.width = itemWidthPx;
+            itemView.setLayoutParams(params);
+        }
+    }
+}

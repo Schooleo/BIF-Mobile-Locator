@@ -1,18 +1,15 @@
 package com.bif.server.features.place.services;
 
 import com.bif.server.features.place.models.Place;
-import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.repositories.PlaceRepository;
+import com.bif.server.features.search.dto.PlaceSearchRequestDTO;
 import com.bif.server.features.search.services.PlaceSearchIndexSyncService;
 import com.bif.server.features.search.services.PlaceSearchProvider;
 import com.bif.server.features.sync.services.SyncVersionService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 
 @Service
@@ -94,8 +91,14 @@ public class PlaceService {
         }).orElse(false);
     }
 
+    public List<Place> search(PlaceSearchRequestDTO request) {
+        return placeSearchProvider.search(request);
+    }
+
     public List<Place> search(String query) {
-        return placeSearchProvider.search(query);
+        PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
+        request.setQuery(query);
+        return search(request);
     }
 
     public List<Place> getByTag(String tag) {
@@ -104,25 +107,5 @@ public class PlaceService {
 
     public List<Place> getByUserId(String userId) {
         return placeRepository.findByPersistedByUserId(userId);
-    }
-
-    public Place addReview(String placeId, PlaceReview review) {
-        return placeRepository.findById(placeId).map(place -> {
-            if (place.getReviews() == null) {
-                place.setReviews(new ArrayList<>());
-            }
-            review.setCreatedAt(Instant.now());
-            place.getReviews().add(review);
-            place.setReviewCount(place.getReviews().size());
-            place.setRating(place.getReviews().stream()
-                    .mapToInt(PlaceReview::getRating)
-                    .average()
-                    .orElse(0));
-            place.setServerVersion(syncVersionService.nextVersion());
-                Place saved = placeRepository.save(place);
-                placeSearchIndexSyncService.upsert(saved);
-                return saved;
-        }).orElseThrow(() -> new NoSuchElementException(
-                "Place not found: " + placeId));
     }
 }
