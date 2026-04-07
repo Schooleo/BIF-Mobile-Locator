@@ -1,7 +1,6 @@
 package com.bif.app.feature.social;
 
-import android.graphics.Color;
-import android.graphics.drawable.GradientDrawable;
+import android.annotation.SuppressLint;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -30,12 +29,14 @@ public class TripListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     public interface OnTripActionListener {
         void onCreateTripClick();
         void onTripClick(TripPlan trip);
+        void onTripMoreClick(TripPlan trip, View anchorView);
     }
 
     public TripListAdapter(OnTripActionListener listener) {
         this.listener = listener;
     }
 
+    @SuppressLint("NotifyDataSetChanged")
     public void setTrips(List<TripPlan> items) {
         trips.clear();
         if (items != null) {
@@ -79,19 +80,6 @@ public class TripListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         return trips.size() + 1;
     }
 
-    private int[] colorsFromTitle(String title) {
-        String safeTitle = title == null ? "trip" : title;
-        int hash = Math.abs(safeTitle.hashCode());
-        int[][] palette = new int[][] {
-                {Color.parseColor("#56CCF2"), Color.parseColor("#2F80ED")},
-                {Color.parseColor("#11998E"), Color.parseColor("#38EF7D")},
-                {Color.parseColor("#FF5F6D"), Color.parseColor("#FFC371")},
-                {Color.parseColor("#FC466B"), Color.parseColor("#3F5EFB")},
-                {Color.parseColor("#00B09B"), Color.parseColor("#96C93D")}
-        };
-        return palette[hash % palette.length];
-    }
-
     private String formatRange(long startAt, long endAt) {
         SimpleDateFormat formatter = new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault());
         String start = startAt > 0 ? formatter.format(new Date(startAt)) : "-";
@@ -121,22 +109,16 @@ public class TripListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     }
 
     class TripViewHolder extends RecyclerView.ViewHolder {
-        private final View banner;
         private final TextView tvTripTitle;
-        private final TextView tvStopCount;
-        private final TextView tvTravelerCount;
         private final TextView tvDateRange;
-        private final TextView tvDescription;
+        private final TextView tvMembersCount;
         private final ImageButton btnMore;
 
         TripViewHolder(View itemView) {
             super(itemView);
-            banner = itemView.findViewById(R.id.view_trip_banner);
             tvTripTitle = itemView.findViewById(R.id.tv_trip_title);
-            tvStopCount = itemView.findViewById(R.id.tv_stop_count);
-            tvTravelerCount = itemView.findViewById(R.id.tv_traveler_count);
             tvDateRange = itemView.findViewById(R.id.tv_date_range);
-            tvDescription = itemView.findViewById(R.id.tv_description);
+            tvMembersCount = itemView.findViewById(R.id.tv_members_count);
             btnMore = itemView.findViewById(R.id.btn_more);
         }
 
@@ -145,19 +127,14 @@ public class TripListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
                     ? "Untitled Trip"
                     : trip.getTitle().trim();
 
-            int[] colors = colorsFromTitle(title);
-            GradientDrawable gradient = new GradientDrawable(
-                    GradientDrawable.Orientation.LEFT_RIGHT,
-                    colors
-            );
-            banner.setBackground(gradient);
-
             tvTripTitle.setText(title);
-            tvStopCount.setText(String.valueOf(trip.getStopCount()));
             int travelerCount = trip.getParticipantIds() == null ? 0 : trip.getParticipantIds().size();
-            tvTravelerCount.setText(String.valueOf(travelerCount));
             tvDateRange.setText(formatRange(trip.getStartAt(), trip.getEndAt()));
-            tvDescription.setText(trip.getDescription() == null ? "" : trip.getDescription());
+                tvMembersCount.setText(itemView.getResources().getQuantityString(
+                    R.plurals.trip_travelers_count,
+                    travelerCount,
+                    travelerCount
+                ));
 
             itemView.setOnClickListener(v -> {
                 if (listener != null) {
@@ -166,7 +143,9 @@ public class TripListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             });
 
             btnMore.setOnClickListener(v -> {
-                // Placeholder for future menu actions.
+                if (listener != null) {
+                    listener.onTripMoreClick(trip, v);
+                }
             });
         }
     }

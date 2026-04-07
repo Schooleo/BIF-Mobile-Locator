@@ -7,17 +7,21 @@ import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.bif.app.core.utils.DialogUtils;
 import com.bif.app.core.utils.UriUtils;
 import com.bif.app.domain.model.TripPlan;
 import com.bif.app.domain.model.TripStop;
@@ -73,13 +77,12 @@ public class TripItineraryFragment extends Fragment {
         adapter = new ItineraryAdapter(new ItineraryAdapter.StopActionListener() {
             @Override
             public void onDeleteStop(@NonNull TripStop stop) {
-                viewModel.removeStop(stop.getId());
-                Toast.makeText(requireContext(), R.string.remove, Toast.LENGTH_SHORT).show();
+                confirmDeleteStop(stop);
             }
 
             @Override
             public void onEditStop(@NonNull TripStop stop) {
-                showStopDateTimePicker(stop);
+                showStopEditDialog(stop);
             }
         });
         rvItinerary.setLayoutManager(new LinearLayoutManager(requireContext()));
@@ -159,6 +162,115 @@ public class TripItineraryFragment extends Fragment {
         }
 
         dateDialog.show();
+    }
+
+    private void showStopEditDialog(@NonNull TripStop stop) {
+        View content = LayoutInflater.from(requireContext())
+                .inflate(R.layout.dialog_edit_trip_stop, null, false);
+        EditText noteInput = content.findViewById(R.id.et_edit_stop_note);
+        TextView dateInput = content.findViewById(R.id.tv_edit_stop_date);
+        TextView timeInput = content.findViewById(R.id.tv_edit_stop_time);
+        MaterialButton btnCancel = content.findViewById(R.id.btn_edit_stop_cancel);
+        MaterialButton btnSave = content.findViewById(R.id.btn_edit_stop_save);
+
+        String originalNote = stop.getNote() == null ? "" : stop.getNote();
+        noteInput.setText(originalNote);
+
+        Calendar selected = Calendar.getInstance();
+        long anchor = stop.getArrivalTime() > 0 ? stop.getArrivalTime() : stop.getDepartureTime();
+        if (anchor > 0) {
+            selected.setTimeInMillis(anchor);
+        }
+
+        SimpleDateFormat dateFormat = new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault());
+        SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
+
+        Runnable refreshDateTime = () -> {
+            dateInput.setText(dateFormat.format(selected.getTime()));
+            timeInput.setText(timeFormat.format(selected.getTime()));
+        };
+        refreshDateTime.run();
+
+        dateInput.setOnClickListener(v -> {
+            DatePickerDialog dateDialog = new DatePickerDialog(
+                    requireContext(),
+                    (picker, year, month, dayOfMonth) -> {
+                        selected.set(Calendar.YEAR, year);
+                        selected.set(Calendar.MONTH, month);
+                        selected.set(Calendar.DAY_OF_MONTH, dayOfMonth);
+                        refreshDateTime.run();
+                    },
+                    selected.get(Calendar.YEAR),
+                    selected.get(Calendar.MONTH),
+                    selected.get(Calendar.DAY_OF_MONTH)
+            );
+
+            if (currentTrip != null) {
+                if (currentTrip.getStartAt() > 0) {
+                    dateDialog.getDatePicker().setMinDate(currentTrip.getStartAt());
+                }
+                if (currentTrip.getEndAt() > 0) {
+                    dateDialog.getDatePicker().setMaxDate(currentTrip.getEndAt());
+                }
+            }
+            dateDialog.show();
+        });
+
+        timeInput.setOnClickListener(v -> {
+            TimePickerDialog timeDialog = new TimePickerDialog(
+                    requireContext(),
+                    (picker, hourOfDay, minute) -> {
+                        selected.set(Calendar.HOUR_OF_DAY, hourOfDay);
+                        selected.set(Calendar.MINUTE, minute);
+                        selected.set(Calendar.SECOND, 0);
+                        selected.set(Calendar.MILLISECOND, 0);
+                        refreshDateTime.run();
+                    },
+                    selected.get(Calendar.HOUR_OF_DAY),
+                    selected.get(Calendar.MINUTE),
+                    true
+            );
+            timeDialog.show();
+        });
+
+        AlertDialog dialog = new AlertDialog.Builder(requireContext())
+                .setView(content)
+                .create();
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+        btnSave.setOnClickListener(v -> {
+            long selectedMillis = selected.getTimeInMillis();
+            if (!isWithinTripRange(selectedMillis)) {
+                Toast.makeText(requireContext(), R.string.trip_stop_time_out_of_range, Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            String newNote = noteInput.getText() == null ? "" : noteInput.getText().toString().trim();
+            viewModel.updateStopDetails(stop, newNote, selectedMillis);
+            Toast.makeText(requireContext(), R.string.save, Toast.LENGTH_SHORT).show();
+
+            dialog.dismiss();
+        });
+
+        dialog.show();
+    }
+
+    private void confirmDeleteStop(@NonNull TripStop stop) {
+        String stopTitle = stop.getTitle() == null || stop.getTitle().trim().isEmpty()
+                ? getString(R.string.trip_stop_untitled)
+                : stop.getTitle().trim();
+
+        DialogUtils.showConfirmDialog(
+                requireContext(),
+                getString(R.string.delete),
+                getString(R.string.trip_stop_delete_confirm, stopTitle),
+                getString(R.string.delete),
+                getString(R.string.cancel),
+                () -> {
+                    viewModel.removeStop(stop.getId());
+                    Toast.makeText(requireContext(), R.string.remove, Toast.LENGTH_SHORT).show();
+                }
+        );
     }
 
     private void showStopTimePicker(@NonNull TripStop stop, @NonNull Calendar selected) {
@@ -268,21 +380,27 @@ public class TripItineraryFragment extends Fragment {
                     ? stopHolder.itemView.getContext().getString(R.string.trip_stop_no_note)
                     : timePart);
 
-            String address = stop.getNote();
-            if (TextUtils.isEmpty(address)) {
-                address = stopHolder.itemView.getContext().getString(R.string.trip_stop_no_note);
+            String addressText = stop.getAddress();
+            if (TextUtils.isEmpty(addressText)) {
+                addressText = stopHolder.itemView.getContext().getString(R.string.trip_stop_no_note);
+            }
+            String noteText = stop.getNote();
+            if (TextUtils.isEmpty(noteText)) {
+                noteText = stopHolder.itemView.getContext().getString(R.string.trip_stop_no_note);
             }
 
             boolean expanded = expandedStopIds.contains(stop.getId());
             stopHolder.detailsContainer.setVisibility(expanded ? View.VISIBLE : View.GONE);
             stopHolder.subtitle.setVisibility(expanded ? View.GONE : View.VISIBLE);
-            stopHolder.subtitle.setText(address);
-            stopHolder.address.setText(stopHolder.itemView.getContext().getString(R.string.trip_stop_address_label, address));
+                stopHolder.subtitle.setText(addressText);
+                stopHolder.address.setText(stopHolder.itemView.getContext().getString(R.string.trip_stop_address_label, addressText));
             stopHolder.notes.setText(stopHolder.itemView.getContext().getString(
                     R.string.trip_stop_notes_label,
-                    stopHolder.itemView.getContext().getString(R.string.trip_stop_no_note)));
+                    noteText));
             stopHolder.rating.setText(R.string.trip_stop_rating_none);
-            stopHolder.expandLabel.setText(expanded ? R.string.collapse_less : R.string.expand_more);
+                stopHolder.expandIcon.setImageResource(expanded ? R.drawable.ic_expand_less : R.drawable.ic_expand_more);
+                stopHolder.expandIcon.setContentDescription(stopHolder.itemView.getContext().getString(
+                    expanded ? R.string.collapse_less : R.string.expand_more));
 
             stopHolder.itemView.setOnClickListener(v -> {
                 if (expanded) {
@@ -362,7 +480,7 @@ public class TripItineraryFragment extends Fragment {
             final TextView index;
             final TextView title;
             final TextView time;
-            final TextView expandLabel;
+            final ImageView expandIcon;
             final TextView subtitle;
             final View detailsContainer;
             final TextView address;
@@ -376,7 +494,7 @@ public class TripItineraryFragment extends Fragment {
                 index = itemView.findViewById(R.id.tv_stop_index);
                 title = itemView.findViewById(R.id.tv_stop_title);
                 time = itemView.findViewById(R.id.tv_stop_time);
-                expandLabel = itemView.findViewById(R.id.tv_stop_expand_label);
+                expandIcon = itemView.findViewById(R.id.iv_stop_expand_icon);
                 subtitle = itemView.findViewById(R.id.tv_stop_subtitle);
                 detailsContainer = itemView.findViewById(R.id.layout_stop_details);
                 address = itemView.findViewById(R.id.tv_stop_address);

@@ -69,10 +69,22 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
             }
 
             TripStopEntity existing = tripDao.getStopByIdSync(payload.id);
+            long incomingVersion = Math.max(payload.serverVersion, change.serverVersion);
+            if (existing != null && existing.serverVersion > incomingVersion) {
+                return;
+            }
             TripStopEntity entity = existing != null ? existing : new TripStopEntity();
             entity.id = payload.id;
             entity.tripId = payload.tripId;
             entity.title = payload.title;
+            String incomingAddress = payload.address == null ? "" : payload.address.trim();
+            if (incomingAddress.isEmpty() && existing != null && existing.address != null) {
+                incomingAddress = existing.address.trim();
+            }
+            if (incomingAddress.isEmpty() && payload.note != null && !payload.note.trim().isEmpty()) {
+                incomingAddress = payload.note.trim();
+            }
+            entity.address = incomingAddress;
             entity.note = payload.note;
             entity.photoUrl = payload.photoUrl;
             entity.latitude = payload.location != null ? payload.location.latitude : 0d;
@@ -80,7 +92,7 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
             entity.arrivalTime = parseInstant(payload.arrivalTime);
             entity.departureTime = parseInstant(payload.departureTime);
             entity.orderIndex = payload.orderIndex;
-            entity.serverVersion = Math.max(payload.serverVersion, change.serverVersion);
+            entity.serverVersion = incomingVersion;
             entity.deleted = payload.deleted || "DELETE".equalsIgnoreCase(change.operation);
             if (entity.photoUrl != null
                     && !entity.photoUrl.trim().isEmpty()

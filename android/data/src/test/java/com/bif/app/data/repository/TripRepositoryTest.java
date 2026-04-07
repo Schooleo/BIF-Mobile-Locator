@@ -2,6 +2,7 @@ package com.bif.app.data.repository;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -260,6 +261,69 @@ public class TripRepositoryTest {
 
         verify(mockSyncManager).syncIfOnline();
     }
+
+        @Test
+        public void updateTrip_updatesLocallyAndEnqueuesSync()
+                        throws InterruptedException {
+                TripPlanEntity existing = new TripPlanEntity();
+                existing.id = "trip-1";
+                existing.groupId = "group-1";
+                existing.title = "Old";
+                existing.description = "Old desc";
+                existing.startAt = 100L;
+                existing.endAt = 200L;
+                existing.deleted = false;
+
+                TripDao.TripPlanWithStops withStops = new TripDao.TripPlanWithStops();
+                withStops.trip = existing;
+                withStops.stops = new ArrayList<>();
+                withStops.members = new ArrayList<>();
+
+                when(mockTripDao.getTripByIdSync("trip-1")).thenReturn(existing);
+                when(mockTripDao.getTripWithStopsByIdSync("trip-1")).thenReturn(withStops);
+
+                tripRepository.updateTrip("trip-1", "New title", "New desc", 300L, 400L);
+                Thread.sleep(250);
+
+                ArgumentCaptor<TripPlanEntity> captor = ArgumentCaptor.forClass(TripPlanEntity.class);
+                verify(mockTripDao).upsertTrip(captor.capture());
+                assertEquals("New title", captor.getValue().title);
+                assertEquals("New desc", captor.getValue().description);
+                assertEquals(300L, captor.getValue().startAt);
+                assertEquals(400L, captor.getValue().endAt);
+
+                verify(mockSyncManager).enqueueChange(eq("trip_plan"), eq("trip-1"),
+                                eq("UPDATE"), anyString(), any());
+                verify(mockSyncManager).syncIfOnline();
+        }
+
+        @Test
+        public void deleteTrip_marksDeletedAndEnqueuesDelete()
+                        throws InterruptedException {
+                TripPlanEntity existing = new TripPlanEntity();
+                existing.id = "trip-1";
+                existing.groupId = "group-1";
+                existing.deleted = false;
+
+                TripDao.TripPlanWithStops withStops = new TripDao.TripPlanWithStops();
+                withStops.trip = existing;
+                withStops.stops = new ArrayList<>();
+                withStops.members = new ArrayList<>();
+
+                when(mockTripDao.getTripByIdSync("trip-1")).thenReturn(existing);
+                when(mockTripDao.getTripWithStopsByIdSync("trip-1")).thenReturn(withStops);
+
+                tripRepository.deleteTrip("trip-1");
+                Thread.sleep(250);
+
+                ArgumentCaptor<TripPlanEntity> captor = ArgumentCaptor.forClass(TripPlanEntity.class);
+                verify(mockTripDao).upsertTrip(captor.capture());
+                assertTrue(captor.getValue().deleted);
+
+                verify(mockSyncManager).enqueueChange(eq("trip_plan"), eq("trip-1"),
+                                eq("DELETE"), anyString(), any());
+                verify(mockSyncManager).syncIfOnline();
+        }
 
     @Test
     public void getTripsByGroup_filtersDeletedEntities() {

@@ -6,6 +6,7 @@ public class TripStopDto {
     public String id;
     public String tripId;
     public String title;
+    public String address;
     public String note;
     public String photoUrl;
     public ChatMessageDto.LocationDto location;

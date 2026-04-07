@@ -4,11 +4,13 @@ import android.annotation.SuppressLint;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.PopupMenu;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -23,6 +25,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.bif.app.core.utils.DialogUtils;
 import com.bif.app.core.utils.UriUtils;
+import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.domain.model.Friend;
 import com.bif.app.domain.model.Friendship;
 import com.bif.app.domain.model.TripPlan;
@@ -119,6 +122,11 @@ public class SocialFragment extends Fragment {
             public void onTripClick(TripPlan trip) {
                 navigateToTripDetail(trip);
             }
+
+            @Override
+            public void onTripMoreClick(TripPlan trip, View anchorView) {
+                showTripOptionsMenu(trip, anchorView);
+            }
         });
 
         friendsAdapter = new FriendsAdapter(new FriendsAdapter.OnFriendActionListener() {
@@ -164,9 +172,27 @@ public class SocialFragment extends Fragment {
     private void observeViewModel() {
         viewModel.getTripActionMessage().observe(getViewLifecycleOwner(), message -> {
             if (message != null && !message.isEmpty()) {
-                int textRes = "__MSG_TRIP_CREATE_SUCCESS__".equals(message)
-                        ? R.string.trip_create_success
-                        : R.string.trip_create_failed;
+                int textRes;
+                switch (message) {
+                    case "__MSG_TRIP_CREATE_SUCCESS__":
+                        textRes = R.string.trip_create_success;
+                        break;
+                    case "__MSG_TRIP_UPDATE_SUCCESS__":
+                        textRes = R.string.trip_update_success;
+                        break;
+                    case "__MSG_TRIP_DELETE_SUCCESS__":
+                        textRes = R.string.trip_delete_success;
+                        break;
+                    case "__MSG_TRIP_UPDATE_FAILED__":
+                        textRes = R.string.trip_update_failed;
+                        break;
+                    case "__MSG_TRIP_DELETE_FAILED__":
+                        textRes = R.string.trip_delete_failed;
+                        break;
+                    default:
+                        textRes = R.string.trip_create_failed;
+                        break;
+                }
                 Toast.makeText(requireContext(), getString(textRes), Toast.LENGTH_SHORT).show();
                 viewModel.clearTripActionMessage();
             }
@@ -393,6 +419,7 @@ public class SocialFragment extends Fragment {
                 R.layout.dialog_create_trip,
                 R.id.btn_close,
                 (dialogView, dialog) -> {
+                    TextView tvDialogTitle = dialogView.findViewById(R.id.tv_dialog_title);
                     EditText etTitle = dialogView.findViewById(R.id.et_trip_title);
                     EditText etDescription = dialogView.findViewById(R.id.et_trip_description);
                     TextView tvStartDate = dialogView.findViewById(R.id.tv_start_date);
@@ -446,6 +473,143 @@ public class SocialFragment extends Fragment {
                     });
                 }
         );
+    }
+
+    private void showTripOptionsMenu(TripPlan trip, View anchorView) {
+        if (trip == null || anchorView == null) {
+            return;
+        }
+
+        PopupMenu popupMenu = new PopupMenu(requireContext(), anchorView);
+        popupMenu.getMenuInflater().inflate(R.menu.menu_trip_options, popupMenu.getMenu());
+        popupMenu.setOnMenuItemClickListener(item -> onTripOptionSelected(item, trip));
+        popupMenu.show();
+    }
+
+    private boolean onTripOptionSelected(MenuItem item, TripPlan trip) {
+        if (item.getItemId() == R.id.action_edit_trip) {
+            showEditTripDialog(trip);
+            return true;
+        }
+        if (item.getItemId() == R.id.action_delete_trip) {
+            showDeleteTripDialog(trip);
+            return true;
+        }
+        return false;
+    }
+
+    private void showEditTripDialog(TripPlan trip) {
+        if (trip == null) {
+            return;
+        }
+
+        DialogUtils.showCustomViewDialog(
+                requireContext(),
+                R.layout.dialog_create_trip,
+                R.id.btn_close,
+                (dialogView, dialog) -> {
+                    TextView tvDialogTitle = dialogView.findViewById(R.id.tv_dialog_title);
+                    EditText etTitle = dialogView.findViewById(R.id.et_trip_title);
+                    EditText etDescription = dialogView.findViewById(R.id.et_trip_description);
+                    TextView tvStartDate = dialogView.findViewById(R.id.tv_start_date);
+                    TextView tvEndDate = dialogView.findViewById(R.id.tv_end_date);
+                    Button btnCreate = dialogView.findViewById(R.id.btn_create_trip);
+
+                    final long[] startMillis = {trip.getStartAt()};
+                    final long[] endMillis = {trip.getEndAt()};
+
+                    tvDialogTitle.setText(R.string.edit);
+                    etTitle.setText(trip.getTitle() == null ? "" : trip.getTitle());
+                    etDescription.setText(trip.getDescription() == null ? "" : trip.getDescription());
+                    tvStartDate.setText(formatDate(startMillis[0]));
+                    tvEndDate.setText(formatDate(endMillis[0]));
+                    btnCreate.setText(R.string.save);
+
+                    tvStartDate.setOnClickListener(v -> {
+                        MaterialDatePicker<Long> picker = MaterialDatePicker.Builder.datePicker()
+                                .setTitleText(R.string.start_date)
+                                .build();
+                        picker.addOnPositiveButtonClickListener(selection -> {
+                            startMillis[0] = selection != null ? selection : 0L;
+                            tvStartDate.setText(formatDate(startMillis[0]));
+                        });
+                        picker.show(getParentFragmentManager(), "edit_start_date_picker");
+                    });
+
+                    tvEndDate.setOnClickListener(v -> {
+                        MaterialDatePicker<Long> picker = MaterialDatePicker.Builder.datePicker()
+                                .setTitleText(R.string.end_date)
+                                .build();
+                        picker.addOnPositiveButtonClickListener(selection -> {
+                            endMillis[0] = selection != null ? selection : 0L;
+                            tvEndDate.setText(formatDate(endMillis[0]));
+                        });
+                        picker.show(getParentFragmentManager(), "edit_end_date_picker");
+                    });
+
+                    btnCreate.setOnClickListener(v -> {
+                        String title = etTitle.getText().toString().trim();
+                        String description = etDescription.getText().toString().trim();
+
+                        if (title.isEmpty()) {
+                            Toast.makeText(requireContext(), R.string.trip_title_required, Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        if (startMillis[0] == 0L || endMillis[0] == 0L) {
+                            Toast.makeText(requireContext(), R.string.trip_dates_required, Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        if (endMillis[0] < startMillis[0]) {
+                            Toast.makeText(requireContext(), R.string.trip_dates_invalid, Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+
+                        viewModel.updateTrip(trip.getId(), title, description, startMillis[0], endMillis[0]);
+                        dialog.dismiss();
+                    });
+                }
+        );
+    }
+
+    private void showDeleteTripDialog(TripPlan trip) {
+        if (trip == null) {
+            return;
+        }
+
+        String tripTitle = trip.getTitle() == null || trip.getTitle().trim().isEmpty()
+                ? getString(R.string.trip_title_hint)
+                : trip.getTitle().trim();
+
+        if (!isCurrentUserTripOwner(trip)) {
+            Toast.makeText(requireContext(), R.string.trip_delete_owner_only, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        DialogUtils.showConfirmDialog(
+                requireContext(),
+                getString(R.string.delete),
+            getString(R.string.trip_delete_confirm, tripTitle),
+                getString(R.string.delete),
+                getString(R.string.cancel),
+                () -> viewModel.deleteTrip(trip.getId())
+        );
+    }
+
+    private boolean isCurrentUserTripOwner(TripPlan trip) {
+        if (trip == null || trip.getParticipantIds() == null || trip.getParticipantIds().isEmpty()) {
+            return false;
+        }
+
+        String ownerId = trip.getParticipantIds().get(0);
+        if (ownerId == null || ownerId.trim().isEmpty()) {
+            return false;
+        }
+
+        String currentUserId = UserPreferences.getId(requireContext());
+        if (currentUserId == null || currentUserId.trim().isEmpty()) {
+            currentUserId = UserPreferences.getUsername(requireContext());
+        }
+        return currentUserId != null && ownerId.trim().equals(currentUserId.trim());
     }
 
     private String formatDate(long millis) {

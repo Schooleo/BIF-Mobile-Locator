@@ -19,6 +19,7 @@ public class TripStopEntity {
 
     public String tripId;
     public String title;
+    public String address;
     public String note;
     public String photoUrl;
     public String localImagePath;

@@ -15,10 +15,10 @@
     <string name="overview">Overview</string>
     <string name="itinerary">Itinerary</string>
     <string name="collab">Collab</string>
-    <string name="add_stop">+ Add Stop</string>
-    <string name="add_collaborator">+ Add Collaborator</string>
+    <string name="add_stop">Add Stop</string>
+    <string name="add_collaborator">Add Collaborator</string>
     <string name="trip_title_hint">Trip title</string>
-    <string name="trip_description_hint">Describe your trip...</string>
+    <string name="trip_description_hint">Describe your trip…</string>
     <string name="start_date">Start Date</string>
     <string name="end_date">End Date</string>
     <string name="create_trip">Create Trip</string>
@@ -74,7 +74,7 @@
     <string name="chat_direct_subtitle">Direct message</string>
     <string name="chat_member_count">%d members</string>
     <string name="chat_you">You</string>
-    <string name="chat_hint">Type a message...</string>
+    <string name="chat_hint">Type a message…</string>
     <string name="chat_send">Send</string>
     <string name="chat_friend_name">Friend</string>
     <string name="chat_seed_friend_1">On my way to the cafe, see you soon!</string>
@@ -95,7 +95,7 @@
     <string name="chat_ai_draft_trip">Draft a Trip</string>
     <string name="chat_ai_suggest_places">Suggest Places</string>
     <string name="chat_ai_drafter_prefix">AI Trip Drafter</string>
-    <string name="chat_ai_draft_hint">Describe the trip you want to draft...</string>
+    <string name="chat_ai_draft_hint">Describe the trip you want to draft…</string>
     <string name="chat_ai_offline">AI tools are unavailable while offline.</string>
     <string name="chat_ai_draft_failed">AI draft failed (%1$s)</string>
     <string name="chat_ai_mention">AI Trip Drafter</string>
@@ -125,7 +125,7 @@
     <string name="friend_tab_shared_locations">Shared Locations</string>
     <string name="friend_tab_trip_plans">Trip Plans</string>
     <string name="friend_plan_trip">Plan a Trip</string>
-    <string name="social_loading">Loading...</string>
+    <string name="social_loading">Loading…</string>
     <string name="social_empty_friends">No friends yet.</string>
     <string name="social_empty_groups">No groups yet.</string>
     <string name="social_error_friends">Unable to load friends.</string>
@@ -170,9 +170,9 @@
     <string name="group_remove_member_requires_online">Please reconnect to internet to remove members</string>
     <string name="friend_request_requires_online">Please reconnect to internet to send a friend request</string>
     <string name="trip_select_place">Select a Place</string>
-    <string name="trip_search_places_hint">Search places...</string>
+    <string name="trip_search_places_hint">Search places…</string>
     <string name="trip_ai_toggle">Toggle AI search mode</string>
-    <string name="trip_ai_loading">AI is finding the best green spots...</string>
+    <string name="trip_ai_loading">AI is finding the best green spots…</string>
     <string name="trip_ai_empty_state">We could not find any places matching your vibe.</string>
     <string name="trip_no_place_selected">Select a place</string>
     <string name="trip_select_place_first">Please select a place first.</string>
@@ -183,12 +183,22 @@
     <string name="trip_stop_time_out_of_range">Selected date/time must be within this trip range.</string>
     <string name="trip_day_stop_count">(%1$d stops)</string>
     <string name="trip_day_stop_count_single">(%1$d stop)</string>
-
+    <string name="trip_stop_edit_title">Edit stop</string>
+    <string name="trip_stop_notes_label_plain">Notes</string>
+    <string name="trip_stop_delete_confirm">Delete stop %1$s?</string>
     <string name="trip_stop_address_label">Address: %1$s</string>
     <string name="trip_stop_notes_label">Notes: %1$s</string>
-    <string name="trip_stop_rating_none">Rating: --</string>
+    <string name="trip_stop_rating_none">Rating: —</string>
     <string name="collapse_less">Less</string>
     <string name="expand_more">More</string>
     <string name="trip_stop_count_single">(%1$d stop)</string>
     <string name="trip_stop_count_plural">(%1$d stops)</string>
+    <string name="trip_delete_confirm">Delete trip \'%1$s\'?</string>
+    <string name="trip_update_success">Trip updated</string>
+    <string name="trip_update_failed">Unable to update trip</string>
+    <string name="trip_delete_success">Trip deleted</string>
+    <string name="trip_delete_failed">Unable to delete trip</string>
+    <string name="trip_delete_owner_only">Only the trip owner can delete this trip</string>
+    <string name="trip_stop_address_coordinates">Lat %.5f, Lng %.5f</string>
+    <string name="trip_stop_no_address">No address</string>
 </resources>

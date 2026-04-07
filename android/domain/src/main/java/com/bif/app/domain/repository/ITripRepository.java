@@ -10,6 +10,8 @@ public interface ITripRepository {
     LiveData<List<TripPlan>> getAllTrips();
     LiveData<TripPlan> getTripById(String tripId);
     void createTrip(String title, String description, long startAt, long endAt);
+    void updateTrip(String tripId, String title, String description, long startAt, long endAt);
+    void deleteTrip(String tripId);
     LiveData<List<TripPlan>> getTripsByGroup(String groupId);
     LiveData<List<TripMember>> getTripMembers(String tripId);
     void addStopToTrip(String tripId, TripStop stop);

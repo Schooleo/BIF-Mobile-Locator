@@ -22,24 +22,26 @@
                 android:layout_centerVertical="true"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/go_back"
-                android:src="@drawable/ic_back" />
+                android:src="@drawable/ic_back"
+                app:tint="?attr/colorTextPrimary" />
 
             <TextView
                 android:id="@+id/tv_trip_title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_centerInParent="true"
-                android:textStyle="bold"
-                android:textSize="18sp" />
+                android:textSize="18sp"
+                android:textColor="?attr/colorTextPrimary"
+                android:textStyle="bold" />
         </RelativeLayout>
 
         <com.google.android.material.tabs.TabLayout
             android:id="@+id/tab_layout_detail"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:tabIndicatorColor="@color/primary_green"
-            app:tabSelectedTextColor="@color/primary_green"
-            app:tabTextColor="@color/primary_grey" />
+            app:tabIndicatorColor="?attr/colorPrimary"
+            app:tabSelectedTextColor="?attr/colorPrimary"
+            app:tabTextColor="?attr/colorTextSecondary" />
 
         <androidx.viewpager2.widget.ViewPager2
             android:id="@+id/view_pager_detail"
@@ -48,15 +50,30 @@
             android:layout_weight="1" />
     </LinearLayout>
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fab_chat"
+    <FrameLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
-        android:layout_margin="16dp"
-        android:contentDescription="@string/chat_default_name"
-        app:backgroundTint="@color/primary_green"
-        app:srcCompat="@drawable/ic_chat"
-        app:tint="@color/white" />
+        android:layout_margin="16dp">
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/fab_chat"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="@string/chat_default_name"
+            app:backgroundTint="@color/primary_green"
+            app:srcCompat="@drawable/ic_chat"
+            app:tint="@color/white" />
+
+        <View
+            android:id="@+id/view_chat_unread_dot"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_gravity="top|end"
+            android:layout_marginTop="6dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/bg_chat_unread_dot"
+            android:visibility="gone" />
+    </FrameLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
