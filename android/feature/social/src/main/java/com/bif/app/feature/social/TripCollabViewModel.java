@@ -38,6 +38,7 @@ public class TripCollabViewModel extends ViewModel {
     private final MediatorLiveData<List<Friend>> availableFriends = new MediatorLiveData<>();
     private final MediatorLiveData<Boolean> isCurrentUserOwner = new MediatorLiveData<>(false);
     private final String currentUserId;
+    private final String currentUserAvatarLetter;
 
     @Inject
     public TripCollabViewModel(ITripRepository tripRepository,
@@ -48,6 +49,7 @@ public class TripCollabViewModel extends ViewModel {
         this.appContext = appContext;
 
         this.currentUserId = resolveCurrentUserId();
+        this.currentUserAvatarLetter = resolveCurrentUserAvatarLetter();
         this.tripMembers = Transformations.switchMap(
                 tripId,
                 value -> value == null || value.trim().isEmpty()
@@ -86,6 +88,10 @@ public class TripCollabViewModel extends ViewModel {
 
     public String getCurrentUserId() {
         return currentUserId;
+    }
+
+    public String getCurrentUserAvatarLetter() {
+        return currentUserAvatarLetter;
     }
 
     public void addCollaborator(Friend friend) {
@@ -195,6 +201,24 @@ public class TripCollabViewModel extends ViewModel {
 
         String fallback = UserPreferences.getUsername(appContext);
         return fallback == null ? "" : fallback.trim();
+    }
+
+    private String resolveCurrentUserAvatarLetter() {
+        String username = UserPreferences.getUsername(appContext);
+        if (username != null && !username.trim().isEmpty()) {
+            return username.trim().substring(0, 1).toUpperCase(Locale.ROOT);
+        }
+
+        String email = UserPreferences.getEmail(appContext);
+        if (email != null && !email.trim().isEmpty()) {
+            return email.trim().substring(0, 1).toUpperCase(Locale.ROOT);
+        }
+
+        if (!currentUserId.isEmpty()) {
+            return currentUserId.substring(0, 1).toUpperCase(Locale.ROOT);
+        }
+
+        return "?";
     }
 
     private String resolveFriendUserId(Friend friend) {

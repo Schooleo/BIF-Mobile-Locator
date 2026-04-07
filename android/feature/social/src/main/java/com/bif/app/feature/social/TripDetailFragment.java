@@ -16,6 +16,7 @@ import androidx.navigation.Navigation;
 import androidx.viewpager2.widget.ViewPager2;
 
 import com.bif.app.core.utils.UriUtils;
+import com.bif.app.domain.model.TripPlan;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
@@ -27,6 +28,7 @@ public class TripDetailFragment extends Fragment {
 
     private String tripId = "";
     private String tripTitle = "";
+    private int tripMemberCount = 0;
     private TripDetailViewModel viewModel;
 
     @Nullable
@@ -52,6 +54,7 @@ public class TripDetailFragment extends Fragment {
         TabLayout tabLayout = view.findViewById(R.id.tab_layout_detail);
         ViewPager2 viewPager = view.findViewById(R.id.view_pager_detail);
         FloatingActionButton fabChat = view.findViewById(R.id.fab_chat);
+        View unreadDot = view.findViewById(R.id.view_chat_unread_dot);
 
         tvTitle.setText(tripTitle == null || tripTitle.trim().isEmpty()
                 ? getString(R.string.trip_description_label)
@@ -75,13 +78,14 @@ public class TripDetailFragment extends Fragment {
 
         btnBack.setOnClickListener(v -> Navigation.findNavController(view).popBackStack());
         fabChat.setOnClickListener(v -> {
+            viewModel.markGroupChatReadNow();
             Uri destUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL_CHAT).buildUpon()
                     .appendQueryParameter("chatType", "group")
                     .appendQueryParameter("chatId", tripId)
                     .appendQueryParameter("chatName", tripTitle == null ? "" : tripTitle)
                     .appendQueryParameter("avatarLetter", "T")
                     .appendQueryParameter("avatarColor", "0")
-                    .appendQueryParameter("memberCount", "0")
+                    .appendQueryParameter("memberCount", String.valueOf(tripMemberCount))
                     .build();
             Navigation.findNavController(view).navigate(destUri);
         });
@@ -90,6 +94,23 @@ public class TripDetailFragment extends Fragment {
         if (tripId != null && !tripId.trim().isEmpty()) {
             viewModel.loadTrip(tripId);
         }
+        viewModel.getTrip().observe(getViewLifecycleOwner(), trip -> tripMemberCount = resolveTripMemberCount(trip));
+        viewModel.getHasUnreadGroupMessages().observe(getViewLifecycleOwner(), hasUnread -> unreadDot.setVisibility(Boolean.TRUE.equals(hasUnread) ? View.VISIBLE : View.GONE));
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (viewModel != null) {
+            viewModel.refreshUnreadState();
+        }
+    }
+
+    private int resolveTripMemberCount(@Nullable TripPlan trip) {
+        if (trip == null || trip.getParticipantIds() == null) {
+            return 0;
+        }
+        return trip.getParticipantIds().size();
     }
 }
 

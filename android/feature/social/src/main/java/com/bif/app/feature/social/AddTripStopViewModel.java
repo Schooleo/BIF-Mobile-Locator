@@ -134,7 +134,8 @@ public class AddTripStopViewModel extends ViewModel {
         TripStop stop = new TripStop(
                 UUID.randomUUID().toString(),
                 place.name,
-                place.address,
+            place.address,
+            "",
                 location.latitude,
                 location.longitude,
                 scheduledAtMillis,
@@ -205,7 +206,7 @@ public class AddTripStopViewModel extends ViewModel {
     }
 
     private <T> void observeOnce(@NonNull LiveData<T> source, @NonNull Observer<T> observer) {
-        source.observeForever(new Observer<T>() {
+        source.observeForever(new Observer<>() {
             @Override
             public void onChanged(T value) {
                 source.removeObserver(this);

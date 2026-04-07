@@ -11,6 +11,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -185,20 +186,29 @@ public class TripCollabFragment extends Fragment {
                 String safeName = member.getName() == null || member.getName().trim().isEmpty()
                         ? itemView.getContext().getString(R.string.trip_collab_member_unknown)
                         : member.getName().trim();
+
+                String memberId = member.getUserId() == null ? "" : member.getUserId().trim();
+                String normalizedCurrentUserId = currentUserId == null ? "" : currentUserId.trim();
+                boolean isCurrentUser = !normalizedCurrentUserId.isEmpty()
+                        && normalizedCurrentUserId.equals(memberId);
+
+                String displayName = isCurrentUser
+                        ? itemView.getContext().getString(R.string.member_you)
+                        : safeName;
+
                 String letter = member.getAvatarLetter();
-                if (letter == null || letter.trim().isEmpty()) {
-                    letter = safeName.substring(0, 1).toUpperCase(Locale.ROOT);
+                if (letter == null || letter.trim().isEmpty() || "?".equals(letter.trim())) {
+                    letter = displayName.substring(0, 1).toUpperCase(Locale.ROOT);
                 }
 
                 tvAvatar.setText(letter);
-                tvAvatar.setBackgroundTintList(ColorStateList.valueOf(member.getAvatarColor()));
+                int avatarColor = member.getAvatarColor();
+                if (avatarColor == 0) {
+                    avatarColor = ContextCompat.getColor(itemView.getContext(), com.bif.app.core.R.color.primary_green);
+                }
+                tvAvatar.setBackgroundTintList(ColorStateList.valueOf(avatarColor));
 
-                String memberId = member.getUserId() == null ? "" : member.getUserId().trim();
-                boolean isCurrentUser = !currentUserId.trim().isEmpty()
-                        && currentUserId.trim().equals(memberId);
-                tvName.setText(isCurrentUser
-                        ? itemView.getContext().getString(R.string.member_you)
-                        : safeName);
+                tvName.setText(displayName);
                 tvRole.setText(member.isOwner()
                         ? R.string.trip_collab_role_owner
                         : R.string.trip_collab_role_collaborator);

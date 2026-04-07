@@ -13,18 +13,24 @@
         android:layout_height="match_parent" />
 
     <LinearLayout
+        android:id="@+id/layout_top_overlay"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
         android:layout_gravity="top"
-        android:elevation="4dp"
+        android:elevation="8dp"
         android:orientation="vertical">
 
         <LinearLayout
+            android:id="@+id/layout_title_bar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:background="?attr/colorSurface"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:minHeight="56dp"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="8dp">
 
             <ImageButton
                 android:id="@+id/btn_add_stop_back"
@@ -32,14 +38,15 @@
                 android:layout_height="40dp"
                 android:background="@android:color/transparent"
                 android:contentDescription="@string/go_back"
-                android:src="@drawable/ic_back" />
+                android:src="@drawable/ic_back"
+                app:tint="?attr/colorOnSurface" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:text="@string/trip_select_place"
-                android:textColor="@android:color/black"
+                android:textColor="?attr/colorOnSurface"
                 android:textSize="28sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -47,12 +54,13 @@
         <LinearLayout
             android:id="@+id/layout_search_box"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
+            android:layout_height="52dp"
             android:layout_marginTop="8dp"
             android:background="@drawable/bg_ai_search_box_default"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="12dp">
+            android:paddingStart="12dp"
+            android:paddingEnd="8dp">
 
             <EditText
                 android:id="@+id/et_search_stop"
@@ -64,8 +72,8 @@
                 android:imeOptions="actionSearch"
                 android:inputType="text"
                 android:maxLines="1"
-                android:textColor="@android:color/black"
-                android:textColorHint="#8B8F96" />
+                android:textColor="?attr/colorOnSurface"
+                android:textColorHint="?attr/colorHintText" />
 
             <ImageButton
                 android:id="@+id/btn_clear_search"
@@ -74,16 +82,18 @@
                 android:background="@android:color/transparent"
                 android:contentDescription="@string/close"
                 android:src="@android:drawable/ic_menu_close_clear_cancel"
+                app:tint="?attr/colorOnSurface"
                 android:visibility="gone" />
 
             <ImageButton
                 android:id="@+id/btn_ai_toggle"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:background="@android:color/transparent"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="4dp"
+                android:background="@drawable/bg_ai_toggle_sparkle"
                 android:contentDescription="@string/trip_ai_toggle"
-                android:src="@drawable/ic_ai_sparkle_off"
-                app:tint="@color/primary_green" />
+                android:src="@drawable/ic_sparkle"
+                app:tint="@color/white" />
         </LinearLayout>
 
         <TextView
@@ -93,8 +103,34 @@
             android:layout_marginStart="8dp"
             android:layout_marginTop="8dp"
             android:text="@string/trip_ai_loading"
+            android:textColor="?attr/colorPrimary"
             android:textStyle="bold"
             android:visibility="gone" />
+
+        <FrameLayout
+            android:id="@+id/layout_search_results_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="?attr/colorSurface"
+            android:elevation="6dp"
+            android:visibility="gone">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_search_results"
+                android:layout_width="match_parent"
+                android:layout_height="220dp" />
+
+            <TextView
+                android:id="@+id/tv_empty_state"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:padding="12dp"
+                android:text="@string/trip_ai_empty_state"
+                android:textColor="?attr/colorTextSecondary"
+                android:visibility="gone" />
+        </FrameLayout>
     </LinearLayout>
 
     <FrameLayout
@@ -102,8 +138,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior"
-        app:behavior_hideable="false"
-        app:behavior_peekHeight="330dp">
+        app:behavior_hideable="true"
+        app:behavior_peekHeight="180dp">
 
         <LinearLayout
             android:id="@+id/layout_bottom_sheet"
@@ -119,7 +155,7 @@
                 android:layout_width="40dp"
                 android:layout_height="4dp"
                 android:layout_gravity="center_horizontal"
-                android:background="#9AA2AF" />
+                android:background="?attr/colorHintText" />
 
             <LinearLayout
                 android:id="@+id/layout_selected_place"
@@ -142,7 +178,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="@string/trip_select_place"
-                        android:textColor="@android:color/black"
+                        android:textColor="?attr/colorOnSurface"
                         android:textSize="24sp"
                         android:textStyle="bold" />
 
@@ -152,8 +188,8 @@
                         android:background="@drawable/ic_star_circle"
                         android:backgroundTint="@color/primary_green"
                         android:contentDescription="@string/add_stop"
-                        android:src="@drawable/ic_ai_sparkle_on"
-                        app:tint="@android:color/white" />
+                        android:src="@drawable/ic_sparkle"
+                        app:tint="@color/white" />
                 </LinearLayout>
 
                 <TextView
@@ -161,7 +197,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:textColor="#4F5660"
+                    android:textColor="?attr/colorTextSecondary"
                     android:textSize="13sp" />
 
                 <TextView
@@ -169,7 +205,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:textColor="#FF9800"
+                    android:textColor="@color/yellow_primary"
                     android:textStyle="bold" />
 
                 <TextView
@@ -187,7 +223,7 @@
                     android:background="@drawable/bg_ai_search_box_default"
                     android:gravity="center_vertical"
                     android:paddingHorizontal="12dp"
-                    android:textColor="@android:color/black" />
+                    android:textColor="?attr/colorOnSurface" />
 
                 <TextView
                     android:layout_width="match_parent"
@@ -204,7 +240,7 @@
                     android:background="@drawable/bg_ai_search_box_default"
                     android:gravity="center_vertical"
                     android:paddingHorizontal="12dp"
-                    android:textColor="@android:color/black" />
+                    android:textColor="?attr/colorOnSurface" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_add_to_trip"
@@ -214,23 +250,6 @@
                     android:text="@string/add_stop"
                     app:backgroundTint="@color/primary_green" />
             </LinearLayout>
-
-            <TextView
-                android:id="@+id/tv_empty_state"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:gravity="center"
-                android:padding="12dp"
-                android:text="@string/trip_ai_empty_state"
-                android:textColor="#667085"
-                android:visibility="gone" />
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/rv_search_results"
-                android:layout_width="match_parent"
-                android:layout_height="220dp"
-                android:layout_marginTop="6dp" />
         </LinearLayout>
     </FrameLayout>
 

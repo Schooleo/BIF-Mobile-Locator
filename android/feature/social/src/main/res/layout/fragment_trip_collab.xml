@@ -17,6 +17,7 @@
         android:textColor="@android:color/white"
         app:cornerRadius="12dp"
         app:icon="@android:drawable/ic_input_add"
+        app:iconGravity="textStart"
         app:iconPadding="8dp"
         app:iconTint="@android:color/white"
         app:backgroundTint="@color/primary_blue" />

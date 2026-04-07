@@ -200,6 +200,34 @@ public class SocialViewModel extends ViewModel {
         });
     }
 
+    public void updateTrip(String tripId, String title, String description, long startAt, long endAt) {
+        tripActionLoading.postValue(true);
+        ioExecutor.execute(() -> {
+            try {
+                tripRepository.updateTrip(tripId, title, description, startAt, endAt);
+                tripActionMessage.postValue("__MSG_TRIP_UPDATE_SUCCESS__");
+            } catch (Exception exception) {
+                tripActionMessage.postValue("__MSG_TRIP_UPDATE_FAILED__");
+            } finally {
+                tripActionLoading.postValue(false);
+            }
+        });
+    }
+
+    public void deleteTrip(String tripId) {
+        tripActionLoading.postValue(true);
+        ioExecutor.execute(() -> {
+            try {
+                tripRepository.deleteTrip(tripId);
+                tripActionMessage.postValue("__MSG_TRIP_DELETE_SUCCESS__");
+            } catch (Exception exception) {
+                tripActionMessage.postValue("__MSG_TRIP_DELETE_FAILED__");
+            } finally {
+                tripActionLoading.postValue(false);
+            }
+        });
+    }
+
     public void createGroup(String groupName, List<Friend> selectedMembers) {
         runGroupAction(() -> {
             groupRepository.createGroup(groupName, selectedMembers);

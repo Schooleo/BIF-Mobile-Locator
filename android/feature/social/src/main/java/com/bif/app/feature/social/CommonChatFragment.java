@@ -1,7 +1,6 @@
 package com.bif.app.feature.social;
 
 import android.annotation.SuppressLint;
-import android.content.res.ColorStateList;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.text.Editable;
@@ -14,7 +13,6 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
-import android.widget.ImageButton;
 import android.widget.PopupMenu;
 import android.widget.TextView;
 
@@ -26,16 +24,19 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.bif.app.core.utils.ChatReadStateStore;
 import com.bif.app.core.utils.UriUtils;
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.domain.model.ChatMessage;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.snackbar.Snackbar;
 
 import org.json.JSONArray;
@@ -82,40 +83,26 @@ public class CommonChatFragment extends Fragment {
         chatType = getArg(args, "chatType", "friend");
         chatId = getArg(args, "chatId", "");
         String chatName = getArg(args, "chatName", getString(R.string.chat_default_name));
-        String avatarLetter = getArg(args, "avatarLetter", "?");
-        int avatarColor = args != null ? args.getInt("avatarColor", 0) : 0;
         int memberCount = args != null ? args.getInt("memberCount", 0) : 0;
 
-        TextView tvAvatar = view.findViewById(R.id.tv_avatar);
         TextView tvTitle = view.findViewById(R.id.tv_chat_title);
         TextView tvSubtitle = view.findViewById(R.id.tv_chat_subtitle);
-        ImageButton btnBack = view.findViewById(R.id.btn_back);
-        ImageButton btnGroupSettings = view.findViewById(R.id.btn_group_settings);
+        View btnBack = view.findViewById(R.id.btn_back);
         rvMessages = view.findViewById(R.id.rv_messages);
         View composerBar = view.findViewById(R.id.layout_chat_composer);
         layoutInputBar = view.findViewById(R.id.layout_input_bar);
         defaultInputBarBackground = layoutInputBar.getBackground();
         View aiBadgesRow = view.findViewById(R.id.layout_ai_badges);
-        MaterialButton btnAiDraftTrip = view.findViewById(R.id.btn_ai_draft_trip);
-        MaterialButton btnAiSuggestPlaces = view.findViewById(R.id.btn_ai_suggest_places);
+        MaterialCardView btnAiDraftTrip = view.findViewById(R.id.btn_ai_draft_trip);
+        MaterialCardView btnAiSuggestPlaces = view.findViewById(R.id.btn_ai_suggest_places);
         EditText etMessage = view.findViewById(R.id.et_message);
         tvAiDrafterPrefix = view.findViewById(R.id.tv_ai_drafter_prefix);
         messageInput = etMessage;
         MaterialButton btnSend = view.findViewById(R.id.btn_send);
         applyKeyboardInsets(view, composerBar, rvMessages);
 
-        tvAvatar.setText(avatarLetter);
-        if (avatarColor != 0) {
-            tvAvatar.setBackgroundTintList(ColorStateList.valueOf(avatarColor));
-        }
-
         tvTitle.setText(chatName);
-        if ("group".equalsIgnoreCase(chatType)) {
-            tvSubtitle.setText(getString(R.string.chat_member_count, Math.max(memberCount, 1)));
-        } else {
-            tvSubtitle.setText(R.string.chat_direct_subtitle);
-        }
-        btnGroupSettings.setVisibility(View.GONE);
+        tvSubtitle.setText(getString(R.string.chat_member_count, resolveMemberCount(memberCount)));
 
         btnBack.setOnClickListener(v -> navigateBackFromChat(view));
         view.setOnClickListener(v -> focusInputAndShowKeyboard(etMessage));
@@ -156,6 +143,7 @@ public class CommonChatFragment extends Fragment {
 
         if (!chatId.isEmpty()) {
             viewModel.init(chatId, chatName, currentUserId);
+            markGroupChatReadIfNeeded();
         }
 
         // Observe messages from ViewModel
@@ -271,6 +259,7 @@ public class CommonChatFragment extends Fragment {
             adapterMessages.add(domainToAdapterMessage(msg));
         }
         adapter.submit(adapterMessages);
+        markGroupChatReadIfNeeded();
         scrollToBottom();
     }
 
@@ -480,7 +469,7 @@ public class CommonChatFragment extends Fragment {
         if (enabled) {
             layoutInputBar.setBackgroundResource(R.drawable.bg_chat_input_ai_draft);
             tvAiDrafterPrefix.setVisibility(View.VISIBLE);
-            etMessage.setHint("Describe the trip you want to draft...");
+            etMessage.setHint(R.string.chat_ai_draft_hint);
         } else {
             if (defaultInputBarBackground != null) {
                 layoutInputBar.setBackground(defaultInputBarBackground);
@@ -488,6 +477,13 @@ public class CommonChatFragment extends Fragment {
             tvAiDrafterPrefix.setVisibility(View.GONE);
             etMessage.setHint(R.string.chat_hint);
         }
+    }
+
+    private int resolveMemberCount(int memberCountArg) {
+        if ("group".equalsIgnoreCase(chatType)) {
+            return Math.max(memberCountArg, 1);
+        }
+        return Math.max(memberCountArg, 2);
     }
 
     private void maybeShowMentionPopup(EditText input, String fullText) {
@@ -643,8 +639,21 @@ public class CommonChatFragment extends Fragment {
         if ("group".equalsIgnoreCase(chatType)) {
             getParentFragmentManager().setFragmentResult("groupDetailResult", new Bundle());
         }
+
+        NavController navController = Navigation.findNavController(rootView);
+        if (navController.popBackStack()) {
+            return;
+        }
+
         android.net.Uri socialUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL);
-        Navigation.findNavController(rootView).navigate(socialUri);
+        navController.navigate(socialUri);
+    }
+
+    private void markGroupChatReadIfNeeded() {
+        if (!"group".equalsIgnoreCase(chatType) || chatId == null || chatId.trim().isEmpty()) {
+            return;
+        }
+        ChatReadStateStore.markGroupReadNow(requireContext(), chatId);
     }
 
     private void focusInputAndShowKeyboard(EditText etMessage) {

@@ -26,7 +26,6 @@ import com.bif.app.domain.repository.ITripRepository;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -108,8 +107,8 @@ public class TripRepository implements ITripRepository {
                 ));
 
                 String ownerName = appContext == null
-                    ? ""
-                    : normalize(UserPreferences.getUsername(appContext));
+                        ? ""
+                        : normalize(UserPreferences.getUsername(appContext));
                 if (ownerName.isEmpty()) {
                     ownerName = ownerId;
                 }
@@ -119,6 +118,56 @@ public class TripRepository implements ITripRepository {
                         0xFF9C27B0);
             }
             enqueueTripPlanChange(entity.id, "CREATE");
+            syncManager.syncIfOnline();
+        });
+    }
+
+    @Override
+    public void updateTrip(String tripId,
+                           String title,
+                           String description,
+                           long startAt,
+                           long endAt) {
+        executorService.execute(() -> {
+            String safeTripId = normalize(tripId);
+            if (safeTripId.isEmpty()) {
+                return;
+            }
+
+            TripPlanEntity entity = tripDao.getTripByIdSync(safeTripId);
+            if (entity == null) {
+                return;
+            }
+
+            entity.title = title;
+            entity.description = description;
+            entity.startAt = startAt;
+            entity.endAt = endAt;
+            entity.deleted = false;
+
+            tripDao.upsertTrip(entity);
+            enqueueTripPlanChange(safeTripId, "UPDATE");
+            syncManager.syncIfOnline();
+        });
+    }
+
+    @Override
+    public void deleteTrip(String tripId) {
+        executorService.execute(() -> {
+            String safeTripId = normalize(tripId);
+            if (safeTripId.isEmpty()) {
+                return;
+            }
+
+            TripPlanEntity entity = tripDao.getTripByIdSync(safeTripId);
+            if (entity == null) {
+                return;
+            }
+
+            entity.deleted = true;
+            tripDao.upsertTrip(entity);
+
+            enqueueTripPlanChange(safeTripId, "DELETE");
             syncManager.syncIfOnline();
         });
     }
@@ -441,7 +490,9 @@ public class TripRepository implements ITripRepository {
             List<TripStop> stops = new ArrayList<>();
             if (item.stops != null) {
                 List<TripStopEntity> stopEntities = new ArrayList<>(item.stops);
-                stopEntities.sort(Comparator.comparingInt(left -> left != null ? left.orderIndex : Integer.MAX_VALUE));
+                stopEntities.sort((left, right) -> Integer.compare(
+                        left != null ? left.orderIndex : Integer.MAX_VALUE,
+                        right != null ? right.orderIndex : Integer.MAX_VALUE));
                 for (TripStopEntity stop : stopEntities) {
                     if (stop == null || stop.deleted) {
                         continue;
@@ -523,7 +574,7 @@ public class TripRepository implements ITripRepository {
             participantIds.add(ownerId);
         }
         for (TripMemberCrossRef member : members) {
-            if (member == null || member.userId == null || member.userId.trim().isEmpty()) {
+            if (member == null || member.userId.trim().isEmpty()) {
                 continue;
             }
             if (ownerId != null && ownerId.equals(member.userId)) {
