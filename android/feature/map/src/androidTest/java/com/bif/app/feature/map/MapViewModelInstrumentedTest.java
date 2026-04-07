@@ -13,14 +13,17 @@ import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.IFavoriteRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.IRouteRepository;
+import com.bif.app.domain.repository.IReviewRepository;
 import com.bif.app.domain.model.Friend;
 import com.bif.app.domain.model.AiPlaceSuggestionResult;
 import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.Group;
+import com.bif.app.domain.model.Review;
 import java.util.List;
 import java.util.Collections;
+import java.util.concurrent.Executor;
 import com.bif.app.domain.model.MapState;
 
 import org.junit.Before;
@@ -46,6 +49,8 @@ public class MapViewModelInstrumentedTest {
     private IFavoriteRepository favoriteRepository;
     private IGroupRepository groupRepository;
     private IRouteRepository routeRepository;
+    private IReviewRepository reviewRepository;
+    private Executor directExecutor;
     private Context context;
 
     private static class FakeMapRepository implements IMapRepository {
@@ -69,7 +74,7 @@ public class MapViewModelInstrumentedTest {
         }
 
         @Override
-        public LiveData<List<Place>> searchPlaces(String query) {
+        public LiveData<List<Place>> searchPlaces(String query, Location userLocation) {
             return new MutableLiveData<>(Collections.emptyList());
         }
 
@@ -173,6 +178,42 @@ public class MapViewModelInstrumentedTest {
         }
     }
 
+    private static class FakeReviewRepository implements IReviewRepository {
+        @Override
+        public LiveData<List<Review>> getReviewsForPlace(String placeId) {
+            return new MutableLiveData<>(Collections.emptyList());
+        }
+
+        @Override
+        public LiveData<Review> getMyReview(String placeId) {
+            return new MutableLiveData<>(null);
+        }
+
+        @Override
+        public void submitReview(String placeId, int stars, String comment) {
+        }
+
+        @Override
+        public void updateReview(String placeId, int stars, String comment) {
+        }
+
+        @Override
+        public void deleteMyReview(String placeId) {
+        }
+
+        @Override
+        public void refreshReviews(String placeId, Runnable onComplete) {
+            if (onComplete != null) {
+                onComplete.run();
+            }
+        }
+
+        @Override
+        public String resolveInternalPlaceId(String externalSource, String externalId, double lat, double lng, String name) {
+            return externalId;
+        }
+    }
+
     @Before
     public void setUp() {
         context = InstrumentationRegistry.getInstrumentation().getTargetContext();
@@ -182,12 +223,16 @@ public class MapViewModelInstrumentedTest {
         favoriteRepository = new FakeFavoriteRepository();
         groupRepository = new FakeGroupRepository();
         routeRepository = new FakeRouteRepository();
+        reviewRepository = new FakeReviewRepository();
+        directExecutor = Runnable::run;
         viewModel = new MapViewModel(
             mapRepository,
             placeRepository,
             favoriteRepository,
             groupRepository,
-            routeRepository);
+            routeRepository,
+            reviewRepository,
+            directExecutor);
     }
 
     @After
@@ -209,9 +254,11 @@ public class MapViewModelInstrumentedTest {
         MapViewModel newViewModel = new MapViewModel(
                 mapRepository,
                 placeRepository,
-            favoriteRepository,
-            groupRepository,
-            routeRepository
+                favoriteRepository,
+                groupRepository,
+                routeRepository,
+                reviewRepository,
+                directExecutor
         );
 
         MapState retrievedState = newViewModel.getLastMapState();

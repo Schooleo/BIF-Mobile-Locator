@@ -7,6 +7,7 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.Transformations;
 import androidx.lifecycle.ViewModel;
+import androidx.lifecycle.ViewModelKt;
 
 import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.model.Group;
@@ -15,19 +16,24 @@ import com.bif.app.domain.model.MapState;
 import com.bif.app.domain.model.OfflineMapDownloadState;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.Route;
+import com.bif.app.domain.model.Review;
 import com.bif.app.domain.repository.IFavoriteRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.IRouteRepository;
+import com.bif.app.domain.repository.IReviewRepository;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.Executor;
 
 import javax.inject.Inject;
 
 import dagger.hilt.android.lifecycle.HiltViewModel;
+
 
 @HiltViewModel
 public class MapViewModel extends ViewModel {
@@ -41,6 +47,8 @@ public class MapViewModel extends ViewModel {
     private final IFavoriteRepository favoriteRepository;
     private final IGroupRepository groupRepository;
     private final IRouteRepository routeRepository;
+    private final IReviewRepository reviewRepository;
+    private final Executor reviewExecutor;
 
     private final MutableLiveData<Event<String>> _statusText = new MutableLiveData<>();
     public final LiveData<Event<String>> statusText = _statusText;
@@ -57,18 +65,38 @@ public class MapViewModel extends ViewModel {
     private final MutableLiveData<String> locationSearchQuery = new MutableLiveData<>();
     public final LiveData<Location> searchResult;
 
-    private final MutableLiveData<String> placesSearchQuery = new MutableLiveData<>();
+    private String lastSearchQuery = null;
+        private final MutableLiveData<List<Place>> _searchResults =
+            new MutableLiveData<>(Collections.emptyList());
     public final LiveData<List<Place>> searchResults;
 
     private final MutableLiveData<String> placesHistoryQuery = new MutableLiveData<>();
     public final LiveData<List<Place>> historySearchResults;
 
+    private final MutableLiveData<String> _currentPlaceId = new MutableLiveData<>();
+    public final LiveData<List<Review>> currentPlaceReviews;
+    public final LiveData<Review> currentMyReview;
+
+    private final MutableLiveData<Boolean> _isLoadingReviews = new MutableLiveData<>(false);
+    public final LiveData<Boolean> isLoadingReviews = _isLoadingReviews;
+
     public final LiveData<List<Favorite>> allFavorites;
     public final LiveData<List<Group>> allGroups;
     public final LiveData<List<String>> searchHistory;
 
+    @Nullable
+    private Location currentSearchUserLocation;
+    @Nullable
+    private LiveData<List<Place>> activeSearchSource;
+    @Nullable
+    private Observer<List<Place>> activeSearchObserver;
+    @Nullable
+    private android.os.Handler searchHandler;
+
     private final java.util.concurrent.atomic.AtomicBoolean activeSearchPending =
             new java.util.concurrent.atomic.AtomicBoolean(false);
+        private final java.util.concurrent.atomic.AtomicLong reviewLoadRequestId =
+            new java.util.concurrent.atomic.AtomicLong(0L);
 
     @Inject
     public MapViewModel(
@@ -76,20 +104,33 @@ public class MapViewModel extends ViewModel {
             IPlaceRepository placeRepository,
             IFavoriteRepository favoriteRepository,
             IGroupRepository groupRepository,
-            IRouteRepository routeRepository) {
+            IRouteRepository routeRepository,
+            IReviewRepository reviewRepository,
+            Executor reviewExecutor) {
         this.mapRepository = mapRepository;
         this.placeRepository = placeRepository;
         this.favoriteRepository = favoriteRepository;
         this.groupRepository = groupRepository;
         this.routeRepository = routeRepository;
+        this.reviewRepository = reviewRepository;
+        this.reviewExecutor = reviewExecutor;
 
         this.searchResult = Transformations.switchMap(locationSearchQuery, placeRepository::searchLocation);
-        this.searchResults = Transformations.switchMap(placesSearchQuery, placeRepository::searchPlaces);
+        this.searchResults = _searchResults;
         this.historySearchResults = Transformations.switchMap(
                 placesHistoryQuery, placeRepository::searchPlacesFromHistory);
         this.allFavorites = favoriteRepository.getAllFavorites();
         this.allGroups = groupRepository.getGroups();
         this.searchHistory = placeRepository.getSearchHistory();
+
+        this.currentPlaceReviews = Transformations.switchMap(_currentPlaceId, reviewRepository::getReviewsForPlace);
+        this.currentMyReview = Transformations.switchMap(_currentPlaceId, reviewRepository::getMyReview);
+
+        try {
+            this.searchHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        } catch (Exception ignored) {
+            this.searchHandler = null;
+        }
     }
 
     public void setStatusText(String text) {
@@ -102,10 +143,38 @@ public class MapViewModel extends ViewModel {
 
     public void searchForPlaces(String query) {
         activeSearchPending.set(true);
-        placesSearchQuery.setValue(query);
+        String normalized = query == null ? "" : query.trim();
+        Location loc = currentSearchUserLocation;
+        String locKey = loc == null ? "none" : String.format(Locale.US, "%.4f,%.4f", loc.latitude, loc.longitude);
+        String dedupeKey = normalized + "|" + locKey;
+        
+        if (dedupeKey.equals(lastSearchQuery)) {
+            return;
+        }
+        lastSearchQuery = dedupeKey;
+ 
+        if (searchHandler == null) {
+            dispatchSearchQuery(normalized);
+            return;
+        }
+ 
+        searchHandler.removeCallbacksAndMessages(null);
+        if (normalized.isEmpty()) {
+            searchHandler.post(() -> dispatchSearchQuery(normalized));
+        } else {
+            searchHandler.postDelayed(() -> dispatchSearchQuery(normalized), 400L);
+        }
+    }
+
+    public void updateSearchUserLocation(@Nullable Location userLocation) {
+        currentSearchUserLocation = cloneLocation(userLocation);
     }
 
     public void searchForPlacesFromHistory(String query) {
+        if (searchHandler != null) {
+            searchHandler.removeCallbacksAndMessages(null);
+        }
+        clearActiveSearchSource();
         activeSearchPending.set(true);
         placesHistoryQuery.setValue(query);
     }
@@ -148,6 +217,86 @@ public class MapViewModel extends ViewModel {
 
     public void cacheViewedPlace(Place place) {
         placeRepository.persistPlace(place, "viewed");
+    }
+
+    public void loadReviews(Place place) {
+        if (place == null || place.location == null) {
+            return;
+        }
+
+        final long requestId = reviewLoadRequestId.incrementAndGet();
+        _isLoadingReviews.setValue(true);
+        _currentPlaceId.setValue(null);
+        reviewExecutor.execute(() -> {
+            String internalId = reviewRepository.resolveInternalPlaceId(
+                place.placeSource, place.id, place.location.latitude, place.location.longitude, place.name);
+
+            if (requestId != reviewLoadRequestId.get()) {
+                return;
+            }
+
+            if (internalId == null || internalId.trim().isEmpty()) {
+                _isLoadingReviews.postValue(false);
+                return;
+            }
+
+            _currentPlaceId.postValue(internalId);
+            reviewRepository.refreshReviews(internalId, () -> {
+                if (requestId == reviewLoadRequestId.get()) {
+                    _isLoadingReviews.postValue(false);
+                }
+            });
+        });
+    }
+
+    public void submitReview(int stars, String comment) {
+        submitOrUpdateReview(null, stars, comment, false);
+    }
+
+    public void updateReview(@Nullable Review existingReview, int stars, String comment) {
+        String expectedPlaceId = existingReview != null ? existingReview.placeId : null;
+        submitOrUpdateReview(expectedPlaceId, stars, comment, true);
+    }
+
+    private void submitOrUpdateReview(@Nullable String expectedPlaceId,
+                                      int stars,
+                                      String comment,
+                                      boolean isUpdate) {
+        if (Boolean.TRUE.equals(_isLoadingReviews.getValue())) {
+            return;
+        }
+
+        final long submitRequestId = reviewLoadRequestId.get();
+        final String placeId = _currentPlaceId.getValue();
+        if (placeId == null || placeId.trim().isEmpty()) {
+            return;
+        }
+
+        if (expectedPlaceId != null
+                && !expectedPlaceId.trim().isEmpty()
+                && !placeId.equals(expectedPlaceId.trim())) {
+            return;
+        }
+
+        reviewExecutor.execute(() -> {
+            if (submitRequestId != reviewLoadRequestId.get()) {
+                return;
+            }
+            if (Boolean.TRUE.equals(_isLoadingReviews.getValue())) {
+                return;
+            }
+
+            String latestPlaceId = _currentPlaceId.getValue();
+            if (latestPlaceId == null || !latestPlaceId.equals(placeId)) {
+                return;
+            }
+
+            if (isUpdate) {
+                reviewRepository.updateReview(placeId, stars, comment);
+            } else {
+                reviewRepository.submitReview(placeId, stars, comment);
+            }
+        });
     }
 
     public void removeFromFavorites(Favorite favorite) {
@@ -297,7 +446,6 @@ public class MapViewModel extends ViewModel {
                 sourceLabel);
     }
 
-    @NonNull
     private String formatDurationText(@NonNull Route route) {
         long totalMinutes = Math.max(1L, Math.round(route.getDurationSeconds() / 60.0));
         long hours = totalMinutes / 60L;
@@ -311,7 +459,6 @@ public class MapViewModel extends ViewModel {
         return String.format(Locale.getDefault(), "%d hr %d min", hours, minutes);
     }
 
-    @NonNull
     private String formatDistanceText(@NonNull Route route) {
         double distanceMeters = Math.max(0.0, route.getDistanceMeters());
         if (distanceMeters < 1000.0) {
@@ -326,5 +473,62 @@ public class MapViewModel extends ViewModel {
             normalized += 360f;
         }
         return normalized;
+    }
+
+    @Override
+    protected void onCleared() {
+        clearActiveSearchSource();
+        if (searchHandler != null) {
+            searchHandler.removeCallbacksAndMessages(null);
+        }
+        super.onCleared();
+    }
+
+
+
+    private void dispatchSearchQuery(@Nullable String rawQuery) {
+        String query = rawQuery == null ? "" : rawQuery.trim();
+        if (query.isEmpty()) {
+            clearActiveSearchSource();
+            _searchResults.postValue(Collections.emptyList());
+            notifySearchDone(0);
+            return;
+        }
+
+        Location locationSnapshot = cloneLocation(currentSearchUserLocation);
+        LiveData<List<Place>> nextSource = placeRepository.searchPlaces(query, locationSnapshot);
+        if (nextSource == null) {
+            clearActiveSearchSource();
+            _searchResults.postValue(Collections.emptyList());
+            notifySearchDone(0);
+            return;
+        }
+
+        clearActiveSearchSource();
+        Observer<List<Place>> observer = places -> {
+            List<Place> safeResults = places != null ? places : Collections.emptyList();
+            _searchResults.postValue(safeResults);
+            notifySearchDone(safeResults.size());
+        };
+
+        activeSearchSource = nextSource;
+        activeSearchObserver = observer;
+        nextSource.observeForever(observer);
+    }
+
+    private void clearActiveSearchSource() {
+        if (activeSearchSource != null && activeSearchObserver != null) {
+            activeSearchSource.removeObserver(activeSearchObserver);
+        }
+        activeSearchSource = null;
+        activeSearchObserver = null;
+    }
+
+    @Nullable
+    private Location cloneLocation(@Nullable Location source) {
+        if (source == null) {
+            return null;
+        }
+        return new Location(source.latitude, source.longitude);
     }
 }

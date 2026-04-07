@@ -52,6 +52,7 @@ dependencies {
     implementation libs.navigation.ui.ktx
     implementation libs.maplibre.android.sdk
     implementation libs.timber
+    implementation libs.facebook.shimmer
 
     testImplementation libs.mockito.core
     testImplementation libs.core.testing

@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.bif.server.features.place.models.Place;
+import com.bif.server.features.search.dto.PlaceSearchRequestDTO;
 
 @ExtendWith(MockitoExtension.class)
 class ConfigurablePlaceSearchProviderTest {
@@ -30,12 +31,14 @@ class ConfigurablePlaceSearchProviderTest {
                         mongoPlaceSearchProvider,
                         typesensePlaceSearchProvider);
         Place place = new Place();
-        when(mongoPlaceSearchProvider.search("cafe")).thenReturn(List.of(place));
+        PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
+        request.setQuery("cafe");
+        when(mongoPlaceSearchProvider.search(request)).thenReturn(List.of(place));
 
-        List<Place> result = provider.search("cafe");
+        List<Place> result = provider.search(request);
 
         assertEquals(1, result.size());
-        verify(mongoPlaceSearchProvider).search("cafe");
+        verify(mongoPlaceSearchProvider).search(request);
     }
 
     @Test
@@ -46,13 +49,15 @@ class ConfigurablePlaceSearchProviderTest {
                         mongoPlaceSearchProvider,
                         typesensePlaceSearchProvider);
         Place place = new Place();
-        when(typesensePlaceSearchProvider.search("cafe"))
+        PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
+        request.setQuery("cafe");
+        when(typesensePlaceSearchProvider.search(request))
                 .thenReturn(List.of(place));
 
-        List<Place> result = provider.search("cafe");
+        List<Place> result = provider.search(request);
 
         assertEquals(1, result.size());
-        verify(typesensePlaceSearchProvider).search("cafe");
+        verify(typesensePlaceSearchProvider).search(request);
     }
 
     @Test
@@ -62,12 +67,14 @@ class ConfigurablePlaceSearchProviderTest {
                         "unknown",
                         mongoPlaceSearchProvider,
                         typesensePlaceSearchProvider);
-        when(mongoPlaceSearchProvider.search("museum"))
+        PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
+        request.setQuery("museum");
+        when(mongoPlaceSearchProvider.search(request))
                 .thenReturn(List.of(new Place()));
 
-        List<Place> result = provider.search("museum");
+        List<Place> result = provider.search(request);
 
         assertEquals(1, result.size());
-        verify(mongoPlaceSearchProvider).search("museum");
+        verify(mongoPlaceSearchProvider).search(request);
     }
 }

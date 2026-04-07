@@ -5,6 +5,16 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.MutableLiveData;
@@ -15,14 +25,17 @@ import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.Route;
+import com.bif.app.domain.model.Review;
 import com.bif.app.domain.repository.IFavoriteRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
+import com.bif.app.domain.repository.IReviewRepository;
 import com.bif.app.domain.repository.IRouteRepository;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.Executor;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -56,15 +69,31 @@ public class MapViewModelTest {
     private IRouteRepository routeRepository;
 
     @Mock
+    private IReviewRepository reviewRepository;
+
+    @Mock
     private Observer<Location> searchResultObserver;
 
     @Mock
     private Observer<Event<String>> statusTextObserver;
 
+    private Executor directExecutor;
+
     private MapViewModel viewModel;
+
+    private static class QueueExecutor implements Executor {
+        final java.util.List<Runnable> tasks = new java.util.ArrayList<>();
+
+        @Override
+        public void execute(Runnable command) {
+            tasks.add(command);
+        }
+    }
 
     @Before
     public void setUp() {
+        directExecutor = Runnable::run;
+
         // Lenient: these guard switchMap setup paths but not every test exercises them.
         Mockito.lenient().when(placeRepository.searchLocation(ArgumentMatchers.anyString()))
             .thenReturn(new MutableLiveData<>());
@@ -74,13 +103,26 @@ public class MapViewModelTest {
             .thenReturn(new MutableLiveData<>(Collections.emptyList()));
         Mockito.lenient().when(routeRepository.getRoute(ArgumentMatchers.anyList()))
             .thenReturn(new MutableLiveData<>());
+        Mockito.lenient().when(reviewRepository.getReviewsForPlace(ArgumentMatchers.anyString()))
+            .thenReturn(new MutableLiveData<>());
+        Mockito.lenient().when(reviewRepository.getMyReview(ArgumentMatchers.anyString()))
+            .thenReturn(new MutableLiveData<>());
+        Mockito.lenient().doAnswer(invocation -> {
+            Runnable callback = invocation.getArgument(1);
+            if (callback != null) {
+                callback.run();
+            }
+            return null;
+        }).when(reviewRepository).refreshReviews(ArgumentMatchers.anyString(), ArgumentMatchers.any());
 
         viewModel = new MapViewModel(
                 mapRepository,
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
-                routeRepository);
+                routeRepository,
+                reviewRepository,
+                directExecutor);
         viewModel.searchResult.observeForever(searchResultObserver);
         viewModel.statusText.observeForever(statusTextObserver);
     }
@@ -231,14 +273,14 @@ public class MapViewModelTest {
     public void searchForPlaces_validQuery_callsPlaceRepository() {
         // Arrange
         String query = "university";
-        Mockito.when(placeRepository.searchPlaces(query)).thenReturn(new MutableLiveData<>());
+        Mockito.when(placeRepository.searchPlaces(query, null)).thenReturn(new MutableLiveData<>());
         viewModel.searchResults.observeForever(list -> { });
 
         // Act
         viewModel.searchForPlaces(query);
 
         // Assert
-        Mockito.verify(placeRepository).searchPlaces(query);
+        Mockito.verify(placeRepository, timeout(1200)).searchPlaces(eq(query), isNull());
     }
 
     // allFavorites
@@ -255,7 +297,9 @@ public class MapViewModelTest {
             placeRepository,
             favoriteRepository,
             groupRepository,
-            routeRepository);
+            routeRepository,
+            reviewRepository,
+            directExecutor);
 
         Observer<List<Favorite>> observer = Mockito.mock(Observer.class);
         vm.allFavorites.observeForever(observer);
@@ -400,11 +444,136 @@ public class MapViewModelTest {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
-                routeRepository);
+                routeRepository,
+            reviewRepository,
+            directExecutor);
 
         assertEquals(RouteSession.Status.IDLE, freshViewModel.getCurrentRouteSession().status);
         assertFalse(freshViewModel.hasActiveRouteSession());
         assertNull(freshViewModel.routeSummary.getValue());
         assertNull(freshViewModel.routeGeometryJson.getValue());
+    }
+
+    @Test
+    public void loadReviews_WhenCalled_SetsLoadingStateAndTriggersResolution() throws InterruptedException {
+        QueueExecutor queueExecutor = new QueueExecutor();
+        MapViewModel queuedViewModel = new MapViewModel(
+                mapRepository,
+                placeRepository,
+                favoriteRepository,
+                groupRepository,
+                routeRepository,
+                reviewRepository,
+                queueExecutor);
+
+        // Arrange
+        Place place = new Place("ext-1", "Central Park", "NY", 4.8, new Location(40.78, -73.96));
+        place.placeSource = "GOOGLE";
+        
+        when(reviewRepository.resolveInternalPlaceId(any(), any(), anyDouble(), anyDouble(), any()))
+            .thenReturn("internal-123");
+
+        // Act
+        queuedViewModel.loadReviews(place);
+
+        // Assert - loading stays true until queued background work runs
+        assertTrue(queuedViewModel.isLoadingReviews.getValue());
+
+        assertEquals(1, queueExecutor.tasks.size());
+        queueExecutor.tasks.get(0).run();
+
+        verify(reviewRepository).resolveInternalPlaceId("GOOGLE", "ext-1", 40.78, -73.96, "Central Park");
+        verify(reviewRepository).refreshReviews(eq("internal-123"), ArgumentMatchers.any());
+        assertFalse(queuedViewModel.isLoadingReviews.getValue());
+    }
+
+    @Test
+    public void submitReview_WhenCalled_TriggersRepositoryAction() {
+        // Arrange - set current place
+        when(reviewRepository.resolveInternalPlaceId(any(), any(), anyDouble(), anyDouble(), any()))
+            .thenReturn("internal-123");
+        viewModel.loadReviews(new Place("ext-1", "Park", "Loc", 4.0, new Location(0,0)));
+        
+        // Act
+        viewModel.submitReview(5, "Excellent!");
+
+        // Assert
+        verify(reviewRepository).submitReview("internal-123", 5, "Excellent!");
+    }
+
+    @Test
+    public void submitReview_WhenReviewsAreLoading_IgnoresSubmission() {
+        QueueExecutor queueExecutor = new QueueExecutor();
+        MapViewModel queuedViewModel = new MapViewModel(
+                mapRepository,
+                placeRepository,
+                favoriteRepository,
+                groupRepository,
+                routeRepository,
+                reviewRepository,
+                queueExecutor);
+
+        queuedViewModel.loadReviews(new Place("ext-1", "Park", "Loc", 4.0, new Location(0, 0)));
+        assertTrue(queuedViewModel.isLoadingReviews.getValue());
+
+        queuedViewModel.submitReview(5, "Should be ignored");
+
+        verify(reviewRepository, never()).submitReview(anyString(), anyInt(), anyString());
+    }
+
+    @Test
+    public void updateReview_WhenCalled_TriggersRepositoryUpdate() {
+        when(reviewRepository.resolveInternalPlaceId(any(), any(), anyDouble(), anyDouble(), any()))
+                .thenReturn("internal-123");
+        viewModel.loadReviews(new Place("ext-1", "Park", "Loc", 4.0, new Location(0,0)));
+
+        Review existing = new Review();
+        existing.placeId = "internal-123";
+        existing.userId = "u1";
+
+        viewModel.updateReview(existing, 4, "Updated");
+
+        verify(reviewRepository).updateReview("internal-123", 4, "Updated");
+    }
+
+    @Test
+    public void loadReviews_WhenCalledTwice_OnlyLatestRequestUpdatesAndRefreshes() {
+        QueueExecutor queueExecutor = new QueueExecutor();
+        MapViewModel queuedViewModel = new MapViewModel(
+                mapRepository,
+                placeRepository,
+                favoriteRepository,
+                groupRepository,
+                routeRepository,
+                reviewRepository,
+                queueExecutor);
+
+        Mockito.when(reviewRepository.resolveInternalPlaceId(any(), any(), anyDouble(), anyDouble(), any()))
+                .thenReturn("internal-old")
+                .thenReturn("internal-new");
+        Mockito.doAnswer(invocation -> {
+            Runnable callback = invocation.getArgument(1);
+            if (callback != null) {
+                callback.run();
+            }
+            return null;
+        }).when(reviewRepository).refreshReviews(any(), any());
+
+        Place oldPlace = new Place("ext-old", "Old", "A", 4.0, new Location(1, 1));
+        oldPlace.placeSource = "OSM";
+        Place newPlace = new Place("ext-new", "New", "B", 4.0, new Location(2, 2));
+        newPlace.placeSource = "OSM";
+
+        queuedViewModel.loadReviews(oldPlace);
+        queuedViewModel.loadReviews(newPlace);
+
+        assertEquals(2, queueExecutor.tasks.size());
+
+        queueExecutor.tasks.get(0).run();
+        queueExecutor.tasks.get(1).run();
+
+        verify(reviewRepository, never()).refreshReviews(eq("internal-old"), any());
+        verify(reviewRepository).refreshReviews(eq("internal-new"), any());
+        assertFalse(queuedViewModel.isLoadingReviews.getValue());
     }
 }

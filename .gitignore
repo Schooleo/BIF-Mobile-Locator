@@ -13,6 +13,9 @@ tailscale-state/
 # Init
 map-data/
 
+# Brouter
+android/brouter/bin/
+
 # Oh My Codex
 .omx/
 

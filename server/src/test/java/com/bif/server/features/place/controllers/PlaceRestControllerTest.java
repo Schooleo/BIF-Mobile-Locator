@@ -1,8 +1,10 @@
 package com.bif.server.features.place.controllers;
 
+import com.bif.server.features.place.dto.rest.PlaceResolveRequest;
+import com.bif.server.features.place.dto.rest.PlaceResolveResponse;
 import com.bif.server.features.place.models.Place;
-import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.services.PlaceService;
+import com.bif.server.features.search.dto.PlaceSearchRequestDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,11 +25,14 @@ class PlaceRestControllerTest {
     @Mock
     private PlaceService placeService;
 
+    @Mock
+    private com.bif.server.features.place.services.PlaceIdentityService placeIdentityService;
+
     private PlaceRestController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new PlaceRestController(placeService);
+        controller = new PlaceRestController(placeService, placeIdentityService);
     }
 
     @Test
@@ -63,12 +68,14 @@ class PlaceRestControllerTest {
     @Test
     void searchPlaces_DelegatesToService() {
         Place item = new Place();
-        when(placeService.search("test")).thenReturn(List.of(item));
+        PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
+        request.setQuery("test");
+        when(placeService.search(request)).thenReturn(List.of(item));
 
-        List<Place> result = controller.searchPlaces("test");
+        List<Place> result = controller.searchPlaces(request);
 
         assertEquals(1, result.size());
-        verify(placeService).search("test");
+        verify(placeService).search(request);
     }
 
     @Test
@@ -115,15 +122,64 @@ class PlaceRestControllerTest {
     }
 
     @Test
-    void addReview_DelegatesToService() {
-        Place place = new Place();
-        PlaceReview review = new PlaceReview();
-        when(placeService.addReview("p1", review)).thenReturn(place);
+    void resolvePlace_WhenResolved_ReturnsOk() {
+        PlaceResolveRequest request = new PlaceResolveRequest(
+                "google",
+                "ext-1",
+                10.5,
+                106.7,
+                "Coffee Shop"
+        );
+        when(placeIdentityService.resolveInternalPlaceId(
+                "google", "ext-1", 10.5, 106.7, "Coffee Shop"))
+                .thenReturn("internal-1");
 
-        Place result = controller.addReview("p1", review);
+        ResponseEntity<PlaceResolveResponse> result = controller.resolvePlace(request);
 
-        assertSame(place, result);
-        verify(placeService).addReview("p1", review);
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertEquals("internal-1", result.getBody().internalPlaceId());
+        assertEquals("Coffee Shop", result.getBody().name());
+        verify(placeIdentityService).resolveInternalPlaceId("google", "ext-1", 10.5, 106.7, "Coffee Shop");
+    }
+
+    @Test
+    void resolvePlace_WhenInternalIdIsNull_ReturnsNotFound() {
+        PlaceResolveRequest request = new PlaceResolveRequest(
+                "google",
+                "ext-1",
+                10.5,
+                106.7,
+                "Coffee Shop"
+        );
+        when(placeIdentityService.resolveInternalPlaceId(
+                "google", "ext-1", 10.5, 106.7, "Coffee Shop"))
+                .thenReturn(null);
+
+        ResponseEntity<PlaceResolveResponse> result = controller.resolvePlace(request);
+
+        assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
+        assertNull(result.getBody());
+        verify(placeIdentityService).resolveInternalPlaceId("google", "ext-1", 10.5, 106.7, "Coffee Shop");
+    }
+
+    @Test
+    void resolvePlace_WhenInternalIdIsBlank_ReturnsNotFound() {
+        PlaceResolveRequest request = new PlaceResolveRequest(
+                "google",
+                "ext-1",
+                10.5,
+                106.7,
+                "Coffee Shop"
+        );
+        when(placeIdentityService.resolveInternalPlaceId(
+                "google", "ext-1", 10.5, 106.7, "Coffee Shop"))
+                .thenReturn("   ");
+
+        ResponseEntity<PlaceResolveResponse> result = controller.resolvePlace(request);
+
+        assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
+        assertNull(result.getBody());
+        verify(placeIdentityService).resolveInternalPlaceId("google", "ext-1", 10.5, 106.7, "Coffee Shop");
     }
 
     @Test

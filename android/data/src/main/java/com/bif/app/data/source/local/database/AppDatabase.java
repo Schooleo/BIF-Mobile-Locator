@@ -16,6 +16,7 @@ import com.bif.app.data.source.local.dao.FriendshipDao;
 import com.bif.app.data.source.local.dao.GroupDao;
 import com.bif.app.data.source.local.dao.PlaceDao;
 import com.bif.app.data.source.local.dao.ProfileDao;
+import com.bif.app.data.source.local.dao.ReviewDao;
 import com.bif.app.data.source.local.dao.SearchHistoryDao;
 import com.bif.app.data.source.local.dao.SyncQueueDao;
 import com.bif.app.data.source.local.dao.TripDao;
@@ -27,6 +28,7 @@ import com.bif.app.data.source.local.entity.GroupEntity;
 import com.bif.app.data.source.local.entity.GroupFriendCrossRef;
 import com.bif.app.data.source.local.entity.PlaceEntity;
 import com.bif.app.data.source.local.entity.ProfileEntity;
+import com.bif.app.data.source.local.entity.ReviewEntity;
 import com.bif.app.data.source.local.entity.SearchHistoryEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 import com.bif.app.data.source.local.entity.TripMemberCrossRef;
@@ -41,6 +43,7 @@ import com.bif.app.data.source.local.entity.TripStopEntity;
         GroupFriendCrossRef.class,
         PlaceEntity.class,
         ProfileEntity.class,
+        ReviewEntity.class,
         SyncQueueEntity.class,
         SearchHistoryEntity.class,
         ChatMessageEntity.class,
@@ -110,6 +113,8 @@ public abstract class AppDatabase extends RoomDatabase {
     public abstract PlaceDao placeDao();
 
     public abstract ProfileDao profileDao();
+
+    public abstract ReviewDao reviewDao();
 
     public abstract SyncQueueDao syncQueueDao();
 

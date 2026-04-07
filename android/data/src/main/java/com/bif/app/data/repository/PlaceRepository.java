@@ -13,6 +13,7 @@ import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.ai.AiPlaceSuggestionPayload;
 import com.bif.app.core.network.dto.ai.AiSuggestedPlacePayload;
 import com.bif.app.core.network.dto.place.PlaceDto;
+import com.bif.app.core.network.dto.place.PlaceSearchRequestDTO;
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.PlaceMapper;
 import com.bif.app.data.source.AndroidGeocodingDataSource;
@@ -117,13 +118,13 @@ public class PlaceRepository implements IPlaceRepository {
     }
 
     @Override
-    public LiveData<List<Place>> searchPlaces(String query) {
-        return doSearch(query, true);
+    public LiveData<List<Place>> searchPlaces(String query, Location userLocation) {
+        return doSearch(query, true, userLocation);
     }
 
     @Override
     public LiveData<List<Place>> searchPlacesFromHistory(String query) {
-        return doSearch(query, false);
+        return doSearch(query, false, null);
     }
 
     @Override
@@ -206,6 +207,8 @@ public class PlaceRepository implements IPlaceRepository {
     }
 
     private LiveData<List<Place>> doSearch(String query, boolean saveToHistory) {
+    private LiveData<List<Place>> doSearch(String query, boolean saveToHistory,
+                                           Location userLocation) {
         MutableLiveData<List<Place>> result = new MutableLiveData<>();
 
         if (query == null || query.isEmpty()) {
@@ -219,8 +222,20 @@ public class PlaceRepository implements IPlaceRepository {
 
             if (networkMonitor.isOnline()) {
                 try {
+                    Location validLocation = null;
+                    if (userLocation != null 
+                            && userLocation.latitude >= -90 && userLocation.latitude <= 90
+                            && userLocation.longitude >= -180 && userLocation.longitude <= 180) {
+                        validLocation = userLocation;
+                    }
+                    Double lat = validLocation != null ? validLocation.latitude : null;
+                    Double lng = validLocation != null ? validLocation.longitude : null;
+                    PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
+                    request.query = query;
+                    request.latitude = lat;
+                    request.longitude = lng;
                     Response<List<PlaceDto>> response = restApiService
-                            .searchServerPlaces(query).execute();
+                        .searchServerPlaces(request).execute();
                     if (response.isSuccessful() && response.body() != null) {
                         for (PlaceDto dto : response.body()) {
                             if (!seenIds.contains(dto.id)) {

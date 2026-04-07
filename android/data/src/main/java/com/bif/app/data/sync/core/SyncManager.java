@@ -18,6 +18,7 @@ import com.bif.app.data.source.local.dao.GroupDao;
 import com.bif.app.data.source.local.dao.FavoriteDao;
 import com.bif.app.data.source.local.dao.PlaceDao;
 import com.bif.app.data.source.local.dao.ProfileDao;
+import com.bif.app.data.source.local.dao.ReviewDao;
 import com.bif.app.data.source.local.dao.SyncQueueDao;
 import com.bif.app.data.source.local.dao.TripDao;
 import com.bif.app.data.source.local.entity.ChatMessageEntity;
@@ -29,6 +30,7 @@ import com.bif.app.data.sync.handler.FriendshipSyncEntityHandler;
 import com.bif.app.data.sync.handler.GroupSyncEntityHandler;
 import com.bif.app.data.sync.handler.PlaceSyncEntityHandler;
 import com.bif.app.data.sync.handler.ProfileSyncEntityHandler;
+import com.bif.app.data.sync.handler.ReviewSyncEntityHandler;
 import com.bif.app.data.sync.handler.SyncEntityHandler;
 import com.bif.app.data.sync.handler.TripMemberSyncEntityHandler;
 import com.bif.app.data.sync.handler.TripStopSyncEntityHandler;
@@ -91,6 +93,7 @@ public class SyncManager {
             FriendshipDao friendshipDao,
             FavoriteDao favoriteDao,
             ProfileDao profileDao,
+            ReviewDao reviewDao,
             NetworkMonitor networkMonitor,
             @ApplicationContext Context appContext) {
         this.restApiService = restApiService;
@@ -117,6 +120,7 @@ public class SyncManager {
                 friendDao, gson));
         registerHandler(new FavoriteSyncEntityHandler(favoriteDao, gson));
         registerHandler(new ProfileSyncEntityHandler(profileDao, gson, appContext));
+        registerHandler(new ReviewSyncEntityHandler(reviewDao, gson));
 
         loadPersistedSyncState();
         registerReconnectAutoSync();

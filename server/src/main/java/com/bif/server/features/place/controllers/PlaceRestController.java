@@ -1,8 +1,11 @@
 package com.bif.server.features.place.controllers;
 
+import com.bif.server.features.place.dto.rest.PlaceResolveRequest;
+import com.bif.server.features.place.dto.rest.PlaceResolveResponse;
 import com.bif.server.features.place.models.Place;
-import com.bif.server.features.place.models.PlaceReview;
+import com.bif.server.features.place.services.PlaceIdentityService;
 import com.bif.server.features.place.services.PlaceService;
+import com.bif.server.features.search.dto.PlaceSearchRequestDTO;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -12,9 +15,11 @@ import java.util.List;
 @RequestMapping("/api/places")
 public class PlaceRestController {
     private final PlaceService placeService;
+    private final PlaceIdentityService placeIdentityService;
 
-    public PlaceRestController(PlaceService placeService) {
+    public PlaceRestController(PlaceService placeService, PlaceIdentityService placeIdentityService) {
         this.placeService = placeService;
+        this.placeIdentityService = placeIdentityService;
     }
 
     @GetMapping
@@ -29,9 +34,9 @@ public class PlaceRestController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    @GetMapping("/search")
-    public List<Place> searchPlaces(@RequestParam String q) {
-        return placeService.search(q);
+    @PostMapping("/search")
+    public List<Place> searchPlaces(@RequestBody PlaceSearchRequestDTO request) {
+        return placeService.search(request);
     }
 
     @GetMapping("/tag/{tag}")
@@ -54,10 +59,19 @@ public class PlaceRestController {
         return placeService.saveFromSearch(place);
     }
 
-    @PostMapping("/{id}/reviews")
-    public Place addReview(@PathVariable String id,
-                           @RequestBody PlaceReview review) {
-        return placeService.addReview(id, review);
+    @PostMapping("/resolve")
+    public ResponseEntity<PlaceResolveResponse> resolvePlace(@RequestBody PlaceResolveRequest request) {
+        String internalId = placeIdentityService.resolveInternalPlaceId(
+                request.externalSource(),
+                request.externalId(),
+                request.lat(),
+                request.lng(),
+                request.name()
+        );
+        if (internalId == null || internalId.isBlank()) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(new PlaceResolveResponse(internalId, request.name()));
     }
 
     @DeleteMapping("/{id}")

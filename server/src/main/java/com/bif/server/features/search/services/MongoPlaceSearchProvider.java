@@ -2,6 +2,7 @@ package com.bif.server.features.search.services;
 
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.repositories.PlaceRepository;
+import com.bif.server.features.search.dto.PlaceSearchRequestDTO;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
@@ -19,11 +20,21 @@ public class MongoPlaceSearchProvider implements PlaceSearchProvider {
     }
 
     @Override
+    public List<Place> search(PlaceSearchRequestDTO request) {
+        if (request == null || request.getQuery() == null || request.getQuery().isBlank()) {
+            return Collections.emptyList();
+        }
+        String query = request.getQuery();
+        return placeRepository.findByNameContainingIgnoreCaseOrAddressContainingIgnoreCase(
+                query, query);
+    }
+
     public List<Place> search(String query) {
         if (query == null || query.isBlank()) {
             return Collections.emptyList();
         }
-        return placeRepository.findByNameContainingIgnoreCaseOrAddressContainingIgnoreCase(
-                query, query);
+        PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
+        request.setQuery(query);
+        return search(request);
     }
 }

@@ -14,6 +14,7 @@ import android.location.Geocoder;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -23,6 +24,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
+import android.widget.RatingBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -51,6 +53,7 @@ import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
 import com.bif.app.domain.model.OfflineMapDownloadState;
 import com.bif.app.domain.model.Place;
+import com.bif.app.domain.model.Review;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.progressindicator.CircularProgressIndicator;
 
@@ -133,6 +136,12 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private static final double VIETNAM_MAX_LAT = 23.39;
     private static final double VIETNAM_MIN_LON = 102.14;
     private static final double VIETNAM_MAX_LON = 109.46;
+    private static final double LOCAL_SEARCH_RADIUS_KM = 15.0;
+    private static final double PRIMARY_CLUSTER_RADIUS_KM = 35.0;
+    private static final int LOCAL_RESULT_LIMIT = 5;
+    private static final double LOCAL_MIN_ZOOM = 13.0;
+    private static final double REMOTE_RESULT_ZOOM = 15.0;
+    private static final long REMOTE_TOAST_COOLDOWN_MS = 2500L;
 
     private MapView mapView;
     private MapLibreMap mapLibreMap;
@@ -152,6 +161,15 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private MaterialButton btnCancelRoute;
     private MaterialButton btnFollowRoute;
     private ImageButton btnMapCompass;
+    
+    // Review and rating related views
+    private RecyclerView rvReviews;
+    private com.facebook.shimmer.ShimmerFrameLayout shimmerReviews;
+    private com.google.android.material.chip.ChipGroup chipGroupFilters;
+    private ReviewAdapter reviewAdapter;
+    private List<ReviewItem> allReviews = new ArrayList<>();
+    private androidx.recyclerview.widget.LinearSnapHelper snapHelper;
+    
     private final MapLibreMap.OnCameraMoveListener onCameraMoveListener = this::updateCompassButtonVisibility;
     private final MapLibreMap.OnCameraIdleListener onCameraIdleListener = this::updateCompassButtonVisibility;
     private MapViewModel viewModel;
@@ -170,8 +188,16 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private boolean isOnlineNow;
     @Nullable
     private OfflineMapDownloadState.Status lastOfflineMapDownloadStatus;
+    private boolean styleLoadRequested;
+    private boolean emulatorRenderModeOptimized;
+    private boolean floatingControlsUpdateScheduled;
+    @Nullable
+    private String lastRemoteToastArea;
+    private long lastRemoteToastAtMs;
     private Runnable hideHistory = () -> {
     };
+    private boolean suppressQueryTextChange;
+    private boolean rvReviewsTouchListenerRegistered = false;
 
     private final Handler locationHandler = new Handler(Looper.getMainLooper());
     private final Runnable locationTimeoutRunnable = () -> {
@@ -186,6 +212,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
     private final LocationListener followLocationListener = location -> {
         lastKnownUserLocation = new Location(location.getLatitude(), location.getLongitude());
+        syncSearchUserLocation(lastKnownUserLocation);
         float bearing = location.hasBearing() ? location.getBearing() : 0f;
         lastKnownUserBearingDegrees = bearing;
         renderUserLocationIndicator(lastKnownUserLocation, bearing);
@@ -279,6 +306,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         viewModel = new ViewModelProvider(requireActivity()).get(MapViewModel.class);
+        syncSearchUserLocation(lastKnownUserLocation);
 
         tvRouteTitle = view.findViewById(R.id.tv_route_title);
         tvRouteAddress = view.findViewById(R.id.tv_route_address);
@@ -308,6 +336,19 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         if (mapView == null) {
             viewModel.setStatusText("Map initialization failed on this device.");
         }
+
+        // Initialize adapter
+        reviewAdapter = new ReviewAdapter(new ReviewAdapter.OnReviewInteractionListener() {
+            @Override
+            public void onAddReviewClicked() {
+                showAddReviewDialog(null);
+            }
+
+            @Override
+            public void onEditReviewClicked(com.bif.app.domain.model.Review review) {
+                showAddReviewDialog(review);
+            }
+        });
 
         viewModel.allFavorites.observe(getViewLifecycleOwner(), favorites -> {
             currentFavorites = favorites != null ? favorites : new ArrayList<>();
@@ -364,6 +405,14 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             renderPlaceResults(places);
         });
 
+        viewModel.currentPlaceReviews.observe(getViewLifecycleOwner(), reviews -> {
+            updateReviewList(reviews, viewModel.currentMyReview.getValue());
+        });
+
+        viewModel.currentMyReview.observe(getViewLifecycleOwner(), myReview -> {
+            updateReviewList(viewModel.currentPlaceReviews.getValue(), myReview);
+        });
+
         if (mapView != null) {
             mapView.addOnDidFailLoadingMapListener(onDidFailLoadingMapListener);
             mapView.getMapAsync(this);
@@ -372,7 +421,15 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
     @Override
     public void onMapReady(@NonNull MapLibreMap mapLibreMap) {
+        if (styleLoadRequested) {
+            Timber.tag(TAG).d("Map style already requested; skipping duplicate setStyle call");
+            return;
+        }
+
         this.mapLibreMap = mapLibreMap;
+        styleLoadRequested = true;
+        optimizeRenderModeForEmulatorIfNeeded();
+
         String configuredStyle = BuildConfig.MAPLIBRE_STYLE_URL;
         String styleUrl = TextUtils.isEmpty(configuredStyle)
                 ? DEFAULT_STYLE_URL
@@ -434,6 +491,64 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             updateCompassButtonVisibility();
         });
 
+    }
+
+    private void optimizeRenderModeForEmulatorIfNeeded() {
+        if (mapView == null || emulatorRenderModeOptimized || !isRunningOnEmulator()) {
+            return;
+        }
+
+        emulatorRenderModeOptimized = true;
+        boolean applied = tryApplyRenderModeByField("RENDERMODE_WHEN_DIRTY");
+        if (!applied) {
+            applied = tryApplyRenderModeByField("RENDERMODE_CONTINUOUS");
+        }
+
+        if (applied) {
+            Timber.tag(TAG).d("Emulator render mode optimization applied");
+        } else {
+            Timber.tag(TAG).d("Emulator render mode optimization not available on this MapView");
+        }
+    }
+
+    private boolean tryApplyRenderModeByField(@NonNull String fieldName) {
+        if (mapView == null) {
+            return false;
+        }
+
+        try {
+            Class<?> mapViewClass = mapView.getClass();
+            java.lang.reflect.Field modeField = mapViewClass.getField(fieldName);
+            int mode = modeField.getInt(null);
+            java.lang.reflect.Method setRenderMode = mapViewClass.getMethod("setRenderMode", int.class);
+            setRenderMode.invoke(mapView, mode);
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private boolean isRunningOnEmulator() {
+        String fingerprint = safeLower(Build.FINGERPRINT);
+        String model = safeLower(Build.MODEL);
+        String brand = safeLower(Build.BRAND);
+        String device = safeLower(Build.DEVICE);
+        String product = safeLower(Build.PRODUCT);
+
+        return fingerprint.startsWith("generic")
+                || fingerprint.contains("emulator")
+                || fingerprint.contains("sdk_gphone")
+                || model.contains("emulator")
+                || model.contains("android sdk built for x86")
+                || model.contains("sdk_gphone")
+                || (brand.startsWith("generic") && device.startsWith("generic"))
+                || product.contains("sdk")
+                || product.contains("emulator");
+    }
+
+    @NonNull
+    private String safeLower(@Nullable String value) {
+        return value == null ? "" : value.toLowerCase(Locale.US);
     }
 
     private void configureCompassAboveMyLocation() {
@@ -519,7 +634,12 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         };
 
         SearchHistoryAdapter historyAdapter = new SearchHistoryAdapter(query -> {
-            searchView.setQuery(query, false);
+            suppressQueryTextChange = true;
+            try {
+                searchView.setQuery(query, false);
+            } finally {
+                suppressQueryTextChange = false;
+            }
             viewModel.searchForPlacesFromHistory(query);
             hideHistory.run();
         });
@@ -546,7 +666,14 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
             @Override
             public boolean onQueryTextChange(String newText) {
-                return false;
+                if (suppressQueryTextChange) {
+                    return true;
+                }
+                viewModel.searchForPlaces(newText);
+                if (TextUtils.isEmpty(newText)) {
+                    clearSearchResultMarkers();
+                }
+                return true;
             }
         });
 
@@ -660,45 +787,227 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     }
 
     private void renderPlaceResults(List<Place> places) {
-        if (places == null || mapLibreMap == null) {
+        if (mapLibreMap == null) {
             return;
         }
 
-        List<Feature> searchFeatures = new ArrayList<>();
+        if (places == null || places.isEmpty()) {
+            updateSearchMarkersSource(Collections.emptyList());
+            viewModel.notifySearchDone(0);
+            return;
+        }
 
-        if (!places.isEmpty()) {
-            LatLng first = null;
-            LatLngBounds.Builder boundsBuilder = new LatLngBounds.Builder();
-            int includedCount = 0;
-            for (Place place : places) {
-                if (place.location == null) {
-                    continue;
-                }
-                LatLng position = new LatLng(place.location.latitude,
-                        place.location.longitude);
-                searchFeatures.add(createFeatureForPlace(position, place));
-                if (first == null) {
-                    first = position;
-                }
-                boundsBuilder.include(position);
-                includedCount++;
-            }
-
-            if (includedCount > 1) {
-                mapLibreMap.animateCamera(CameraUpdateFactory.newLatLngBounds(
-                        boundsBuilder.build(), 150));
-            } else if (first != null) {
-                mapLibreMap.animateCamera(CameraUpdateFactory.newLatLngZoom(first, 14.0));
+        List<Place> locatedPlaces = new ArrayList<>();
+        for (Place place : places) {
+            if (place != null && place.location != null) {
+                locatedPlaces.add(place);
             }
         }
 
-        setFeatures(SEARCH_SOURCE_ID, searchFeatures);
+        if (locatedPlaces.isEmpty()) {
+            updateSearchMarkersSource(Collections.emptyList());
+            viewModel.notifySearchDone(0);
+            return;
+        }
+
+        Place topResult = locatedPlaces.get(0);
+        List<Place> primaryCluster = selectPrimaryCluster(locatedPlaces, topResult);
+        List<Feature> searchFeatures = new ArrayList<>();
+        for (Place place : primaryCluster) {
+            if (place.location == null) {
+                continue;
+            }
+            LatLng position = new LatLng(place.location.latitude, place.location.longitude);
+            searchFeatures.add(createFeatureForPlace(position, place));
+        }
+
+        updateSearchMarkersSource(searchFeatures);
+
+        boolean hasUserLocation = lastKnownUserLocation != null;
+        double topDistanceFromUserKm = distanceKm(lastKnownUserLocation,
+            topResult.location);
+        boolean isLocalSearch = hasUserLocation
+            && topDistanceFromUserKm <= LOCAL_SEARCH_RADIUS_KM;
+
+        if (isLocalSearch) {
+            focusCameraForLocalSearch(lastKnownUserLocation, primaryCluster);
+        } else {
+            focusCameraForRemoteSearch(topResult, hasUserLocation);
+        }
 
         viewModel.notifySearchDone(places.size());
     }
 
+    @NonNull
+    private List<Place> selectPrimaryCluster(@NonNull List<Place> locatedPlaces,
+            @NonNull Place topResult) {
+        if (topResult.location == null) {
+            return locatedPlaces;
+        }
+
+        List<Place> cluster = new ArrayList<>();
+        for (Place place : locatedPlaces) {
+            if (place.location == null) {
+                continue;
+            }
+            if (distanceKm(topResult.location, place.location)
+                    <= PRIMARY_CLUSTER_RADIUS_KM) {
+                cluster.add(place);
+            }
+        }
+
+        if (cluster.isEmpty()) {
+            cluster.add(topResult);
+        }
+        return cluster;
+    }
+
+    private void focusCameraForLocalSearch(@Nullable Location userLocation,
+            @NonNull List<Place> primaryCluster) {
+        if (mapLibreMap == null || userLocation == null || primaryCluster.isEmpty()) {
+            return;
+        }
+
+        LatLngBounds.Builder boundsBuilder = new LatLngBounds.Builder();
+        boundsBuilder.include(new LatLng(userLocation.latitude, userLocation.longitude));
+
+        int includedResults = 0;
+        for (Place place : primaryCluster) {
+            if (place.location == null) {
+                continue;
+            }
+            boundsBuilder.include(new LatLng(
+                    place.location.latitude,
+                    place.location.longitude));
+            includedResults++;
+            if (includedResults >= LOCAL_RESULT_LIMIT) {
+                break;
+            }
+        }
+
+        if (includedResults == 0) {
+            return;
+        }
+
+        mapLibreMap.animateCamera(
+                CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 150),
+                550);
+
+        View root = getView();
+        if (root != null) {
+            root.postDelayed(() -> {
+                if (mapLibreMap == null) {
+                    return;
+                }
+                CameraPosition current = mapLibreMap.getCameraPosition();
+                if (current != null && current.zoom < LOCAL_MIN_ZOOM) {
+                    mapLibreMap.animateCamera(
+                            CameraUpdateFactory.newLatLngZoom(current.target,
+                                    LOCAL_MIN_ZOOM),
+                            250);
+                }
+            }, 600L);
+        }
+    }
+
+    private void focusCameraForRemoteSearch(@NonNull Place topResult,
+            boolean showHint) {
+        if (mapLibreMap == null || topResult.location == null) {
+            return;
+        }
+
+        LatLng target = new LatLng(topResult.location.latitude,
+                topResult.location.longitude);
+        mapLibreMap.animateCamera(
+                CameraUpdateFactory.newLatLngZoom(target, REMOTE_RESULT_ZOOM),
+                550);
+
+        if (showHint) {
+            showRemoteSearchToast(topResult);
+        }
+    }
+
+    private void showRemoteSearchToast(@NonNull Place topResult) {
+        String area = resolveResultArea(topResult);
+        long now = System.currentTimeMillis();
+        if (area.equals(lastRemoteToastArea)
+                && now - lastRemoteToastAtMs < REMOTE_TOAST_COOLDOWN_MS) {
+            return;
+        }
+
+        lastRemoteToastArea = area;
+        lastRemoteToastAtMs = now;
+        Toast.makeText(requireContext(), "Showing results in " + area,
+                Toast.LENGTH_SHORT).show();
+    }
+
+    @NonNull
+    private String resolveResultArea(@NonNull Place place) {
+        String haystack = ((place.name != null ? place.name : "") + " "
+                + (place.address != null ? place.address : ""))
+                .toLowerCase(Locale.ROOT);
+                
+        String[] patterns = getResources().getStringArray(R.array.search_area_patterns);
+        for (String patternDef : patterns) {
+            String[] parts = patternDef.split("\\|");
+            if (parts.length == 2 && haystack.contains(parts[0])) {
+                return parts[1];
+            }
+        }
+
+        if (place.address != null && !place.address.isBlank()) {
+            String[] parts = place.address.split(",");
+            String candidate = parts.length > 0
+                    ? parts[parts.length - 1].trim()
+                    : place.address.trim();
+            if (!candidate.isEmpty()) {
+                return candidate;
+            }
+        }
+
+        if (place.name != null && !place.name.isBlank()) {
+            return place.name;
+        }
+        return "selected area";
+    }
+
+    private double distanceKm(@Nullable Location from, @Nullable Location to) {
+        if (from == null || to == null) {
+            return Double.MAX_VALUE;
+        }
+
+        double earthRadiusKm = 6371.0;
+        double dLat = Math.toRadians(to.latitude - from.latitude);
+        double dLon = Math.toRadians(to.longitude - from.longitude);
+        double lat1 = Math.toRadians(from.latitude);
+        double lat2 = Math.toRadians(to.latitude);
+
+        double sinHalfLat = Math.sin(dLat / 2.0);
+        double sinHalfLon = Math.sin(dLon / 2.0);
+        double a = sinHalfLat * sinHalfLat
+                + Math.cos(lat1) * Math.cos(lat2) * sinHalfLon * sinHalfLon;
+        double c = 2.0 * Math.atan2(Math.sqrt(a), Math.sqrt(1.0 - a));
+        return earthRadiusKm * c;
+    }
+
     private void clearSearchResultMarkers() {
-        setFeatures(SEARCH_SOURCE_ID, Collections.emptyList());
+        updateSearchMarkersSource(Collections.emptyList());
+    }
+
+    private void updateSearchMarkersSource(@NonNull List<Feature> features) {
+        if (mapLibreMap == null) {
+            return;
+        }
+
+        Style style = mapLibreMap.getStyle();
+        if (style == null) {
+            return;
+        }
+
+        GeoJsonSource source = style.getSourceAs(SEARCH_SOURCE_ID);
+        if (source != null) {
+            source.setGeoJson(FeatureCollection.fromFeatures(features));
+        }
     }
 
     private void refreshFavoriteMarkers() {
@@ -1218,18 +1527,36 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             return;
         }
 
+        if (floatingControlsUpdateScheduled) {
+            return;
+        }
+
         ImageButton btnMyLocation = root.findViewById(R.id.btn_my_location);
         if (btnMyLocation == null) {
             return;
         }
 
+        floatingControlsUpdateScheduled = true;
+
         root.post(() -> {
-            int rootHeight = root.getHeight();
+            floatingControlsUpdateScheduled = false;
+
+            View currentRoot = getView();
+            if (currentRoot == null) {
+                return;
+            }
+
+            ImageButton currentMyLocation = currentRoot.findViewById(R.id.btn_my_location);
+            if (currentMyLocation == null) {
+                return;
+            }
+
+            int rootHeight = currentRoot.getHeight();
             if (rootHeight <= 0) {
                 return;
             }
 
-            int myLocationDefaultY = rootHeight - dpToPx(100) - btnMyLocation.getHeight();
+            int myLocationDefaultY = rootHeight - dpToPx(100) - currentMyLocation.getHeight();
             int anchorTop = rootHeight;
             if (bottomSheetBehavior != null && bottomSheetBehavior.getState() != BottomSheetBehavior.STATE_HIDDEN
                     && bottomSheetContainer != null) {
@@ -1237,13 +1564,20 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             }
 
             int targetMyLocationY = anchorTop < rootHeight
-                    ? anchorTop - btnMyLocation.getHeight() - dpToPx(16)
+                    ? anchorTop - currentMyLocation.getHeight() - dpToPx(16)
                     : myLocationDefaultY;
-            btnMyLocation.setY(Math.min(myLocationDefaultY, targetMyLocationY));
+            float nextMyLocationY = Math.min(myLocationDefaultY, targetMyLocationY);
+            if (Math.abs(currentMyLocation.getY() - nextMyLocationY) > 0.5f) {
+                currentMyLocation.setY(nextMyLocationY);
+            }
+
             if (btnMapCompass != null) {
                 int compassDefaultY = myLocationDefaultY - dpToPx(60);
-                int targetCompassY = (int) btnMyLocation.getY() - btnMapCompass.getHeight() - dpToPx(12);
-                btnMapCompass.setY(Math.min(compassDefaultY, targetCompassY));
+                int targetCompassY = (int) currentMyLocation.getY() - btnMapCompass.getHeight() - dpToPx(12);
+                float nextCompassY = Math.min(compassDefaultY, targetCompassY);
+                if (Math.abs(btnMapCompass.getY() - nextCompassY) > 0.5f) {
+                    btnMapCompass.setY(nextCompassY);
+                }
             }
         });
     }
@@ -2114,21 +2448,28 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         viewModel.cacheViewedPlace(place);
         showPlaceSheetOnly();
 
+        // Bind basic place details
         TextView tvName = root.findViewById(R.id.tv_place_name);
         TextView tvAddress = root.findViewById(R.id.tv_place_address);
-        TextView tvRating = root.findViewById(R.id.tv_place_rating);
+        TextView tvRatingValue = root.findViewById(R.id.tv_rating_value);
+        RatingBar rbPlaceRating = root.findViewById(R.id.rb_place_rating);
+        TextView tvRatingCount = root.findViewById(R.id.tv_rating_count);
         ImageButton btnAddFavorite = root.findViewById(R.id.btn_add_favorite);
         MaterialButton btnSharePlace = root.findViewById(R.id.btn_share_place);
         MaterialButton btnRoutePlace = root.findViewById(R.id.btn_navigate_place);
 
         tvName.setText(place.name);
         tvAddress.setText(place.address);
+        
+        // Update rating summary
         if (place.rating > 0) {
-            tvRating.setText(String.format(Locale.getDefault(), "* %.1f",
-                    place.rating));
+            tvRatingValue.setText(String.format(Locale.getDefault(), "%.1f", place.rating));
+            rbPlaceRating.setRating((float) place.rating);
         } else {
-            tvRating.setText(R.string.default_rating);
+            tvRatingValue.setText("0");
+            rbPlaceRating.setRating(0);
         }
+        tvRatingCount.setText("0 reviews"); // Update this when data is fetched
 
         btnAddFavorite.setEnabled(true);
         btnSharePlace.setEnabled(true);
@@ -2153,15 +2494,227 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         btnRoutePlace.setOnClickListener(v -> routeToPlace(place));
         btnSharePlace.setOnClickListener(v -> showShareToGroupDialog(place));
 
-        View layoutExtendedDetails = root.findViewById(R.id.layout_extended_details);
+        // Setup Reviews RecyclerView and Adapter
+        setupReviewsRecyclerView(root);
+        
+        // Setup Chip filters
+        setupChipFilters(root);
+
+        allReviews.clear();
+        if (reviewAdapter != null) {
+            reviewAdapter.showAllReviews(allReviews);
+        }
+        if (rvReviews != null) {
+            rvReviews.setVisibility(View.INVISIBLE);
+        }
+        if (shimmerReviews != null) {
+            shimmerReviews.setVisibility(View.VISIBLE);
+            shimmerReviews.startShimmer();
+        }
+        if (!TextUtils.isEmpty(place.placeSource)) {
+            viewModel.loadReviews(place);
+        } else if (shimmerReviews != null) {
+            shimmerReviews.stopShimmer();
+            shimmerReviews.setVisibility(View.GONE);
+        }
+
         View layoutContainer = root.findViewById(R.id.layout_container);
-        layoutExtendedDetails.post(() -> {
-            int dynamicPeekHeight = layoutExtendedDetails.getTop()
-                    + layoutContainer.getPaddingBottom()
-                    - layoutContainer.getPaddingTop();
+        layoutContainer.post(() -> {
+            int dynamicPeekHeight = layoutContainer.getHeight() / 2;
             bottomSheetBehavior.setPeekHeight(dynamicPeekHeight);
             bottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
         });
+    }
+
+    private void setupReviewsRecyclerView(View root) {
+        rvReviews = root.findViewById(R.id.rv_reviews);
+        shimmerReviews = root.findViewById(R.id.shimmer_reviews);
+        
+        if (rvReviews == null) {
+            return;
+        }
+
+        // Set item width to 85% of screen width (adapter owns view sizing).
+        int screenWidth = requireActivity().getResources().getDisplayMetrics().widthPixels;
+        int itemWidth = (int) (screenWidth * 0.85f);
+        reviewAdapter.setItemWidthPx(itemWidth);
+
+        rvReviews.setAdapter(reviewAdapter);
+
+        // Setup LinearLayoutManager for horizontal carousel
+        LinearLayoutManager layoutManager = new LinearLayoutManager(
+                requireContext(), 
+                LinearLayoutManager.HORIZONTAL, 
+                false);
+        rvReviews.setLayoutManager(layoutManager);
+
+        // Attach LinearSnapHelper for carousel snapping
+        if (snapHelper == null) {
+            snapHelper = new androidx.recyclerview.widget.LinearSnapHelper();
+            snapHelper.attachToRecyclerView(rvReviews);
+        }
+
+        if (!rvReviewsTouchListenerRegistered) {
+            rvReviews.addOnItemTouchListener(new RecyclerView.OnItemTouchListener() {
+                @Override
+                public boolean onInterceptTouchEvent(@NonNull RecyclerView rv, @NonNull android.view.MotionEvent e) {
+                    int action = e.getActionMasked();
+                    if (action == android.view.MotionEvent.ACTION_DOWN) {
+                        rv.getParent().requestDisallowInterceptTouchEvent(true);
+                    } else if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) {
+                        rv.getParent().requestDisallowInterceptTouchEvent(false);
+                    }
+                    return false;
+                }
+
+                @Override
+                public void onTouchEvent(@NonNull RecyclerView rv, @NonNull android.view.MotionEvent e) {}
+
+                @Override
+                public void onRequestDisallowInterceptTouchEvent(boolean disallowIntercept) {}
+            });
+            rvReviewsTouchListenerRegistered = true;
+        }
+    }
+
+    private void setupChipFilters(View root) {
+        chipGroupFilters = root.findViewById(R.id.chip_group_filters);
+        if (chipGroupFilters == null) {
+            return;
+        }
+
+        // Setup chip click listeners
+        chipGroupFilters.setOnCheckedStateChangeListener((group, checkedIds) -> {
+            if (checkedIds.isEmpty()) {
+                // All reviews
+                reviewAdapter.showAllReviews(allReviews);
+            } else {
+                int selectedChipId = checkedIds.get(0);
+                int starRating = 0;
+
+                if (selectedChipId == R.id.chip_filter_5) {
+                    starRating = 5;
+                } else if (selectedChipId == R.id.chip_filter_4) {
+                    starRating = 4;
+                } else if (selectedChipId == R.id.chip_filter_3) {
+                    starRating = 3;
+                } else if (selectedChipId == R.id.chip_filter_2) {
+                    starRating = 2;
+                } else if (selectedChipId == R.id.chip_filter_1) {
+                    starRating = 1;
+                }
+
+                reviewAdapter.filterByStarRating(allReviews, starRating);
+            }
+        });
+    }
+
+    private void updateReviewList(java.util.List<com.bif.app.domain.model.Review> reviews, com.bif.app.domain.model.Review myReview) {
+        allReviews.clear();
+
+        if (myReview != null) {
+            allReviews.add(new ReviewItem(ReviewItem.VIEW_TYPE_MINE, myReview, true));
+        } else {
+            allReviews.add(new ReviewItem());
+        }
+
+        if (reviews != null) {
+            for (com.bif.app.domain.model.Review review : reviews) {
+                if (myReview != null && java.util.Objects.equals(review.userId, myReview.userId)) {
+                    continue;
+                }
+                allReviews.add(new ReviewItem(ReviewItem.VIEW_TYPE_OTHERS, review, false));
+            }
+        }
+
+        int count = (reviews != null ? reviews.size() : 0);
+        double totalStars = 0;
+
+        if (reviews != null) {
+            for (com.bif.app.domain.model.Review review : reviews) {
+                totalStars += review.stars;
+            }
+        }
+
+        double averageRating = count > 0 ? totalStars / count : 0.0;
+
+        TextView tvRatingCount = placeDetailSheet.findViewById(R.id.tv_rating_count);
+        if (tvRatingCount != null) {
+            tvRatingCount.setText(String.format(Locale.getDefault(), "%d reviews", count));
+        }
+
+        TextView tvRatingValue = placeDetailSheet.findViewById(R.id.tv_rating_value);
+        RatingBar rbPlaceRating = placeDetailSheet.findViewById(R.id.rb_place_rating);
+        if (tvRatingValue != null && rbPlaceRating != null) {
+            if (averageRating > 0) {
+                tvRatingValue.setText(String.format(Locale.getDefault(), "%.1f", averageRating));
+                rbPlaceRating.setRating((float) averageRating);
+            } else {
+                tvRatingValue.setText("0");
+                rbPlaceRating.setRating(0);
+            }
+        }
+
+        if (shimmerReviews != null) {
+            shimmerReviews.stopShimmer();
+            shimmerReviews.setVisibility(View.GONE);
+        }
+        if (rvReviews != null) {
+            rvReviews.setVisibility(View.VISIBLE);
+        }
+
+        int activeStarFilter = 0;
+        if (chipGroupFilters != null) {
+            List<Integer> checkedIds = chipGroupFilters.getCheckedChipIds();
+            if (!checkedIds.isEmpty()) {
+                int selectedId = checkedIds.get(0);
+                if (selectedId == R.id.chip_filter_5) activeStarFilter = 5;
+                else if (selectedId == R.id.chip_filter_4) activeStarFilter = 4;
+                else if (selectedId == R.id.chip_filter_3) activeStarFilter = 3;
+                else if (selectedId == R.id.chip_filter_2) activeStarFilter = 2;
+                else if (selectedId == R.id.chip_filter_1) activeStarFilter = 1;
+            }
+        }
+
+        if (reviewAdapter != null) {
+            if (activeStarFilter == 0) {
+                reviewAdapter.showAllReviews(allReviews);
+            } else {
+                reviewAdapter.filterByStarRating(allReviews, activeStarFilter);
+            }
+        }
+    }
+
+    private void showAddReviewDialog(@Nullable com.bif.app.domain.model.Review existingReview) {
+        View view = getLayoutInflater().inflate(R.layout.dialog_add_review, null);
+        RatingBar ratingBar = view.findViewById(R.id.feedback_rating_bar);
+        com.google.android.material.textfield.TextInputEditText etComment = view.findViewById(R.id.feedback_input);
+
+        if (existingReview != null) {
+            ratingBar.setRating(existingReview.stars);
+            if (existingReview.comment != null) {
+                etComment.setText(existingReview.comment);
+            }
+        }
+
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle(existingReview == null ? "Add Review" : "Edit Review")
+                .setView(view)
+                .setPositiveButton("Submit", (dialog, which) -> {
+                    int stars = (int) ratingBar.getRating();
+                    if (stars > 0) {
+                        String comment = etComment.getText() != null ? etComment.getText().toString().trim() : "";
+                        if (existingReview != null) {
+                            viewModel.updateReview(existingReview, stars, comment);
+                        } else {
+                            viewModel.submitReview(stars, comment);
+                        }
+                    } else {
+                        Toast.makeText(getContext(), "Please provide a rating", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private Favorite findFavoriteForPlace(Place place) {
@@ -2213,6 +2766,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         }
 
         lastKnownUserLocation = origin;
+        syncSearchUserLocation(lastKnownUserLocation);
         renderRouteSheet(RouteSession.loading(place));
         viewModel.beginRoutePreview(place, origin, place.location);
     }
@@ -2248,6 +2802,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         lastKnownUserLocation = new Location(
                 bestLastKnown.getLatitude(),
                 bestLastKnown.getLongitude());
+        syncSearchUserLocation(lastKnownUserLocation);
         lastKnownUserBearingDegrees = bestLastKnown.hasBearing()
                 ? bestLastKnown.getBearing()
                 : lastKnownUserBearingDegrees;
@@ -2417,6 +2972,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
     private void centerMapOnLocation(@NonNull android.location.Location location) {
         lastKnownUserLocation = new Location(location.getLatitude(), location.getLongitude());
+        syncSearchUserLocation(lastKnownUserLocation);
         lastKnownUserBearingDegrees = location.hasBearing() ? location.getBearing() : lastKnownUserBearingDegrees;
         renderUserLocationIndicator(lastKnownUserLocation, lastKnownUserBearingDegrees);
         if (mapLibreMap == null) {
@@ -2442,6 +2998,12 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             manager.removeUpdates(singleLocationListener);
         } catch (Exception ignored) {
             // Safe no-op if listener is not registered.
+        }
+    }
+
+    private void syncSearchUserLocation(@Nullable Location location) {
+        if (viewModel != null) {
+            viewModel.updateSearchUserLocation(location);
         }
     }
 
@@ -2504,6 +3066,9 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onDestroyView() {
         stopSingleLocationUpdates();
+        floatingControlsUpdateScheduled = false;
+        styleLoadRequested = false;
+        emulatorRenderModeOptimized = false;
         if (mapView != null) {
             mapView.removeOnDidFailLoadingMapListener(
                     onDidFailLoadingMapListener);
@@ -2514,11 +3079,39 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             mapView.onDestroy();
             mapView = null;
         }
+        mapLibreMap = null;
         clearFavoriteMarkers();
         clearSearchResultMarkers();
         clearSelectedMarker();
         clearRouteFeatures();
         stopFollowLocationUpdates();
+        if (reviewAdapter != null) {
+            reviewAdapter.clear();
+        }
+        if (rvReviews != null) {
+            rvReviews.setAdapter(null);
+            rvReviews.setOnFlingListener(null);
+        }
+        rvReviewsTouchListenerRegistered = false;
+        if (snapHelper != null) {
+            snapHelper.attachToRecyclerView(null);
+            snapHelper = null;
+        }
+        if (shimmerReviews != null) {
+            shimmerReviews.stopShimmer();
+        }
+        if (chipGroupFilters != null) {
+            chipGroupFilters.clearCheck();
+            chipGroupFilters.setOnCheckedStateChangeListener(null);
+        }
+        if (allReviews != null) {
+            allReviews.clear();
+        }
+        rvReviews = null;
+        shimmerReviews = null;
+        chipGroupFilters = null;
+        reviewAdapter = null;
+        suppressQueryTextChange = false;
         bottomSheetContainer = null;
         placeDetailSheet = null;
         routeDetailSheet = null;

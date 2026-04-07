@@ -78,9 +78,13 @@ public class AuthSessionManager {
     }
 
     public void clearSession() {
+        clearSession(null);
+    }
+
+    public void clearSession(Runnable onComplete) {
         UserPreferences.clearUser(context);
         clearPersistedSyncState();
-        localSessionDataCleaner.clearLocalUserData();
+        localSessionDataCleaner.clearLocalUserData(onComplete);
     }
 
     private void clearPersistedSyncState() {
@@ -93,22 +97,19 @@ public class AuthSessionManager {
     public void logout(@NonNull LogoutCallback callback) {
         String refreshToken = UserPreferences.getRefreshToken(context);
         if (refreshToken.isBlank()) {
-            clearSession();
-            callback.onComplete(false);
+            clearSession(() -> callback.onComplete(false));
             return;
         }
 
         restApiService.logout(new RefreshTokenRequest(refreshToken)).enqueue(new Callback<>() {
             @Override
             public void onResponse(@NonNull Call<Void> call, @NonNull Response<Void> response) {
-                clearSession();
-                callback.onComplete(response.isSuccessful());
+                clearSession(() -> callback.onComplete(response.isSuccessful()));
             }
 
             @Override
             public void onFailure(@NonNull Call<Void> call, @NonNull Throwable throwable) {
-                clearSession();
-                callback.onComplete(false);
+                clearSession(() -> callback.onComplete(false));
             }
         });
     }
