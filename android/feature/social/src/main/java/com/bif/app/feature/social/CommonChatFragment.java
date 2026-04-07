@@ -443,8 +443,11 @@ public class CommonChatFragment extends Fragment {
             JSONObject stop = stops.optJSONObject(i);
             if (stop == null) continue;
 
-            double lat = stop.optDouble("latitude", 0d);
-            double lng = stop.optDouble("longitude", 0d);
+            double lat = stop.optDouble("latitude", Double.NaN);
+            double lng = stop.optDouble("longitude", Double.NaN);
+            if (Double.isNaN(lat) || Double.isNaN(lng)) {
+                continue;
+            }
             if (hasPrev) {
                 total += haversineDistanceKm(prevLat, prevLng, lat, lng);
             }
