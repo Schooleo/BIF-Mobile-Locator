@@ -83,7 +83,8 @@ public class PlaceRepositoryTest {
                 mockSearchHistoryDao,
                 mockSyncManager,
                 mockNetworkMonitor,
-                mockAiGraphQlClient);
+                mockAiGraphQlClient,
+                null);
     }
 
     @After
