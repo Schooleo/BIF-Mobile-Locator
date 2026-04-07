@@ -11,7 +11,7 @@ import com.google.gson.Gson;
 public class TripSyncEntityHandler implements SyncEntityHandler {
 
     private static final String TAG = "TripSyncEntityHandler";
-    private static final int MAX_TRIPS_PER_GROUP = 10;
+    private static final int MAX_TRIPS_PER_GROUP = 30;
 
     private final TripDao tripDao;
     private final Gson gson;
@@ -78,6 +78,11 @@ public class TripSyncEntityHandler implements SyncEntityHandler {
             entity.serverVersion = Math.max(payload.serverVersion, change.serverVersion);
             entity.deleted = payload.deleted || "DELETE".equalsIgnoreCase(change.operation);
             tripDao.upsertTrip(entity);
+            if (payload.participantIds != null) {
+                tripDao.replaceTripMembersFromParticipantIds(entity.id,
+                        payload.participantIds,
+                        activeUserId);
+            }
             enforceGroupCap(entity.groupId);
         } catch (Exception e) {
             Log.e(TAG, "Failed applying pulled trip plan change", e);

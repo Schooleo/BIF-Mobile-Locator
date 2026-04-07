@@ -1,12 +1,13 @@
 package com.bif.app.feature.social;
 
+import android.annotation.SuppressLint;
+import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -15,20 +16,30 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.bif.app.domain.model.TripPlan;
+import com.bif.app.core.utils.DialogUtils;
+import com.bif.app.domain.model.TripMember;
+import com.google.android.material.button.MaterialButton;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
+import dagger.hilt.android.AndroidEntryPoint;
+
+@AndroidEntryPoint
 public class TripCollabFragment extends Fragment {
 
+    private static final String ARG_TRIP_ID = "tripId";
+
+    private TripCollabViewModel viewModel;
     private CollabAdapter adapter;
+    private String tripId = "";
 
     public static TripCollabFragment newInstance(String tripId) {
         TripCollabFragment fragment = new TripCollabFragment();
         Bundle args = new Bundle();
-        args.putString("tripId", tripId);
+        args.putString(ARG_TRIP_ID, tripId);
         fragment.setArguments(args);
         return fragment;
     }
@@ -45,7 +56,9 @@ public class TripCollabFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        Button btnAddCollaborator = view.findViewById(R.id.btn_add_collaborator);
+        tripId = getArguments() != null ? getArguments().getString(ARG_TRIP_ID, "") : "";
+
+        MaterialButton btnAddCollaborator = view.findViewById(R.id.btn_add_collaborator);
         RecyclerView rvCollab = view.findViewById(R.id.rv_collab);
         TextView tvEmpty = view.findViewById(R.id.tv_collab_empty);
 
@@ -53,47 +66,75 @@ public class TripCollabFragment extends Fragment {
         rvCollab.setLayoutManager(new LinearLayoutManager(requireContext()));
         rvCollab.setAdapter(adapter);
 
-        btnAddCollaborator.setOnClickListener(v -> Toast.makeText(
+        viewModel = new ViewModelProvider(this).get(TripCollabViewModel.class);
+        viewModel.setTripId(tripId);
+
+        btnAddCollaborator.setOnClickListener(v -> AddCollaboratorBottomSheet
+                .newInstance(tripId)
+                .show(getChildFragmentManager(), "AddCollaboratorBottomSheet"));
+
+        viewModel.getTripMembers().observe(getViewLifecycleOwner(), members -> {
+            List<TripMember> data = members == null ? Collections.emptyList() : members;
+            String currentUserId = viewModel.getCurrentUserId();
+            boolean isOwner = isCurrentUserOwner(data, currentUserId);
+
+            adapter.setItems(data, currentUserId);
+            adapter.setOwnerMode(isOwner);
+            btnAddCollaborator.setVisibility(isOwner ? View.VISIBLE : View.GONE);
+            tvEmpty.setVisibility(data.isEmpty() ? View.VISIBLE : View.GONE);
+        });
+
+        adapter.setOnRemoveClickListener(member -> DialogUtils.showConfirmDialog(
                 requireContext(),
-                R.string.trip_feature_add_collab_soon,
-                Toast.LENGTH_SHORT
-        ).show());
-
-        TripDetailViewModel viewModel = new ViewModelProvider(requireParentFragment())
-                .get(TripDetailViewModel.class);
-
-        if (viewModel.getTrip() != null) {
-            viewModel.getTrip().observe(getViewLifecycleOwner(), trip -> bindTrip(trip, tvEmpty));
-        }
+                getString(R.string.trip_collab_remove_title),
+                getString(R.string.trip_collab_remove_message, member.getName()),
+                getString(R.string.remove),
+                getString(R.string.cancel),
+                () -> viewModel.removeCollaborator(member)
+        ));
     }
 
-    private void bindTrip(@Nullable TripPlan trip, @NonNull TextView tvEmpty) {
-        List<String> participants = trip == null || trip.getParticipantIds() == null
-                ? Collections.emptyList()
-                : new ArrayList<>(trip.getParticipantIds());
-
-        adapter.setItems(participants);
-        tvEmpty.setVisibility(participants.isEmpty() ? View.VISIBLE : View.GONE);
+    private boolean isCurrentUserOwner(@NonNull List<TripMember> members,
+                                       @Nullable String currentUserId) {
+        if (currentUserId == null || currentUserId.trim().isEmpty()) {
+            return false;
+        }
+        String normalizedCurrentUserId = currentUserId.trim();
+        for (TripMember member : members) {
+            if (member == null || !member.isOwner()) {
+                continue;
+            }
+            String memberId = member.getUserId();
+            if (memberId != null && normalizedCurrentUserId.equals(memberId.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static class CollabAdapter extends RecyclerView.Adapter<CollabAdapter.CollabViewHolder> {
 
-        private final List<String> items = new ArrayList<>();
+        interface OnRemoveClickListener {
+            void onRemove(TripMember member);
+        }
+
+        private final List<TripMember> items = new ArrayList<>();
+        private String currentUserId = "";
+        private boolean isOwnerMode;
+        private OnRemoveClickListener onRemoveClickListener;
 
         @NonNull
         @Override
         public CollabViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
             View view = LayoutInflater.from(parent.getContext())
-                    .inflate(android.R.layout.simple_list_item_1, parent, false);
+                    .inflate(R.layout.item_trip_collaborator, parent, false);
             return new CollabViewHolder(view);
         }
 
         @Override
         public void onBindViewHolder(@NonNull CollabViewHolder holder, int position) {
-            String memberId = items.get(position);
-            holder.title.setText(memberId == null || memberId.trim().isEmpty()
-                    ? holder.itemView.getContext().getString(R.string.trip_collab_member_unknown)
-                    : memberId);
+            TripMember member = items.get(position);
+            holder.bind(member, isOwnerMode, currentUserId, onRemoveClickListener);
         }
 
         @Override
@@ -101,18 +142,74 @@ public class TripCollabFragment extends Fragment {
             return items.size();
         }
 
-        void setItems(@NonNull List<String> data) {
+        @SuppressLint("NotifyDataSetChanged")
+        void setItems(@NonNull List<TripMember> data, @NonNull String currentUserId) {
             items.clear();
             items.addAll(data);
+            this.currentUserId = currentUserId;
             notifyDataSetChanged();
         }
 
+        @SuppressLint("NotifyDataSetChanged")
+        void setOwnerMode(boolean ownerMode) {
+            isOwnerMode = ownerMode;
+            notifyDataSetChanged();
+        }
+
+        void setOnRemoveClickListener(OnRemoveClickListener listener) {
+            this.onRemoveClickListener = listener;
+        }
+
         static class CollabViewHolder extends RecyclerView.ViewHolder {
-            final TextView title;
+            final TextView tvAvatar;
+            final TextView tvName;
+            final TextView tvRole;
+            final ImageButton btnDelete;
 
             CollabViewHolder(@NonNull View itemView) {
                 super(itemView);
-                title = itemView.findViewById(android.R.id.text1);
+                tvAvatar = itemView.findViewById(R.id.tv_trip_member_avatar);
+                tvName = itemView.findViewById(R.id.tv_trip_member_name);
+                tvRole = itemView.findViewById(R.id.tv_trip_member_role);
+                btnDelete = itemView.findViewById(R.id.btn_remove_trip_member);
+            }
+
+            void bind(TripMember member,
+                      boolean ownerMode,
+                      String currentUserId,
+                      OnRemoveClickListener onRemoveClickListener) {
+                if (member == null) {
+                    return;
+                }
+
+                String safeName = member.getName() == null || member.getName().trim().isEmpty()
+                        ? itemView.getContext().getString(R.string.trip_collab_member_unknown)
+                        : member.getName().trim();
+                String letter = member.getAvatarLetter();
+                if (letter == null || letter.trim().isEmpty()) {
+                    letter = safeName.substring(0, 1).toUpperCase(Locale.ROOT);
+                }
+
+                tvAvatar.setText(letter);
+                tvAvatar.setBackgroundTintList(ColorStateList.valueOf(member.getAvatarColor()));
+
+                String memberId = member.getUserId() == null ? "" : member.getUserId().trim();
+                boolean isCurrentUser = !currentUserId.trim().isEmpty()
+                        && currentUserId.trim().equals(memberId);
+                tvName.setText(isCurrentUser
+                        ? itemView.getContext().getString(R.string.member_you)
+                        : safeName);
+                tvRole.setText(member.isOwner()
+                        ? R.string.trip_collab_role_owner
+                        : R.string.trip_collab_role_collaborator);
+
+                boolean showDelete = ownerMode && !member.isOwner();
+                btnDelete.setVisibility(showDelete ? View.VISIBLE : View.GONE);
+                btnDelete.setOnClickListener(v -> {
+                    if (showDelete && onRemoveClickListener != null) {
+                        onRemoveClickListener.onRemove(member);
+                    }
+                });
             }
         }
     }

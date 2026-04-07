@@ -8,7 +8,10 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Transformations;
 
+import com.bif.app.core.network.AiGraphQlClient;
 import com.bif.app.core.network.RestApiService;
+import com.bif.app.core.network.dto.ai.AiPlaceSuggestionPayload;
+import com.bif.app.core.network.dto.ai.AiSuggestedPlacePayload;
 import com.bif.app.core.network.dto.place.PlaceDto;
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.PlaceMapper;
@@ -19,6 +22,8 @@ import com.bif.app.data.source.local.entity.PlaceEntity;
 import com.bif.app.data.source.local.entity.SearchHistoryEntity;
 import com.bif.app.data.sync.core.NetworkMonitor;
 import com.bif.app.data.sync.core.SyncManager;
+import com.bif.app.domain.model.AiPlaceSuggestion;
+import com.bif.app.domain.model.AiPlaceSuggestionResult;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.repository.IPlaceRepository;
@@ -50,6 +55,7 @@ public class PlaceRepository implements IPlaceRepository {
     private final SearchHistoryDao searchHistoryDao;
     private final SyncManager syncManager;
     private final NetworkMonitor networkMonitor;
+    private final AiGraphQlClient aiGraphQlClient;
     private final ExecutorService executorService;
     private final String activeUserId;
 
@@ -60,6 +66,7 @@ public class PlaceRepository implements IPlaceRepository {
                            SearchHistoryDao searchHistoryDao,
                            SyncManager syncManager,
                            NetworkMonitor networkMonitor,
+                           AiGraphQlClient aiGraphQlClient,
                            @ApplicationContext Context appContext) {
         this.geocodingDataSource = geocodingDataSource;
         this.restApiService = restApiService;
@@ -67,6 +74,7 @@ public class PlaceRepository implements IPlaceRepository {
         this.searchHistoryDao = searchHistoryDao;
         this.syncManager = syncManager;
         this.networkMonitor = networkMonitor;
+        this.aiGraphQlClient = aiGraphQlClient;
         this.executorService = Executors.newFixedThreadPool(4);
         this.activeUserId = resolveActiveUserId(appContext);
 
@@ -82,7 +90,18 @@ public class PlaceRepository implements IPlaceRepository {
                            SyncManager syncManager,
                            NetworkMonitor networkMonitor) {
         this(geocodingDataSource, restApiService, placeDao,
-                searchHistoryDao, syncManager, networkMonitor, null);
+                    searchHistoryDao, syncManager, networkMonitor, null, null);
+                }
+
+                public PlaceRepository(AndroidGeocodingDataSource geocodingDataSource,
+                           RestApiService restApiService,
+                           PlaceDao placeDao,
+                           SearchHistoryDao searchHistoryDao,
+                           SyncManager syncManager,
+                           NetworkMonitor networkMonitor,
+                           AiGraphQlClient aiGraphQlClient) {
+                this(geocodingDataSource, restApiService, placeDao,
+                    searchHistoryDao, syncManager, networkMonitor, aiGraphQlClient, null);
     }
 
     @Override
@@ -116,6 +135,85 @@ public class PlaceRepository implements IPlaceRepository {
     @Override
     public LiveData<List<Place>> searchPlacesFromHistory(String query) {
         return doSearch(query, false);
+    }
+
+    @Override
+    public LiveData<AiPlaceSuggestionResult> suggestPlacesFromQuery(String query) {
+        MutableLiveData<AiPlaceSuggestionResult> result = new MutableLiveData<>();
+
+        if (query == null || query.trim().isEmpty()) {
+            result.setValue(new AiPlaceSuggestionResult(new ArrayList<>(),
+                    new ArrayList<>(), null));
+            return result;
+        }
+
+        if (!networkMonitor.isOnline()) {
+            result.setValue(new AiPlaceSuggestionResult(new ArrayList<>(),
+                    new ArrayList<>(), "OFFLINE"));
+            return result;
+        }
+
+        executorService.execute(() -> {
+                if (aiGraphQlClient == null) {
+                result.postValue(new AiPlaceSuggestionResult(new ArrayList<>(),
+                        new ArrayList<>(), "AI_FAILURE"));
+                return;
+            }
+
+            try {
+                AiPlaceSuggestionPayload payload = aiGraphQlClient.suggestPlacesFromQuery(query);
+                List<String> warnings = payload.warnings != null
+                    ? new ArrayList<>(payload.warnings)
+                    : new ArrayList<>();
+
+                String failureCode = payload.failureCode;
+
+                if (failureCode != null) {
+                    result.postValue(new AiPlaceSuggestionResult(new ArrayList<>(),
+                            warnings, failureCode));
+                    return;
+                }
+
+                List<AiPlaceSuggestion> mappedPlaces = new ArrayList<>();
+                if (payload.places != null) {
+                    for (AiSuggestedPlacePayload placeNode : payload.places) {
+                        if (placeNode == null) {
+                            continue;
+                        }
+
+                        String placeId = placeNode.id != null
+                        ? placeNode.id
+                                : UUID.randomUUID().toString();
+                    String placeName = placeNode.name != null
+                        ? placeNode.name
+                                : "";
+                    String placeAddress = placeNode.address != null
+                        ? placeNode.address
+                                : "";
+                    double rating = placeNode.rating;
+                    int addedToTripCount = placeNode.addedToTripCount;
+
+                        Place place = new Place(
+                                placeId,
+                                placeName,
+                                placeAddress,
+                                rating,
+                        new Location(placeNode.latitude, placeNode.longitude)
+                        );
+                        mappedPlaces.add(new AiPlaceSuggestion(place, addedToTripCount));
+                    }
+                }
+
+                result.postValue(new AiPlaceSuggestionResult(mappedPlaces,
+                        warnings, null));
+            } catch (Exception exception) {
+                Log.e(TAG, "AI suggest query failed", exception);
+                result.postValue(new AiPlaceSuggestionResult(new ArrayList<>(),
+                        new ArrayList<>(), "AI_FAILURE"));
+            }
+        });
+
+        return result;
     }
 
     private LiveData<List<Place>> doSearch(String query, boolean saveToHistory) {

@@ -30,6 +30,7 @@ import com.bif.app.data.sync.handler.GroupSyncEntityHandler;
 import com.bif.app.data.sync.handler.PlaceSyncEntityHandler;
 import com.bif.app.data.sync.handler.ProfileSyncEntityHandler;
 import com.bif.app.data.sync.handler.SyncEntityHandler;
+import com.bif.app.data.sync.handler.TripMemberSyncEntityHandler;
 import com.bif.app.data.sync.handler.TripStopSyncEntityHandler;
 import com.bif.app.data.sync.handler.TripSyncEntityHandler;
 import com.google.gson.Gson;
@@ -108,6 +109,7 @@ public class SyncManager {
 
         registerHandler(new PlaceSyncEntityHandler(placeDao, gson));
         registerHandler(new TripSyncEntityHandler(tripDao, gson));
+        registerHandler(new TripMemberSyncEntityHandler(tripDao, gson));
         registerHandler(new TripStopSyncEntityHandler(tripDao, gson));
         registerHandler(new ChatMessageSyncEntityHandler(chatMessageDao, gson));
         registerHandler(new GroupSyncEntityHandler(groupDao, gson));
@@ -271,9 +273,11 @@ public class SyncManager {
     }
 
     public void syncIfOnline() {
-        if (networkMonitor.isOnline()) {
-            sync();
-        }
+        enqueueExecutor.execute(() -> {
+            if (networkMonitor.isOnline()) {
+                sync();
+            }
+        });
     }
 
     public boolean isOnline() {

@@ -1,6 +1,5 @@
 package com.bif.app.feature.social;
 
-import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.timeout;
@@ -14,11 +13,11 @@ import com.bif.app.domain.model.Friend;
 import com.bif.app.domain.model.Group;
 import com.bif.app.domain.repository.IFriendshipRepository;
 import com.bif.app.domain.repository.IGroupRepository;
+import com.bif.app.domain.repository.ITripRepository;
 
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -36,6 +35,9 @@ public class SocialViewModelTest {
     @Mock
     private IGroupRepository mockGroupRepository;
 
+    @Mock
+    private ITripRepository mockTripRepository;
+
     private SocialViewModel viewModel;
 
     @Before
@@ -44,7 +46,11 @@ public class SocialViewModelTest {
         when(mockFriendshipRepository.getFriends()).thenReturn(new MutableLiveData<>());
         when(mockFriendshipRepository.getPendingRequests()).thenReturn(new MutableLiveData<>());
         when(mockGroupRepository.getGroups()).thenReturn(new MutableLiveData<>());
-        viewModel = new SocialViewModel(mockFriendshipRepository, mockGroupRepository);
+        when(mockTripRepository.getAllTrips()).thenReturn(new MutableLiveData<>());
+        viewModel = new SocialViewModel(
+            mockFriendshipRepository,
+            mockGroupRepository,
+            mockTripRepository);
     }
 
     // ==================== Friend Tests ====================

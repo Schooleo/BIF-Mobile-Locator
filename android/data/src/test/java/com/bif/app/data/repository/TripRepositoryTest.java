@@ -112,6 +112,15 @@ public class TripRepositoryTest {
         when(mockTripDao.getStopByIdSync("stop-1")).thenReturn(null);
         when(mockTripDao.getActiveStopsByTripSync("trip-1"))
                 .thenReturn(List.of(new TripStopEntity(), new TripStopEntity()));
+        TripPlanEntity planEntity = new TripPlanEntity();
+        planEntity.id = "trip-1";
+        planEntity.groupId = "group-1";
+        TripDao.TripPlanWithStops planWithStops = new TripDao.TripPlanWithStops();
+        planWithStops.trip = planEntity;
+        planWithStops.stops = new ArrayList<>();
+        planWithStops.members = new ArrayList<>();
+        when(mockTripDao.getTripWithStopsByIdSync("trip-1"))
+                .thenReturn(planWithStops);
 
         TripStop stop = new TripStop("stop-1", "Museum", "note",
                 1.0, 2.0, 0L, 0L, 0);
@@ -127,6 +136,8 @@ public class TripRepositoryTest {
 
         verify(mockSyncManager).enqueueChange(eq("trip_stop"),
                 eq("stop-1"), eq("UPDATE"), anyString(), any());
+        verify(mockSyncManager).enqueueChange(eq("trip_plan"),
+                eq("trip-1"), eq("UPDATE"), anyString(), any());
         verify(mockSyncManager).syncIfOnline();
     }
 
