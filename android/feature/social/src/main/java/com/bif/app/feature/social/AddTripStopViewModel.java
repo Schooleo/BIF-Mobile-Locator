@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.inject.Inject;
 
@@ -37,6 +38,7 @@ public class AddTripStopViewModel extends ViewModel {
     private final MutableLiveData<Boolean> aiToggleEnabled = new MutableLiveData<>(false);
     private final MutableLiveData<String> searchHint = new MutableLiveData<>("Search places...");
     private final MutableLiveData<SearchState> searchState = new MutableLiveData<>(new SearchState.Idle());
+    private final AtomicInteger currentSearchToken = new AtomicInteger(0);
 
     private String currentTripId = "";
 
@@ -95,6 +97,7 @@ public class AddTripStopViewModel extends ViewModel {
     }
 
     public void search(@NonNull String rawQuery) {
+        int requestToken = currentSearchToken.incrementAndGet();
         String query = rawQuery.trim();
         if (query.isEmpty()) {
             searchState.setValue(new SearchState.Idle());
@@ -107,8 +110,12 @@ public class AddTripStopViewModel extends ViewModel {
         }
 
         searchState.setValue(new SearchState.Loading(false));
-        LiveData<List<Place>> source = placeRepository.searchPlaces(query);
+        LiveData<List<Place>> source = placeRepository.searchPlaces(query, null);
         observeOnce(source, places -> {
+            if (requestToken != currentSearchToken.get()) {
+                return;
+            }
+
             List<StopSearchResultItem> mapped = new ArrayList<>();
             if (places != null) {
                 for (Place place : places) {
@@ -134,8 +141,8 @@ public class AddTripStopViewModel extends ViewModel {
         TripStop stop = new TripStop(
                 UUID.randomUUID().toString(),
                 place.name,
-            place.address,
-            "",
+                place.address,
+                "",
                 location.latitude,
                 location.longitude,
                 scheduledAtMillis,
@@ -152,6 +159,8 @@ public class AddTripStopViewModel extends ViewModel {
     }
 
     private void runAiSearch(@NonNull String query) {
+        int requestToken = currentSearchToken.incrementAndGet();
+
         if (!networkMonitor.isOnline()) {
             aiModeEnabled.setValue(false);
             aiToggleEnabled.setValue(false);
@@ -165,6 +174,10 @@ public class AddTripStopViewModel extends ViewModel {
 
         LiveData<AiPlaceSuggestionResult> source = placeRepository.suggestPlacesFromQuery(query);
         observeOnce(source, result -> {
+            if (requestToken != currentSearchToken.get()) {
+                return;
+            }
+
             if (result == null) {
                 searchState.setValue(new SearchState.Empty(
                         "We couldn't find any places matching your vibe."));
@@ -206,7 +219,7 @@ public class AddTripStopViewModel extends ViewModel {
     }
 
     private <T> void observeOnce(@NonNull LiveData<T> source, @NonNull Observer<T> observer) {
-        source.observeForever(new Observer<>() {
+        source.observeForever(new Observer<T>() {
             @Override
             public void onChanged(T value) {
                 source.removeObserver(this);

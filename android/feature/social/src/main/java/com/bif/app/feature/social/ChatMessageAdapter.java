@@ -261,6 +261,10 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         public double getLongitude() {
             return longitude;
         }
+
+        public boolean hasCoordinates() {
+            return Double.isFinite(latitude) && Double.isFinite(longitude);
+        }
     }
 
     private static final int VIEW_TYPE_TEXT_INCOMING = 1;
@@ -447,13 +451,14 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             tvStartTime.setText(card.getStartTime());
             tvTotalDistance.setText(card.getTotalDistance());
 
-            if (card.isSaved()) {
+            boolean hasTripId = card.getTripId() != null && !card.getTripId().trim().isEmpty();
+            if (card.isSaved() || !hasTripId) {
                 btnSaveTrip.setVisibility(View.GONE);
                 btnSaveTrip.setOnClickListener(null);
             } else {
                 btnSaveTrip.setVisibility(View.VISIBLE);
                 btnSaveTrip.setOnClickListener(v -> {
-                    if (actionCallback != null && card.getTripId() != null && !card.getTripId().trim().isEmpty()) {
+                    if (actionCallback != null) {
                         actionCallback.onSaveTripClick(card.getTripId());
                     }
                 });
@@ -495,9 +500,20 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             SuggestedPlacesCard card = message.getSuggestedPlacesCard();
             if (card == null) {
                 nestedAdapter.submit(Collections.emptyList(), "");
+                resetSuggestedPlacesScroll();
                 return;
             }
             nestedAdapter.submit(card.getPlaces(), card.getTripId());
+            resetSuggestedPlacesScroll();
+        }
+
+        private void resetSuggestedPlacesScroll() {
+            RecyclerView.LayoutManager layoutManager = rvSuggestedPlaces.getLayoutManager();
+            if (layoutManager instanceof LinearLayoutManager) {
+                ((LinearLayoutManager) layoutManager).scrollToPositionWithOffset(0, 0);
+            } else {
+                rvSuggestedPlaces.scrollToPosition(0);
+            }
         }
     }
 
@@ -567,11 +583,18 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                     tvRating.setVisibility(View.GONE);
                 }
 
-                btnAddToTrip.setOnClickListener(v -> {
-                    if (actionCallback != null) {
-                        actionCallback.onAddPlaceToTripClick(tripId, place);
-                    }
-                });
+                boolean hasTripId = tripId != null && !tripId.trim().isEmpty();
+                if (hasTripId && place.hasCoordinates()) {
+                    btnAddToTrip.setVisibility(View.VISIBLE);
+                    btnAddToTrip.setOnClickListener(v -> {
+                        if (actionCallback != null) {
+                            actionCallback.onAddPlaceToTripClick(tripId, place);
+                        }
+                    });
+                } else {
+                    btnAddToTrip.setVisibility(View.GONE);
+                    btnAddToTrip.setOnClickListener(null);
+                }
 
                 btnViewPlace.setOnClickListener(v -> {
                     if (actionCallback != null) {

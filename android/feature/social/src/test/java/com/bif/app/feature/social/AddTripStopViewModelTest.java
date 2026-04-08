@@ -2,7 +2,9 @@ package com.bif.app.feature.social;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -52,7 +54,7 @@ public class AddTripStopViewModelTest {
         when(networkMonitor.observeConnectivity()).thenReturn(connectivityLiveData);
         when(networkMonitor.isOnline()).thenReturn(true);
 
-        Mockito.lenient().when(placeRepository.searchPlaces(anyString()))
+        Mockito.lenient().when(placeRepository.searchPlaces(anyString(), any(Location.class)))
                 .thenReturn(new MutableLiveData<>(Collections.emptyList()));
         Mockito.lenient().when(placeRepository.suggestPlacesFromQuery(anyString()))
                 .thenReturn(new MutableLiveData<>(new AiPlaceSuggestionResult(
@@ -69,8 +71,8 @@ public class AddTripStopViewModelTest {
 
         viewModel.toggleAiMode();
 
-        assertFalse(Boolean.TRUE.equals(viewModel.getAiModeEnabled().getValue()));
-        assertFalse(Boolean.TRUE.equals(viewModel.getAiToggleEnabled().getValue()));
+        assertNotEquals(Boolean.TRUE, viewModel.getAiModeEnabled().getValue());
+        assertNotEquals(Boolean.TRUE, viewModel.getAiToggleEnabled().getValue());
     }
 
     @Test
@@ -79,7 +81,7 @@ public class AddTripStopViewModelTest {
 
         viewModel.toggleAiMode();
 
-        assertTrue(Boolean.TRUE.equals(viewModel.getAiModeEnabled().getValue()));
+        assertEquals(Boolean.TRUE, viewModel.getAiModeEnabled().getValue());
         assertEquals("Describe your vibe...", viewModel.getSearchHint().getValue());
     }
 
@@ -108,8 +110,8 @@ public class AddTripStopViewModelTest {
 
         viewModel.search("hidden cafe");
 
-        assertFalse(Boolean.TRUE.equals(viewModel.getAiModeEnabled().getValue()));
-        assertFalse(Boolean.TRUE.equals(viewModel.getAiToggleEnabled().getValue()));
+        assertNotEquals(Boolean.TRUE, viewModel.getAiModeEnabled().getValue());
+        assertNotEquals(Boolean.TRUE, viewModel.getAiToggleEnabled().getValue());
         assertTrue(viewModel.getSearchState().getValue() instanceof AddTripStopViewModel.SearchState.Empty);
     }
 

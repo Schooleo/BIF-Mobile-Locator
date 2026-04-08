@@ -206,13 +206,18 @@ public class ChatViewModel extends ViewModel {
     public void addSuggestedPlaceToTrip(String tripId, Place place) {
         if (tripId == null || tripId.trim().isEmpty() || place == null) return;
 
-        Location location = place.location != null ? place.location : new Location(0d, 0d);
+        if (place.location == null
+            || !Double.isFinite(place.location.latitude)
+            || !Double.isFinite(place.location.longitude)) {
+            return;
+        }
+
         TripStop stop = new TripStop(
                 UUID.randomUUID().toString(),
                 place.name,
                 place.address,
-                location.latitude,
-                location.longitude,
+            place.location.latitude,
+            place.location.longitude,
                 0L,
                 0L,
                 0

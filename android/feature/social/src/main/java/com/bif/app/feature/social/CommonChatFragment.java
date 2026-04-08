@@ -117,12 +117,22 @@ public class CommonChatFragment extends Fragment {
 
             @Override
             public void onSaveTripClick(String tripId) {
+                if (tripId == null || tripId.trim().isEmpty()) {
+                    return;
+                }
                 viewModel.onSaveTripCard(tripId);
             }
 
             @Override
             public void onAddPlaceToTripClick(String tripId, ChatMessageAdapter.PlaceCard place) {
-                viewModel.addSuggestedPlaceToTrip(tripId, toDomainPlace(place));
+                if (tripId == null || tripId.trim().isEmpty()) {
+                    return;
+                }
+                Place domainPlace = toDomainPlace(place);
+                if (domainPlace == null) {
+                    return;
+                }
+                viewModel.addSuggestedPlaceToTrip(tripId, domainPlace);
             }
 
             @Override
@@ -150,7 +160,7 @@ public class CommonChatFragment extends Fragment {
         viewModel.getMessages().observe(getViewLifecycleOwner(), this::onMessagesUpdated);
         viewModel.getSavedTripCardIds().observe(getViewLifecycleOwner(), savedIds -> {
             if (!latestMessages.isEmpty()) {
-                renderMessages(latestMessages, false);
+                updateSavedStateForMessages();
             }
         });
         viewModel.getAiBadgesEnabled().observe(getViewLifecycleOwner(), enabled -> {
@@ -269,6 +279,14 @@ public class CommonChatFragment extends Fragment {
         }
     }
 
+    private void updateSavedStateForMessages() {
+        List<ChatMessageAdapter.ChatMessage> adapterMessages = new ArrayList<>();
+        for (ChatMessage msg : latestMessages) {
+            adapterMessages.add(domainToAdapterMessage(msg));
+        }
+        adapter.submit(adapterMessages);
+    }
+
     private ChatMessageAdapter.ChatMessage domainToAdapterMessage(ChatMessage msg) {
         String senderDisplay = msg.getSenderName() != null && !msg.getSenderName().isEmpty()
                 ? msg.getSenderName()
@@ -358,6 +376,9 @@ public class CommonChatFragment extends Fragment {
                 tripId = json.optString("tripId", tripId);
                 stopCount = json.optInt("stopCount", stopCount);
                 startTimeMs = json.optLong("startTime", startTimeMs);
+                if (startTimeMs <= 0L) {
+                    startTimeMs = msg.getSentAt();
+                }
                 isSaved = json.optBoolean("isSaved", isSaved);
 
                 double distanceFromPayload = json.optDouble("totalDistance", -1d);
@@ -395,14 +416,13 @@ public class CommonChatFragment extends Fragment {
             tripId = data.getTripId() != null ? data.getTripId() : "";
             for (Place place : data.getPlaces()) {
                 if (place == null) continue;
-                Location location = place.location != null ? place.location : new Location(0d, 0d);
                 places.add(new ChatMessageAdapter.PlaceCard(
                         place.id,
                         place.name,
                         place.address,
                         place.rating,
-                        location.latitude,
-                        location.longitude
+                        place.location != null ? place.location.latitude : Double.NaN,
+                        place.location != null ? place.location.longitude : Double.NaN
                 ));
             }
         }
@@ -419,13 +439,19 @@ public class CommonChatFragment extends Fragment {
                     for (int i = 0; i < items.length(); i++) {
                         JSONObject placeJson = items.optJSONObject(i);
                         if (placeJson == null) continue;
+                        double latitude = placeJson.has("latitude")
+                                ? placeJson.optDouble("latitude", Double.NaN)
+                                : Double.NaN;
+                        double longitude = placeJson.has("longitude")
+                                ? placeJson.optDouble("longitude", Double.NaN)
+                                : Double.NaN;
                         places.add(new ChatMessageAdapter.PlaceCard(
                                 placeJson.optString("id", ""),
                                 placeJson.optString("name", "Unknown place"),
                                 placeJson.optString("address", ""),
                                 placeJson.optDouble("rating", 0d),
-                                placeJson.optDouble("latitude", 0d),
-                                placeJson.optDouble("longitude", 0d)
+                                latitude,
+                                longitude
                         ));
                     }
                 }
@@ -449,11 +475,8 @@ public class CommonChatFragment extends Fragment {
             JSONObject stop = stops.optJSONObject(i);
             if (stop == null) continue;
 
-            double lat = stop.optDouble("latitude", Double.NaN);
-            double lng = stop.optDouble("longitude", Double.NaN);
-            if (Double.isNaN(lat) || Double.isNaN(lng)) {
-                continue;
-            }
+            double lat = stop.optDouble("latitude", 0d);
+            double lng = stop.optDouble("longitude", 0d);
             if (hasPrev) {
                 total += haversineDistanceKm(prevLat, prevLng, lat, lng);
             }
@@ -589,6 +612,9 @@ public class CommonChatFragment extends Fragment {
     }
 
     private Place toDomainPlace(ChatMessageAdapter.PlaceCard placeCard) {
+        if (placeCard == null || !placeCard.hasCoordinates()) {
+            return null;
+        }
         return new Place(
                 placeCard.getId(),
                 placeCard.getName(),
@@ -632,8 +658,14 @@ public class CommonChatFragment extends Fragment {
     }
 
     private void handleViewPlaceClick(ChatMessageAdapter.PlaceCard place) {
-        String location = place.getLatitude() + "," + place.getLongitude();
-        if (Math.abs(place.getLatitude()) < 0.000001d && Math.abs(place.getLongitude()) < 0.000001d) {
+        if (place == null) {
+            return;
+        }
+
+        String location;
+        if (place.hasCoordinates()) {
+            location = place.getLatitude() + "," + place.getLongitude();
+        } else {
             location = place.getAddress() != null && !place.getAddress().trim().isEmpty()
                     ? place.getAddress()
                     : place.getName();
