@@ -4,28 +4,35 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-
-import java.util.HashMap;
-import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(ApiExceptionHandler.class);
+
     @ExceptionHandler(SecurityException.class)
-    public ResponseEntity<Map<String, Object>> handleSecurity(SecurityException ex) {
-        return build(HttpStatus.FORBIDDEN, ex.getMessage());
+    public ResponseEntity<ErrorResponse> handleSecurity(SecurityException ex) {
+        LOGGER.warn("Forbidden request", ex);
+        return build(HttpStatus.FORBIDDEN, "Access denied");
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, Object>> handleBadRequest(IllegalArgumentException ex) {
-        return build(HttpStatus.BAD_REQUEST, ex.getMessage());
+    public ResponseEntity<ErrorResponse> handleBadRequest(IllegalArgumentException ex) {
+        LOGGER.warn("Bad request", ex);
+        return build(HttpStatus.BAD_REQUEST, "Invalid request");
     }
 
-    private ResponseEntity<Map<String, Object>> build(HttpStatus status, String message) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("status", status.value());
-        body.put("error", status.getReasonPhrase());
-        body.put("message", message != null ? message : "Unexpected error");
+    private ResponseEntity<ErrorResponse> build(HttpStatus status, String message) {
+        ErrorResponse body = new ErrorResponse(
+                status.value(),
+                status.getReasonPhrase(),
+                message != null ? message : "Unexpected error"
+        );
         return ResponseEntity.status(status).body(body);
+    }
+
+    public record ErrorResponse(int status, String error, String message) {
     }
 }

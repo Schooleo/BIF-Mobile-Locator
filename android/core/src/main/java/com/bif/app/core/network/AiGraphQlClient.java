@@ -4,6 +4,7 @@ import android.util.Log;
 
 import com.apollographql.apollo.api.ApolloResponse;
 import com.apollographql.java.client.ApolloClient;
+import com.apollographql.java.client.ApolloDisposable;
 import com.bif.app.core.network.dto.ai.AiPlaceSuggestionPayload;
 import com.bif.app.core.network.dto.ai.AiSuggestedPlacePayload;
 import com.bif.app.core.network.dto.ai.AiTripDraftPayload;
@@ -36,8 +37,9 @@ public class AiGraphQlClient {
         AtomicReference<ApolloResponse<SuggestPlacesFromQueryMutation.Data>> responseRef =
                 new AtomicReference<>();
         CountDownLatch latch = new CountDownLatch(1);
+        ApolloDisposable disposable;
 
-        apolloClient
+        disposable = apolloClient
                 .mutation(new SuggestPlacesFromQueryMutation(query))
                 .enqueue(response -> {
                     responseRef.set(response);
@@ -49,9 +51,11 @@ public class AiGraphQlClient {
             completed = latch.await(15, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            disposable.dispose();
             return new AiPlaceSuggestionPayload(new ArrayList<>(), new ArrayList<>(), "AI_FAILURE");
         }
         if (!completed) {
+            disposable.dispose();
             return new AiPlaceSuggestionPayload(new ArrayList<>(), new ArrayList<>(), "AI_FAILURE");
         }
 
@@ -84,10 +88,11 @@ public class AiGraphQlClient {
 
         List<AiSuggestedPlacePayload> mapped = new ArrayList<>();
         if (payload.places != null) {
-            for (SuggestPlacesFromQueryMutation.Place place : payload.places) {
-                if (place == null) {
+            for (SuggestPlacesFromQueryMutation.Place suggestion : payload.places) {
+                if (suggestion == null || suggestion.placeData == null) {
                     continue;
                 }
+                SuggestPlacesFromQueryMutation.PlaceData place = suggestion.placeData;
 
                 Double latitude = place.location != null
                         ? place.location.latitude
@@ -101,7 +106,7 @@ public class AiGraphQlClient {
                         place.name,
                         place.address,
                         place.rating != null ? place.rating : 0d,
-                        place.addedToTripCount != null ? place.addedToTripCount : 0,
+                    suggestion.addedToTripCount != null ? suggestion.addedToTripCount : 0,
                         latitude,
                         longitude
                 ));
@@ -115,16 +120,25 @@ public class AiGraphQlClient {
         AtomicReference<ApolloResponse<DraftTripFromQueryMutation.Data>> responseRef =
                 new AtomicReference<>();
         CountDownLatch latch = new CountDownLatch(1);
+        ApolloDisposable disposable;
 
-        apolloClient
+        disposable = apolloClient
                 .mutation(new DraftTripFromQueryMutation(query))
                 .enqueue(response -> {
                     responseRef.set(response);
                     latch.countDown();
                 });
 
-        boolean completed = latch.await(15, TimeUnit.SECONDS);
+        boolean completed;
+        try {
+            completed = latch.await(15, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            disposable.dispose();
+            return new AiTripDraftResultPayload(null, new ArrayList<>(), new ArrayList<>(), "AI_FAILURE");
+        }
         if (!completed) {
+            disposable.dispose();
             return new AiTripDraftResultPayload(null, new ArrayList<>(), new ArrayList<>(), "AI_FAILURE");
         }
 

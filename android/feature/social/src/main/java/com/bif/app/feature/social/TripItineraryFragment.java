@@ -28,7 +28,6 @@ import com.bif.app.domain.model.TripPlan;
 import com.bif.app.domain.model.TripStop;
 import com.google.android.material.button.MaterialButton;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
@@ -36,7 +35,6 @@ import java.util.Date;
 import java.util.IdentityHashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -117,15 +115,19 @@ public class TripItineraryFragment extends Fragment {
                 : new ArrayList<>(trip.getStops());
 
         stops.sort((left, right) -> {
-            long leftAnchor = left.getArrivalTime() > 0 ? left.getArrivalTime() : left.getDepartureTime();
-            long rightAnchor = right.getArrivalTime() > 0 ? right.getArrivalTime() : right.getDepartureTime();
-            if (leftAnchor == 0L && rightAnchor == 0L) {
+            long leftAnchor = left.getArrivalTime() > 0
+                    ? left.getArrivalTime()
+                    : (left.getDepartureTime() > 0 ? left.getDepartureTime() : 0L);
+            long rightAnchor = right.getArrivalTime() > 0
+                    ? right.getArrivalTime()
+                    : (right.getDepartureTime() > 0 ? right.getDepartureTime() : 0L);
+            if (leftAnchor <= 0L && rightAnchor <= 0L) {
                 return Integer.compare(left.getOrderIndex(), right.getOrderIndex());
             }
-            if (leftAnchor == 0L) {
+            if (leftAnchor <= 0L) {
                 return 1;
             }
-            if (rightAnchor == 0L) {
+            if (rightAnchor <= 0L) {
                 return -1;
             }
             int compare = Long.compare(leftAnchor, rightAnchor);
@@ -159,8 +161,8 @@ public class TripItineraryFragment extends Fragment {
             selected[0].setTimeInMillis(anchor);
         }
 
-        SimpleDateFormat dateFormat = new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault());
-        SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
+        java.text.DateFormat dateFormat = android.text.format.DateFormat.getDateFormat(requireContext());
+        java.text.DateFormat timeFormat = android.text.format.DateFormat.getTimeFormat(requireContext());
 
         Runnable refreshDateTime = () -> {
             if (selected[0] == null) {
@@ -345,13 +347,14 @@ public class TripItineraryFragment extends Fragment {
         private final Map<TripStop, String> fallbackStopKeys = new IdentityHashMap<>();
         private final Context context;
         private final StopActionListener stopActionListener;
-        private final SimpleDateFormat dateHeaderFormatter =
-                new SimpleDateFormat("EEE, MMM dd, yyyy", Locale.getDefault());
-        private final SimpleDateFormat timeFormatter = new SimpleDateFormat("HH:mm", Locale.getDefault());
+        private final java.text.DateFormat dateHeaderFormatter;
+        private final java.text.DateFormat timeFormatter;
 
         ItineraryAdapter(@NonNull Context context, @NonNull StopActionListener stopActionListener) {
             this.context = context;
             this.stopActionListener = stopActionListener;
+            this.dateHeaderFormatter = android.text.format.DateFormat.getMediumDateFormat(context);
+            this.timeFormatter = android.text.format.DateFormat.getTimeFormat(context);
         }
 
         @Override
@@ -444,8 +447,15 @@ public class TripItineraryFragment extends Fragment {
                 }
             });
 
-            stopHolder.btnDelete.setOnClickListener(v -> stopActionListener.onDeleteStop(stop));
-            stopHolder.btnEdit.setOnClickListener(v -> stopActionListener.onEditStop(stop));
+            boolean hasPersistedId = stop.getId() != null && !stop.getId().trim().isEmpty();
+            stopHolder.btnDelete.setOnClickListener(null);
+            stopHolder.btnEdit.setOnClickListener(null);
+            stopHolder.btnDelete.setEnabled(hasPersistedId);
+            stopHolder.btnEdit.setEnabled(hasPersistedId);
+            if (hasPersistedId) {
+                stopHolder.btnDelete.setOnClickListener(v -> stopActionListener.onDeleteStop(stop));
+                stopHolder.btnEdit.setOnClickListener(v -> stopActionListener.onEditStop(stop));
+            }
         }
 
         @Override

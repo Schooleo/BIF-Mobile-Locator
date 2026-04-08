@@ -404,12 +404,43 @@ public class ChatViewModel extends ViewModel {
         if (value == null) {
             return "\"\"";
         }
-        String escaped = value
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r");
-        return "\"" + escaped + "\"";
+        StringBuilder escaped = new StringBuilder(value.length() + 16);
+        escaped.append('"');
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            switch (ch) {
+                case '\\':
+                    escaped.append("\\\\");
+                    break;
+                case '"':
+                    escaped.append("\\\"");
+                    break;
+                case '\n':
+                    escaped.append("\\n");
+                    break;
+                case '\r':
+                    escaped.append("\\r");
+                    break;
+                case '\t':
+                    escaped.append("\\t");
+                    break;
+                case '\b':
+                    escaped.append("\\b");
+                    break;
+                case '\f':
+                    escaped.append("\\f");
+                    break;
+                default:
+                    if (ch <= 0x1F) {
+                        escaped.append(String.format("\\u%04x", (int) ch));
+                    } else {
+                        escaped.append(ch);
+                    }
+                    break;
+            }
+        }
+        escaped.append('"');
+        return escaped.toString();
     }
 
     private List<TripStop> toTripStops(List<AiTripDraftStop> stops) {
@@ -426,12 +457,14 @@ public class ChatViewModel extends ViewModel {
 
             Place place = stop.getPlace();
             Location location = place != null ? place.location : null;
-            double latitude = location != null && Double.isFinite(location.latitude)
-                    ? location.latitude
-                    : 0d;
-            double longitude = location != null && Double.isFinite(location.longitude)
-                    ? location.longitude
-                    : 0d;
+                boolean hasValidCoordinates = location != null
+                    && Double.isFinite(location.latitude)
+                    && Double.isFinite(location.longitude);
+                if (!hasValidCoordinates) {
+                continue;
+                }
+                double latitude = location.latitude;
+                double longitude = location.longitude;
 
             String stopTitle = place != null && place.name != null
                     ? place.name

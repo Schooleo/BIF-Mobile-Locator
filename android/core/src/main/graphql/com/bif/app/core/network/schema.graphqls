@@ -138,12 +138,17 @@ type TripStop {
 }
 
 type AiPlaceSuggestionResult {
-  places: [Place!]!
+  places: [AiPlaceSuggestion!]!
   extractedKeywords: [String!]!
   category: String
   vibe: String
   warnings: [String!]!
   failureCode: AiFailureCode
+}
+
+type AiPlaceSuggestion {
+  place: Place!
+  addedToTripCount: Int!
 }
 
 type AiTripDraftResult {
@@ -196,6 +201,7 @@ type SyncChange {
   operation: String
   clientChangeId: String
   timestamp: String
+  payload: String
 }
 
 type SyncConflict {
@@ -345,4 +351,6 @@ input SyncChangeInput {
   serverVersion: Int
   operation: String
   clientChangeId: String
+  payload: String
+  timestamp: String
 }
