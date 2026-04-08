@@ -124,7 +124,7 @@ public class AddTripStopViewModel extends ViewModel {
             }
             if (mapped.isEmpty()) {
                 searchState.setValue(new SearchState.Empty(
-                        "We couldn't find any places matching your vibe."));
+                        "No places found. Try a different search."));
             } else {
                 searchState.setValue(new SearchState.Success(mapped));
             }
@@ -137,11 +137,16 @@ public class AddTripStopViewModel extends ViewModel {
         }
 
         Place place = item.place;
-        Location location = place.location != null ? place.location : new Location(0d, 0d);
+        Location location = place.location;
+        if (location == null) {
+            return false;
+        }
         TripStop stop = new TripStop(
                 UUID.randomUUID().toString(),
                 place.name,
                 place.address,
+                "",
+                "",
                 "",
                 location.latitude,
                 location.longitude,
