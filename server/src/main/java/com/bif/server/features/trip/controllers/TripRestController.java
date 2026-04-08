@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bif.server.features.trip.models.TripPlan;
+import com.bif.server.features.trip.models.RearrangeStopInput;
 import com.bif.server.features.trip.models.TripStop;
 import com.bif.server.features.trip.services.TripActivityService;
 import com.bif.server.features.trip.services.TripService;
@@ -90,7 +91,20 @@ public class TripRestController {
             @PathVariable String tripId,
             @RequestBody List<TripStop> stops,
             @RequestParam(required = false) String userId) {
-        return tripService.rearrangeStops(tripId, stops)
+        List<RearrangeStopInput> reorderInputs = new java.util.ArrayList<>();
+        if (stops != null) {
+            for (TripStop stop : stops) {
+                if (stop == null) {
+                    continue;
+                }
+                RearrangeStopInput input = new RearrangeStopInput();
+                input.setId(stop.getId());
+                input.setOrderIndex(stop.getOrderIndex());
+                reorderInputs.add(input);
+            }
+        }
+
+        return tripService.rearrangeStops(tripId, reorderInputs)
                 .map(plan -> {
                     tripActivityService.postStopsRearranged(plan, userId);
                     return ResponseEntity.ok(plan);

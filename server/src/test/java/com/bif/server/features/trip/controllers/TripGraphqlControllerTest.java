@@ -1,6 +1,7 @@
 package com.bif.server.features.trip.controllers;
 
 import com.bif.server.features.trip.models.TripPlan;
+import com.bif.server.features.trip.models.RearrangeStopInput;
 import com.bif.server.features.trip.models.TripStop;
 import com.bif.server.features.trip.services.TripService;
 import org.junit.jupiter.api.BeforeEach;
@@ -114,7 +115,10 @@ class TripGraphqlControllerTest {
     @Test
     void rearrangeTripStops_WhenFound_ReturnsResult() {
         TripPlan plan = new TripPlan();
-        List<TripStop> stops = List.of(new TripStop());
+        RearrangeStopInput input = new RearrangeStopInput();
+        input.setId("s1");
+        input.setOrderIndex(0);
+        List<RearrangeStopInput> stops = List.of(input);
         when(tripService.rearrangeStops("t1", stops)).thenReturn(Optional.of(plan));
 
         TripPlan result = controller.rearrangeTripStops("t1", stops);

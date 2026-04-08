@@ -50,6 +50,7 @@ apollo {
     service("service") {
         packageName.set("com.bif.app.core.network")
         generateKotlinModels.set(false)
+        mapScalarToKotlinLong("Long")
     }
 }
 

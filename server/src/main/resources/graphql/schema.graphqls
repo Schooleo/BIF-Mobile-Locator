@@ -41,8 +41,8 @@ type Mutation {
   deleteChatMessage(id: ID!): Boolean!
   upsertTripPlan(input: TripPlanInput!): TripPlan!
   addTripStop(tripId: ID!, input: TripStopInput!): TripPlan
-  removeTripStop(tripId: ID!, orderIndex: Int!): TripPlan
-  rearrangeTripStops(tripId: ID!, stops: [TripStopInput!]!): TripPlan
+  removeTripStop(tripId: ID!, stopId: ID!): TripPlan
+  rearrangeTripStops(tripId: ID!, stops: [RearrangeStopInput!]!): TripPlan
   deleteTripPlan(id: ID!): Boolean!
   suggestPlacesFromQuery(query: String!): AiPlaceSuggestionResult!
   draftTripFromQuery(query: String!): AiTripDraftResult!
@@ -127,6 +127,8 @@ type TripPlan {
 }
 
 type TripStop {
+  id: ID
+  placeId: ID
   title: String
   note: String
   location: Location
@@ -286,12 +288,19 @@ input TripPlanInput {
 }
 
 input TripStopInput {
+  id: ID
+  placeId: ID
   title: String
   note: String
   location: LocationInput
   arrivalTime: String
   departureTime: String
   orderIndex: Int
+}
+
+input RearrangeStopInput {
+  id: ID!
+  orderIndex: Int!
 }
 
 input LocationInput {

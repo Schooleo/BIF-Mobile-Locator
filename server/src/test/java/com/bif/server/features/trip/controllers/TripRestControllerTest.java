@@ -18,6 +18,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -155,13 +156,21 @@ class TripRestControllerTest {
     @Test
     void rearrangeStops_WhenFound_ReturnsOk() {
         TripPlan plan = new TripPlan();
-        List<TripStop> stops = List.of(new TripStop());
-        when(tripService.rearrangeStops("t1", stops)).thenReturn(Optional.of(plan));
+        TripStop stop = new TripStop();
+        stop.setId("s1");
+        stop.setOrderIndex(0);
+        List<TripStop> stops = List.of(stop);
+        when(tripService.rearrangeStops(eq("t1"), any())).thenReturn(Optional.of(plan));
 
         ResponseEntity<TripPlan> result =
                 controller.rearrangeStops("t1", stops, "u1");
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
+        verify(tripService).rearrangeStops(eq("t1"), argThat(inputs ->
+            inputs != null
+                && inputs.size() == 1
+                && "s1".equals(inputs.get(0).getId())
+                && inputs.get(0).getOrderIndex() == 0));
         verify(tripActivityService).postStopsRearranged(plan, "u1");
     }
 
