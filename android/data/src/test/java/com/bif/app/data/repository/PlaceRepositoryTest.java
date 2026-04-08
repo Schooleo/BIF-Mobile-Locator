@@ -43,6 +43,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -389,10 +390,11 @@ public class PlaceRepositoryTest {
             throws Exception {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
         when(mockAiGraphQlClient.suggestPlacesFromQuery("late night food"))
-                .thenReturn(new AiPlaceSuggestionPayload(
-                        Collections.emptyList(),
-                        Collections.singletonList("warning"),
-                        "RATE_LIMITED"));
+                .thenReturn(CompletableFuture.completedFuture(
+                        new AiPlaceSuggestionPayload(
+                                Collections.emptyList(),
+                                Collections.singletonList("warning"),
+                                "RATE_LIMITED")));
 
         LiveData<AiPlaceSuggestionResult> result =
                 placeRepository.suggestPlacesFromQuery("late night food");
@@ -408,18 +410,19 @@ public class PlaceRepositoryTest {
             throws Exception {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
         when(mockAiGraphQlClient.suggestPlacesFromQuery("best coffee"))
-                .thenReturn(new AiPlaceSuggestionPayload(
-                        Collections.singletonList(
-                                new AiSuggestedPlacePayload(
-                                        "p-ai-1",
-                                        "Morning Brew",
-                                        "101 Bean St",
-                                        4.7,
-                                        14,
-                                        10.11,
-                                        106.22)),
-                        Collections.singletonList("minor"),
-                        null));
+                .thenReturn(CompletableFuture.completedFuture(
+                        new AiPlaceSuggestionPayload(
+                                Collections.singletonList(
+                                        new AiSuggestedPlacePayload(
+                                                "p-ai-1",
+                                                "Morning Brew",
+                                                "101 Bean St",
+                                                4.7,
+                                                14,
+                                                10.11,
+                                                106.22)),
+                                Collections.singletonList("minor"),
+                                null)));
 
         LiveData<AiPlaceSuggestionResult> result =
                 placeRepository.suggestPlacesFromQuery("best coffee");
@@ -439,18 +442,19 @@ public class PlaceRepositoryTest {
             throws Exception {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
         when(mockAiGraphQlClient.suggestPlacesFromQuery("missing fields"))
-                .thenReturn(new AiPlaceSuggestionPayload(
-                        Collections.singletonList(
-                                new AiSuggestedPlacePayload(
-                                        null,
-                                        "",
-                                        "101 Bean St",
-                                        4.2,
-                                        2,
-                                        null,
-                                        106.22)),
-                        Collections.emptyList(),
-                        null));
+                .thenReturn(CompletableFuture.completedFuture(
+                        new AiPlaceSuggestionPayload(
+                                Collections.singletonList(
+                                        new AiSuggestedPlacePayload(
+                                                null,
+                                                "",
+                                                "101 Bean St",
+                                                4.2,
+                                                2,
+                                                null,
+                                                106.22)),
+                                Collections.emptyList(),
+                                null)));
 
         LiveData<AiPlaceSuggestionResult> result =
                 placeRepository.suggestPlacesFromQuery("missing fields");

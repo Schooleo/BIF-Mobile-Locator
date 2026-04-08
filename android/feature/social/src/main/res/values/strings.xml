@@ -204,4 +204,5 @@
     <string name="trip_untitled">Untitled Trip</string>
     <string name="trip_no_date">No Date</string>
     <string name="trip_stop_rating_format">Rating %.1f</string>
+    <string name="trip_stop_unscheduled">Unscheduled</string>
 </resources>
