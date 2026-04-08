@@ -229,7 +229,7 @@ public class TripItineraryFragment extends Fragment {
                     },
                     selected[0].get(Calendar.HOUR_OF_DAY),
                     selected[0].get(Calendar.MINUTE),
-                    true
+                    android.text.format.DateFormat.is24HourFormat(requireContext())
             );
             timeDialog.show();
         });
@@ -409,15 +409,15 @@ public class TripItineraryFragment extends Fragment {
                 timePart = timeFormatter.format(new Date(stop.getDepartureTime()));
             }
             stopHolder.time.setText(timePart.isEmpty()
-                    ? stopHolder.itemView.getContext().getString(R.string.trip_stop_no_note)
+                    ? stopHolder.itemView.getContext().getString(R.string.trip_stop_unscheduled)
                     : timePart);
 
             String addressText = stop.getAddress();
-            if (TextUtils.isEmpty(addressText)) {
-                addressText = stopHolder.itemView.getContext().getString(R.string.trip_stop_no_note);
+            if (TextUtils.isEmpty(addressText == null ? null : addressText.trim())) {
+                addressText = stopHolder.itemView.getContext().getString(R.string.trip_stop_no_address);
             }
             String noteText = stop.getNote();
-            if (TextUtils.isEmpty(noteText)) {
+            if (TextUtils.isEmpty(noteText == null ? null : noteText.trim())) {
                 noteText = stopHolder.itemView.getContext().getString(R.string.trip_stop_no_note);
             }
 

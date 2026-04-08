@@ -147,7 +147,7 @@ type AiPlaceSuggestionResult {
 }
 
 type AiPlaceSuggestion {
-  place: Place!
+  place: Place
   addedToTripCount: Int!
 }
 
@@ -166,7 +166,7 @@ type AiTripDraft {
 
 type AiTripDraftStop {
   placeId: ID!
-  place: Place!
+  place: Place
   durationMinutes: Int!
   note: String
 }

@@ -134,7 +134,7 @@ public class TripRepository implements ITripRepository {
                             0xFF9C27B0);
                 }
                 enqueueTripPlanChange(entity.id, "CREATE");
-                syncManager.syncIfOnline();
+                syncAndReconcileTrip(entity.id);
                 success = true;
             } catch (Exception ex) {
                 Log.w(TAG, "Failed to create trip", ex);
@@ -190,10 +190,10 @@ public class TripRepository implements ITripRepository {
 
                 tripDao.upsertTrip(entity);
                 enqueueTripPlanChange(safeTripId, "UPDATE");
-                syncManager.syncIfOnline();
+                syncAndReconcileTrip(safeTripId);
                 success = true;
-            } catch (Exception ignored) {
-                success = false;
+            } catch (Exception ex) {
+                Log.w(TAG, "Failed to update trip", ex);
             }
 
             if (callback != null) {
@@ -232,7 +232,7 @@ public class TripRepository implements ITripRepository {
                 tripDao.upsertTrip(entity);
 
                 enqueueTripPlanChange(safeTripId, "DELETE");
-                syncManager.syncIfOnline();
+                syncAndReconcileTrip(safeTripId);
                 success = true;
             } catch (Exception ignored) {
                 success = false;
@@ -319,7 +319,7 @@ public class TripRepository implements ITripRepository {
                 }
 
                 enqueueTripPlanChange(safeTripId, "CREATE");
-                syncManager.syncIfOnline();
+                syncAndReconcileTrip(safeTripId);
                 success = true;
             } catch (Exception ignored) {
                 success = false;
@@ -377,7 +377,7 @@ public class TripRepository implements ITripRepository {
             enqueueTripPlanChange(tripId, "UPDATE");
             enqueueImageUploadIfPending(entity);
             enqueueStopUpdate(entity);
-            syncManager.syncIfOnline();
+            syncAndReconcileTrip(tripId);
         });
     }
 
@@ -421,7 +421,7 @@ public class TripRepository implements ITripRepository {
             enqueueStopUpdate(entity);
 
             normalizeActiveOrderIndexes(tripId, true);
-            syncManager.syncIfOnline();
+            syncAndReconcileTrip(tripId);
         });
     }
 
@@ -444,7 +444,7 @@ public class TripRepository implements ITripRepository {
             upsertFriendCache(safeUserId, name, avatarLetter, avatarColor);
 
             enqueueTripPlanChange(safeTripId, "UPDATE");
-            syncManager.syncIfOnline();
+            syncAndReconcileTrip(safeTripId);
         });
     }
 
@@ -465,7 +465,7 @@ public class TripRepository implements ITripRepository {
             tripDao.deleteTripMember(safeTripId, safeUserId);
 
             enqueueTripPlanChange(safeTripId, "UPDATE");
-            syncManager.syncIfOnline();
+            syncAndReconcileTrip(safeTripId);
         });
     }
 
@@ -485,7 +485,7 @@ public class TripRepository implements ITripRepository {
                 enqueueStopUpdate(entity);
             }
 
-            syncManager.syncIfOnline();
+            syncAndReconcileTrip(tripId);
         });
     }
 
@@ -713,6 +713,50 @@ public class TripRepository implements ITripRepository {
                 UUID.randomUUID().toString(),
                 toStopDto(entity)
         );
+    }
+
+    private void syncAndReconcileTrip(String tripId) {
+        String safeTripId = normalize(tripId);
+        if (safeTripId.isEmpty()) {
+            syncManager.syncIfOnline();
+            return;
+        }
+
+        networkExecutor.execute(() -> {
+            if (!syncManager.isOnline()) {
+                return;
+            }
+
+            syncManager.sync();
+            reconcileTripFromServer(safeTripId);
+        });
+    }
+
+    private void reconcileTripFromServer(String tripId) {
+        if (restApiService == null) {
+            return;
+        }
+
+        try {
+            Response<List<TripPlanDto>> response = restApiService.getTrips().execute();
+            if (!response.isSuccessful() || response.body() == null) {
+                return;
+            }
+
+            String activeUserId = resolveCurrentUserId();
+            for (TripPlanDto dto : response.body()) {
+                if (dto == null || normalize(dto.id).isEmpty()) {
+                    continue;
+                }
+                if (!tripId.equals(normalize(dto.id))) {
+                    continue;
+                }
+                upsertTripFromApi(dto, activeUserId);
+                return;
+            }
+        } catch (Exception ex) {
+            Log.w(TAG, "Failed to reconcile trip from server: " + tripId, ex);
+        }
     }
 
     private List<String> mapParticipantIds(List<TripMemberCrossRef> members) {

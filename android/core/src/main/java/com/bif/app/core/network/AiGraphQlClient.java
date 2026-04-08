@@ -99,6 +99,22 @@ public class AiGraphQlClient {
             return new AiPlaceSuggestionPayload(new ArrayList<>(), new ArrayList<>(), "AI_FAILURE");
         }
 
+        if (response.exception != null) {
+            Log.w(TAG, "AI suggest transport failure", response.exception);
+            ArrayList<String> warnings = new ArrayList<>();
+            warnings.add("Transport error: " + response.exception.getMessage());
+            return new AiPlaceSuggestionPayload(new ArrayList<>(), warnings, "AI_FAILURE");
+        }
+
+        if (response.errors != null && !response.errors.isEmpty()) {
+            ArrayList<String> warnings = new ArrayList<>();
+            for (Object error : response.errors) {
+                warnings.add(String.valueOf(error));
+            }
+            Log.w(TAG, "AI suggest GraphQL errors=" + warnings);
+            return new AiPlaceSuggestionPayload(new ArrayList<>(), warnings, "AI_FAILURE");
+        }
+
         SuggestPlacesFromQueryMutation.Data data = response.data;
         if (data == null || data.suggestPlacesFromQuery == null) {
             return new AiPlaceSuggestionPayload(new ArrayList<>(), new ArrayList<>(), "AI_FAILURE");
@@ -152,7 +168,27 @@ public class AiGraphQlClient {
 
     private AiTripDraftResultPayload mapDraftTripResponse(
             ApolloResponse<DraftTripFromQueryMutation.Data> response) {
-        if (response == null || response.data == null || response.data.draftTripFromQuery == null) {
+        if (response == null) {
+            return new AiTripDraftResultPayload(null, new ArrayList<>(), new ArrayList<>(), "AI_FAILURE");
+        }
+
+        if (response.exception != null) {
+            Log.w(TAG, "AI draft transport failure", response.exception);
+            ArrayList<String> warnings = new ArrayList<>();
+            warnings.add("Transport error: " + response.exception.getMessage());
+            return new AiTripDraftResultPayload(null, new ArrayList<>(), warnings, "AI_FAILURE");
+        }
+
+        if (response.errors != null && !response.errors.isEmpty()) {
+            ArrayList<String> warnings = new ArrayList<>();
+            for (Object error : response.errors) {
+                warnings.add(String.valueOf(error));
+            }
+            Log.w(TAG, "AI draft GraphQL errors=" + warnings);
+            return new AiTripDraftResultPayload(null, new ArrayList<>(), warnings, "AI_FAILURE");
+        }
+
+        if (response.data == null || response.data.draftTripFromQuery == null) {
             return new AiTripDraftResultPayload(null, new ArrayList<>(), new ArrayList<>(), "AI_FAILURE");
         }
 
