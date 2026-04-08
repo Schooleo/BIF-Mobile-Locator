@@ -137,7 +137,10 @@ public class AddTripStopViewModel extends ViewModel {
         }
 
         Place place = item.place;
-        Location location = place.location != null ? place.location : new Location(0d, 0d);
+        Location location = place.location;
+        if (location == null) {
+            return false;
+        }
         TripStop stop = new TripStop(
                 UUID.randomUUID().toString(),
                 place.name,
