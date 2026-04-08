@@ -206,7 +206,6 @@ public class PlaceRepository implements IPlaceRepository {
         return result;
     }
 
-    private LiveData<List<Place>> doSearch(String query, boolean saveToHistory) {
     private LiveData<List<Place>> doSearch(String query, boolean saveToHistory,
                                            Location userLocation) {
         MutableLiveData<List<Place>> result = new MutableLiveData<>();
