@@ -1,6 +1,7 @@
 package com.bif.server.features.trip.controllers;
 
 import com.bif.server.features.trip.models.TripPlan;
+import com.bif.server.features.trip.models.RearrangeStopInput;
 import com.bif.server.features.trip.models.TripStop;
 import com.bif.server.features.trip.services.TripService;
 import org.springframework.graphql.data.method.annotation.Argument;
@@ -52,7 +53,7 @@ public class TripGraphqlController {
 
     @MutationMapping
     public TripPlan rearrangeTripStops(@Argument String tripId,
-                                       @Argument List<TripStop> stops) {
+                                       @Argument List<RearrangeStopInput> stops) {
         return tripService.rearrangeStops(tripId, stops).orElse(null);
     }
 

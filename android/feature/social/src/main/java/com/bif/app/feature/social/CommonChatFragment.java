@@ -1,8 +1,10 @@
 package com.bif.app.feature.social;
 
 import android.annotation.SuppressLint;
-import android.content.res.ColorStateList;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.text.format.DateFormat;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -11,7 +13,7 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
-import android.widget.ImageButton;
+import android.widget.PopupMenu;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -22,18 +24,29 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.bif.app.core.utils.ChatReadStateStore;
 import com.bif.app.core.utils.UriUtils;
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.domain.model.ChatMessage;
+import com.bif.app.domain.model.Location;
+import com.bif.app.domain.model.Place;
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.card.MaterialCardView;
+import com.google.android.material.snackbar.Snackbar;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 import dagger.hilt.android.AndroidEntryPoint;
 
@@ -46,7 +59,12 @@ public class CommonChatFragment extends Fragment {
     private String chatId;
     private EditText messageInput;
     private RecyclerView rvMessages;
+    private View layoutInputBar;
+    private TextView tvAiDrafterPrefix;
+    private Drawable defaultInputBarBackground;
+    private List<ChatMessage> latestMessages = new ArrayList<>();
     private int previousSoftInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_UNSPECIFIED;
+    private boolean applyingMention = false;
 
     @Nullable
     @Override
@@ -65,59 +83,63 @@ public class CommonChatFragment extends Fragment {
         chatType = getArg(args, "chatType", "friend");
         chatId = getArg(args, "chatId", "");
         String chatName = getArg(args, "chatName", getString(R.string.chat_default_name));
-        String avatarLetter = getArg(args, "avatarLetter", "?");
-        int avatarColor = args != null ? args.getInt("avatarColor", 0) : 0;
         int memberCount = args != null ? args.getInt("memberCount", 0) : 0;
 
-        TextView tvAvatar = view.findViewById(R.id.tv_avatar);
         TextView tvTitle = view.findViewById(R.id.tv_chat_title);
         TextView tvSubtitle = view.findViewById(R.id.tv_chat_subtitle);
-        ImageButton btnBack = view.findViewById(R.id.btn_back);
-        ImageButton btnGroupSettings = view.findViewById(R.id.btn_group_settings);
+        View btnBack = view.findViewById(R.id.btn_back);
         rvMessages = view.findViewById(R.id.rv_messages);
-        View inputBar = view.findViewById(R.id.layout_input_bar);
+        View composerBar = view.findViewById(R.id.layout_chat_composer);
+        layoutInputBar = view.findViewById(R.id.layout_input_bar);
+        defaultInputBarBackground = layoutInputBar.getBackground();
+        View aiBadgesRow = view.findViewById(R.id.layout_ai_badges);
+        MaterialCardView btnAiDraftTrip = view.findViewById(R.id.btn_ai_draft_trip);
+        MaterialCardView btnAiSuggestPlaces = view.findViewById(R.id.btn_ai_suggest_places);
         EditText etMessage = view.findViewById(R.id.et_message);
+        tvAiDrafterPrefix = view.findViewById(R.id.tv_ai_drafter_prefix);
         messageInput = etMessage;
         MaterialButton btnSend = view.findViewById(R.id.btn_send);
-        applyKeyboardInsets(view, inputBar, rvMessages);
-
-        tvAvatar.setText(avatarLetter);
-        if (avatarColor != 0) {
-            tvAvatar.setBackgroundTintList(ColorStateList.valueOf(avatarColor));
-        }
+        applyKeyboardInsets(view, composerBar, rvMessages);
 
         tvTitle.setText(chatName);
-        if ("group".equalsIgnoreCase(chatType)) {
-            tvSubtitle.setText(getString(R.string.chat_member_count, Math.max(memberCount, 1)));
-            btnGroupSettings.setVisibility(View.VISIBLE);
-            btnGroupSettings.setOnClickListener(v -> {
-                android.net.Uri settingsUri = UriUtils.buildUri(UriUtils.PathTo.GROUP_SETTINGS_PLANS)
-                        .buildUpon()
-                        .appendQueryParameter("groupId", chatId)
-                        .build();
-                Navigation.findNavController(view).navigate(settingsUri);
-            });
-        } else {
-            tvSubtitle.setText(R.string.chat_direct_subtitle);
-            btnGroupSettings.setVisibility(View.VISIBLE);
-            btnGroupSettings.setOnClickListener(v -> {
-                android.net.Uri settingsUri = UriUtils.buildUri(UriUtils.PathTo.FRIEND_SETTINGS_LOCATIONS)
-                        .buildUpon()
-                        .appendQueryParameter("friendId", chatId)
-                        .appendQueryParameter("friendName", chatName)
-                        .appendQueryParameter("avatarLetter", avatarLetter)
-                        .appendQueryParameter("avatarColor", String.valueOf(avatarColor))
-                        .build();
-                Navigation.findNavController(view).navigate(settingsUri);
-            });
-        }
+        tvSubtitle.setText(getString(R.string.chat_member_count, resolveMemberCount(memberCount)));
 
         btnBack.setOnClickListener(v -> navigateBackFromChat(view));
         view.setOnClickListener(v -> focusInputAndShowKeyboard(etMessage));
         etMessage.post(() -> focusInputAndShowKeyboard(etMessage));
 
         // Set up adapter
-        adapter = new ChatMessageAdapter(this::handleLocationLinkClick);
+        adapter = new ChatMessageAdapter(new ChatMessageAdapter.ChatActionCallback() {
+            @Override
+            public void onLocationLinkClick(ChatMessageAdapter.ChatMessage message) {
+                handleLocationLinkClick(message);
+            }
+
+            @Override
+            public void onSaveTripClick(String tripId) {
+                if (tripId == null || tripId.trim().isEmpty()) {
+                    return;
+                }
+                viewModel.onSaveTripCard(tripId);
+            }
+
+            @Override
+            public void onAddPlaceToTripClick(String tripId, ChatMessageAdapter.PlaceCard place) {
+                if (tripId == null || tripId.trim().isEmpty()) {
+                    return;
+                }
+                Place domainPlace = toDomainPlace(place);
+                if (domainPlace == null) {
+                    return;
+                }
+                viewModel.addSuggestedPlaceToTrip(tripId, domainPlace);
+            }
+
+            @Override
+            public void onViewPlaceClick(ChatMessageAdapter.PlaceCard place) {
+                handleViewPlaceClick(place);
+            }
+        });
         rvMessages.setLayoutManager(new LinearLayoutManager(requireContext()));
         rvMessages.setAdapter(adapter);
 
@@ -131,10 +153,39 @@ public class CommonChatFragment extends Fragment {
 
         if (!chatId.isEmpty()) {
             viewModel.init(chatId, chatName, currentUserId);
+            markGroupChatReadIfNeeded();
         }
 
         // Observe messages from ViewModel
         viewModel.getMessages().observe(getViewLifecycleOwner(), this::onMessagesUpdated);
+        viewModel.getSavedTripCardIds().observe(getViewLifecycleOwner(), savedIds -> {
+            if (!latestMessages.isEmpty()) {
+                updateSavedStateForMessages();
+            }
+        });
+        viewModel.getAiBadgesEnabled().observe(getViewLifecycleOwner(), enabled -> {
+            boolean isEnabled = Boolean.TRUE.equals(enabled);
+            aiBadgesRow.setVisibility(isEnabled ? View.VISIBLE : View.GONE);
+            btnAiDraftTrip.setEnabled(isEnabled);
+            btnAiSuggestPlaces.setEnabled(isEnabled);
+            float alpha = isEnabled ? 1f : 0.45f;
+            btnAiDraftTrip.setAlpha(alpha);
+            btnAiSuggestPlaces.setAlpha(alpha);
+            if (!isEnabled) {
+                viewModel.cancelAiDraftMode();
+            }
+        });
+        viewModel.getAiDraftModeEnabled().observe(getViewLifecycleOwner(), isDraftMode -> {
+            boolean enabled = Boolean.TRUE.equals(isDraftMode);
+            applyAiDraftMode(enabled, etMessage);
+        });
+        viewModel.getSnackbarMessage().observe(getViewLifecycleOwner(), message -> {
+            if (message == null || message.trim().isEmpty()) {
+                return;
+            }
+            Snackbar.make(view, message, Snackbar.LENGTH_LONG).show();
+            viewModel.clearSnackbarMessage();
+        });
 
         // Handle initial shared place if navigated here with a place argument
         if (savedInstanceState == null) {
@@ -155,6 +206,43 @@ public class CommonChatFragment extends Fragment {
             viewModel.sendMessage(input);
             etMessage.setText("");
             focusInputAndShowKeyboard(etMessage);
+        });
+
+        btnAiDraftTrip.setOnClickListener(v -> {
+            if (!btnAiDraftTrip.isEnabled()) {
+                Snackbar.make(view, R.string.chat_ai_offline, Snackbar.LENGTH_SHORT).show();
+                return;
+            }
+            viewModel.enterAiDraftMode();
+            focusInputAndShowKeyboard(etMessage);
+        });
+
+        /*btnAiSuggestPlaces.setOnClickListener(v -> {
+            aiBadgesRow.setVisibility(View.VISIBLE);
+            Snackbar.make(view,
+                    getString(R.string.trip_feature_add_stop_soon),
+                    Snackbar.LENGTH_SHORT).show();
+        });*/
+
+        btnAiSuggestPlaces.setEnabled(false);
+        btnAiSuggestPlaces.setOnClickListener(null);
+
+        etMessage.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (applyingMention) {
+                    return;
+                }
+                maybeShowMentionPopup(etMessage, s != null ? s.toString() : "");
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+            }
         });
     }
 
@@ -177,13 +265,29 @@ public class CommonChatFragment extends Fragment {
     // ─── LiveData observers ────────────────────────────────────────────────────
 
     private void onMessagesUpdated(List<ChatMessage> messages) {
+        renderMessages(messages, true);
+    }
+
+    private void renderMessages(List<ChatMessage> messages, boolean withSideEffects) {
         if (messages == null) return;
+        latestMessages = new ArrayList<>(messages);
         List<ChatMessageAdapter.ChatMessage> adapterMessages = new ArrayList<>();
         for (ChatMessage msg : messages) {
             adapterMessages.add(domainToAdapterMessage(msg));
         }
         adapter.submit(adapterMessages);
-        scrollToBottom();
+        if (withSideEffects) {
+            markGroupChatReadIfNeeded();
+            scrollToBottom();
+        }
+    }
+
+    private void updateSavedStateForMessages() {
+        List<ChatMessageAdapter.ChatMessage> adapterMessages = new ArrayList<>();
+        for (ChatMessage msg : latestMessages) {
+            adapterMessages.add(domainToAdapterMessage(msg));
+        }
+        adapter.submit(adapterMessages);
     }
 
     private ChatMessageAdapter.ChatMessage domainToAdapterMessage(ChatMessage msg) {
@@ -193,6 +297,13 @@ public class CommonChatFragment extends Fragment {
         if (msg.isOutgoing()) senderDisplay = getString(R.string.chat_you);
 
         String time = DateFormat.format("HH:mm", new Date(msg.getSentAt())).toString();
+
+        if (msg.getMessageType() == ChatMessage.MessageType.TRIP_CREATED_CARD) {
+            return buildTripCreatedCardMessage(msg, senderDisplay, time);
+        }
+        if (msg.getMessageType() == ChatMessage.MessageType.AI_SUGGESTED_PLACES_CARD) {
+            return buildSuggestedPlacesCardMessage(msg, senderDisplay, time);
+        }
 
         if (msg.isLocationMessage()) {
             String title = msg.getContent() != null && !msg.getContent().isEmpty()
@@ -221,11 +332,299 @@ public class CommonChatFragment extends Fragment {
         );
     }
 
+    private ChatMessageAdapter.ChatMessage buildTripCreatedCardMessage(ChatMessage msg,
+                                                                       String senderDisplay,
+                                                                       String time) {
+        ChatMessageAdapter.TripCreatedCard card = parseTripCreatedCard(msg);
+        return ChatMessageAdapter.ChatMessage.tripCreatedCard(
+                senderDisplay,
+                time,
+                msg.isOutgoing(),
+                card
+        );
+    }
+
+    private ChatMessageAdapter.ChatMessage buildSuggestedPlacesCardMessage(ChatMessage msg,
+                                                                           String senderDisplay,
+                                                                           String time) {
+        ChatMessageAdapter.SuggestedPlacesCard card = parseSuggestedPlacesCard(msg);
+        return ChatMessageAdapter.ChatMessage.suggestedPlacesCard(
+                senderDisplay,
+                time,
+                msg.isOutgoing(),
+                card
+        );
+    }
+
+    private ChatMessageAdapter.TripCreatedCard parseTripCreatedCard(ChatMessage msg) {
+        ChatMessage.TripCreatedCardData data = msg.getTripCreatedCardData();
+        String tripId = "";
+        int stopCount = 0;
+        long startTimeMs = msg.getSentAt();
+        double totalDistance = 0d;
+        boolean isSaved = false;
+
+        if (data != null) {
+            tripId = data.getTripId() != null ? data.getTripId() : "";
+            stopCount = Math.max(0, data.getStopCount());
+            startTimeMs = data.getStartTime() > 0 ? data.getStartTime() : startTimeMs;
+            totalDistance = Math.max(0d, data.getTotalDistance());
+            isSaved = data.isSaved();
+        }
+
+        String content = msg.getContent();
+        if (content != null && content.trim().startsWith("{")) {
+            try {
+                JSONObject json = new JSONObject(content);
+                tripId = json.optString("tripId", tripId);
+                stopCount = json.optInt("stopCount", stopCount);
+                startTimeMs = json.optLong("startTime", startTimeMs);
+                if (startTimeMs <= 0L) {
+                    startTimeMs = msg.getSentAt();
+                }
+                isSaved = json.optBoolean("isSaved", isSaved);
+
+                double distanceFromPayload = json.optDouble("totalDistance", -1d);
+                if (distanceFromPayload >= 0d) {
+                    totalDistance = distanceFromPayload;
+                }
+
+                if (totalDistance <= 0d && json.has("stops")) {
+                    totalDistance = computeManhattanDistance(json.optJSONArray("stops"));
+                }
+            } catch (JSONException ignored) {
+                // Fallback to defaults for malformed payloads.
+            }
+        }
+
+        String startTimeLabel = DateFormat.format("HH:mm", new Date(startTimeMs)).toString();
+        String totalDistanceLabel = formatDistanceLabel(totalDistance);
+        boolean shouldHideSaveButton = isSaved || viewModel.isTripCardSaved(tripId);
+
+        return new ChatMessageAdapter.TripCreatedCard(
+                tripId,
+                Math.max(stopCount, 0),
+                startTimeLabel,
+                totalDistanceLabel,
+                shouldHideSaveButton
+        );
+    }
+
+    private ChatMessageAdapter.SuggestedPlacesCard parseSuggestedPlacesCard(ChatMessage msg) {
+        String tripId = "";
+        List<ChatMessageAdapter.PlaceCard> places = new ArrayList<>();
+
+        ChatMessage.SuggestedPlacesCardData data = msg.getSuggestedPlacesCardData();
+        if (data != null) {
+            tripId = data.getTripId() != null ? data.getTripId() : "";
+            for (Place place : data.getPlaces()) {
+                if (place == null) continue;
+                places.add(new ChatMessageAdapter.PlaceCard(
+                        place.id,
+                        place.name,
+                        place.address,
+                        place.rating,
+                        place.location != null ? place.location.latitude : Double.NaN,
+                        place.location != null ? place.location.longitude : Double.NaN
+                ));
+            }
+        }
+
+        String content = msg.getContent();
+        if (content != null && content.trim().startsWith("{")) {
+            try {
+                JSONObject json = new JSONObject(content);
+                tripId = json.optString("tripId", tripId);
+
+                JSONArray items = json.optJSONArray("places");
+                if (items != null) {
+                    places.clear();
+                    for (int i = 0; i < items.length(); i++) {
+                        JSONObject placeJson = items.optJSONObject(i);
+                        if (placeJson == null) continue;
+                        double latitude = placeJson.has("latitude")
+                                ? placeJson.optDouble("latitude", Double.NaN)
+                                : Double.NaN;
+                        double longitude = placeJson.has("longitude")
+                                ? placeJson.optDouble("longitude", Double.NaN)
+                                : Double.NaN;
+                        places.add(new ChatMessageAdapter.PlaceCard(
+                                placeJson.optString("id", ""),
+                                placeJson.optString("name", "Unknown place"),
+                                placeJson.optString("address", ""),
+                                placeJson.optDouble("rating", 0d),
+                                latitude,
+                                longitude
+                        ));
+                    }
+                }
+            } catch (JSONException ignored) {
+                // Fallback to defaults for malformed payloads.
+            }
+        }
+
+        return new ChatMessageAdapter.SuggestedPlacesCard(tripId, places);
+    }
+
+    private double computeManhattanDistance(@Nullable JSONArray stops) {
+        if (stops == null || stops.length() < 2) return 0d;
+
+        double total = 0d;
+        double prevLat = 0d;
+        double prevLng = 0d;
+        boolean hasPrev = false;
+
+        for (int i = 0; i < stops.length(); i++) {
+            JSONObject stop = stops.optJSONObject(i);
+            if (stop == null) continue;
+
+            double lat = stop.optDouble("latitude", 0d);
+            double lng = stop.optDouble("longitude", 0d);
+            if (hasPrev) {
+                total += haversineDistanceKm(prevLat, prevLng, lat, lng);
+            }
+            prevLat = lat;
+            prevLng = lng;
+            hasPrev = true;
+        }
+        return total;
+    }
+
+    private double haversineDistanceKm(double fromLat, double fromLng, double toLat, double toLng) {
+        final double earthRadiusKm = 6371d;
+        double dLat = Math.toRadians(toLat - fromLat);
+        double dLng = Math.toRadians(toLng - fromLng);
+        double lat1 = Math.toRadians(fromLat);
+        double lat2 = Math.toRadians(toLat);
+
+        double a = Math.sin(dLat / 2d) * Math.sin(dLat / 2d)
+                + Math.cos(lat1) * Math.cos(lat2)
+                * Math.sin(dLng / 2d) * Math.sin(dLng / 2d);
+        double c = 2d * Math.atan2(Math.sqrt(a), Math.sqrt(1d - a));
+        return earthRadiusKm * c;
+    }
+
+    private String formatDistanceLabel(double distance) {
+        if (distance <= 0d) {
+            return "0.0";
+        }
+        return String.format(Locale.US, "%.1f", distance);
+    }
+
+    private void applyAiDraftMode(boolean enabled, EditText etMessage) {
+        if (layoutInputBar == null || tvAiDrafterPrefix == null) {
+            return;
+        }
+        if (enabled) {
+            layoutInputBar.setBackgroundResource(R.drawable.bg_chat_input_ai_draft);
+            tvAiDrafterPrefix.setVisibility(View.VISIBLE);
+            etMessage.setHint(R.string.chat_ai_draft_hint);
+        } else {
+            if (defaultInputBarBackground != null) {
+                layoutInputBar.setBackground(defaultInputBarBackground);
+            }
+            tvAiDrafterPrefix.setVisibility(View.GONE);
+            etMessage.setHint(R.string.chat_hint);
+        }
+    }
+
+    private int resolveMemberCount(int memberCountArg) {
+        if ("group".equalsIgnoreCase(chatType)) {
+            return Math.max(memberCountArg, 1);
+        }
+        return Math.max(memberCountArg, 2);
+    }
+
+    private void maybeShowMentionPopup(EditText input, String fullText) {
+        int cursor = input.getSelectionStart();
+        if (cursor < 0 || cursor > fullText.length()) {
+            return;
+        }
+
+        int tokenStart = cursor - 1;
+        while (tokenStart >= 0 && !Character.isWhitespace(fullText.charAt(tokenStart))) {
+            tokenStart--;
+        }
+        tokenStart++;
+
+        if (tokenStart >= fullText.length() || fullText.charAt(tokenStart) != '@') {
+            return;
+        }
+
+        String token = fullText.substring(tokenStart, cursor).toLowerCase(Locale.US);
+        List<String> suggestions = buildMentionSuggestions(token);
+        if (suggestions.isEmpty()) {
+            return;
+        }
+
+        PopupMenu popupMenu = new PopupMenu(requireContext(), input);
+        for (int i = 0; i < suggestions.size(); i++) {
+            popupMenu.getMenu().add(0, i, i, suggestions.get(i));
+        }
+        int start = tokenStart;
+        int end = cursor;
+        popupMenu.setOnMenuItemClickListener(item -> {
+            String mention = suggestions.get(item.getItemId());
+            String updated = fullText.substring(0, start) + mention + " " + fullText.substring(end);
+            applyingMention = true;
+            input.setText(updated);
+            int nextCursor = Math.min(updated.length(), start + mention.length() + 1);
+            input.setSelection(nextCursor);
+            applyingMention = false;
+            return true;
+        });
+        popupMenu.show();
+    }
+
+    private List<String> buildMentionSuggestions(String token) {
+        List<String> candidates = new ArrayList<>();
+        candidates.add("@AI Trip Drafter");
+
+        for (ChatMessage message : latestMessages) {
+            if (message == null) {
+                continue;
+            }
+            String name = message.getSenderName();
+            if (name == null || name.trim().isEmpty()) {
+                continue;
+            }
+            String mention = "@" + name.trim();
+            if (!candidates.contains(mention)) {
+                candidates.add(mention);
+            }
+        }
+
+        if (token.length() <= 1) {
+            return candidates;
+        }
+
+        List<String> filtered = new ArrayList<>();
+        for (String candidate : candidates) {
+            if (candidate.toLowerCase(Locale.US).startsWith(token)) {
+                filtered.add(candidate);
+            }
+        }
+        return filtered;
+    }
+
     private String buildMapQuery(ChatMessage msg) {
         if (msg.getSharedLatitude() != 0 || msg.getSharedLongitude() != 0) {
             return msg.getSharedLatitude() + "," + msg.getSharedLongitude();
         }
         return msg.getSharedAddress() != null ? msg.getSharedAddress() : "";
+    }
+
+    private Place toDomainPlace(ChatMessageAdapter.PlaceCard placeCard) {
+        if (placeCard == null || !placeCard.hasCoordinates()) {
+            return null;
+        }
+        return new Place(
+                placeCard.getId(),
+                placeCard.getName(),
+                placeCard.getAddress(),
+                placeCard.getRating(),
+                new Location(placeCard.getLatitude(), placeCard.getLongitude())
+        );
     }
 
     // ─── Shared place from navigation args ─────────────────────────────────────
@@ -261,6 +660,27 @@ public class CommonChatFragment extends Fragment {
         Navigation.findNavController(requireView()).navigate(mapUri);
     }
 
+    private void handleViewPlaceClick(ChatMessageAdapter.PlaceCard place) {
+        if (place == null) {
+            return;
+        }
+
+        String location;
+        if (place.hasCoordinates()) {
+            location = place.getLatitude() + "," + place.getLongitude();
+        } else {
+            location = place.getAddress() != null && !place.getAddress().trim().isEmpty()
+                    ? place.getAddress()
+                    : place.getName();
+        }
+
+        android.net.Uri mapUri = UriUtils.buildUri("/map")
+                .buildUpon()
+                .appendQueryParameter("location", location)
+                .build();
+        Navigation.findNavController(requireView()).navigate(mapUri);
+    }
+
     private void scrollToBottom() {
         if (rvMessages != null && adapter.getItemCount() > 0) {
             rvMessages.post(() -> rvMessages.scrollToPosition(adapter.getItemCount() - 1));
@@ -277,8 +697,21 @@ public class CommonChatFragment extends Fragment {
         if ("group".equalsIgnoreCase(chatType)) {
             getParentFragmentManager().setFragmentResult("groupDetailResult", new Bundle());
         }
+
+        NavController navController = Navigation.findNavController(rootView);
+        if (navController.popBackStack()) {
+            return;
+        }
+
         android.net.Uri socialUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL);
-        Navigation.findNavController(rootView).navigate(socialUri);
+        navController.navigate(socialUri);
+    }
+
+    private void markGroupChatReadIfNeeded() {
+        if (!"group".equalsIgnoreCase(chatType) || chatId == null || chatId.trim().isEmpty()) {
+            return;
+        }
+        ChatReadStateStore.markGroupReadNow(requireContext(), chatId);
     }
 
     private void focusInputAndShowKeyboard(EditText etMessage) {

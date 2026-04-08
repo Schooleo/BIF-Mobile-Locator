@@ -202,6 +202,9 @@ public interface RestApiService {
     @GET("trips/group/{groupId}")
     Call<List<TripPlanDto>> getTripsByGroup(@Path("groupId") String groupId);
 
+        @GET("trips")
+        Call<List<TripPlanDto>> getTrips();
+
     @POST("trips/{tripId}/stops")
     Call<TripPlanDto> addTripStop(@Path("tripId") String tripId,
             @Body TripStopDto stop);

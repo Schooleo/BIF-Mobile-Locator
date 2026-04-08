@@ -83,7 +83,7 @@ public class TripSyncEntityHandlerTest {
 
     @Test
     public void applyPulledChange_whenGroupExceedsCap_evictsOldestTrips() {
-        when(mockTripDao.countActiveTripsByGroup("g-1")).thenReturn(13);
+        when(mockTripDao.countActiveTripsByGroup("g-1")).thenReturn(31);
 
         SyncChangeDto change = new SyncChangeDto();
         change.operation = "UPDATE";
@@ -93,7 +93,7 @@ public class TripSyncEntityHandlerTest {
 
         handler.applyPulledChange(change, "user-1");
 
-        verify(mockTripDao).evictOldestTripsByGroup("g-1", 3);
+        verify(mockTripDao).evictOldestTripsByGroup("g-1", 1);
     }
 }
 

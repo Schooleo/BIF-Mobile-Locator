@@ -3,6 +3,7 @@ package com.bif.app.domain.model;
 public class TripStop {
     private final String id;
     private final String title;
+    private final String address;
     private final String note;
     private final String photoUrl;
     private final String localImagePath;
@@ -14,7 +15,14 @@ public class TripStop {
 
     public TripStop(String id, String title, String note, double latitude, double longitude,
                     long arrivalTime, long departureTime, int orderIndex) {
-        this(id, title, note, null, null, latitude, longitude,
+        this(id, title, "", note, null, null, latitude, longitude,
+            arrivalTime, departureTime, orderIndex);
+        }
+
+        public TripStop(String id, String title, String address, String note,
+                double latitude, double longitude,
+                long arrivalTime, long departureTime, int orderIndex) {
+        this(id, title, address, note, null, null, latitude, longitude,
             arrivalTime, departureTime, orderIndex);
     }
 
@@ -23,8 +31,18 @@ public class TripStop {
                     double latitude, double longitude,
                     long arrivalTime, long departureTime,
                     int orderIndex) {
+        this(id, title, "", note, photoUrl, localImagePath,
+            latitude, longitude, arrivalTime, departureTime, orderIndex);
+        }
+
+        public TripStop(String id, String title, String address, String note,
+                String photoUrl, String localImagePath,
+                double latitude, double longitude,
+                long arrivalTime, long departureTime,
+                int orderIndex) {
         this.id = id;
         this.title = title;
+        this.address = address;
         this.note = note;
         this.photoUrl = photoUrl;
         this.localImagePath = localImagePath;
@@ -37,6 +55,7 @@ public class TripStop {
 
     public String getId() { return id; }
     public String getTitle() { return title; }
+    public String getAddress() { return address; }
     public String getNote() { return note; }
     public String getPhotoUrl() { return photoUrl; }
     public String getLocalImagePath() { return localImagePath; }

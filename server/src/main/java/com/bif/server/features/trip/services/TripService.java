@@ -1,6 +1,7 @@
 package com.bif.server.features.trip.services;
 
 import com.bif.server.features.trip.exceptions.TripLimitExceededException;
+import com.bif.server.features.trip.models.RearrangeStopInput;
 import com.bif.server.features.trip.models.TripPlan;
 import com.bif.server.features.trip.models.TripStop;
 import com.bif.server.features.trip.repositories.TripPlanRepository;
@@ -8,7 +9,10 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -110,7 +114,8 @@ public class TripService {
         return Optional.empty();
     }
 
-    public Optional<TripPlan> rearrangeStops(String tripId, List<TripStop> newStops) {
+    public Optional<TripPlan> rearrangeStops(String tripId,
+                                             List<RearrangeStopInput> stopOrders) {
         int retries = 0;
         while (retries < 3) {
             try {
@@ -119,10 +124,38 @@ public class TripService {
                     return optPlan;
                 }
                 TripPlan plan = optPlan.get();
-                for (int i = 0; i < newStops.size(); i++) {
-                    newStops.get(i).setOrderIndex(i);
+                List<TripStop> stops = plan.getStops();
+                if (stops == null || stops.isEmpty()) {
+                    return optPlan;
                 }
-                plan.setStops(newStops);
+
+                Map<String, Integer> orderByStopId = new HashMap<>();
+                if (stopOrders != null) {
+                    for (RearrangeStopInput stopOrder : stopOrders) {
+                        if (stopOrder == null || stopOrder.getId() == null
+                                || stopOrder.getId().isBlank()) {
+                            continue;
+                        }
+                        orderByStopId.put(stopOrder.getId(), stopOrder.getOrderIndex());
+                    }
+                }
+
+                for (TripStop stop : stops) {
+                    if (stop == null || stop.getId() == null) {
+                        continue;
+                    }
+                    Integer updatedOrderIndex = orderByStopId.get(stop.getId());
+                    if (updatedOrderIndex != null) {
+                        stop.setOrderIndex(updatedOrderIndex);
+                    }
+                }
+
+                stops.sort(Comparator.comparingInt(TripStop::getOrderIndex));
+                for (int i = 0; i < stops.size(); i++) {
+                    stops.get(i).setOrderIndex(i);
+                }
+
+                plan.setStops(stops);
                 return Optional.of(tripPlanRepository.save(plan));
             } catch (OptimisticLockingFailureException e) {
                 retries++;

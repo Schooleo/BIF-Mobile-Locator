@@ -12,7 +12,7 @@ import java.util.List;
 @Dao
 public interface SyncQueueDao {
     @Query("SELECT * FROM sync_queue WHERE status = 'PENDING' "
-            + "ORDER BY createdAt ASC")
+            + "ORDER BY createdAt ASC, id ASC")
     List<SyncQueueEntity> getPending();
 
     @Insert

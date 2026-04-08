@@ -96,18 +96,6 @@
         <deepLink app:uri="app://bif.app/profile/personal-info" />
     </fragment>
     <fragment
-        android:id="@+id/nav_group_detail"
-        android:name="com.bif.app.feature.social.GroupDetailFragment"
-        android:label="Group Detail"
-        app:route="/social/group-detail"
-        tools:layout="@layout/fragment_group_detail">
-
-        <argument android:name="groupId" app:argType="string" android:defaultValue="" />
-
-        <deepLink app:uri="app://bif.app/social/group-detail?groupId={groupId}" />
-    </fragment>
-
-    <fragment
         android:id="@+id/nav_social_chat"
         android:name="com.bif.app.feature.social.CommonChatFragment"
         android:label="Chat"
@@ -156,36 +144,28 @@
     </fragment>
 
     <fragment
-        android:id="@+id/nav_group_settings_plans"
-        android:name="com.bif.app.feature.social.GroupSettingsPlansFragment"
-        android:label="Group Plans"
-        app:route="/social/group-settings/plans"
-        tools:layout="@layout/fragment_group_settings_plans">
+        android:id="@+id/nav_trip_detail"
+        android:name="com.bif.app.feature.social.TripDetailFragment"
+        android:label="Trip Detail"
+        app:route="/social/trip-detail"
+        tools:layout="@layout/fragment_trip_detail">
 
-        <argument android:name="groupId" app:argType="string" android:defaultValue="" />
-        <deepLink app:uri="app://bif.app/social/group-settings/plans?groupId={groupId}" />
+        <argument android:name="tripId" app:argType="string" android:defaultValue="" />
+        <argument android:name="tripTitle" app:argType="string" android:defaultValue="" />
+
+        <deepLink app:uri="app://bif.app/social/trip-detail?tripId={tripId}&amp;tripTitle={tripTitle}" />
     </fragment>
 
     <fragment
-        android:id="@+id/nav_group_settings_locations"
-        android:name="com.bif.app.feature.social.GroupSettingsLocationsFragment"
-        android:label="Group Locations"
-        app:route="/social/group-settings/locations"
-        tools:layout="@layout/fragment_group_settings_locations">
+        android:id="@+id/nav_add_trip_stop"
+        android:name="com.bif.app.feature.social.AddTripStopFragment"
+        android:label="Add Trip Stop"
+        app:route="/social/add-trip-stop"
+        tools:layout="@layout/fragment_add_trip_stop">
 
-        <argument android:name="groupId" app:argType="string" android:defaultValue="" />
-        <deepLink app:uri="app://bif.app/social/group-settings/locations?groupId={groupId}" />
-    </fragment>
+        <argument android:name="tripId" app:argType="string" android:defaultValue="" />
 
-    <fragment
-        android:id="@+id/nav_group_settings_members"
-        android:name="com.bif.app.feature.social.GroupSettingsMembersFragment"
-        android:label="Group Members"
-        app:route="/social/group-settings/members"
-        tools:layout="@layout/fragment_group_settings_members">
-
-        <argument android:name="groupId" app:argType="string" android:defaultValue="" />
-        <deepLink app:uri="app://bif.app/social/group-settings/members?groupId={groupId}" />
+        <deepLink app:uri="app://bif.app/social/add-trip-stop?tripId={tripId}" />
     </fragment>
 
 </navigation>

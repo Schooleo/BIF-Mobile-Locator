@@ -1,8 +1,12 @@
 package com.bif.app.data.source.local.database;
 
+import android.database.Cursor;
+
 import androidx.room.Database;
 import androidx.room.RoomDatabase;
 import androidx.room.TypeConverters;
+import androidx.room.migration.Migration;
+import androidx.sqlite.db.SupportSQLiteDatabase;
 import com.bif.app.data.source.local.converter.FriendshipStatusConverter;
 import com.bif.app.data.source.local.converter.UploadStatusConverter;
 import com.bif.app.data.source.local.dao.ChatMessageDao;
@@ -27,6 +31,7 @@ import com.bif.app.data.source.local.entity.ProfileEntity;
 import com.bif.app.data.source.local.entity.ReviewEntity;
 import com.bif.app.data.source.local.entity.SearchHistoryEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
+import com.bif.app.data.source.local.entity.TripMemberCrossRef;
 import com.bif.app.data.source.local.entity.TripPlanEntity;
 import com.bif.app.data.source.local.entity.TripStopEntity;
 
@@ -43,10 +48,128 @@ import com.bif.app.data.source.local.entity.TripStopEntity;
         SearchHistoryEntity.class,
         ChatMessageEntity.class,
         TripPlanEntity.class,
+        TripMemberCrossRef.class,
         TripStopEntity.class
-}, version = 15, exportSchema = false)
+}, version = 17, exportSchema = false)
 @TypeConverters({ FriendshipStatusConverter.class, UploadStatusConverter.class })
 public abstract class AppDatabase extends RoomDatabase {
+    public static final Migration MIGRATION_15_16 = new Migration(15, 16) {
+        @Override
+        public void migrate(SupportSQLiteDatabase database) {
+            if (!hasTable(database, "trip_members")) {
+                database.execSQL("CREATE TABLE trip_members ("
+                        + "tripId TEXT NOT NULL, "
+                        + "userId TEXT NOT NULL, "
+                        + "PRIMARY KEY(tripId, userId), "
+                        + "FOREIGN KEY(tripId) REFERENCES trip_plans(id) ON DELETE CASCADE"
+                        + ")");
+                database.execSQL("CREATE INDEX index_trip_members_tripId ON trip_members(tripId)");
+                database.execSQL("CREATE INDEX index_trip_members_userId ON trip_members(userId)");
+            }
+
+            if (!hasColumn(database, "trip_stops", "address")) {
+                database.execSQL("ALTER TABLE trip_stops ADD COLUMN address TEXT");
+            }
+        }
+
+        private boolean hasTable(SupportSQLiteDatabase database, String tableName) {
+            Cursor cursor = database.query("SELECT name FROM sqlite_master "
+                    + "WHERE type='table' AND name=?", new Object[]{tableName});
+            try {
+                return cursor.moveToFirst();
+            } finally {
+                cursor.close();
+            }
+        }
+
+        private boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
+            Cursor cursor = database.query("PRAGMA table_info(`" + tableName + "`)");
+            try {
+                int nameIndex = cursor.getColumnIndex("name");
+                if (nameIndex < 0) {
+                    nameIndex = 1;
+                }
+                while (cursor.moveToNext()) {
+                    String existing = cursor.getString(nameIndex);
+                    if (columnName.equals(existing)) {
+                        return true;
+                    }
+                }
+                return false;
+            } finally {
+                cursor.close();
+            }
+        }
+    };
+
+    public static final Migration MIGRATION_16_17 = new Migration(16, 17) {
+        @Override
+        public void migrate(SupportSQLiteDatabase database) {
+            if (!hasTable(database, "reviews")) {
+                database.execSQL("CREATE TABLE reviews ("
+                        + "placeId TEXT NOT NULL, "
+                        + "userId TEXT NOT NULL, "
+                        + "userName TEXT, "
+                        + "stars INTEGER NOT NULL, "
+                        + "comment TEXT, "
+                        + "createdAt INTEGER NOT NULL, "
+                        + "serverVersion INTEGER NOT NULL, "
+                        + "deleted INTEGER NOT NULL, "
+                        + "lastSyncedAt INTEGER NOT NULL, "
+                        + "pendingSync INTEGER NOT NULL, "
+                        + "PRIMARY KEY(placeId, userId)"
+                        + ")");
+            }
+
+            if (!hasIndex(database, "index_reviews_createdAt")) {
+                database.execSQL("CREATE INDEX index_reviews_createdAt ON reviews(createdAt)");
+            }
+
+            if (!hasColumn(database, "trip_members", "role")) {
+                database.execSQL("ALTER TABLE trip_members ADD COLUMN role TEXT NOT NULL DEFAULT ''");
+            }
+        }
+
+        private boolean hasTable(SupportSQLiteDatabase database, String tableName) {
+            Cursor cursor = database.query("SELECT name FROM sqlite_master "
+                    + "WHERE type='table' AND name=?", new Object[]{tableName});
+            try {
+                return cursor.moveToFirst();
+            } finally {
+                cursor.close();
+            }
+        }
+
+        private boolean hasIndex(SupportSQLiteDatabase database, String indexName) {
+            Cursor cursor = database.query("SELECT name FROM sqlite_master "
+                    + "WHERE type='index' AND name=?", new Object[]{indexName});
+            try {
+                return cursor.moveToFirst();
+            } finally {
+                cursor.close();
+            }
+        }
+
+        private boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
+            Cursor cursor = database.query("PRAGMA table_info(`" + tableName + "`)");
+            try {
+                int nameIndex = cursor.getColumnIndex("name");
+                if (nameIndex < 0) {
+                    nameIndex = 1;
+                }
+                while (cursor.moveToNext()) {
+                    String existing = cursor.getString(nameIndex);
+                    if (columnName.equals(existing)) {
+                        return true;
+                    }
+                }
+                return false;
+            } finally {
+                cursor.close();
+            }
+        }
+    };
+
     public abstract FriendDao friendDao();
 
     public abstract FriendshipDao friendshipDao();

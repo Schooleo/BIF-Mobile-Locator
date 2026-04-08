@@ -6,9 +6,15 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 
 import androidx.lifecycle.LiveData;
+import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Transformations;
 
+import com.bif.app.core.network.AiGraphQlClient;
 import com.bif.app.core.network.RestApiService;
+import com.bif.app.core.network.dto.ai.AiSuggestedPlacePayload;
+import com.bif.app.core.network.dto.ai.AiTripDraftPayload;
+import com.bif.app.core.network.dto.ai.AiTripDraftResultPayload;
+import com.bif.app.core.network.dto.ai.AiTripDraftStopPayload;
 import com.bif.app.core.network.dto.chat.ChatMessageDto;
 import com.bif.app.core.network.dto.user.UserApiModel;
 import com.bif.app.core.utils.UserPreferences;
@@ -17,7 +23,12 @@ import com.bif.app.data.sync.core.NetworkMonitor;
 import com.bif.app.data.source.local.dao.ChatMessageDao;
 import com.bif.app.data.source.local.entity.ChatMessageEntity;
 import com.bif.app.data.sync.core.SyncManager;
+import com.bif.app.domain.model.AiTripDraft;
+import com.bif.app.domain.model.AiTripDraftResult;
+import com.bif.app.domain.model.AiTripDraftStop;
 import com.bif.app.domain.model.ChatMessage;
+import com.bif.app.domain.model.Location;
+import com.bif.app.domain.model.Place;
 import com.bif.app.domain.repository.IChatRepository;
 import com.google.gson.Gson;
 
@@ -57,6 +68,7 @@ public class ChatRepository implements IChatRepository {
     private final NetworkMonitor networkMonitor;
     private final Context context;
     private final String wsBaseUrl;
+    private final AiGraphQlClient aiGraphQlClient;
     private final ExecutorService dbExecutor;
     private final ExecutorService backgroundExecutor;
     private final Gson gson;
@@ -83,7 +95,8 @@ public class ChatRepository implements IChatRepository {
                           SyncManager syncManager,
                           NetworkMonitor networkMonitor,
                           @ApplicationContext Context context,
-                          @Named("wsBaseUrl") String wsBaseUrl) {
+                          @Named("wsBaseUrl") String wsBaseUrl,
+                          AiGraphQlClient aiGraphQlClient) {
         this.chatMessageDao = chatMessageDao;
         this.chatMapper = chatMapper;
         this.restApiService = restApiService;
@@ -91,6 +104,7 @@ public class ChatRepository implements IChatRepository {
         this.networkMonitor = networkMonitor;
         this.context = context;
         this.wsBaseUrl = wsBaseUrl;
+        this.aiGraphQlClient = aiGraphQlClient;
         this.dbExecutor = Executors.newSingleThreadExecutor();
         this.backgroundExecutor = Executors.newSingleThreadExecutor();
         this.gson = new Gson();
@@ -143,6 +157,74 @@ public class ChatRepository implements IChatRepository {
     }
 
     @Override
+    public LiveData<AiTripDraftResult> draftTripFromQuery(String query) {
+        MutableLiveData<AiTripDraftResult> result = new MutableLiveData<>();
+
+        if (query == null || query.trim().isEmpty()) {
+            result.setValue(failureResult("INVALID_QUERY", new ArrayList<>()));
+            return result;
+        }
+
+        if (!networkMonitor.isOnline()) {
+            result.setValue(failureResult("OFFLINE", new ArrayList<>()));
+            return result;
+        }
+
+        if (aiGraphQlClient == null) {
+            result.postValue(failureResult("AI_FAILURE", new ArrayList<>()));
+            return result;
+        }
+
+        aiGraphQlClient.draftTripFromQuery(query)
+                .whenComplete((payload, throwable) -> {
+            if (throwable != null || payload == null) {
+                Log.e(TAG, "AI trip draft failed", throwable);
+                result.postValue(failureResult("AI_FAILURE", new ArrayList<>()));
+                return;
+            }
+
+                String failureCode = payload.failureCode;
+                List<String> warnings = payload.warnings != null
+                        ? new ArrayList<>(payload.warnings)
+                        : new ArrayList<>();
+
+                if (failureCode != null) {
+                    result.postValue(failureResult(failureCode, warnings));
+                    return;
+                }
+
+                List<Place> candidatePlaces = new ArrayList<>();
+                if (payload.candidatePlaces != null) {
+                    for (AiSuggestedPlacePayload placeNode : payload.candidatePlaces) {
+                        if (placeNode == null) {
+                            continue;
+                        }
+                        candidatePlaces.add(mapPlace(placeNode));
+                    }
+                }
+
+                AiTripDraft draft = mapDraft(payload.draft);
+                if (draft == null) {
+                    draft = new AiTripDraft("", "", new ArrayList<>());
+                }
+                result.postValue(new AiTripDraftResult(draft, candidatePlaces, warnings, null));
+        });
+
+        return result;
+    }
+
+    @Override
+    public void insertLocalMessage(ChatMessage message) {
+        if (message == null || isBlank(message.getGroupId())) {
+            return;
+        }
+        dbExecutor.execute(() -> {
+            chatMessageDao.insert(chatMapper.mapToEntity(message));
+            pruneMessageCache(message.getGroupId());
+        });
+    }
+
+    @Override
     public void refreshMessages(String groupId) {
         restApiService.getChatMessages(groupId).enqueue(new Callback<>() {
             @Override
@@ -150,7 +232,7 @@ public class ChatRepository implements IChatRepository {
                                    @NonNull Response<List<ChatMessageDto>> response) {
                 if (response.isSuccessful() && response.body() != null) {
                     dbExecutor.execute(() -> {
-                        refreshUserNameCache(false);
+                        refreshUserNameCache();
                         List<ChatMessageEntity> entities = new ArrayList<>();
                         for (ChatMessageDto dto : response.body()) {
                             entities.add(dtoToEntity(dto));
@@ -183,7 +265,7 @@ public class ChatRepository implements IChatRepository {
             ? wsBaseUrl.trim()
             : String.format(WS_URL_TEMPLATE, resolveHost());
         stompClient = Stomp.over(Stomp.ConnectionProvider.OKHTTP, wsUrl);
-        backgroundExecutor.execute(() -> refreshUserNameCache(false));
+        backgroundExecutor.execute(() -> refreshUserNameCache());
 
         // Lifecycle events for logging.
         wsDisposables.add(
@@ -247,7 +329,7 @@ public class ChatRepository implements IChatRepository {
             ChatMessageDto dto = gson.fromJson(stompMessage.getPayload(), ChatMessageDto.class);
             if (dto == null) return;
 
-            refreshUserNameCache(false);
+            refreshUserNameCache();
 
             // Determine current user's ID to tag isOutgoing; the entity stores
             // everything, the mapper derives isOutgoing at query time.
@@ -372,6 +454,47 @@ public class ChatRepository implements IChatRepository {
         );
     }
 
+    private AiTripDraftResult failureResult(String failureCode, List<String> warnings) {
+        AiTripDraft placeholderDraft = new AiTripDraft("", "", new ArrayList<>());
+        return new AiTripDraftResult(placeholderDraft, new ArrayList<>(), warnings, failureCode);
+    }
+
+    private AiTripDraft mapDraft(AiTripDraftPayload payload) {
+        if (payload == null) {
+            return null;
+        }
+
+        List<AiTripDraftStop> stops = new ArrayList<>();
+        if (payload.stops != null) {
+            for (AiTripDraftStopPayload stopPayload : payload.stops) {
+            if (stopPayload == null) {
+                continue;
+            }
+            Place place = stopPayload.place != null
+                ? mapPlace(stopPayload.place)
+                : new Place(stopPayload.placeId, "", "", 0d, new Location(0d, 0d));
+            stops.add(new AiTripDraftStop(
+                stopPayload.placeId,
+                place,
+                Math.max(0, stopPayload.durationMinutes),
+                stopPayload.note
+            ));
+            }
+        }
+
+        return new AiTripDraft(payload.title, payload.summary, stops);
+    }
+
+    private Place mapPlace(AiSuggestedPlacePayload payload) {
+        String id = payload.id != null ? payload.id : UUID.randomUUID().toString();
+        String name = payload.name != null ? payload.name : "";
+        String address = payload.address != null ? payload.address : "";
+        double latitude = payload.latitude != null ? payload.latitude : 0.0;
+        double longitude = payload.longitude != null ? payload.longitude : 0.0;
+        return new Place(id, name, address, payload.rating,
+                new Location(latitude, longitude));
+    }
+
     private String resolveSenderName(ChatMessageDto dto) {
         if (dto == null) {
             return "";
@@ -400,13 +523,13 @@ public class ChatRepository implements IChatRepository {
         return senderId;
     }
 
-    private void refreshUserNameCache(boolean force) {
+    private void refreshUserNameCache() {
         if (!networkMonitor.isOnline()) {
             return;
         }
 
         long now = System.currentTimeMillis();
-        if (!force && (now - userNameCacheUpdatedAtMs) < USER_NAME_CACHE_TTL_MS) {
+        if ((now - userNameCacheUpdatedAtMs) < USER_NAME_CACHE_TTL_MS) {
             return;
         }
 
@@ -473,5 +596,4 @@ public class ChatRepository implements IChatRepository {
         return "10.0.2.2";
     }
 }
-
 

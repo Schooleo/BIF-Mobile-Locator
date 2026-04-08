@@ -1,6 +1,7 @@
 package com.bif.server.features.trip.services;
 
 import com.bif.server.features.trip.exceptions.TripLimitExceededException;
+import com.bif.server.features.trip.models.RearrangeStopInput;
 import com.bif.server.features.trip.models.TripPlan;
 import com.bif.server.features.trip.models.TripStop;
 import com.bif.server.features.trip.repositories.TripPlanRepository;
@@ -175,25 +176,36 @@ class TripServiceTest {
     }
 
     @Test
-    void rearrangeStops_WhenFound_ReplacesAndReindex() {
+    void rearrangeStops_WhenFound_ReordersByIdAndReindex() {
         TripPlan plan = new TripPlan();
-        plan.setStops(new ArrayList<>());
+        TripStop stopA = new TripStop();
+        stopA.setId("s1");
+        stopA.setTitle("A");
+        stopA.setOrderIndex(0);
+        TripStop stopB = new TripStop();
+        stopB.setId("s2");
+        stopB.setTitle("B");
+        stopB.setOrderIndex(1);
+        plan.setStops(new ArrayList<>(List.of(stopA, stopB)));
         when(tripPlanRepository.findById("t1")).thenReturn(Optional.of(plan));
         when(tripPlanRepository.save(any(TripPlan.class))).thenAnswer(i -> i.getArgument(0));
 
-        TripStop newStop0 = new TripStop();
-        newStop0.setTitle("Z");
-        TripStop newStop1 = new TripStop();
-        newStop1.setTitle("Y");
+        RearrangeStopInput reorderA = new RearrangeStopInput();
+        reorderA.setId("s1");
+        reorderA.setOrderIndex(1);
+        RearrangeStopInput reorderB = new RearrangeStopInput();
+        reorderB.setId("s2");
+        reorderB.setOrderIndex(0);
 
         Optional<TripPlan> result = tripService.rearrangeStops("t1",
-                new ArrayList<>(List.of(newStop0, newStop1)));
+                new ArrayList<>(List.of(reorderA, reorderB)));
 
         assertTrue(result.isPresent());
         assertEquals(2, result.get().getStops().size());
         assertEquals(0, result.get().getStops().get(0).getOrderIndex());
         assertEquals(1, result.get().getStops().get(1).getOrderIndex());
-        assertEquals("Z", result.get().getStops().get(0).getTitle());
+        assertEquals("B", result.get().getStops().get(0).getTitle());
+        assertEquals("A", result.get().getStops().get(1).getTitle());
     }
 
     @Test

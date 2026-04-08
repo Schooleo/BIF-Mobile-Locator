@@ -73,6 +73,7 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
                 || (payload != null && payload.deleted);
 
         if (payload != null) {
+            target.setPlaceId(payload.placeId);
             target.setTitle(payload.title);
             target.setNote(payload.note);
             if (payload.photoUrlProvided) {
@@ -164,6 +165,7 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         TripStopPayload payload = new TripStopPayload();
         payload.id = stop.getId();
         payload.tripId = tripId;
+        payload.placeId = stop.getPlaceId();
         payload.title = stop.getTitle();
         payload.note = stop.getNote();
         payload.photoUrl = stop.getPhotoUrl();
@@ -190,6 +192,7 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
     private static class TripStopPayload {
         public String id;
         public String tripId;
+        public String placeId;
         public String title;
         public String note;
         public String photoUrl;

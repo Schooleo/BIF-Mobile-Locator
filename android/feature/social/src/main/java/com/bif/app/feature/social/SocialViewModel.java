@@ -7,9 +7,11 @@ import androidx.lifecycle.ViewModel;
 
 import com.bif.app.domain.model.Friend;
 import com.bif.app.domain.model.Friendship;
+import com.bif.app.domain.model.TripPlan;
 import com.bif.app.domain.repository.IFriendshipRepository;
 import com.bif.app.domain.model.Group;
 import com.bif.app.domain.repository.IGroupRepository;
+import com.bif.app.domain.repository.ITripRepository;
 
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -23,31 +25,41 @@ import dagger.hilt.android.lifecycle.HiltViewModel;
 public class SocialViewModel extends ViewModel {
     private final IFriendshipRepository friendshipRepository;
     private final IGroupRepository groupRepository;
+    private final ITripRepository tripRepository;
     private final LiveData<List<Friend>> friends;
     private final LiveData<List<Friendship>> pendingRequests;
     private final LiveData<List<Group>> groups;
+    private final LiveData<List<TripPlan>> trips;
     private final MediatorLiveData<UiState<List<Friend>>> friendUiState = new MediatorLiveData<>();
     private final MediatorLiveData<UiState<List<Group>>> groupUiState = new MediatorLiveData<>();
+    private final MediatorLiveData<UiState<List<TripPlan>>> tripUiState = new MediatorLiveData<>();
     private final MutableLiveData<String> friendActionMessage = new MutableLiveData<>();
     private final MutableLiveData<Boolean> friendActionLoading = new MutableLiveData<>(false);
     private final MutableLiveData<String> groupActionMessage = new MutableLiveData<>();
     private final MutableLiveData<Boolean> groupActionLoading = new MutableLiveData<>(false);
+    private final MutableLiveData<String> tripActionMessage = new MutableLiveData<>();
+    private final MutableLiveData<Boolean> tripActionLoading = new MutableLiveData<>(false);
     private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
 
     @Inject
     public SocialViewModel(IFriendshipRepository friendshipRepository,
-                           IGroupRepository groupRepository) {
+                           IGroupRepository groupRepository,
+                           ITripRepository tripRepository) {
         this.friendshipRepository = friendshipRepository;
         this.groupRepository = groupRepository;
+        this.tripRepository = tripRepository;
         this.friends = friendshipRepository.getFriends();
         this.pendingRequests = friendshipRepository.getPendingRequests();
         this.groups = groupRepository.getGroups();
+        this.trips = tripRepository.getAllTrips();
 
         friendUiState.setValue(UiState.loading());
         groupUiState.setValue(UiState.loading());
+        tripUiState.setValue(UiState.loading());
 
         friendUiState.addSource(this.friends, this::mapFriendState);
         groupUiState.addSource(this.groups, this::mapGroupState);
+        tripUiState.addSource(this.trips, this::mapTripState);
     }
 
     public LiveData<List<Friend>> getFriends() {
@@ -60,12 +72,18 @@ public class SocialViewModel extends ViewModel {
 
     public LiveData<List<Group>> getGroups() { return groups; }
 
+    public LiveData<List<TripPlan>> getTrips() { return trips; }
+
     public LiveData<UiState<List<Friend>>> getFriendUiState() {
         return friendUiState;
     }
 
     public LiveData<UiState<List<Group>>> getGroupUiState() {
         return groupUiState;
+    }
+
+    public LiveData<UiState<List<TripPlan>>> getTripUiState() {
+        return tripUiState;
     }
 
     public LiveData<String> getFriendActionMessage() {
@@ -84,12 +102,24 @@ public class SocialViewModel extends ViewModel {
         groupActionMessage.setValue(null);
     }
 
+    public void clearTripActionMessage() {
+        tripActionMessage.setValue(null);
+    }
+
     public LiveData<String> getGroupActionMessage() {
         return groupActionMessage;
     }
 
     public LiveData<Boolean> getGroupActionLoading() {
         return groupActionLoading;
+    }
+
+    public LiveData<String> getTripActionMessage() {
+        return tripActionMessage;
+    }
+
+    public LiveData<Boolean> getTripActionLoading() {
+        return tripActionLoading;
     }
 
     public void retryFriends() {
@@ -105,6 +135,11 @@ public class SocialViewModel extends ViewModel {
     public void retryGroups() {
         mapGroupState(groups.getValue());
         groupRepository.refreshGroups();
+    }
+
+    public void retryTrips() {
+        mapTripState(trips.getValue());
+        tripRepository.refreshTrips("");
     }
 
     public void addFriend(String receiverId) {
@@ -149,6 +184,36 @@ public class SocialViewModel extends ViewModel {
             friendshipRepository.refreshPendingRequests();
             return "__MSG_FRIEND_REQUEST_REJECT_SUCCESS__";
         }, "__MSG_FRIEND_REQUEST_REJECT_FAILED__");
+    }
+
+    public void createTrip(String title, String description, long startAt, long endAt) {
+        tripActionLoading.postValue(true);
+        tripRepository.createTrip(title, description, startAt, endAt, success -> {
+            tripActionMessage.postValue(success
+                    ? "__MSG_TRIP_CREATE_SUCCESS__"
+                    : "__MSG_TRIP_CREATE_FAILED__");
+            tripActionLoading.postValue(false);
+        });
+    }
+
+    public void updateTrip(String tripId, String title, String description, long startAt, long endAt) {
+        tripActionLoading.postValue(true);
+        tripRepository.updateTrip(tripId, title, description, startAt, endAt, success -> {
+            tripActionMessage.postValue(success
+                    ? "__MSG_TRIP_UPDATE_SUCCESS__"
+                    : "__MSG_TRIP_UPDATE_FAILED__");
+            tripActionLoading.postValue(false);
+        });
+    }
+
+    public void deleteTrip(String tripId) {
+        tripActionLoading.postValue(true);
+        tripRepository.deleteTrip(tripId, success -> {
+            tripActionMessage.postValue(success
+                    ? "__MSG_TRIP_DELETE_SUCCESS__"
+                    : "__MSG_TRIP_DELETE_FAILED__");
+            tripActionLoading.postValue(false);
+        });
     }
 
     public void createGroup(String groupName, List<Friend> selectedMembers) {
@@ -244,6 +309,18 @@ public class SocialViewModel extends ViewModel {
             return;
         }
         groupUiState.setValue(UiState.success(groupList));
+    }
+
+    private void mapTripState(List<TripPlan> tripList) {
+        if (tripList == null) {
+            tripUiState.setValue(UiState.error("Unable to load trips."));
+            return;
+        }
+        if (tripList.isEmpty()) {
+            tripUiState.setValue(UiState.empty("No trips yet."));
+            return;
+        }
+        tripUiState.setValue(UiState.success(tripList));
     }
 
     private void runFriendAction(FriendAction action, String fallbackErrorCode) {

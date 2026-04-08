@@ -307,7 +307,7 @@ public class SyncManagerTest {
     }
 
     @Test
-    public void syncIfOnline_whenOnline_triggersSync() {
+        public void syncIfOnline_whenOnline_triggersSync() throws InterruptedException {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
         when(mockSyncQueueDao.getPending())
                 .thenReturn(new ArrayList<>());
@@ -318,16 +318,16 @@ public class SyncManagerTest {
         } catch (Exception e) {
             // Expected when REST mock isn't fully set up
         }
-        verify(mockSyncQueueDao).resetInFlight();
+        verify(mockSyncQueueDao, timeout(1000)).resetInFlight();
     }
 
     @Test
-    public void syncIfOnline_whenOffline_doesNothing() {
+        public void syncIfOnline_whenOffline_doesNothing() throws InterruptedException {
         when(mockNetworkMonitor.isOnline()).thenReturn(false);
 
         syncManager.syncIfOnline();
-
-        verify(mockSyncQueueDao, never()).resetInFlight();
+        // Give async path time to potentially execute (it shouldn't)
+        verify(mockSyncQueueDao, timeout(150).times(0)).resetInFlight();
     }
 }
 

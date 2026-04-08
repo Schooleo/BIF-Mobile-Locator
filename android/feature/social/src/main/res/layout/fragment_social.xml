@@ -25,21 +25,21 @@
         app:tabMode="fixed"
         app:tabGravity="fill"
         app:tabIndicator="@drawable/bg_tab_indicator"
-        app:tabIndicatorColor="@color/primary_blue"
+        app:tabIndicatorColor="@color/primary_green"
         app:tabIndicatorHeight="3dp"
-        app:tabSelectedTextColor="@color/primary_blue"
+        app:tabSelectedTextColor="@color/primary_green"
         app:tabTextColor="@color/primary_grey"
         app:tabTextAppearance="@style/TabTextStyle">
 
         <com.google.android.material.tabs.TabItem
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/friends" />
+            android:text="@string/trips" />
 
         <com.google.android.material.tabs.TabItem
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/groups" />
+            android:text="@string/friends" />
 
     </com.google.android.material.tabs.TabLayout>
 
