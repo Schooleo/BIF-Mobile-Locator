@@ -110,6 +110,7 @@ public class TripRepositoryTest {
     @Test
     public void addStopToTrip_upsertsLocallyAndEnqueuesSync()
             throws InterruptedException {
+        when(mockSyncManager.isOnline()).thenReturn(true);
         when(mockTripDao.getStopByIdSync("stop-1")).thenReturn(null);
         when(mockTripDao.getActiveStopsByTripSync("trip-1"))
                 .thenReturn(List.of(new TripStopEntity(), new TripStopEntity()));
@@ -139,7 +140,7 @@ public class TripRepositoryTest {
                 eq("stop-1"), eq("UPDATE"), anyString(), any());
         verify(mockSyncManager).enqueueChange(eq("trip_plan"),
                 eq("trip-1"), eq("UPDATE"), anyString(), any());
-        verify(mockSyncManager).syncIfOnline();
+        verify(mockSyncManager).sync();
     }
 
     @Test
@@ -193,6 +194,7 @@ public class TripRepositoryTest {
     @Test
     public void removeStopFromTrip_marksDeletedAndReindexesActive()
             throws InterruptedException {
+                when(mockSyncManager.isOnline()).thenReturn(true);
         TripStopEntity removed = new TripStopEntity();
         removed.id = "s2";
         removed.tripId = "trip-1";
@@ -218,7 +220,7 @@ public class TripRepositoryTest {
         verify(mockTripDao, atLeastOnce()).upsertStop(any());
         verify(mockSyncManager, atLeastOnce()).enqueueChange(eq("trip_stop"),
                 anyString(), eq("UPDATE"), anyString(), any());
-        verify(mockSyncManager).syncIfOnline();
+        verify(mockSyncManager).sync();
     }
 
     @Test
@@ -265,6 +267,7 @@ public class TripRepositoryTest {
         @Test
         public void updateTrip_updatesLocallyAndEnqueuesSync()
                         throws InterruptedException {
+                when(mockSyncManager.isOnline()).thenReturn(true);
                 TripPlanEntity existing = new TripPlanEntity();
                 existing.id = "trip-1";
                 existing.groupId = "group-1";
@@ -294,12 +297,13 @@ public class TripRepositoryTest {
 
                 verify(mockSyncManager).enqueueChange(eq("trip_plan"), eq("trip-1"),
                                 eq("UPDATE"), anyString(), any());
-                verify(mockSyncManager).syncIfOnline();
+                verify(mockSyncManager).sync();
         }
 
         @Test
         public void deleteTrip_marksDeletedAndEnqueuesDelete()
                         throws InterruptedException {
+                when(mockSyncManager.isOnline()).thenReturn(true);
                 TripPlanEntity existing = new TripPlanEntity();
                 existing.id = "trip-1";
                 existing.groupId = "group-1";
@@ -322,7 +326,7 @@ public class TripRepositoryTest {
 
                 verify(mockSyncManager).enqueueChange(eq("trip_plan"), eq("trip-1"),
                                 eq("DELETE"), anyString(), any());
-                verify(mockSyncManager).syncIfOnline();
+                verify(mockSyncManager).sync();
         }
 
     @Test
