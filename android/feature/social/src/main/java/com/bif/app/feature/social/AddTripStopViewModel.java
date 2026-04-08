@@ -124,7 +124,7 @@ public class AddTripStopViewModel extends ViewModel {
             }
             if (mapped.isEmpty()) {
                 searchState.setValue(new SearchState.Empty(
-                        "We couldn't find any places matching your vibe."));
+                        "No places found. Try a different search."));
             } else {
                 searchState.setValue(new SearchState.Success(mapped));
             }
