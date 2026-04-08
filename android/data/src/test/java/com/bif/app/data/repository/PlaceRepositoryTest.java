@@ -386,7 +386,7 @@ public class PlaceRepositoryTest {
 
     @Test
     public void suggestPlacesFromQuery_failureCode_doesNotReturnPlaces()
-            throws Exception, InterruptedException {
+            throws Exception {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
         when(mockAiGraphQlClient.suggestPlacesFromQuery("late night food"))
                 .thenReturn(new AiPlaceSuggestionPayload(
@@ -405,7 +405,7 @@ public class PlaceRepositoryTest {
 
     @Test
     public void suggestPlacesFromQuery_success_mapsPlaces()
-            throws Exception, InterruptedException {
+            throws Exception {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
         when(mockAiGraphQlClient.suggestPlacesFromQuery("best coffee"))
                 .thenReturn(new AiPlaceSuggestionPayload(
@@ -436,7 +436,7 @@ public class PlaceRepositoryTest {
 
     @Test
     public void suggestPlacesFromQuery_incompletePlace_isFilteredOut()
-            throws Exception, InterruptedException {
+            throws Exception {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
         when(mockAiGraphQlClient.suggestPlacesFromQuery("missing fields"))
                 .thenReturn(new AiPlaceSuggestionPayload(

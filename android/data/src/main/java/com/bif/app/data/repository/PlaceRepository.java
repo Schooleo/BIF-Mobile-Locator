@@ -143,15 +143,21 @@ public class PlaceRepository implements IPlaceRepository {
             return result;
         }
 
-        executorService.execute(() -> {
-                if (aiGraphQlClient == null) {
+        if (aiGraphQlClient == null) {
+            result.postValue(new AiPlaceSuggestionResult(new ArrayList<>(),
+                    new ArrayList<>(), "AI_FAILURE"));
+            return result;
+        }
+
+        aiGraphQlClient.suggestPlacesFromQuery(query)
+                .whenComplete((payload, throwable) -> {
+            if (throwable != null || payload == null) {
+                Log.e(TAG, "AI suggest query failed", throwable);
                 result.postValue(new AiPlaceSuggestionResult(new ArrayList<>(),
                         new ArrayList<>(), "AI_FAILURE"));
                 return;
             }
 
-            try {
-                AiPlaceSuggestionPayload payload = aiGraphQlClient.suggestPlacesFromQuery(query);
                 List<String> warnings = payload.warnings != null
                     ? new ArrayList<>(payload.warnings)
                     : new ArrayList<>();
@@ -196,11 +202,6 @@ public class PlaceRepository implements IPlaceRepository {
 
                 result.postValue(new AiPlaceSuggestionResult(mappedPlaces,
                         warnings, null));
-            } catch (Exception exception) {
-                Log.e(TAG, "AI suggest query failed", exception);
-                result.postValue(new AiPlaceSuggestionResult(new ArrayList<>(),
-                        new ArrayList<>(), "AI_FAILURE"));
-            }
         });
 
         return result;

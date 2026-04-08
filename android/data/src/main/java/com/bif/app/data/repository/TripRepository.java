@@ -1,6 +1,7 @@
 package com.bif.app.data.repository;
 
 import android.content.Context;
+import android.util.Log;
 
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.Transformations;
@@ -40,12 +41,15 @@ import retrofit2.Response;
 @Singleton
 public class TripRepository implements ITripRepository {
 
+    private static final String TAG = "TripRepository";
+
     private final Context appContext;
     private final RestApiService restApiService;
     private final TripDao tripDao;
     private final FriendDao friendDao;
     private final SyncManager syncManager;
     private final ExecutorService executorService;
+    private final ExecutorService networkExecutor;
 
     @Inject
     public TripRepository(@ApplicationContext Context appContext,
@@ -59,6 +63,7 @@ public class TripRepository implements ITripRepository {
         this.friendDao = friendDao;
         this.syncManager = syncManager;
         this.executorService = Executors.newSingleThreadExecutor();
+        this.networkExecutor = Executors.newSingleThreadExecutor();
     }
 
     // Visible for tests without Android context.
@@ -131,7 +136,8 @@ public class TripRepository implements ITripRepository {
                 enqueueTripPlanChange(entity.id, "CREATE");
                 syncManager.syncIfOnline();
                 success = true;
-            } catch (Exception ignored) {
+            } catch (Exception ex) {
+                Log.w(TAG, "Failed to create trip", ex);
                 success = false;
             }
 
@@ -292,6 +298,7 @@ public class TripRepository implements ITripRepository {
                         existingStop.serverVersion = Math.max(1L,
                                 existingStop.serverVersion + 1L);
                         tripDao.upsertStop(existingStop);
+                        enqueueStopUpdate(existingStop);
                     }
                 }
 
@@ -370,28 +377,8 @@ public class TripRepository implements ITripRepository {
             enqueueTripPlanChange(tripId, "UPDATE");
             enqueueImageUploadIfPending(entity);
             enqueueStopUpdate(entity);
-            pushStopToServerIfOnline(entity);
             syncManager.syncIfOnline();
         });
-    }
-
-    private void pushStopToServerIfOnline(TripStopEntity entity) {
-        if (entity == null || restApiService == null || !syncManager.isOnline()) {
-            return;
-        }
-
-        try {
-            Response<TripPlanDto> response = restApiService
-                    .addTripStop(entity.tripId, toStopDto(entity))
-                    .execute();
-            if (!response.isSuccessful() || response.body() == null) {
-                return;
-            }
-
-            upsertTripFromApi(response.body(), resolveCurrentUserId());
-        } catch (Exception ignored) {
-            // Keep local-first behavior when direct API push fails.
-        }
     }
 
     @Override
@@ -504,7 +491,7 @@ public class TripRepository implements ITripRepository {
 
     @Override
     public void refreshTrips(String groupId) {
-        executorService.execute(() -> {
+        networkExecutor.execute(() -> {
             String safeGroupId = normalize(groupId);
             if (restApiService != null) {
                 if (!safeGroupId.isEmpty()) {
@@ -835,7 +822,7 @@ public class TripRepository implements ITripRepository {
         FriendEntity existingFriend = friendDao.getByServerUserId(userId);
         FriendEntity entity = existingFriend != null ? existingFriend : new FriendEntity();
         if (existingFriend == null) {
-            entity.id = Math.abs(userId.hashCode());
+            entity.id = userId.hashCode() & 0x7fffffff;
             entity.serverUserId = userId;
         }
 
@@ -847,7 +834,9 @@ public class TripRepository implements ITripRepository {
 
         String safeLetter = normalize(avatarLetter);
         if (safeLetter.isEmpty()) {
-            safeLetter = safeName.substring(0, 1).toUpperCase();
+            safeLetter = safeName.isEmpty()
+                    ? ""
+                    : safeName.substring(0, 1).toUpperCase();
         }
         entity.avatarLetter = safeLetter;
         entity.avatarColor = avatarColor;

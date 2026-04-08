@@ -57,6 +57,8 @@ public class ChatViewModel extends ViewModel {
             new MutableLiveData<>(null);
             private final Map<String, DraftTripCardSnapshot> pendingDraftTripSnapshots =
                 Collections.synchronizedMap(new HashMap<>());
+    private final Map<LiveData<?>, Set<Observer<?>>> observeOnceObservers =
+            Collections.synchronizedMap(new HashMap<>());
 
         private final Observer<Boolean> networkObserver = isOnline -> {
         boolean online = Boolean.TRUE.equals(isOnline);
@@ -404,12 +406,43 @@ public class ChatViewModel extends ViewModel {
         if (value == null) {
             return "\"\"";
         }
-        String escaped = value
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r");
-        return "\"" + escaped + "\"";
+        StringBuilder escaped = new StringBuilder(value.length() + 16);
+        escaped.append('"');
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            switch (ch) {
+                case '\\':
+                    escaped.append("\\\\");
+                    break;
+                case '"':
+                    escaped.append("\\\"");
+                    break;
+                case '\n':
+                    escaped.append("\\n");
+                    break;
+                case '\r':
+                    escaped.append("\\r");
+                    break;
+                case '\t':
+                    escaped.append("\\t");
+                    break;
+                case '\b':
+                    escaped.append("\\b");
+                    break;
+                case '\f':
+                    escaped.append("\\f");
+                    break;
+                default:
+                    if (ch <= 0x1F) {
+                        escaped.append(String.format("\\u%04x", (int) ch));
+                    } else {
+                        escaped.append(ch);
+                    }
+                    break;
+            }
+        }
+        escaped.append('"');
+        return escaped.toString();
     }
 
     private List<TripStop> toTripStops(List<AiTripDraftStop> stops) {
@@ -426,12 +459,14 @@ public class ChatViewModel extends ViewModel {
 
             Place place = stop.getPlace();
             Location location = place != null ? place.location : null;
-            double latitude = location != null && Double.isFinite(location.latitude)
-                    ? location.latitude
-                    : 0d;
-            double longitude = location != null && Double.isFinite(location.longitude)
-                    ? location.longitude
-                    : 0d;
+                boolean hasValidCoordinates = location != null
+                    && Double.isFinite(location.latitude)
+                    && Double.isFinite(location.longitude);
+                if (!hasValidCoordinates) {
+                continue;
+                }
+                double latitude = location.latitude;
+                double longitude = location.longitude;
 
             String stopTitle = place != null && place.name != null
                     ? place.name
@@ -491,17 +526,59 @@ public class ChatViewModel extends ViewModel {
     }
 
     private <T> void observeOnce(LiveData<T> source, Observer<T> observer) {
-        source.observeForever(new Observer<T>() {
+        Observer<T> oneShotObserver = new Observer<T>() {
             @Override
             public void onChanged(T value) {
                 source.removeObserver(this);
+                untrackObserveOnceObserver(source, this);
                 observer.onChanged(value);
             }
-        });
+        };
+
+        trackObserveOnceObserver(source, oneShotObserver);
+        source.observeForever(oneShotObserver);
+    }
+
+    private void trackObserveOnceObserver(LiveData<?> source, Observer<?> observer) {
+        synchronized (observeOnceObservers) {
+            Set<Observer<?>> observers = observeOnceObservers.get(source);
+            if (observers == null) {
+                observers = new HashSet<>();
+                observeOnceObservers.put(source, observers);
+            }
+            observers.add(observer);
+        }
+    }
+
+    private void untrackObserveOnceObserver(LiveData<?> source, Observer<?> observer) {
+        synchronized (observeOnceObservers) {
+            Set<Observer<?>> observers = observeOnceObservers.get(source);
+            if (observers == null) {
+                return;
+            }
+            observers.remove(observer);
+            if (observers.isEmpty()) {
+                observeOnceObservers.remove(source);
+            }
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void clearObserveOnceObservers() {
+        synchronized (observeOnceObservers) {
+            for (Map.Entry<LiveData<?>, Set<Observer<?>>> entry : observeOnceObservers.entrySet()) {
+                LiveData source = entry.getKey();
+                for (Observer<?> observer : entry.getValue()) {
+                    source.removeObserver((Observer) observer);
+                }
+            }
+            observeOnceObservers.clear();
+        }
     }
 
     @Override
     protected void onCleared() {
+        clearObserveOnceObservers();
         super.onCleared();
         networkMonitor.observeConnectivity().removeObserver(networkObserver);
         chatRepository.disconnectFromGroup();

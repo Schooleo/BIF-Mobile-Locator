@@ -4,6 +4,7 @@ import android.util.Log;
 
 import com.apollographql.apollo.api.ApolloResponse;
 import com.apollographql.java.client.ApolloClient;
+import com.apollographql.java.client.ApolloDisposable;
 import com.bif.app.core.network.dto.ai.AiPlaceSuggestionPayload;
 import com.bif.app.core.network.dto.ai.AiSuggestedPlacePayload;
 import com.bif.app.core.network.dto.ai.AiTripDraftPayload;
@@ -12,50 +13,88 @@ import com.bif.app.core.network.dto.ai.AiTripDraftStopPayload;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 @Singleton
 public class AiGraphQlClient {
 
     private static final String TAG = "AiGraphQlClient";
+    private static final long REQUEST_TIMEOUT_SECONDS = 15L;
 
     private final ApolloClient apolloClient;
+    private final ScheduledExecutorService timeoutScheduler = Executors.newSingleThreadScheduledExecutor();
 
     @Inject
     public AiGraphQlClient(ApolloClient apolloClient) {
         this.apolloClient = apolloClient;
     }
 
-    public AiPlaceSuggestionPayload suggestPlacesFromQuery(String query) throws Exception {
-        AtomicReference<ApolloResponse<SuggestPlacesFromQueryMutation.Data>> responseRef =
-                new AtomicReference<>();
-        CountDownLatch latch = new CountDownLatch(1);
+    public CompletableFuture<AiPlaceSuggestionPayload> suggestPlacesFromQuery(String query) {
+        CompletableFuture<AiPlaceSuggestionPayload> future = new CompletableFuture<>();
+        final ApolloDisposable disposable;
 
-        apolloClient
-                .mutation(new SuggestPlacesFromQueryMutation(query))
-                .enqueue(response -> {
-                    responseRef.set(response);
-                    latch.countDown();
-                });
-
-        boolean completed;
         try {
-            completed = latch.await(15, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return new AiPlaceSuggestionPayload(new ArrayList<>(), new ArrayList<>(), "AI_FAILURE");
-        }
-        if (!completed) {
-            return new AiPlaceSuggestionPayload(new ArrayList<>(), new ArrayList<>(), "AI_FAILURE");
+            disposable = apolloClient
+                    .mutation(new SuggestPlacesFromQueryMutation(query))
+                    .enqueue(response -> {
+                        if (future.isDone()) {
+                            return;
+                        }
+                        future.complete(mapSuggestPlacesResponse(response));
+                    });
+        } catch (Exception e) {
+            future.completeExceptionally(e);
+            return future;
         }
 
-        ApolloResponse<SuggestPlacesFromQueryMutation.Data> response = responseRef.get();
+        ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
+            if (future.completeExceptionally(new TimeoutException("suggestPlacesFromQuery timed out"))) {
+                disposable.dispose();
+            }
+        }, REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+        future.whenComplete((ignored, error) -> timeoutTask.cancel(false));
+        return future;
+    }
+
+    public CompletableFuture<AiTripDraftResultPayload> draftTripFromQuery(String query) {
+        CompletableFuture<AiTripDraftResultPayload> future = new CompletableFuture<>();
+        final ApolloDisposable disposable;
+
+        try {
+            disposable = apolloClient
+                    .mutation(new DraftTripFromQueryMutation(query))
+                    .enqueue(response -> {
+                        if (future.isDone()) {
+                            return;
+                        }
+                        future.complete(mapDraftTripResponse(response));
+                    });
+        } catch (Exception e) {
+            future.completeExceptionally(e);
+            return future;
+        }
+
+        ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
+            if (future.completeExceptionally(new TimeoutException("draftTripFromQuery timed out"))) {
+                disposable.dispose();
+            }
+        }, REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+        future.whenComplete((ignored, error) -> timeoutTask.cancel(false));
+        return future;
+    }
+
+    private AiPlaceSuggestionPayload mapSuggestPlacesResponse(
+            ApolloResponse<SuggestPlacesFromQueryMutation.Data> response) {
         if (response == null) {
             return new AiPlaceSuggestionPayload(new ArrayList<>(), new ArrayList<>(), "AI_FAILURE");
         }
@@ -84,10 +123,11 @@ public class AiGraphQlClient {
 
         List<AiSuggestedPlacePayload> mapped = new ArrayList<>();
         if (payload.places != null) {
-            for (SuggestPlacesFromQueryMutation.Place place : payload.places) {
-                if (place == null) {
+            for (SuggestPlacesFromQueryMutation.Place suggestion : payload.places) {
+                if (suggestion == null || suggestion.placeData == null) {
                     continue;
                 }
+                SuggestPlacesFromQueryMutation.PlaceData place = suggestion.placeData;
 
                 Double latitude = place.location != null
                         ? place.location.latitude
@@ -101,34 +141,17 @@ public class AiGraphQlClient {
                         place.name,
                         place.address,
                         place.rating != null ? place.rating : 0d,
-                        place.addedToTripCount != null ? place.addedToTripCount : 0,
+                    suggestion.addedToTripCount != null ? suggestion.addedToTripCount : 0,
                         latitude,
                         longitude
                 ));
             }
         }
-
         return new AiPlaceSuggestionPayload(mapped, warnings, null);
     }
 
-    public AiTripDraftResultPayload draftTripFromQuery(String query) throws Exception {
-        AtomicReference<ApolloResponse<DraftTripFromQueryMutation.Data>> responseRef =
-                new AtomicReference<>();
-        CountDownLatch latch = new CountDownLatch(1);
-
-        apolloClient
-                .mutation(new DraftTripFromQueryMutation(query))
-                .enqueue(response -> {
-                    responseRef.set(response);
-                    latch.countDown();
-                });
-
-        boolean completed = latch.await(15, TimeUnit.SECONDS);
-        if (!completed) {
-            return new AiTripDraftResultPayload(null, new ArrayList<>(), new ArrayList<>(), "AI_FAILURE");
-        }
-
-        ApolloResponse<DraftTripFromQueryMutation.Data> response = responseRef.get();
+    private AiTripDraftResultPayload mapDraftTripResponse(
+            ApolloResponse<DraftTripFromQueryMutation.Data> response) {
         if (response == null || response.data == null || response.data.draftTripFromQuery == null) {
             return new AiTripDraftResultPayload(null, new ArrayList<>(), new ArrayList<>(), "AI_FAILURE");
         }

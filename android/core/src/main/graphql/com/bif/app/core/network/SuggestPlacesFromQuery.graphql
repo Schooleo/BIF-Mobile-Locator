@@ -6,14 +6,16 @@ mutation SuggestPlacesFromQuery($query: String!) {
     warnings
     failureCode
     places {
-      id
-      name
-      address
-      rating
-      addedToTripCount: reviewCount
-      location {
-        latitude
-        longitude
+      addedToTripCount
+      placeData: place {
+        id
+        name
+        address
+        rating
+        location {
+          latitude
+          longitude
+        }
       }
     }
   }

@@ -172,15 +172,21 @@ public class ChatRepository implements IChatRepository {
             return result;
         }
 
-        backgroundExecutor.execute(() -> {
-            if (aiGraphQlClient == null) {
+        if (aiGraphQlClient == null) {
+            result.postValue(new AiTripDraftResult(null, new ArrayList<>(),
+                    new ArrayList<>(), "AI_FAILURE"));
+            return result;
+        }
+
+        aiGraphQlClient.draftTripFromQuery(query)
+                .whenComplete((payload, throwable) -> {
+            if (throwable != null || payload == null) {
+                Log.e(TAG, "AI trip draft failed", throwable);
                 result.postValue(new AiTripDraftResult(null, new ArrayList<>(),
                         new ArrayList<>(), "AI_FAILURE"));
                 return;
             }
 
-            try {
-                AiTripDraftResultPayload payload = aiGraphQlClient.draftTripFromQuery(query);
                 String failureCode = payload.failureCode;
                 List<String> warnings = payload.warnings != null
                         ? new ArrayList<>(payload.warnings)
@@ -204,11 +210,6 @@ public class ChatRepository implements IChatRepository {
 
                 AiTripDraft draft = mapDraft(payload.draft);
                 result.postValue(new AiTripDraftResult(draft, candidatePlaces, warnings, null));
-            } catch (Exception e) {
-                Log.e(TAG, "AI trip draft failed", e);
-                result.postValue(new AiTripDraftResult(null, new ArrayList<>(),
-                        new ArrayList<>(), "AI_FAILURE"));
-            }
         });
 
         return result;
