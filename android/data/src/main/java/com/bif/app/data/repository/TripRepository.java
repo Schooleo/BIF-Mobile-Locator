@@ -265,9 +265,11 @@ public class TripRepository implements ITripRepository {
                 }
 
                 TripPlanEntity entity = tripDao.getTripByIdSync(safeTripId);
+                boolean isNew = false;
                 if (entity == null) {
                     entity = new TripPlanEntity();
                     entity.id = safeTripId;
+                    isNew = true;
                 }
 
                 String safeGroupId = normalize(groupId);
@@ -318,7 +320,7 @@ public class TripRepository implements ITripRepository {
                     }
                 }
 
-                enqueueTripPlanChange(safeTripId, "CREATE");
+                enqueueTripPlanChange(safeTripId, isNew ? "CREATE" : "UPDATE");
                 syncAndReconcileTrip(safeTripId);
                 success = true;
             } catch (Exception ignored) {
@@ -697,6 +699,7 @@ public class TripRepository implements ITripRepository {
             TripStopEntity stop = activeStops.get(i);
             if (stop.orderIndex != i) {
                 stop.orderIndex = i;
+                stop.serverVersion = Math.max(1L, stop.serverVersion + 1L);
                 tripDao.upsertStop(stop);
                 if (enqueueChanges) {
                     enqueueStopUpdate(stop);

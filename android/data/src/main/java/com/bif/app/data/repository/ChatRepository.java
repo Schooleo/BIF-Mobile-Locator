@@ -161,20 +161,17 @@ public class ChatRepository implements IChatRepository {
         MutableLiveData<AiTripDraftResult> result = new MutableLiveData<>();
 
         if (query == null || query.trim().isEmpty()) {
-            result.setValue(new AiTripDraftResult(null, new ArrayList<>(),
-                    new ArrayList<>(), "INVALID_QUERY"));
+            result.setValue(failureResult("INVALID_QUERY", new ArrayList<>()));
             return result;
         }
 
         if (!networkMonitor.isOnline()) {
-            result.setValue(new AiTripDraftResult(null, new ArrayList<>(),
-                    new ArrayList<>(), "OFFLINE"));
+            result.setValue(failureResult("OFFLINE", new ArrayList<>()));
             return result;
         }
 
         if (aiGraphQlClient == null) {
-            result.postValue(new AiTripDraftResult(null, new ArrayList<>(),
-                    new ArrayList<>(), "AI_FAILURE"));
+            result.postValue(failureResult("AI_FAILURE", new ArrayList<>()));
             return result;
         }
 
@@ -182,8 +179,7 @@ public class ChatRepository implements IChatRepository {
                 .whenComplete((payload, throwable) -> {
             if (throwable != null || payload == null) {
                 Log.e(TAG, "AI trip draft failed", throwable);
-                result.postValue(new AiTripDraftResult(null, new ArrayList<>(),
-                        new ArrayList<>(), "AI_FAILURE"));
+                result.postValue(failureResult("AI_FAILURE", new ArrayList<>()));
                 return;
             }
 
@@ -193,8 +189,7 @@ public class ChatRepository implements IChatRepository {
                         : new ArrayList<>();
 
                 if (failureCode != null) {
-                    result.postValue(new AiTripDraftResult(null, new ArrayList<>(),
-                            warnings, failureCode));
+                    result.postValue(failureResult(failureCode, warnings));
                     return;
                 }
 
@@ -209,6 +204,9 @@ public class ChatRepository implements IChatRepository {
                 }
 
                 AiTripDraft draft = mapDraft(payload.draft);
+                if (draft == null) {
+                    draft = new AiTripDraft("", "", new ArrayList<>());
+                }
                 result.postValue(new AiTripDraftResult(draft, candidatePlaces, warnings, null));
         });
 
@@ -456,6 +454,11 @@ public class ChatRepository implements IChatRepository {
         );
     }
 
+    private AiTripDraftResult failureResult(String failureCode, List<String> warnings) {
+        AiTripDraft placeholderDraft = new AiTripDraft("", "", new ArrayList<>());
+        return new AiTripDraftResult(placeholderDraft, new ArrayList<>(), warnings, failureCode);
+    }
+
     private AiTripDraft mapDraft(AiTripDraftPayload payload) {
         if (payload == null) {
             return null;
@@ -486,8 +489,10 @@ public class ChatRepository implements IChatRepository {
         String id = payload.id != null ? payload.id : UUID.randomUUID().toString();
         String name = payload.name != null ? payload.name : "";
         String address = payload.address != null ? payload.address : "";
+        double latitude = payload.latitude != null ? payload.latitude : 0.0;
+        double longitude = payload.longitude != null ? payload.longitude : 0.0;
         return new Place(id, name, address, payload.rating,
-                new Location(payload.latitude, payload.longitude));
+                new Location(latitude, longitude));
     }
 
     private String resolveSenderName(ChatMessageDto dto) {
@@ -591,5 +596,4 @@ public class ChatRepository implements IChatRepository {
         return "10.0.2.2";
     }
 }
-
 

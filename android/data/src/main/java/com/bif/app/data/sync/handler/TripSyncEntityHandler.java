@@ -67,6 +67,22 @@ public class TripSyncEntityHandler implements SyncEntityHandler {
                 return;
             }
 
+            // Check if current user is in the participant list
+            boolean userIsParticipant = false;
+            if (activeUserId != null && !activeUserId.isEmpty() && payload.participantIds != null) {
+                for (String participantId : payload.participantIds) {
+                    if (participantId != null && activeUserId.equals(participantId.trim())) {
+                        userIsParticipant = true;
+                        break;
+                    }
+                }
+            }
+
+            // If user is not a participant, mark the trip as deleted
+            boolean shouldMarkDeleted = payload.deleted
+                    || "DELETE".equalsIgnoreCase(change.operation)
+                    || !userIsParticipant;
+
             TripPlanEntity existing = tripDao.getTripByIdSync(payload.id);
             TripPlanEntity entity = existing != null ? existing : new TripPlanEntity();
             entity.id = payload.id;
@@ -76,9 +92,9 @@ public class TripSyncEntityHandler implements SyncEntityHandler {
             entity.startAt = parseInstant(payload.startAt);
             entity.endAt = parseInstant(payload.endAt);
             entity.serverVersion = Math.max(payload.serverVersion, change.serverVersion);
-            entity.deleted = payload.deleted || "DELETE".equalsIgnoreCase(change.operation);
+            entity.deleted = shouldMarkDeleted;
             tripDao.upsertTrip(entity);
-            if (payload.participantIds != null) {
+            if (payload.participantIds != null && userIsParticipant) {
                 tripDao.replaceTripMembersFromParticipantIds(entity.id,
                         payload.participantIds,
                         activeUserId);
@@ -112,5 +128,4 @@ public class TripSyncEntityHandler implements SyncEntityHandler {
         }
     }
 }
-
 
