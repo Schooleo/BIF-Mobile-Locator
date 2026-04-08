@@ -146,6 +146,8 @@ public class AddTripStopViewModel extends ViewModel {
                 place.name,
                 place.address,
                 "",
+                "",
+                "",
                 location.latitude,
                 location.longitude,
                 scheduledAtMillis,
