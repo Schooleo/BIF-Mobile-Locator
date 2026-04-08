@@ -89,16 +89,12 @@ public class AiGraphQlClient {
                     continue;
                 }
 
-                double latitude = 0d;
-                double longitude = 0d;
-                if (place.location != null) {
-                    if (place.location.latitude != null) {
-                        latitude = place.location.latitude;
-                    }
-                    if (place.location.longitude != null) {
-                        longitude = place.location.longitude;
-                    }
-                }
+                Double latitude = place.location != null
+                        ? place.location.latitude
+                        : null;
+                Double longitude = place.location != null
+                        ? place.location.longitude
+                        : null;
 
                 mapped.add(new AiSuggestedPlacePayload(
                         place.id,
@@ -209,8 +205,8 @@ public class AiGraphQlClient {
                 address,
                 rating != null ? rating : 0d,
                 0,
-                latitude != null ? latitude : 0d,
-                longitude != null ? longitude : 0d
+                latitude,
+                longitude
         );
     }
 }

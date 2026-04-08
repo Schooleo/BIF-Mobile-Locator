@@ -38,6 +38,14 @@ public interface ITripRepository {
                     long endAt,
                     OperationCallback callback);
     void deleteTrip(String tripId, OperationCallback callback);
+    void saveDraftTrip(String tripId,
+                       String groupId,
+                       String title,
+                       String description,
+                       long startAt,
+                       long endAt,
+                       List<TripStop> stops,
+                       OperationCallback callback);
     LiveData<List<TripPlan>> getTripsByGroup(String groupId);
     LiveData<List<TripMember>> getTripMembers(String tripId);
     void addStopToTrip(String tripId, TripStop stop);

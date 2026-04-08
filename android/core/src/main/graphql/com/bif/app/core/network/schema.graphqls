@@ -1,5 +1,3 @@
-scalar Long
-
 type Query {
   users: [User!]!
   user(id: ID!): User
@@ -22,7 +20,7 @@ type Query {
   tripPlans: [TripPlan!]!
   tripPlan(id: ID!): TripPlan
   tripPlansByGroup(groupId: ID!): [TripPlan!]!
-  syncPreview(lastPulledVersion: Long): SyncResponse!
+  syncPreview(lastPulledVersion: Int): SyncResponse!
 }
 
 type Mutation {
@@ -169,7 +167,6 @@ type AiTripDraftStop {
 }
 
 enum AiFailureCode {
-  OFFLINE
   UNAUTHORIZED
   RATE_LIMITED
   INVALID_QUERY
@@ -187,7 +184,7 @@ type Location {
 }
 
 type SyncResponse {
-  currentServerVersion: Long!
+  currentServerVersion: Int!
   pulledChanges: [SyncChange!]!
   conflicts: [SyncConflict!]
 }
@@ -195,19 +192,18 @@ type SyncResponse {
 type SyncChange {
   entityType: String
   entityId: String
-  serverVersion: Long
+  serverVersion: Int
   operation: String
   clientChangeId: String
   timestamp: String
-  payload: String
 }
 
 type SyncConflict {
   entityType: String
   entityId: String
   clientChangeId: String
-  clientVersion: Long
-  serverVersion: Long
+  clientVersion: Int
+  serverVersion: Int
   resolution: String
 }
 
@@ -325,7 +321,7 @@ type ProfileMetadata {
   avatarLetter: String
   avatarColor: Int
   online: Boolean
-  serverVersion: Long
+  serverVersion: Int
   updatedAt: String
   profileCompletionPercent: Int!
 }
@@ -339,16 +335,14 @@ input UpdateMyProfileInput {
 input SyncRequestInput {
   userId: ID
   deviceId: ID
-  lastPulledVersion: Long!
+  lastPulledVersion: Int!
   pushedChanges: [SyncChangeInput!]
 }
 
 input SyncChangeInput {
   entityType: String
   entityId: String
-  serverVersion: Long
+  serverVersion: Int
   operation: String
   clientChangeId: String
-  timestamp: String
-  payload: String
 }

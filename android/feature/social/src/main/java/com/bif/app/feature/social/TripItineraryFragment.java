@@ -33,16 +33,21 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
+import java.util.IdentityHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 public class TripItineraryFragment extends Fragment {
 
     private TripDetailViewModel viewModel;
     private TripPlan currentTrip;
     private ItineraryAdapter adapter;
+    private PendingStopEdit pendingStopEdit;
+    private String pendingRemovedStopId;
 
     public static TripItineraryFragment newInstance(String tripId) {
         TripItineraryFragment fragment = new TripItineraryFragment();
@@ -131,6 +136,8 @@ public class TripItineraryFragment extends Fragment {
         });
         adapter.setItems(stops);
         tvEmpty.setVisibility(stops.isEmpty() ? View.VISIBLE : View.GONE);
+
+        maybeResolvePendingStopOperations(stops);
     }
 
     private void showStopEditDialog(@NonNull TripStop stop) {
@@ -145,33 +152,51 @@ public class TripItineraryFragment extends Fragment {
         String originalNote = stop.getNote() == null ? "" : stop.getNote();
         noteInput.setText(originalNote);
 
-        Calendar selected = Calendar.getInstance();
+        final Calendar[] selected = new Calendar[1];
         long anchor = stop.getArrivalTime() > 0 ? stop.getArrivalTime() : stop.getDepartureTime();
         if (anchor > 0) {
-            selected.setTimeInMillis(anchor);
+            selected[0] = Calendar.getInstance();
+            selected[0].setTimeInMillis(anchor);
         }
 
         SimpleDateFormat dateFormat = new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault());
         SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
 
         Runnable refreshDateTime = () -> {
-            dateInput.setText(dateFormat.format(selected.getTime()));
-            timeInput.setText(timeFormat.format(selected.getTime()));
+            if (selected[0] == null) {
+                dateInput.setText("");
+                timeInput.setText("");
+                return;
+            }
+            dateInput.setText(dateFormat.format(selected[0].getTime()));
+            timeInput.setText(timeFormat.format(selected[0].getTime()));
         };
-        refreshDateTime.run();
+        if (anchor > 0) {
+            refreshDateTime.run();
+        } else {
+            dateInput.setText("");
+            timeInput.setText("");
+        }
 
         dateInput.setOnClickListener(v -> {
+            if (selected[0] == null) {
+                selected[0] = Calendar.getInstance();
+                selected[0].set(Calendar.HOUR_OF_DAY, 9);
+                selected[0].set(Calendar.MINUTE, 0);
+                selected[0].set(Calendar.SECOND, 0);
+                selected[0].set(Calendar.MILLISECOND, 0);
+            }
             DatePickerDialog dateDialog = new DatePickerDialog(
                     requireContext(),
                     (picker, year, month, dayOfMonth) -> {
-                        selected.set(Calendar.YEAR, year);
-                        selected.set(Calendar.MONTH, month);
-                        selected.set(Calendar.DAY_OF_MONTH, dayOfMonth);
+                        selected[0].set(Calendar.YEAR, year);
+                        selected[0].set(Calendar.MONTH, month);
+                        selected[0].set(Calendar.DAY_OF_MONTH, dayOfMonth);
                         refreshDateTime.run();
                     },
-                    selected.get(Calendar.YEAR),
-                    selected.get(Calendar.MONTH),
-                    selected.get(Calendar.DAY_OF_MONTH)
+                    selected[0].get(Calendar.YEAR),
+                    selected[0].get(Calendar.MONTH),
+                    selected[0].get(Calendar.DAY_OF_MONTH)
             );
 
             if (currentTrip != null) {
@@ -186,17 +211,22 @@ public class TripItineraryFragment extends Fragment {
         });
 
         timeInput.setOnClickListener(v -> {
+            if (selected[0] == null) {
+                selected[0] = Calendar.getInstance();
+                selected[0].set(Calendar.SECOND, 0);
+                selected[0].set(Calendar.MILLISECOND, 0);
+            }
             TimePickerDialog timeDialog = new TimePickerDialog(
                     requireContext(),
                     (picker, hourOfDay, minute) -> {
-                        selected.set(Calendar.HOUR_OF_DAY, hourOfDay);
-                        selected.set(Calendar.MINUTE, minute);
-                        selected.set(Calendar.SECOND, 0);
-                        selected.set(Calendar.MILLISECOND, 0);
+                        selected[0].set(Calendar.HOUR_OF_DAY, hourOfDay);
+                        selected[0].set(Calendar.MINUTE, minute);
+                        selected[0].set(Calendar.SECOND, 0);
+                        selected[0].set(Calendar.MILLISECOND, 0);
                         refreshDateTime.run();
                     },
-                    selected.get(Calendar.HOUR_OF_DAY),
-                    selected.get(Calendar.MINUTE),
+                    selected[0].get(Calendar.HOUR_OF_DAY),
+                    selected[0].get(Calendar.MINUTE),
                     true
             );
             timeDialog.show();
@@ -208,15 +238,20 @@ public class TripItineraryFragment extends Fragment {
 
         btnCancel.setOnClickListener(v -> dialog.dismiss());
         btnSave.setOnClickListener(v -> {
-            long selectedMillis = selected.getTimeInMillis();
-            if (!isWithinTripRange(selectedMillis)) {
+            long selectedMillis = selected[0] != null ? selected[0].getTimeInMillis() : 0L;
+            if (selectedMillis > 0L && !isWithinTripRange(selectedMillis)) {
                 Toast.makeText(requireContext(), R.string.trip_stop_time_out_of_range, Toast.LENGTH_SHORT).show();
                 return;
             }
 
             String newNote = noteInput.getText() == null ? "" : noteInput.getText().toString().trim();
+            String safeStopId = stop.getId();
+            if (safeStopId == null || safeStopId.trim().isEmpty()) {
+                dialog.dismiss();
+                return;
+            }
+            pendingStopEdit = new PendingStopEdit(safeStopId, newNote, selectedMillis);
             viewModel.updateStopDetails(stop, newNote, selectedMillis);
-            Toast.makeText(requireContext(), R.string.save, Toast.LENGTH_SHORT).show();
 
             dialog.dismiss();
         });
@@ -236,10 +271,56 @@ public class TripItineraryFragment extends Fragment {
                 getString(R.string.delete),
                 getString(R.string.cancel),
                 () -> {
-                    viewModel.removeStop(stop.getId());
-                    Toast.makeText(requireContext(), R.string.remove, Toast.LENGTH_SHORT).show();
+                    String stopId = stop.getId();
+                    if (stopId == null || stopId.trim().isEmpty()) {
+                        return;
+                    }
+                    pendingRemovedStopId = stopId;
+                    viewModel.removeStop(stopId);
                 }
         );
+    }
+
+    private void maybeResolvePendingStopOperations(@NonNull List<TripStop> stops) {
+        if (pendingRemovedStopId != null && !pendingRemovedStopId.trim().isEmpty()) {
+            boolean stillExists = false;
+            for (TripStop stop : stops) {
+                if (stop == null) {
+                    continue;
+                }
+                if (pendingRemovedStopId.equals(stop.getId())) {
+                    stillExists = true;
+                    break;
+                }
+            }
+            if (!stillExists) {
+                Toast.makeText(requireContext(), R.string.remove, Toast.LENGTH_SHORT).show();
+                pendingRemovedStopId = null;
+            }
+        }
+
+        if (pendingStopEdit != null) {
+            for (TripStop stop : stops) {
+                if (stop == null || !pendingStopEdit.stopId.equals(stop.getId())) {
+                    continue;
+                }
+
+                String currentNote = stop.getNote() == null ? "" : stop.getNote().trim();
+                long currentSchedule = stop.getArrivalTime() > 0
+                        ? stop.getArrivalTime()
+                        : stop.getDepartureTime();
+                if (currentSchedule <= 0L) {
+                    currentSchedule = 0L;
+                }
+
+                if (pendingStopEdit.note.equals(currentNote)
+                        && pendingStopEdit.scheduledAtMillis == currentSchedule) {
+                    Toast.makeText(requireContext(), R.string.save, Toast.LENGTH_SHORT).show();
+                    pendingStopEdit = null;
+                }
+                break;
+            }
+        }
     }
 
     private boolean isWithinTripRange(long selectedMillis) {
@@ -261,6 +342,7 @@ public class TripItineraryFragment extends Fragment {
 
         private final List<RowItem> items = new ArrayList<>();
         private final Set<String> expandedStopIds = new HashSet<>();
+        private final Map<TripStop, String> fallbackStopKeys = new IdentityHashMap<>();
         private final Context context;
         private final StopActionListener stopActionListener;
         private final SimpleDateFormat dateHeaderFormatter =
@@ -336,7 +418,8 @@ public class TripItineraryFragment extends Fragment {
                 noteText = stopHolder.itemView.getContext().getString(R.string.trip_stop_no_note);
             }
 
-            boolean expanded = expandedStopIds.contains(stop.getId());
+            String stopKey = getStopKey(stop);
+            boolean expanded = expandedStopIds.contains(stopKey);
             stopHolder.detailsContainer.setVisibility(expanded ? View.VISIBLE : View.GONE);
             stopHolder.subtitle.setVisibility(expanded ? View.GONE : View.VISIBLE);
                 stopHolder.subtitle.setText(addressText);
@@ -351,9 +434,9 @@ public class TripItineraryFragment extends Fragment {
 
             stopHolder.itemView.setOnClickListener(v -> {
                 if (expanded) {
-                    expandedStopIds.remove(stop.getId());
+                    expandedStopIds.remove(stopKey);
                 } else {
-                    expandedStopIds.add(stop.getId());
+                    expandedStopIds.add(stopKey);
                 }
                 int adapterPosition = stopHolder.getBindingAdapterPosition();
                 if (adapterPosition != RecyclerView.NO_POSITION) {
@@ -372,6 +455,9 @@ public class TripItineraryFragment extends Fragment {
 
         void setItems(@NonNull List<TripStop> data) {
             items.clear();
+
+            Map<TripStop, String> nextFallbackStopKeys = new IdentityHashMap<>();
+            Set<String> activeStopKeys = new HashSet<>();
 
             String currentKey = null;
             int dayCount = 0;
@@ -401,8 +487,17 @@ public class TripItineraryFragment extends Fragment {
                     currentKey = dayKey;
                 }
                 dayCount++;
+                String stopKey = getStopKey(stop);
+                activeStopKeys.add(stopKey);
+                if (stop.getId() == null || stop.getId().trim().isEmpty()) {
+                    nextFallbackStopKeys.put(stop, stopKey);
+                }
                 items.add(RowItem.stop(stop, dayCount));
             }
+
+            fallbackStopKeys.clear();
+            fallbackStopKeys.putAll(nextFallbackStopKeys);
+            expandedStopIds.retainAll(activeStopKeys);
 
             if (dayStartIndex >= 0) {
                 RowItem previous = items.get(dayStartIndex);
@@ -410,6 +505,21 @@ public class TripItineraryFragment extends Fragment {
             }
 
             notifyDataSetChanged();
+        }
+
+        @NonNull
+        private String getStopKey(@NonNull TripStop stop) {
+            String stopId = stop.getId();
+            if (stopId != null && !stopId.trim().isEmpty()) {
+                return stopId;
+            }
+            String existing = fallbackStopKeys.get(stop);
+            if (existing != null) {
+                return existing;
+            }
+            String created = "draft-stop-" + UUID.randomUUID();
+            fallbackStopKeys.put(stop, created);
+            return created;
         }
 
         static class DayHeaderViewHolder extends RecyclerView.ViewHolder {
@@ -483,6 +593,18 @@ public class TripItineraryFragment extends Fragment {
             static RowItem stop(TripStop stop, int dayOrderIndex) {
                 return new RowItem(Type.STOP, null, stop, dayOrderIndex);
             }
+        }
+    }
+
+    private static class PendingStopEdit {
+        final String stopId;
+        final String note;
+        final long scheduledAtMillis;
+
+        PendingStopEdit(String stopId, String note, long scheduledAtMillis) {
+            this.stopId = stopId;
+            this.note = note == null ? "" : note;
+            this.scheduledAtMillis = Math.max(0L, scheduledAtMillis);
         }
     }
 }

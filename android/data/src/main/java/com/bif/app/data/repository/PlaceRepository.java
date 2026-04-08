@@ -171,24 +171,24 @@ public class PlaceRepository implements IPlaceRepository {
                             continue;
                         }
 
-                        String placeId = placeNode.id != null
-                        ? placeNode.id
-                                : UUID.randomUUID().toString();
-                    String placeName = placeNode.name != null
-                        ? placeNode.name
-                                : "";
-                    String placeAddress = placeNode.address != null
-                        ? placeNode.address
-                                : "";
+                        if (!hasText(placeNode.id)
+                                || !hasText(placeNode.name)
+                                || !hasText(placeNode.address)
+                                || placeNode.latitude == null
+                                || placeNode.longitude == null
+                                || !isValidCoordinate(placeNode.latitude, placeNode.longitude)) {
+                            continue;
+                        }
+
                     double rating = placeNode.rating;
                     int addedToTripCount = placeNode.addedToTripCount;
 
                         Place place = new Place(
-                                placeId,
-                                placeName,
-                                placeAddress,
+                                placeNode.id,
+                                placeNode.name,
+                                placeNode.address,
                                 rating,
-                        new Location(placeNode.latitude, placeNode.longitude)
+                                new Location(placeNode.latitude, placeNode.longitude)
                         );
                         mappedPlaces.add(new AiPlaceSuggestion(place, addedToTripCount));
                     }
@@ -491,6 +491,17 @@ public class PlaceRepository implements IPlaceRepository {
             return right == null;
         }
         return left.equals(right);
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    private boolean isValidCoordinate(double latitude, double longitude) {
+        return Double.isFinite(latitude)
+                && Double.isFinite(longitude)
+                && latitude >= -90d && latitude <= 90d
+                && longitude >= -180d && longitude <= 180d;
     }
 }
 

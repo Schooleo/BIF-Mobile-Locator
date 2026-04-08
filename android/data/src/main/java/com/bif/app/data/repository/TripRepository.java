@@ -239,6 +239,92 @@ public class TripRepository implements ITripRepository {
     }
 
     @Override
+    public void saveDraftTrip(String tripId,
+                              String groupId,
+                              String title,
+                              String description,
+                              long startAt,
+                              long endAt,
+                              List<TripStop> stops,
+                              ITripRepository.OperationCallback callback) {
+        executorService.execute(() -> {
+            boolean success = false;
+            try {
+                String safeTripId = normalize(tripId);
+                if (safeTripId.isEmpty()) {
+                    if (callback != null) {
+                        callback.onComplete(false);
+                    }
+                    return;
+                }
+
+                TripPlanEntity entity = tripDao.getTripByIdSync(safeTripId);
+                if (entity == null) {
+                    entity = new TripPlanEntity();
+                    entity.id = safeTripId;
+                }
+
+                String safeGroupId = normalize(groupId);
+                entity.groupId = safeGroupId.isEmpty() ? safeTripId : safeGroupId;
+                entity.title = title;
+                entity.description = description;
+                entity.startAt = startAt;
+                entity.endAt = endAt;
+                entity.deleted = false;
+                tripDao.upsertTrip(entity);
+
+                String ownerId = resolveCurrentUserId();
+                if (!ownerId.isEmpty()) {
+                    tripDao.upsertTripMember(new TripMemberCrossRef(
+                            safeTripId,
+                            ownerId,
+                            "OWNER"
+                    ));
+                }
+
+                List<TripStopEntity> existingStops = tripDao.getActiveStopsByTripSync(safeTripId);
+                if (existingStops != null) {
+                    for (TripStopEntity existingStop : existingStops) {
+                        if (existingStop == null) {
+                            continue;
+                        }
+                        existingStop.deleted = true;
+                        existingStop.serverVersion = Math.max(1L,
+                                existingStop.serverVersion + 1L);
+                        tripDao.upsertStop(existingStop);
+                    }
+                }
+
+                if (stops != null) {
+                    for (int i = 0; i < stops.size(); i++) {
+                        TripStop stop = stops.get(i);
+                        if (stop == null) {
+                            continue;
+                        }
+                        TripStopEntity stopEntity = toStopEntity(safeTripId, stop);
+                        stopEntity.orderIndex = i;
+                        stopEntity.deleted = false;
+                        stopEntity.serverVersion = Math.max(1L,
+                                stopEntity.serverVersion + 1L);
+                        tripDao.upsertStop(stopEntity);
+                        enqueueStopUpdate(stopEntity);
+                    }
+                }
+
+                enqueueTripPlanChange(safeTripId, "CREATE");
+                syncManager.syncIfOnline();
+                success = true;
+            } catch (Exception ignored) {
+                success = false;
+            }
+
+            if (callback != null) {
+                callback.onComplete(success);
+            }
+        });
+    }
+
+    @Override
     public LiveData<List<TripPlan>> getTripsByGroup(String groupId) {
         refreshTrips(groupId);
         return Transformations.map(tripDao.getTripsWithStopsByGroup(groupId),

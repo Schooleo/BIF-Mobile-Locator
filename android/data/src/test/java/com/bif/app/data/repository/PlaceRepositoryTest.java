@@ -435,6 +435,33 @@ public class PlaceRepositoryTest {
     }
 
     @Test
+    public void suggestPlacesFromQuery_incompletePlace_isFilteredOut()
+            throws Exception, InterruptedException {
+        when(mockNetworkMonitor.isOnline()).thenReturn(true);
+        when(mockAiGraphQlClient.suggestPlacesFromQuery("missing fields"))
+                .thenReturn(new AiPlaceSuggestionPayload(
+                        Collections.singletonList(
+                                new AiSuggestedPlacePayload(
+                                        null,
+                                        "",
+                                        "101 Bean St",
+                                        4.2,
+                                        2,
+                                        null,
+                                        106.22)),
+                        Collections.emptyList(),
+                        null));
+
+        LiveData<AiPlaceSuggestionResult> result =
+                placeRepository.suggestPlacesFromQuery("missing fields");
+        Thread.sleep(250);
+
+        assertNotNull(result.getValue());
+        assertNull(result.getValue().getFailureCode());
+        assertTrue(result.getValue().getPlaces().isEmpty());
+    }
+
+    @Test
     public void persistPlace_cachesLocallyAndEnqueuesSync()
             throws InterruptedException {
         Place place = new Place("p1", "Test", "Addr", 4.5,

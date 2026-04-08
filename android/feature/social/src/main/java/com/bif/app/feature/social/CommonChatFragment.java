@@ -217,12 +217,15 @@ public class CommonChatFragment extends Fragment {
             focusInputAndShowKeyboard(etMessage);
         });
 
-        btnAiSuggestPlaces.setOnClickListener(v -> {
+        /*btnAiSuggestPlaces.setOnClickListener(v -> {
             aiBadgesRow.setVisibility(View.VISIBLE);
             Snackbar.make(view,
                     getString(R.string.trip_feature_add_stop_soon),
                     Snackbar.LENGTH_SHORT).show();
-        });
+        });*/
+
+        btnAiSuggestPlaces.setEnabled(false);
+        btnAiSuggestPlaces.setOnClickListener(null);
 
         etMessage.addTextChangedListener(new TextWatcher() {
             @Override

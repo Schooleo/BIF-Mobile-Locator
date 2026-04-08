@@ -6,16 +6,16 @@ public class AiSuggestedPlacePayload {
     public final String address;
     public final double rating;
     public final int addedToTripCount;
-    public final double latitude;
-    public final double longitude;
+    public final Double latitude;
+    public final Double longitude;
 
     public AiSuggestedPlacePayload(String id,
                                    String name,
                                    String address,
                                    double rating,
                                    int addedToTripCount,
-                                   double latitude,
-                                   double longitude) {
+                                   Double latitude,
+                                   Double longitude) {
         this.id = id;
         this.name = name;
         this.address = address;
