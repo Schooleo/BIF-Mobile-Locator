@@ -8,6 +8,7 @@ import androidx.lifecycle.Transformations;
 
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.chat.ChatMessageDto;
+import com.bif.app.core.network.dto.sync.SyncResponseDto;
 import com.bif.app.core.network.dto.trip.TripPlanDto;
 import com.bif.app.core.network.dto.trip.TripStopDto;
 import com.bif.app.core.utils.UserPreferences;
@@ -375,11 +376,38 @@ public class TripRepository implements ITripRepository {
             entity.serverVersion = Math.max(1L, entity.serverVersion + 1L);
 
             tripDao.upsertStop(entity);
-            // Ensure the trip exists/refreshes on server before trip_stop mutations are applied.
-            enqueueTripPlanChange(tripId, "UPDATE");
             enqueueImageUploadIfPending(entity);
             enqueueStopUpdate(entity);
             syncAndReconcileTrip(tripId);
+        });
+    }
+
+    @Override
+    public void updateStopInTrip(String tripId, TripStop stop) {
+        executorService.execute(() -> {
+            String safeTripId = normalize(tripId);
+            if (safeTripId.isEmpty() || stop == null) {
+                return;
+            }
+
+            String safeStopId = normalize(stop.getId());
+            if (safeStopId.isEmpty()) {
+                return;
+            }
+
+            TripStopEntity existing = tripDao.getStopByIdSync(safeStopId);
+            if (existing == null) {
+                return;
+            }
+
+            TripStopEntity entity = toStopEntity(safeTripId, stop);
+            entity.deleted = false;
+            entity.serverVersion = Math.max(1L, entity.serverVersion + 1L);
+
+            tripDao.upsertStop(entity);
+            enqueueImageUploadIfPending(entity);
+            enqueueStopUpdate(entity);
+            syncAndReconcileTrip(safeTripId);
         });
     }
 
@@ -730,8 +758,10 @@ public class TripRepository implements ITripRepository {
                 return;
             }
 
-            syncManager.sync();
-            reconcileTripFromServer(safeTripId);
+            SyncResponseDto syncResponse = syncManager.sync();
+            if (syncResponse != null) {
+                reconcileTripFromServer(safeTripId);
+            }
         });
     }
 

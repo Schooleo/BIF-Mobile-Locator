@@ -45,8 +45,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -192,6 +194,7 @@ public class SyncManager {
             return null;
         }
 
+        waitForPendingEnqueues();
         syncQueueDao.resetInFlight();
 
         SyncRequestDto request = new SyncRequestDto();
@@ -494,6 +497,20 @@ public class SyncManager {
             }
             lastObservedOnline = online;
         });
+    }
+
+    private void waitForPendingEnqueues() {
+        CountDownLatch latch = new CountDownLatch(1);
+        enqueueExecutor.execute(latch::countDown);
+        try {
+            if (!latch.await(5, TimeUnit.SECONDS)) {
+                Log.w(TAG, "Timed out waiting for pending sync queue writes");
+            }
+        } catch (InterruptedException interruptedException) {
+            Thread.currentThread().interrupt();
+            Log.w(TAG, "Interrupted while waiting for sync queue writes",
+                    interruptedException);
+        }
     }
 
     private String serializePayload(String entityType, Object payload) {

@@ -28,6 +28,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import retrofit2.Call;
 import retrofit2.Response;
@@ -322,12 +327,60 @@ public class SyncManagerTest {
     }
 
     @Test
-        public void syncIfOnline_whenOffline_doesNothing() throws InterruptedException {
+    public void syncIfOnline_whenOffline_doesNothing() throws InterruptedException {
         when(mockNetworkMonitor.isOnline()).thenReturn(false);
 
         syncManager.syncIfOnline();
         // Give async path time to potentially execute (it shouldn't)
         verify(mockSyncQueueDao, timeout(150).times(0)).resetInFlight();
     }
-}
 
+    @Test
+    @SuppressWarnings("unchecked")
+    public void sync_waitsForPendingEnqueueWritesBeforeReadingQueue()
+            throws Exception {
+        when(mockNetworkMonitor.isOnline()).thenReturn(true);
+
+        List<SyncQueueEntity> storedEntries = Collections.synchronizedList(new ArrayList<>());
+        CountDownLatch allowEnqueue = new CountDownLatch(1);
+
+        org.mockito.Mockito.doAnswer(invocation -> {
+            allowEnqueue.await(1, TimeUnit.SECONDS);
+            storedEntries.add(invocation.getArgument(0));
+            return null;
+        }).when(mockSyncQueueDao).enqueue(any(SyncQueueEntity.class));
+        when(mockSyncQueueDao.getPending()).thenAnswer(invocation -> new ArrayList<>(storedEntries));
+
+        SyncResponseDto serverResponse = new SyncResponseDto();
+        serverResponse.currentServerVersion = 3;
+        serverResponse.pulledChanges = new ArrayList<>();
+
+        Call<SyncResponseDto> mockCall =
+                (Call<SyncResponseDto>) org.mockito.Mockito.mock(Call.class);
+        when(mockCall.execute()).thenReturn(Response.success(serverResponse));
+        when(mockRestApiService.sync(any(SyncRequestDto.class))).thenReturn(mockCall);
+
+        syncManager.enqueueChange("place", "p1", "UPDATE",
+                "cid-1", "{\"id\":\"p1\"}");
+
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
+        try {
+            Future<SyncResponseDto> future = executorService.submit(syncManager::sync);
+            Thread.sleep(150);
+            verify(mockRestApiService, never()).sync(any());
+
+            allowEnqueue.countDown();
+            SyncResponseDto result = future.get(2, TimeUnit.SECONDS);
+
+            assertNotNull(result);
+            ArgumentCaptor<SyncRequestDto> requestCaptor =
+                    ArgumentCaptor.forClass(SyncRequestDto.class);
+            verify(mockRestApiService).sync(requestCaptor.capture());
+            assertNotNull(requestCaptor.getValue().pushedChanges);
+            assertEquals(1, requestCaptor.getValue().pushedChanges.size());
+            assertEquals("p1", requestCaptor.getValue().pushedChanges.get(0).entityId);
+        } finally {
+            executorService.shutdownNow();
+        }
+    }
+}
