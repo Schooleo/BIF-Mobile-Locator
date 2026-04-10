@@ -74,6 +74,24 @@ public class TripStopSyncEntityHandlerTest {
     }
 
     @Test
+    public void applyPulledChange_flatPayloadFallsBackToTopLevelCoordinates() {
+        SyncChangeDto change = new SyncChangeDto();
+        change.operation = "UPDATE";
+        change.serverVersion = 11L;
+        change.payload = "{\"id\":\"stop-flat\",\"tripId\":\"trip-1\","
+                + "\"title\":\"Museum\",\"latitude\":10.5,\"longitude\":20.25,"
+                + "\"orderIndex\":2,\"serverVersion\":11,\"deleted\":false}";
+
+        handler.applyPulledChange(change, "user-1");
+
+        ArgumentCaptor<TripStopEntity> captor = ArgumentCaptor.forClass(TripStopEntity.class);
+        verify(mockTripDao).upsertStop(captor.capture());
+        TripStopEntity saved = captor.getValue();
+        org.junit.Assert.assertEquals(10.5, saved.latitude, 0.001);
+        org.junit.Assert.assertEquals(20.25, saved.longitude, 0.001);
+    }
+
+    @Test
     public void applyPulledChange_keepsPendingLocalUploadWhenRemotePhotoArrives() {
         TripStopEntity existing = new TripStopEntity();
         existing.id = "stop-2";
@@ -96,5 +114,25 @@ public class TripStopSyncEntityHandlerTest {
         org.junit.Assert.assertEquals("/files/image-staging/stop-2.jpg",
                 saved.localImagePath);
         org.junit.Assert.assertEquals(UploadStatus.ERROR, saved.uploadStatus);
+    }
+
+    @Test
+    public void applyPulledChange_flatReplayPayloadFallsBackToLegacyCoordinates() {
+        SyncChangeDto change = new SyncChangeDto();
+        change.operation = "UPDATE";
+        change.serverVersion = 11L;
+        change.payload = "{\"id\":\"stop-flat\",\"tripId\":\"trip-1\","
+                + "\"title\":\"Flat Stop\","
+                + "\"latitude\":33.3,\"longitude\":44.4,"
+                + "\"orderIndex\":1,\"serverVersion\":11,\"deleted\":false}";
+
+        handler.applyPulledChange(change, "user-1");
+
+        ArgumentCaptor<TripStopEntity> captor = ArgumentCaptor.forClass(TripStopEntity.class);
+        verify(mockTripDao).upsertStop(captor.capture());
+        TripStopEntity saved = captor.getValue();
+        org.junit.Assert.assertEquals(33.3, saved.latitude, 0.001);
+        org.junit.Assert.assertEquals(44.4, saved.longitude, 0.001);
+        org.junit.Assert.assertEquals("stop-flat", saved.id);
     }
 }

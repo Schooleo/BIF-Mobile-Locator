@@ -77,18 +77,18 @@
 
     <FrameLayout
         android:id="@+id/layout_download_city_map"
-        android:layout_width="60dp"
-        android:layout_height="60dp"
+        android:layout_width="68dp"
+        android:layout_height="68dp"
         android:layout_gravity="bottom|start"
         android:layout_marginStart="16dp"
         android:layout_marginBottom="100dp"
-        android:elevation="6dp"
         android:visibility="gone">
 
         <com.google.android.material.progressindicator.CircularProgressIndicator
             android:id="@+id/progress_download_city_map"
-            android:layout_width="60dp"
-            android:layout_height="60dp"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:layout_gravity="center"
             android:indeterminate="false"
             android:max="100"
             android:progress="0"

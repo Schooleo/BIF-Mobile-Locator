@@ -9,4 +9,5 @@ public class SyncResponse {
     private long currentServerVersion;
     private List<SyncChange> pulledChanges;
     private List<SyncConflict> conflicts;
+    private List<SyncPushResult> pushResults;
 }

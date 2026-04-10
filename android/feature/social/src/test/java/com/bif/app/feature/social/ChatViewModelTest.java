@@ -15,6 +15,8 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.MutableLiveData;
 
 import com.bif.app.data.sync.core.NetworkMonitor;
+import com.bif.app.domain.model.AiPlaceSuggestion;
+import com.bif.app.domain.model.AiPlaceSuggestionResult;
 import com.bif.app.domain.model.AiTripDraft;
 import com.bif.app.domain.model.AiTripDraftResult;
 import com.bif.app.domain.model.AiTripDraftStop;
@@ -23,6 +25,7 @@ import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.TripStop;
 import com.bif.app.domain.repository.IChatRepository;
+import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.ITripRepository;
 
 import org.junit.Before;
@@ -48,6 +51,9 @@ public class ChatViewModelTest {
     private ITripRepository mockTripRepository;
 
     @Mock
+    private IPlaceRepository mockPlaceRepository;
+
+    @Mock
     private NetworkMonitor networkMonitor;
 
     private MutableLiveData<Boolean> connectivityLiveData;
@@ -64,7 +70,15 @@ public class ChatViewModelTest {
         when(networkMonitor.isOnline()).thenReturn(true);
         when(networkMonitor.observeConnectivity()).thenReturn(connectivityLiveData);
         
-        viewModel = new ChatViewModel(mockChatRepository, mockTripRepository, networkMonitor);
+        when(mockPlaceRepository.suggestPlacesFromQuery(anyString()))
+                .thenReturn(new MutableLiveData<>(new AiPlaceSuggestionResult(
+                        Collections.emptyList(),
+                        Collections.emptyList(),
+                        "AI_FAILURE"
+                )));
+
+        viewModel = new ChatViewModel(mockChatRepository, mockPlaceRepository,
+                mockTripRepository, networkMonitor);
     }
 
     @Test
@@ -178,6 +192,54 @@ public class ChatViewModelTest {
         assertTrue(message.getContent().contains("candidatePlaces"));
         assertTrue(message.getContent().contains("\"latitude\":10.0"));
         assertTrue(message.getContent().contains("\"longitude\":20.0"));
+    }
+
+    @Test
+    public void sendMessage_AiSuggestModeSuccess_InsertsSuggestedPlacesCardLocally() {
+        viewModel.init("group1", "Group 1", "u1");
+
+        Place place = new Place("place1", "Cafe", "Addr", 4.5, new Location(10.0, 20.0));
+        AiPlaceSuggestion suggestion = new AiPlaceSuggestion(place, 0);
+        MutableLiveData<AiPlaceSuggestionResult> aiResult = new MutableLiveData<>(
+                new AiPlaceSuggestionResult(Collections.singletonList(suggestion),
+                        Collections.emptyList(), null)
+        );
+        when(mockPlaceRepository.suggestPlacesFromQuery("best cafes"))
+                .thenReturn(aiResult);
+
+        viewModel.enterAiSuggestPlacesMode();
+        viewModel.sendMessage("best cafes");
+
+        ArgumentCaptor<ChatMessage> captor = ArgumentCaptor.forClass(ChatMessage.class);
+        verify(mockChatRepository).insertLocalMessage(captor.capture());
+
+        ChatMessage message = captor.getValue();
+        assertEquals("AI_SUGGESTED_PLACES_CARD", message.getType());
+        assertTrue(message.getContent().contains("\"places\""));
+        assertTrue(message.getContent().contains("\"name\":\"Cafe\""));
+        assertTrue(message.getContent().contains("\"latitude\":10.0"));
+    }
+
+    @Test
+    public void sendMessage_AiSuggestModeFailure_ShowsSnackbarAndDoesNotInsertCard() {
+        viewModel.init("group1", "Group 1", "u1");
+
+        MutableLiveData<AiPlaceSuggestionResult> aiResult = new MutableLiveData<>(
+                new AiPlaceSuggestionResult(Collections.emptyList(),
+                        Collections.emptyList(), "OFFLINE")
+        );
+        when(mockPlaceRepository.suggestPlacesFromQuery("hidden gems"))
+                .thenReturn(aiResult);
+
+        AtomicReference<String> snackbar = new AtomicReference<>();
+        viewModel.getSnackbarMessage().observeForever(snackbar::set);
+
+        viewModel.enterAiSuggestPlacesMode();
+        viewModel.sendMessage("hidden gems");
+
+        verify(mockPlaceRepository).suggestPlacesFromQuery("hidden gems");
+        String snackbarMessage = snackbar.get();
+        assertTrue(snackbarMessage != null && snackbarMessage.contains("OFFLINE"));
     }
 
         @Test

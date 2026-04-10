@@ -10,7 +10,7 @@
     app:cardElevation="4dp">
 
     <LinearLayout
-        android:layout_width="180dp"
+        android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:padding="12dp">
@@ -36,7 +36,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
-                android:text="Your review"
+                android:text="@string/your_review"
                 android:textColor="?android:attr/textColorSecondary"
                 android:textSize="11sp" />
 
@@ -47,7 +47,7 @@
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:text="Great place to visit!"
+            android:text="@string/example_rating"
             android:textColor="?android:attr/textColorPrimary"
             android:textSize="12sp"
             android:maxLines="2"
@@ -57,9 +57,9 @@
             android:id="@+id/tv_review_date"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="2 days ago"
+            android:text="@string/days_ago"
             android:textColor="?android:attr/textColorTertiary"
-            android:textSize="10sp" />
+            android:textSize="12sp" />
 
     </LinearLayout>
 

@@ -14,12 +14,10 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
-import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
-import com.bif.app.core.utils.UriUtils;
 import com.bif.app.domain.model.Favorite;
 
 import dagger.hilt.android.AndroidEntryPoint;
@@ -102,19 +100,8 @@ public class FavoritesFragment extends Fragment
 
     @Override
     public void onFavoriteClicked(Favorite favorite) {
-        // Deep Link
-        android.net.Uri destUri = UriUtils.buildUri(UriUtils.PathTo.FAVORITES_DETAIL).buildUpon()
-            .appendQueryParameter("favId", favorite.id != null ? favorite.id : "")
-                .appendQueryParameter("favName", favorite.name != null ? favorite.name : "")
-                .appendQueryParameter("favAddress", favorite.address != null ? favorite.address : "")
-                .appendQueryParameter("favDescription", favorite.description != null ? favorite.description : "")
-                .appendQueryParameter("favNotes", favorite.notes != null ? favorite.notes : "")
-                .appendQueryParameter("favRating", String.valueOf(favorite.rating))
-            .appendQueryParameter("favLatitude", String.valueOf(favorite.latitude))
-            .appendQueryParameter("favLongitude", String.valueOf(favorite.longitude))
-                .build();
-
-        Navigation.findNavController(requireView()).navigate(destUri);
+        FavoriteDetailBottomSheet.newInstance(favorite)
+                .show(getChildFragmentManager(), "FavoriteDetailBottomSheet");
     }
 
     @Override

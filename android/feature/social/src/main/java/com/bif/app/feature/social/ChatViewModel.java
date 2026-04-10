@@ -6,6 +6,8 @@ import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModel;
 
 import com.bif.app.data.sync.core.NetworkMonitor;
+import com.bif.app.domain.model.AiPlaceSuggestion;
+import com.bif.app.domain.model.AiPlaceSuggestionResult;
 import com.bif.app.domain.model.AiTripDraft;
 import com.bif.app.domain.model.AiTripDraftResult;
 import com.bif.app.domain.model.AiTripDraftStop;
@@ -15,6 +17,7 @@ import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.TripPlan;
 import com.bif.app.domain.model.TripStop;
 import com.bif.app.domain.repository.IChatRepository;
+import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.ITripRepository;
 
 import java.util.List;
@@ -34,6 +37,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel;
 public class ChatViewModel extends ViewModel {
 
     private final IChatRepository chatRepository;
+    private final IPlaceRepository placeRepository;
     private final ITripRepository tripRepository;
     private final NetworkMonitor networkMonitor;
 
@@ -49,14 +53,16 @@ public class ChatViewModel extends ViewModel {
             new MutableLiveData<>(Collections.emptyList());
     private final MutableLiveData<Set<String>> savedTripCardIdsLiveData =
             new MutableLiveData<>(new HashSet<>());
-        private final MutableLiveData<Boolean> aiDraftModeEnabledLiveData =
+    private final MutableLiveData<Boolean> aiDraftModeEnabledLiveData =
             new MutableLiveData<>(false);
-        private final MutableLiveData<Boolean> aiBadgesEnabledLiveData =
+    private final MutableLiveData<Boolean> aiSuggestPlacesModeEnabledLiveData =
             new MutableLiveData<>(false);
-        private final MutableLiveData<String> snackbarMessageLiveData =
+    private final MutableLiveData<Boolean> aiBadgesEnabledLiveData =
+            new MutableLiveData<>(false);
+    private final MutableLiveData<String> snackbarMessageLiveData =
             new MutableLiveData<>(null);
-            private final Map<String, DraftTripCardSnapshot> pendingDraftTripSnapshots =
-                Collections.synchronizedMap(new HashMap<>());
+    private final Map<String, DraftTripCardSnapshot> pendingDraftTripSnapshots =
+            Collections.synchronizedMap(new HashMap<>());
     private final Map<LiveData<?>, Set<Observer<?>>> observeOnceObservers =
             Collections.synchronizedMap(new HashMap<>());
 
@@ -65,24 +71,23 @@ public class ChatViewModel extends ViewModel {
         aiBadgesEnabledLiveData.postValue(online);
         if (!online) {
             aiDraftModeEnabledLiveData.postValue(false);
+            aiSuggestPlacesModeEnabledLiveData.postValue(false);
         }
-        };
+    };
 
     @Inject
     public ChatViewModel(IChatRepository chatRepository,
+                         IPlaceRepository placeRepository,
                          ITripRepository tripRepository,
                          NetworkMonitor networkMonitor) {
         this.chatRepository = chatRepository;
+        this.placeRepository = placeRepository;
         this.tripRepository = tripRepository;
         this.networkMonitor = networkMonitor;
         aiBadgesEnabledLiveData.setValue(networkMonitor.isOnline());
         networkMonitor.observeConnectivity().observeForever(networkObserver);
     }
 
-    /**
-     * Must be called once when the Fragment is ready.
-     * Loads messages, refreshes from server, and starts WebSocket connection.
-     */
     public void init(String groupId, String groupName, String userId) {
         this.groupId = groupId;
         this.groupName = groupName;
@@ -118,6 +123,10 @@ public class ChatViewModel extends ViewModel {
         return aiDraftModeEnabledLiveData;
     }
 
+    public LiveData<Boolean> getAiSuggestPlacesModeEnabled() {
+        return aiSuggestPlacesModeEnabledLiveData;
+    }
+
     public LiveData<Boolean> getAiBadgesEnabled() {
         return aiBadgesEnabledLiveData;
     }
@@ -134,7 +143,6 @@ public class ChatViewModel extends ViewModel {
         return groupName;
     }
 
-    /** Send a plain text message. */
     public void sendMessage(String content) {
         if (content == null || content.trim().isEmpty()) return;
         if (groupId == null || groupId.trim().isEmpty()) return;
@@ -142,6 +150,11 @@ public class ChatViewModel extends ViewModel {
         if (Boolean.TRUE.equals(aiDraftModeEnabledLiveData.getValue())) {
             aiDraftModeEnabledLiveData.setValue(false);
             sendDraftTripQuery(content.trim());
+            return;
+        }
+        if (Boolean.TRUE.equals(aiSuggestPlacesModeEnabledLiveData.getValue())) {
+            aiSuggestPlacesModeEnabledLiveData.setValue(false);
+            sendSuggestedPlacesQuery(content.trim());
             return;
         }
 
@@ -166,6 +179,7 @@ public class ChatViewModel extends ViewModel {
             snackbarMessageLiveData.setValue("AI drafting is unavailable while offline.");
             return;
         }
+        aiSuggestPlacesModeEnabledLiveData.setValue(false);
         aiDraftModeEnabledLiveData.setValue(true);
     }
 
@@ -173,13 +187,29 @@ public class ChatViewModel extends ViewModel {
         aiDraftModeEnabledLiveData.setValue(false);
     }
 
-    /** Share a location as a LOCATION-type message. */
+    public void enterAiSuggestPlacesMode() {
+        if (Boolean.TRUE.equals(aiSuggestPlacesModeEnabledLiveData.getValue())) {
+            aiSuggestPlacesModeEnabledLiveData.setValue(false);
+            return;
+        }
+        if (!networkMonitor.isOnline()) {
+            aiSuggestPlacesModeEnabledLiveData.setValue(false);
+            snackbarMessageLiveData.setValue("AI place suggestions are unavailable while offline.");
+            return;
+        }
+        aiDraftModeEnabledLiveData.setValue(false);
+        aiSuggestPlacesModeEnabledLiveData.setValue(true);
+    }
+
+    public void cancelAiSuggestPlacesMode() {
+        aiSuggestPlacesModeEnabledLiveData.setValue(false);
+    }
+
     public void shareLocation(double latitude, double longitude, String address) {
         if (groupId == null || groupId.trim().isEmpty()) return;
         chatRepository.sendLocationMessage(groupId, currentUserId, latitude, longitude, address);
     }
 
-    /** Add a shared location from a chat message to an existing trip plan. */
     public void addSharedLocationToTrip(String tripId, ChatMessage message) {
         if (!message.isLocationMessage()) return;
 
@@ -259,7 +289,6 @@ public class ChatViewModel extends ViewModel {
         tripRepository.addStopToTrip(tripId, stop);
     }
 
-    /** Manually refresh messages from the server (used after network restore). */
     public void refreshMessages() {
         if (groupId != null) {
             chatRepository.refreshMessages(groupId);
@@ -287,6 +316,30 @@ public class ChatViewModel extends ViewModel {
                 return;
             }
             chatRepository.insertLocalMessage(draftCard);
+        });
+    }
+
+    private void sendSuggestedPlacesQuery(String query) {
+        if (query == null || query.trim().isEmpty()) {
+            return;
+        }
+
+        LiveData<AiPlaceSuggestionResult> source = placeRepository.suggestPlacesFromQuery(query);
+        observeOnce(source, result -> {
+            String failureCode = result != null ? result.getFailureCode() : "AI_FAILURE";
+            if (failureCode != null) {
+                aiSuggestPlacesModeEnabledLiveData.postValue(false);
+                snackbarMessageLiveData.postValue("AI suggestions failed (" + failureCode + ")");
+                return;
+            }
+
+            ChatMessage suggestedPlacesCard = buildSuggestedPlacesCardMessage(result);
+            if (suggestedPlacesCard == null) {
+                aiSuggestPlacesModeEnabledLiveData.postValue(false);
+                snackbarMessageLiveData.postValue("Unable to build AI place suggestions.");
+                return;
+            }
+            chatRepository.insertLocalMessage(suggestedPlacesCard);
         });
     }
 
@@ -326,6 +379,48 @@ public class ChatViewModel extends ViewModel {
                 null,
                 false,
                 true
+        );
+    }
+
+    private ChatMessage buildSuggestedPlacesCardMessage(AiPlaceSuggestionResult result) {
+        if (result == null || result.getPlaces() == null || result.getPlaces().isEmpty()) {
+            return null;
+        }
+
+        List<Place> places = new ArrayList<>();
+        for (AiPlaceSuggestion suggestion : result.getPlaces()) {
+            if (suggestion == null || suggestion.getPlace() == null) {
+                continue;
+            }
+            places.add(suggestion.getPlace());
+        }
+        if (places.isEmpty()) {
+            return null;
+        }
+
+        String targetTripId = "";
+        List<TripPlan> trips = tripsLiveData != null ? tripsLiveData.getValue() : null;
+        if (trips != null && !trips.isEmpty() && trips.get(0) != null && trips.get(0).getId() != null) {
+            targetTripId = trips.get(0).getId();
+        }
+
+        String payload = buildSuggestedPlacesPayloadJson(targetTripId, places);
+        return new ChatMessage(
+                UUID.randomUUID().toString(),
+                groupId,
+                currentUserId,
+                null,
+                payload,
+                "AI_SUGGESTED_PLACES_CARD",
+                System.currentTimeMillis(),
+                UUID.randomUUID().toString(),
+                0,
+                0,
+                null,
+                false,
+                true,
+                null,
+                new ChatMessage.SuggestedPlacesCardData(targetTripId, places)
         );
     }
 
@@ -399,6 +494,36 @@ public class ChatViewModel extends ViewModel {
         }
         sb.append("]");
         sb.append("}");
+        return sb.toString();
+    }
+
+    private String buildSuggestedPlacesPayloadJson(String tripId, List<Place> places) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        sb.append("\"tripId\":").append(jsonString(tripId == null ? "" : tripId)).append(",");
+        sb.append("\"places\":[");
+        boolean first = true;
+        for (Place place : places) {
+            if (place == null) {
+                continue;
+            }
+            if (!first) {
+                sb.append(",");
+            }
+            first = false;
+            sb.append("{");
+            sb.append("\"id\":").append(jsonString(place.id)).append(",");
+            sb.append("\"name\":").append(jsonString(place.name)).append(",");
+            sb.append("\"address\":").append(jsonString(place.address)).append(",");
+            sb.append("\"rating\":").append(place.rating).append(",");
+            sb.append("\"latitude\":");
+            appendNullableDouble(sb, place.location != null ? place.location.latitude : null);
+            sb.append(",");
+            sb.append("\"longitude\":");
+            appendNullableDouble(sb, place.location != null ? place.location.longitude : null);
+            sb.append("}");
+        }
+        sb.append("]}");
         return sb.toString();
     }
 

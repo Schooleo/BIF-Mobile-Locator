@@ -16,7 +16,6 @@ public class FavoriteTest {
         favorite.description = "A great place";
         favorite.notes = "Remember to carry cash";
         favorite.rating = 5;
-        favorite.imagePath = "/images/fav.png";
 
         assertEquals("fav-1", favorite.id);
         assertEquals("My Favorite Place", favorite.name);
@@ -26,6 +25,5 @@ public class FavoriteTest {
         assertEquals("A great place", favorite.description);
         assertEquals("Remember to carry cash", favorite.notes);
         assertEquals(5, favorite.rating);
-        assertEquals("/images/fav.png", favorite.imagePath);
     }
 }

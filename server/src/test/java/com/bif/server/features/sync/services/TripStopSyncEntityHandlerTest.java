@@ -73,7 +73,7 @@ class TripStopSyncEntityHandlerTest {
         pushed.setOperation("UPDATE");
         pushed.setPayload("{\"id\":\"s1\",\"tripId\":\"trip-1\","
                 + "\"title\":\"Updated\",\"note\":\"n\","
-                + "\"latitude\":1.2,\"longitude\":2.3,"
+                + "\"location\":{\"latitude\":1.2,\"longitude\":2.3},"
                 + "\"arrivalTime\":\"2026-03-28T09:00:00Z\","
                 + "\"departureTime\":\"2026-03-28T10:00:00Z\","
                 + "\"orderIndex\":3,\"deleted\":false}");
@@ -92,6 +92,11 @@ class TripStopSyncEntityHandlerTest {
         assertEquals("s1", response.get("id").asText());
         assertEquals("trip-1", response.get("tripId").asText());
         assertEquals(17L, response.get("serverVersion").asLong());
+        assertNotNull(response.get("location"));
+        assertEquals(1.2, response.get("location").get("latitude").asDouble(), 0.001);
+        assertEquals(2.3, response.get("location").get("longitude").asDouble(), 0.001);
+        assertNull(response.get("latitude"));
+        assertNull(response.get("longitude"));
     }
 
     @Test
@@ -151,5 +156,49 @@ class TripStopSyncEntityHandlerTest {
         ArgumentCaptor<TripPlan> captor = ArgumentCaptor.forClass(TripPlan.class);
         verify(tripPlanRepository).save(captor.capture());
         assertNull(captor.getValue().getStops().get(0).getPhotoUrl());
+    }
+
+    @Test
+    void applyPushedChangeResult_whenTripMissing_rejectsValidation() {
+        SyncChange pushed = new SyncChange();
+        pushed.setEntityType("trip_stop");
+        pushed.setEntityId("s1");
+        pushed.setOperation("UPDATE");
+        pushed.setPayload("{\"id\":\"s1\",\"tripId\":\"missing-trip\","
+                + "\"location\":{\"latitude\":1.0,\"longitude\":2.0}}");
+
+        SyncPushApplyResult result =
+                handler.applyPushedChangeResult(pushed, "user-1", () -> 21L);
+
+        assertEquals(SyncPushApplyResult.STATUS_REJECTED_VALIDATION,
+                result.getStatus());
+        assertEquals("TRIP_NOT_FOUND", result.getReasonCode());
+        verify(tripPlanRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void resolvePayload_emitsCanonicalNestedLocation() throws Exception {
+        TripStop stop = new TripStop();
+        stop.setId("s3");
+        stop.setLocation(new Location(8.5, 9.5));
+
+        TripPlan plan = new TripPlan();
+        plan.setId("trip-3");
+        plan.setStops(List.of(stop));
+
+        when(tripPlanRepository.findById("trip-3")).thenReturn(Optional.of(plan));
+
+        SyncChangeEntry entry = new SyncChangeEntry();
+        entry.setEntityId("s3");
+        entry.setServerVersion(4L);
+        entry.setPayload("{\"tripId\":\"trip-3\"}");
+
+        JsonNode response = objectMapper.readTree(handler.resolvePayload(entry));
+
+        assertNotNull(response.get("location"));
+        assertEquals(8.5, response.get("location").get("latitude").asDouble(), 0.001);
+        assertEquals(9.5, response.get("location").get("longitude").asDouble(), 0.001);
+        assertNull(response.get("latitude"));
+        assertNull(response.get("longitude"));
     }
 }

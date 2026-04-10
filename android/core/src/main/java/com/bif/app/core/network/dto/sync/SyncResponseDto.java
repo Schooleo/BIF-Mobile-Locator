@@ -6,5 +6,6 @@ public class SyncResponseDto {
     public long currentServerVersion;
     public List<SyncChangeDto> pulledChanges;
     public List<SyncConflictDto> conflicts;
+    public List<SyncPushResultDto> pushResults;
 }
 

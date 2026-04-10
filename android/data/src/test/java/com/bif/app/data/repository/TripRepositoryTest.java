@@ -16,6 +16,8 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
+import com.bif.app.core.network.dto.sync.SyncPushResultDto;
+import com.bif.app.core.network.dto.sync.SyncResponseDto;
 import com.bif.app.data.source.local.dao.TripDao;
 import com.bif.app.data.source.local.entity.TripPlanEntity;
 import com.bif.app.data.source.local.entity.TripStopEntity;
@@ -32,7 +34,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class TripRepositoryTest {
@@ -408,6 +412,14 @@ public class TripRepositoryTest {
 
         assertNotNull(liveData.getValue());
         assertEquals(0, liveData.getValue().size());
+    }
+
+    private SyncPushResultDto pushResult(String clientChangeId, String status) {
+        SyncPushResultDto result = new SyncPushResultDto();
+        result.clientChangeId = clientChangeId;
+        result.status = status;
+        result.reasonCode = status;
+        return result;
     }
 }
 

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="social">Social</string>
+    <string name="social">Trip planning with friends</string>
     <string name="trips">Trips</string>
     <string name="friends">Friends</string>
     <string name="groups">Groups</string>
@@ -95,9 +95,12 @@
     <string name="chat_ai_draft_trip">Draft a Trip</string>
     <string name="chat_ai_suggest_places">Suggest Places</string>
     <string name="chat_ai_drafter_prefix">AI Trip Drafter</string>
+    <string name="chat_ai_suggest_prefix">AI Place Scout</string>
     <string name="chat_ai_draft_hint">Describe the trip you want to draft…</string>
+    <string name="chat_ai_suggest_hint">Describe the places you want suggested…</string>
     <string name="chat_ai_offline">AI tools are unavailable while offline.</string>
     <string name="chat_ai_draft_failed">AI draft failed (%1$s)</string>
+    <string name="chat_ai_suggest_failed">AI place suggestions failed (%1$s)</string>
     <string name="chat_ai_mention">AI Trip Drafter</string>
     <string name="group_settings_title">Group Settings</string>
     <string name="group_tab_plans">Plans</string>

@@ -26,6 +26,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="?attr/colorSurface"
+            android:backgroundTint="?attr/colorListItemBackground"
             android:gravity="center_vertical"
             android:minHeight="56dp"
             android:orientation="horizontal"
@@ -113,6 +114,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:background="?attr/colorSurface"
+            android:backgroundTint="?attr/colorListItemBackground"
             android:elevation="6dp"
             android:visibility="gone">
 
@@ -163,6 +165,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"
                 android:background="@drawable/bg_add_trip_stop_result"
+                android:backgroundTint="?attr/colorListItemBackground"
                 android:orientation="vertical"
                 android:padding="12dp">
 

@@ -367,22 +367,9 @@ public class FriendshipRepository implements IFriendshipRepository {
                 throw new IllegalStateException(accept ? "ACCEPT_FAILED" : "REJECT_FAILED");
             }
         } catch (IOException ioException) {
-            existing.status = accept ? FriendshipStatus.ACCEPTED
-                    : FriendshipStatus.REJECTED;
-            existing.updatedAt = System.currentTimeMillis();
-            friendshipDao.update(existing);
-
-            String op = accept ? "ACCEPT_REQUEST" : "REJECT_REQUEST";
-            String serverId = existing.serverId != null
-                    ? existing.serverId : String.valueOf(friendshipId);
-            enqueueFriendshipChange(op, serverId,
-                    Collections.singletonMap("friendshipId", serverId));
-
-            refreshRequestCachesSync();
-            if (accept) {
-                refreshFriendsSync();
-            }
-            return;
+            throw new IllegalStateException(accept
+                    ? "ACCEPT_REQUEST_REQUIRES_ONLINE"
+                    : "REJECT_REQUEST_REQUIRES_ONLINE");
         } catch (IllegalStateException stateException) {
             throw stateException;
         } catch (Exception ignored) {
@@ -483,12 +470,6 @@ public class FriendshipRepository implements IFriendshipRepository {
         if (networkMonitor != null && !networkMonitor.isOnline()) {
             throw new IllegalStateException(errorCode);
         }
-    }
-
-    private void enqueueFriendshipChange(String operation, String entityId,
-                                         Object payload) {
-        syncManager.enqueueChange("friendship", entityId, operation,
-                UUID.randomUUID().toString(), payload);
     }
 
     private java.util.Map<String, String> buildSendRequestPayload(

@@ -5,6 +5,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -24,7 +25,6 @@ import com.bif.app.data.source.local.database.AppDatabase;
 import com.bif.app.data.source.local.entity.ReviewEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 import com.bif.app.data.sync.core.SyncManager;
-import com.bif.app.core.utils.UserPreferences;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -76,21 +76,18 @@ public class ReviewRepositoryTest {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         
-        // Mock transaction execution to run immediately
         doAnswer(invocation -> {
             Runnable runnable = invocation.getArgument(0);
             runnable.run();
             return null;
         }).when(mockAppDatabase).runInTransaction(any(Runnable.class));
 
-        // Mock executor to run immediately
         doAnswer(invocation -> {
             Runnable runnable = invocation.getArgument(0);
             runnable.run();
             return null;
         }).when(mockExecutor).execute(any(Runnable.class));
 
-        // Fix NPE caused by UserPreferences static call in constructor
         SharedPreferences mockPrefs = mock(SharedPreferences.class);
         when(mockContext.getSharedPreferences(anyString(), anyInt())).thenReturn(mockPrefs);
         when(mockPrefs.getString(anyString(), anyString())).thenReturn("test-user");
@@ -145,7 +142,6 @@ public class ReviewRepositoryTest {
 
         repository.submitReview(placeId, stars, comment);
 
-        // Verify Room persistence
         ArgumentCaptor<ReviewEntity> entityCaptor = ArgumentCaptor.forClass(ReviewEntity.class);
         verify(mockReviewDao).upsert(entityCaptor.capture());
         ReviewEntity saved = entityCaptor.getValue();
@@ -153,7 +149,6 @@ public class ReviewRepositoryTest {
         assertEquals(stars, saved.stars);
         assertTrue(saved.pendingSync);
 
-        // Verify SyncQueue persistence
         ArgumentCaptor<SyncQueueEntity> syncCaptor = ArgumentCaptor.forClass(SyncQueueEntity.class);
         verify(mockSyncQueueDao).enqueue(syncCaptor.capture());
         SyncQueueEntity enqueued = syncCaptor.getValue();
@@ -162,6 +157,65 @@ public class ReviewRepositoryTest {
         assertTrue(enqueued.payload.contains("\"rating\":5"));
         
         verify(mockSyncManager).syncIfOnline();
+    }
+
+    @Test
+    public void submitReview_WhenOnline_PersistsLocallyAndWritesThroughServer() throws IOException {
+        String placeId = "p1";
+        int stars = 5;
+        String comment = "";
+
+        when(mockSyncManager.isOnline()).thenReturn(true);
+
+        PlaceReviewDto responseDto = new PlaceReviewDto();
+        responseDto.placeId = placeId;
+        responseDto.userId = "test-user";
+        responseDto.userName = "tester";
+        responseDto.stars = stars;
+        responseDto.comment = null;
+        responseDto.createdAt = "2026-04-10T00:00:00Z";
+
+        Call<PlaceReviewDto> mockCall = mock(Call.class);
+        when(mockCall.execute()).thenReturn(Response.success(responseDto));
+        when(mockApiService.addReview(anyString(), any(PlaceReviewDto.class))).thenReturn(mockCall);
+
+        repository.submitReview(placeId, stars, comment);
+
+        verify(mockApiService).addReview(eq(placeId), any(PlaceReviewDto.class));
+        verify(mockSyncQueueDao).removeByEntity("review", placeId + ":test-user");
+        verify(mockSyncQueueDao, never()).enqueue(any(SyncQueueEntity.class));
+
+        ArgumentCaptor<ReviewEntity> entityCaptor = ArgumentCaptor.forClass(ReviewEntity.class);
+        verify(mockReviewDao, org.mockito.Mockito.atLeastOnce()).upsert(entityCaptor.capture());
+        ReviewEntity saved = entityCaptor.getValue();
+        assertEquals(placeId, saved.placeId);
+        assertEquals("test-user", saved.userId);
+        assertEquals(stars, saved.stars);
+        org.junit.Assert.assertFalse(saved.pendingSync);
+    }
+
+    @Test
+    public void deleteMyReview_WhenOnline_DeletesServerAndLocalEntry() throws IOException {
+        String placeId = "p1";
+
+        when(mockSyncManager.isOnline()).thenReturn(true);
+
+        ReviewEntity existing = new ReviewEntity();
+        existing.placeId = placeId;
+        existing.userId = "test-user";
+        existing.stars = 4;
+        when(mockReviewDao.getReviewSync(placeId, "test-user")).thenReturn(existing);
+
+        Call<Void> mockCall = mock(Call.class);
+        when(mockCall.execute()).thenReturn(Response.success(null));
+        when(mockApiService.deleteMyReview(placeId)).thenReturn(mockCall);
+
+        repository.deleteMyReview(placeId);
+
+        verify(mockApiService).deleteMyReview(placeId);
+        verify(mockReviewDao).deleteByPlaceAndUserId(placeId, "test-user");
+        verify(mockSyncQueueDao).removeByEntity("review", placeId + ":test-user");
+        verify(mockSyncQueueDao, never()).enqueue(any(SyncQueueEntity.class));
     }
 
     @Test

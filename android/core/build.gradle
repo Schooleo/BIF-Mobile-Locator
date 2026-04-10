@@ -41,6 +41,7 @@ dependencies {
     implementation libs.retrofit.gson
     implementation libs.okhttp.logging
     implementation libs.hilt.android
+    implementation libs.maplibre.android.sdk
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core

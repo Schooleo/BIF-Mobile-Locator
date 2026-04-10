@@ -22,7 +22,6 @@
     <string name="share_place">Share Place</string>
     <string name="navigate_to_place">Route to Place</string>
     <string name="trip_actions">Trip Actions</string>
-    <string name="view_on_map">View on Map</string>
     <string name="directions">Directions</string>
     <string name="route_sheet_title">Route</string>
     <string name="route_eta_label">Estimated time</string>
@@ -50,6 +49,16 @@
     <string name="download_map_failed">Could not download offline map data</string>
     <string name="download_map_location_required">Current location unavailable for map download.</string>
     <string name="download_map_in_progress">Downloading...</string>
+    <string name="your_review">Your review</string>
+    <string name="example_rating">Great place to visit!</string>
+    <string name="days_ago">2 days ago</string>
+    <string name="rate_this_place">Rate this place</string>
+    <string name="review_optional_hint">Your rating is saved locally and synced when online.</string>
+    <string name="review_comment_hint">Share your experience (optional)</string>
+    <string name="add_review_title">Add Review</string>
+    <string name="edit_review_title">Edit Review</string>
+    <string name="submit_review">Submit</string>
+    <string name="provide_rating_error">Please provide a rating</string>
     <string-array name="search_area_patterns">
         <item>phan thiet|Phan Thiet</item>
         <item>da lat|Da Lat</item>

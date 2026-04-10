@@ -24,6 +24,9 @@ public interface SyncQueueDao {
     @Query("DELETE FROM sync_queue WHERE id = :id")
     void remove(int id);
 
+    @Query("DELETE FROM sync_queue WHERE entityType = :entityType AND entityId = :entityId")
+    void removeByEntity(String entityType, String entityId);
+
     @Query("UPDATE sync_queue SET status = 'PENDING' "
             + "WHERE status = 'IN_FLIGHT'")
     void resetInFlight();

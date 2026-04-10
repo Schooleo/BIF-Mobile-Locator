@@ -108,7 +108,6 @@ public class CommonChatFragment extends Fragment {
         view.setOnClickListener(v -> focusInputAndShowKeyboard(etMessage));
         etMessage.post(() -> focusInputAndShowKeyboard(etMessage));
 
-        // Set up adapter
         adapter = new ChatMessageAdapter(new ChatMessageAdapter.ChatActionCallback() {
             @Override
             public void onLocationLinkClick(ChatMessageAdapter.ChatMessage message) {
@@ -143,7 +142,6 @@ public class CommonChatFragment extends Fragment {
         rvMessages.setLayoutManager(new LinearLayoutManager(requireContext()));
         rvMessages.setAdapter(adapter);
 
-        // Wire ViewModel
         viewModel = new ViewModelProvider(this).get(ChatViewModel.class);
 
         String currentUserId = UserPreferences.getId(requireContext());
@@ -156,7 +154,6 @@ public class CommonChatFragment extends Fragment {
             markGroupChatReadIfNeeded();
         }
 
-        // Observe messages from ViewModel
         viewModel.getMessages().observe(getViewLifecycleOwner(), this::onMessagesUpdated);
         viewModel.getSavedTripCardIds().observe(getViewLifecycleOwner(), savedIds -> {
             if (!latestMessages.isEmpty()) {
@@ -173,11 +170,17 @@ public class CommonChatFragment extends Fragment {
             btnAiSuggestPlaces.setAlpha(alpha);
             if (!isEnabled) {
                 viewModel.cancelAiDraftMode();
+                viewModel.cancelAiSuggestPlacesMode();
             }
         });
         viewModel.getAiDraftModeEnabled().observe(getViewLifecycleOwner(), isDraftMode -> {
             boolean enabled = Boolean.TRUE.equals(isDraftMode);
-            applyAiDraftMode(enabled, etMessage);
+            boolean suggestEnabled = Boolean.TRUE.equals(viewModel.getAiSuggestPlacesModeEnabled().getValue());
+            applyAiComposeMode(enabled, suggestEnabled, etMessage);
+        });
+        viewModel.getAiSuggestPlacesModeEnabled().observe(getViewLifecycleOwner(), isSuggestMode -> {
+            boolean draftEnabled = Boolean.TRUE.equals(viewModel.getAiDraftModeEnabled().getValue());
+            applyAiComposeMode(draftEnabled, Boolean.TRUE.equals(isSuggestMode), etMessage);
         });
         viewModel.getSnackbarMessage().observe(getViewLifecycleOwner(), message -> {
             if (message == null || message.trim().isEmpty()) {
@@ -187,7 +190,6 @@ public class CommonChatFragment extends Fragment {
             viewModel.clearSnackbarMessage();
         });
 
-        // Handle initial shared place if navigated here with a place argument
         if (savedInstanceState == null) {
             appendSharedPlaceMessageIfPresent(args);
         }
@@ -216,16 +218,14 @@ public class CommonChatFragment extends Fragment {
             viewModel.enterAiDraftMode();
             focusInputAndShowKeyboard(etMessage);
         });
-
-        /*btnAiSuggestPlaces.setOnClickListener(v -> {
-            aiBadgesRow.setVisibility(View.VISIBLE);
-            Snackbar.make(view,
-                    getString(R.string.trip_feature_add_stop_soon),
-                    Snackbar.LENGTH_SHORT).show();
-        });*/
-
-        btnAiSuggestPlaces.setEnabled(false);
-        btnAiSuggestPlaces.setOnClickListener(null);
+        btnAiSuggestPlaces.setOnClickListener(v -> {
+            if (!btnAiSuggestPlaces.isEnabled()) {
+                Snackbar.make(view, R.string.chat_ai_offline, Snackbar.LENGTH_SHORT).show();
+                return;
+            }
+            viewModel.enterAiSuggestPlacesMode();
+            focusInputAndShowKeyboard(etMessage);
+        });
 
         etMessage.addTextChangedListener(new TextWatcher() {
             @Override
@@ -511,14 +511,22 @@ public class CommonChatFragment extends Fragment {
         return String.format(Locale.US, "%.1f", distance);
     }
 
-    private void applyAiDraftMode(boolean enabled, EditText etMessage) {
+    private void applyAiComposeMode(boolean draftEnabled,
+                                    boolean suggestEnabled,
+                                    EditText etMessage) {
         if (layoutInputBar == null || tvAiDrafterPrefix == null) {
             return;
         }
-        if (enabled) {
+        if (draftEnabled) {
             layoutInputBar.setBackgroundResource(R.drawable.bg_chat_input_ai_draft);
             tvAiDrafterPrefix.setVisibility(View.VISIBLE);
+            tvAiDrafterPrefix.setText(R.string.chat_ai_drafter_prefix);
             etMessage.setHint(R.string.chat_ai_draft_hint);
+        } else if (suggestEnabled) {
+            layoutInputBar.setBackgroundResource(R.drawable.bg_chat_input_ai_draft);
+            tvAiDrafterPrefix.setVisibility(View.VISIBLE);
+            tvAiDrafterPrefix.setText(R.string.chat_ai_suggest_prefix);
+            etMessage.setHint(R.string.chat_ai_suggest_hint);
         } else {
             if (defaultInputBarBackground != null) {
                 layoutInputBar.setBackground(defaultInputBarBackground);
@@ -627,8 +635,6 @@ public class CommonChatFragment extends Fragment {
         );
     }
 
-    // ─── Shared place from navigation args ─────────────────────────────────────
-
     private void appendSharedPlaceMessageIfPresent(Bundle args) {
         if (args == null || !"group".equalsIgnoreCase(chatType)) return;
 
@@ -644,8 +650,6 @@ public class CommonChatFragment extends Fragment {
 
         viewModel.shareLocation(lat, lng, placeName);
     }
-
-    // ─── Navigation / UI helpers ───────────────────────────────────────────────
 
     private void handleLocationLinkClick(ChatMessageAdapter.ChatMessage message) {
         String mapQuery = message.getMapQuery();

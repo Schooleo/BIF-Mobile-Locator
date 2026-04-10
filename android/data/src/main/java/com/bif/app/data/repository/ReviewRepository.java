@@ -86,6 +86,9 @@ public class ReviewRepository implements IReviewRepository {
     /** Lấy userId hiện tại động theo từng request, không cache tĩnh */
     private String getActiveUserId() {
         String userId = UserPreferences.getUserId(appContext);
+        if (userId == null || userId.trim().isEmpty()) {
+            userId = UserPreferences.getId(appContext);
+        }
         if (userId == null || userId.trim().isEmpty()) return "anonymous";
         return userId.trim();
     }
@@ -104,47 +107,57 @@ public class ReviewRepository implements IReviewRepository {
     @Override
     public void submitReview(String placeId, int stars, String comment) {
         String captureUserId = getActiveUserId();
-        executeReviewAction(placeId, stars, comment, "CREATE", captureUserId);
+        executeReviewAction(placeId, stars, comment, "CREATE", captureUserId, getActiveUsername());
     }
 
     @Override
     public void updateReview(String placeId, int stars, String comment) {
         String captureUserId = getActiveUserId();
-        executeReviewAction(placeId, stars, comment, "UPDATE", captureUserId);
+        executeReviewAction(placeId, stars, comment, "UPDATE", captureUserId, getActiveUsername());
     }
 
-    private void executeReviewAction(String placeId, int stars, String comment, String operation, String userId) {
+    private void executeReviewAction(String placeId,
+                                     int stars,
+                                     String comment,
+                                     String operation,
+                                     String userId,
+                                     String userName) {
         executorService.execute(() -> {
             Review review = new Review();
             review.placeId = placeId;
             review.userId = userId;
-            review.userName = "Me";
+            review.userName = userName;
             review.stars = stars;
             review.comment = comment;
             review.pendingSync = true;
             review.deleted = false;
 
+            ReviewEntity existing = reviewDao.getReviewSync(placeId, userId);
+
             appDatabase.runInTransaction(() -> {
                 long timestamp = System.currentTimeMillis();
-                if ("UPDATE".equals(operation)) {
-                    ReviewEntity existing = reviewDao.getReviewSync(placeId, userId);
-                    if (existing != null) {
-                        timestamp = existing.createdAt;
-                    }
+                if (existing != null) {
+                    timestamp = existing.createdAt;
                 }
                 review.createdAt = timestamp;
                 ReviewEntity entity = ReviewMapper.toEntity(review);
                 reviewDao.upsert(entity);
-
-                SyncQueueEntity syncEntry = createSyncEntry(
-                        "review",
-                        placeId + ":" + userId,
-                        operation,
-                        ReviewMapper.toDto(review)
-                );
-                syncQueueDao.enqueue(syncEntry);
+                updateCachedPlaceRating(placeId);
             });
-            syncManager.syncIfOnline();
+
+            boolean syncedOnline = syncReviewOnline(placeId, review, operation);
+            if (!syncedOnline) {
+                appDatabase.runInTransaction(() -> {
+                    SyncQueueEntity syncEntry = createSyncEntry(
+                            "review",
+                            placeId + ":" + userId,
+                            operation,
+                            ReviewMapper.toDto(review)
+                    );
+                    syncQueueDao.enqueue(syncEntry);
+                });
+                syncManager.syncIfOnline();
+            }
         });
     }
 
@@ -152,23 +165,29 @@ public class ReviewRepository implements IReviewRepository {
     public void deleteMyReview(String placeId) {
         executorService.execute(() -> {
             String userId = getActiveUserId();
+            ReviewEntity existing = reviewDao.getReviewSync(placeId, userId);
             appDatabase.runInTransaction(() -> {
-                ReviewEntity existing = reviewDao.getReviewSync(placeId, userId);
                 if (existing != null) {
                     existing.deleted = true;
                     existing.pendingSync = true;
                     reviewDao.upsert(existing);
                 }
-
-                SyncQueueEntity syncEntry = createSyncEntry(
-                        "review",
-                         placeId + ":" + userId,
-                        "DELETE",
-                        null
-                );
-                syncQueueDao.enqueue(syncEntry);
+                updateCachedPlaceRating(placeId);
             });
-            syncManager.syncIfOnline();
+
+            boolean deletedOnline = deleteReviewOnline(placeId, userId);
+            if (!deletedOnline) {
+                appDatabase.runInTransaction(() -> {
+                    SyncQueueEntity syncEntry = createSyncEntry(
+                            "review",
+                            placeId + ":" + userId,
+                            "DELETE",
+                            null
+                    );
+                    syncQueueDao.enqueue(syncEntry);
+                });
+                syncManager.syncIfOnline();
+            }
         });
     }
 
@@ -221,6 +240,8 @@ public class ReviewRepository implements IReviewRepository {
                                 reviewDao.deleteByPlaceAndUserId(placeId, localUserId);
                             }
                         }
+
+                        updateCachedPlaceRating(placeId);
                     });
                 }
             } catch (IOException e) {
@@ -277,6 +298,103 @@ public class ReviewRepository implements IReviewRepository {
         String seed = source + "|" + extId + "|" + lat + "|" + lng + "|" + placeName;
         return UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8)).toString();
         }
+
+    private String getActiveUsername() {
+        String username = UserPreferences.getUsername(appContext);
+        if (username == null || username.trim().isEmpty()) {
+            return "Me";
+        }
+        return username.trim();
+    }
+
+    private boolean syncReviewOnline(String placeId, Review review, String operation) {
+        if (restApiService == null || !syncManager.isOnline()) {
+            return false;
+        }
+
+        try {
+            PlaceReviewDto payload = ReviewMapper.toDto(review);
+            Response<PlaceReviewDto> response;
+            if ("UPDATE".equalsIgnoreCase(operation)) {
+                response = restApiService.updateMyReview(placeId, payload).execute();
+            } else {
+                response = restApiService.addReview(placeId, payload).execute();
+                if (response.code() == 409) {
+                    response = restApiService.updateMyReview(placeId, payload).execute();
+                }
+            }
+
+            if (!response.isSuccessful() || response.body() == null) {
+                Log.w(TAG, "Review write-through failed. code=" + response.code()
+                        + " operation=" + operation + " placeId=" + placeId);
+                return false;
+            }
+
+            PlaceReviewDto dto = response.body();
+            appDatabase.runInTransaction(() -> {
+                ReviewEntity entity = ReviewMapper.fromDto(dto, placeId);
+                entity.pendingSync = false;
+                entity.deleted = false;
+                reviewDao.upsert(entity);
+                syncQueueDao.removeByEntity("review", placeId + ":" + review.userId);
+                updateCachedPlaceRating(placeId);
+            });
+            return true;
+        } catch (IOException e) {
+            Log.e(TAG, "Review write-through failed for place " + placeId, e);
+            return false;
+        }
+    }
+
+    private boolean deleteReviewOnline(String placeId, String userId) {
+        if (restApiService == null || !syncManager.isOnline()) {
+            return false;
+        }
+
+        try {
+            Response<Void> response = restApiService.deleteMyReview(placeId).execute();
+            if (!response.isSuccessful() && response.code() != 404) {
+                Log.w(TAG, "Review delete write-through failed. code="
+                        + response.code() + " placeId=" + placeId);
+                return false;
+            }
+
+            appDatabase.runInTransaction(() -> {
+                reviewDao.deleteByPlaceAndUserId(placeId, userId);
+                syncQueueDao.removeByEntity("review", placeId + ":" + userId);
+                updateCachedPlaceRating(placeId);
+            });
+            return true;
+        } catch (IOException e) {
+            Log.e(TAG, "Review delete write-through failed for place " + placeId, e);
+            return false;
+        }
+    }
+
+    private void updateCachedPlaceRating(String placeId) {
+        List<ReviewEntity> localReviews = reviewDao.getByPlaceIdSync(placeId);
+        if (localReviews == null) {
+            return;
+        }
+
+        int count = 0;
+        int totalStars = 0;
+        for (ReviewEntity review : localReviews) {
+            if (review == null || review.deleted) {
+                continue;
+            }
+            count++;
+            totalStars += review.stars;
+        }
+
+        PlaceEntity place = placeDao.getByIdSync(placeId, getActiveUserId());
+        if (place == null) {
+            return;
+        }
+
+        place.rating = count > 0 ? (double) totalStars / count : 0.0;
+        placeDao.upsert(place);
+    }
 
     private SyncQueueEntity createSyncEntry(String entityType, String entityId, String operation, Object payload) {
         SyncQueueEntity entry = new SyncQueueEntity();

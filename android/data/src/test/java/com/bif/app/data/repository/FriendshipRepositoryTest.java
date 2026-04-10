@@ -88,7 +88,7 @@ public class FriendshipRepositoryTest {
     }
 
     @Test
-    public void acceptFriendRequest_whenOffline_updatesLocalAndEnqueues() throws Exception {
+    public void acceptFriendRequest_whenOffline_throwsPolicyErrorAndDoesNotEnqueue() throws Exception {
         FriendshipEntity existing = new FriendshipEntity();
         existing.id = 1;
         existing.serverId = "friendship-1";
@@ -103,13 +103,19 @@ public class FriendshipRepositoryTest {
         when(mockRestApiService.acceptFriendRequest("friendship-1"))
                 .thenReturn(acceptCall);
 
-        repository.acceptFriendRequest(1);
+        try {
+            repository.acceptFriendRequest(1);
+            org.junit.Assert.fail("Expected policy error");
+        } catch (IllegalStateException expected) {
+            org.junit.Assert.assertEquals("ACCEPT_REQUEST_REQUIRES_ONLINE",
+                    expected.getMessage());
+        }
 
-        org.junit.Assert.assertEquals(FriendshipStatus.ACCEPTED,
-                existing.status);
-        verify(mockFriendshipDao).update(existing);
-        verify(mockSyncManager).enqueueChange(eq("friendship"),
+        org.junit.Assert.assertEquals(FriendshipStatus.PENDING, existing.status);
+        verify(mockFriendshipDao, never()).update(existing);
+        verify(mockSyncManager, never()).enqueueChange(eq("friendship"),
                 eq("friendship-1"), eq("ACCEPT_REQUEST"), anyString(), any());
+        verify(mockSyncManager, never()).syncIfOnline();
     }
 
     private void stubAuthUser() throws Exception {

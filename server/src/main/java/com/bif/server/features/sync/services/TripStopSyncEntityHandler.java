@@ -8,6 +8,7 @@ import com.bif.server.features.trip.models.TripStop;
 import com.bif.server.features.trip.repositories.TripPlanRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -15,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.function.LongSupplier;
 
 @Component
 public class TripStopSyncEntityHandler implements SyncEntityHandler {
@@ -34,8 +36,9 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
     }
 
     @Override
-    public String applyPushedChange(SyncChange pushed, String userId,
-                                    long newVersion) {
+    public SyncPushApplyResult applyPushedChangeResult(SyncChange pushed,
+                                                       String userId,
+                                                       LongSupplier nextVersionSupplier) {
         TripStopPayload payload = parsePayload(pushed.getPayload());
         String operation = pushed.getOperation() != null
                 ? pushed.getOperation().toUpperCase(Locale.ROOT)
@@ -47,16 +50,22 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         }
         String tripId = payload != null ? payload.tripId : null;
 
-        if (stopId == null || stopId.isBlank() || tripId == null
-                || tripId.isBlank()) {
-            return pushed.getPayload();
+        if (payload == null) {
+            return SyncPushApplyResult.rejectedValidation("INVALID_PAYLOAD");
+        }
+        if (stopId == null || stopId.isBlank()) {
+            return SyncPushApplyResult.rejectedValidation("MISSING_STOP_ID");
+        }
+        if (tripId == null || tripId.isBlank()) {
+            return SyncPushApplyResult.rejectedValidation("MISSING_TRIP_ID");
         }
 
         Optional<TripPlan> planOpt = tripPlanRepository.findById(tripId);
         if (planOpt.isEmpty()) {
-            return pushed.getPayload();
+            return SyncPushApplyResult.rejectedValidation("TRIP_NOT_FOUND");
         }
 
+        long newVersion = nextVersionSupplier.getAsLong();
         TripPlan plan = planOpt.get();
         List<TripStop> stops = plan.getStops() != null
                 ? new ArrayList<>(plan.getStops())
@@ -70,22 +79,20 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         }
 
         boolean deleteRequested = "DELETE".equals(operation)
-                || (payload != null && payload.deleted);
+                || payload.deleted;
 
-        if (payload != null) {
-            target.setPlaceId(payload.placeId);
-            target.setTitle(payload.title);
-            target.setNote(payload.note);
-            if (payload.photoUrlProvided) {
-                target.setPhotoUrl(normalizeNullable(payload.photoUrl));
-            }
-            target.setOrderIndex(payload.orderIndex);
-            target.setArrivalTime(payload.arrivalTime);
-            target.setDepartureTime(payload.departureTime);
-            if (payload.latitude != null && payload.longitude != null) {
-                target.setLocation(new Location(payload.latitude,
-                        payload.longitude));
-            }
+        target.setPlaceId(payload.placeId);
+        target.setTitle(payload.title);
+        target.setNote(payload.note);
+        if (payload.photoUrlProvided) {
+            target.setPhotoUrl(normalizeNullable(payload.photoUrl));
+        }
+        target.setOrderIndex(payload.orderIndex);
+        target.setArrivalTime(payload.arrivalTime);
+        target.setDepartureTime(payload.departureTime);
+        if (payload.latitude != null && payload.longitude != null) {
+            target.setLocation(new Location(payload.latitude,
+                    payload.longitude));
         }
 
         target.setDeleted(deleteRequested);
@@ -98,7 +105,13 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
 
         TripStopPayload responsePayload = toPayload(target, tripId);
         responsePayload.serverVersion = newVersion;
-        return writePayload(responsePayload);
+        return SyncPushApplyResult.applied(writePayload(responsePayload), newVersion);
+    }
+
+    @Override
+    public String applyPushedChange(SyncChange pushed, String userId,
+                                    long newVersion) {
+        return applyPushedChangeResult(pushed, userId, () -> newVersion).getPayload();
     }
 
     @Override
@@ -147,6 +160,15 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
             JsonNode node = objectMapper.readTree(json);
             TripStopPayload payload = objectMapper.treeToValue(node, TripStopPayload.class);
             payload.photoUrlProvided = node.has("photoUrl");
+            JsonNode locationNode = node.get("location");
+            if (locationNode != null && locationNode.isObject()) {
+                if (payload.latitude == null && locationNode.hasNonNull("latitude")) {
+                    payload.latitude = locationNode.get("latitude").doubleValue();
+                }
+                if (payload.longitude == null && locationNode.hasNonNull("longitude")) {
+                    payload.longitude = locationNode.get("longitude").doubleValue();
+                }
+            }
             return payload;
         } catch (Exception e) {
             return null;
@@ -155,7 +177,29 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
 
     private String writePayload(TripStopPayload payload) {
         try {
-            return objectMapper.writeValueAsString(payload);
+            ObjectNode node = objectMapper.createObjectNode();
+            putText(node, "id", payload.id);
+            putText(node, "tripId", payload.tripId);
+            putText(node, "placeId", payload.placeId);
+            putText(node, "title", payload.title);
+            putText(node, "note", payload.note);
+            putText(node, "photoUrl", payload.photoUrl);
+            if (payload.location != null && payload.location.latitude != null
+                    && payload.location.longitude != null) {
+                ObjectNode locationNode = node.putObject("location");
+                locationNode.put("latitude", payload.location.latitude);
+                locationNode.put("longitude", payload.location.longitude);
+            }
+            if (payload.arrivalTime != null) {
+                node.set("arrivalTime", objectMapper.valueToTree(payload.arrivalTime));
+            }
+            if (payload.departureTime != null) {
+                node.set("departureTime", objectMapper.valueToTree(payload.departureTime));
+            }
+            node.put("orderIndex", payload.orderIndex);
+            node.put("serverVersion", payload.serverVersion);
+            node.put("deleted", payload.deleted);
+            return objectMapper.writeValueAsString(node);
         } catch (Exception e) {
             return null;
         }
@@ -173,12 +217,19 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         payload.departureTime = stop.getDepartureTime();
         payload.orderIndex = stop.getOrderIndex();
         if (stop.getLocation() != null) {
-            payload.latitude = stop.getLocation().getLatitude();
-            payload.longitude = stop.getLocation().getLongitude();
+            payload.location = new LocationPayload();
+            payload.location.latitude = stop.getLocation().getLatitude();
+            payload.location.longitude = stop.getLocation().getLongitude();
         }
         payload.serverVersion = stop.getServerVersion();
         payload.deleted = stop.isDeleted();
         return payload;
+    }
+
+    private void putText(ObjectNode node, String fieldName, String value) {
+        if (value != null) {
+            node.put(fieldName, value);
+        }
     }
 
     private String normalizeNullable(String value) {
@@ -194,8 +245,10 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         public String tripId;
         public String placeId;
         public String title;
+        public String address;
         public String note;
         public String photoUrl;
+        public LocationPayload location;
         public Double latitude;
         public Double longitude;
         public Instant arrivalTime;
@@ -204,5 +257,10 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         public long serverVersion;
         public boolean deleted;
         public boolean photoUrlProvided;
+    }
+
+    private static class LocationPayload {
+        public Double latitude;
+        public Double longitude;
     }
 }
