@@ -47,6 +47,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
 
 import retrofit2.Call;
 import retrofit2.Response;
@@ -386,6 +387,51 @@ public class PlaceRepositoryTest {
     }
 
     @Test
+    public void suggestPlacesFromQuery_nullAiClient_returnsAiFailureWithWarning() {
+        when(mockNetworkMonitor.isOnline()).thenReturn(true);
+
+        PlaceRepository repositoryWithoutAiClient = new PlaceRepository(
+                mockGeocodingDataSource,
+                mockRestApiService,
+                mockPlaceDao,
+                mockSearchHistoryDao,
+                mockSyncManager,
+                mockNetworkMonitor,
+                null,
+                null);
+
+        LiveData<AiPlaceSuggestionResult> result =
+                repositoryWithoutAiClient.suggestPlacesFromQuery("ramen");
+
+        assertNotNull(result.getValue());
+        assertEquals("AI_FAILURE", result.getValue().getFailureCode());
+        assertTrue(result.getValue().getPlaces().isEmpty());
+        assertTrue(result.getValue().getWarnings().stream()
+                .anyMatch(message -> message.contains("AI client is unavailable")));
+    }
+
+    @Test
+    public void suggestPlacesFromQuery_transportFailure_surfacesWarning()
+            throws Exception {
+        when(mockNetworkMonitor.isOnline()).thenReturn(true);
+
+        CompletableFuture<AiPlaceSuggestionPayload> failedFuture = new CompletableFuture<>();
+        failedFuture.completeExceptionally(new TimeoutException("suggestPlacesFromQuery timed out"));
+        when(mockAiGraphQlClient.suggestPlacesFromQuery("best coffee"))
+                .thenReturn(failedFuture);
+
+        LiveData<AiPlaceSuggestionResult> result =
+                placeRepository.suggestPlacesFromQuery("best coffee");
+        Thread.sleep(250);
+
+        assertNotNull(result.getValue());
+        assertEquals("AI_FAILURE", result.getValue().getFailureCode());
+        assertTrue(result.getValue().getPlaces().isEmpty());
+        assertTrue(result.getValue().getWarnings().stream()
+                .anyMatch(message -> message.contains("Transport error")));
+    }
+
+    @Test
     public void suggestPlacesFromQuery_failureCode_doesNotReturnPlaces()
             throws Exception {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
@@ -463,6 +509,8 @@ public class PlaceRepositoryTest {
         assertNotNull(result.getValue());
         assertNull(result.getValue().getFailureCode());
         assertTrue(result.getValue().getPlaces().isEmpty());
+        assertTrue(result.getValue().getWarnings().stream()
+                .anyMatch(message -> message.contains("filtered out")));
     }
 
     @Test

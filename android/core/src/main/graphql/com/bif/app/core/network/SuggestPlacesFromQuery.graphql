@@ -3,19 +3,18 @@ mutation SuggestPlacesFromQuery($query: String!) {
     extractedKeywords
     category
     vibe
+    searchQueries
+    locationHint
     warnings
     failureCode
     places {
-      addedToTripCount
-      placeData: place {
-        id
-        name
-        address
-        rating
-        location {
-          latitude
-          longitude
-        }
+      id
+      name
+      address
+      rating
+      location {
+        latitude
+        longitude
       }
     }
   }

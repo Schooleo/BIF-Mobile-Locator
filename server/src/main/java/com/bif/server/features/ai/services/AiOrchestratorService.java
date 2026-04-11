@@ -17,45 +17,72 @@ import com.bif.server.features.ai.exceptions.AiParseException;
 import com.bif.server.features.ai.exceptions.AiUpstreamException;
 import com.bif.server.features.ai.exceptions.AiValidationException;
 import com.bif.server.features.place.models.Place;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class AiOrchestratorService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(AiOrchestratorService.class);
+
     private final PlaceSuggestionAgent placeSuggestionAgent;
     private final TripDraftingAgent tripDraftingAgent;
-    private final AiPlaceGroundingService aiPlaceGroundingService;
+    private final AiSearchOrchestratorService aiSearchOrchestratorService;
     private final AiRequestGuardService aiRequestGuardService;
     private final OllamaProperties ollamaProperties;
+    private final TripScheduleHintExtractor tripScheduleHintExtractor;
+
+    private static final int TRAVEL_BUFFER_MINUTES = 30;
 
     public AiOrchestratorService(
             PlaceSuggestionAgent placeSuggestionAgent,
             TripDraftingAgent tripDraftingAgent,
-            AiPlaceGroundingService aiPlaceGroundingService,
+            AiSearchOrchestratorService aiSearchOrchestratorService,
             AiRequestGuardService aiRequestGuardService,
-            OllamaProperties ollamaProperties) {
+            OllamaProperties ollamaProperties,
+            TripScheduleHintExtractor tripScheduleHintExtractor) {
         this.placeSuggestionAgent = placeSuggestionAgent;
         this.tripDraftingAgent = tripDraftingAgent;
-        this.aiPlaceGroundingService = aiPlaceGroundingService;
+        this.aiSearchOrchestratorService = aiSearchOrchestratorService;
         this.aiRequestGuardService = aiRequestGuardService;
         this.ollamaProperties = ollamaProperties;
+        this.tripScheduleHintExtractor = tripScheduleHintExtractor;
     }
 
     public AiPlaceSuggestionResult suggestPlacesFromQuery(String query) {
+        return suggestPlacesFromQuery(query, null, null, null);
+    }
+
+    public AiPlaceSuggestionResult suggestPlacesFromQuery(
+            String query,
+            Double latitude,
+            Double longitude,
+            String cityBias) {
         AiRequestDecision decision = aiRequestGuardService.evaluateCurrentRequest();
         if (!decision.allowed()) {
+            logDeniedRequest("suggestPlacesFromQuery", decision, query);
             return deniedSuggestion(decision);
         }
         if (query == null || query.isBlank()) {
+            LOGGER.warn("AI suggest request rejected: invalid blank query");
             return new AiPlaceSuggestionResult(
                     List.of(),
                     List.of(),
                     null,
+                    null,
+                    List.of(),
                     null,
                     List.of("Query must not be blank."),
                     AiFailureCode.INVALID_QUERY);
@@ -68,37 +95,61 @@ public class AiOrchestratorService {
                     reason -> placeSuggestionAgent.retry(query, reason),
                     "place suggestion",
                     warnings);
-            List<Place> places = aiPlaceGroundingService.ground(extraction);
+            PlaceSearchExtraction enrichedExtraction = applySuggestionBias(
+                    extraction,
+                    cityBias,
+                    latitude,
+                    longitude);
+
+            List<Place> places = aiSearchOrchestratorService.resolveCandidates(
+                    enrichedExtraction,
+                    latitude,
+                    longitude);
             if (places.isEmpty()) {
                 warnings.add("No grounded places matched the extracted parameters.");
+                LOGGER.warn(
+                        "AI suggest returned no grounded results for query='{}' locationHint='{}' searchQueries={} cityBias='{}'",
+                        safeQuerySnippet(query),
+                        enrichedExtraction.locationHint(),
+                        enrichedExtraction.searchQueries(),
+                        cityBias);
             }
             return new AiPlaceSuggestionResult(
                     places,
-                    extraction.keywords(),
-                    extraction.category(),
-                    extraction.vibe(),
+                    enrichedExtraction.keywords(),
+                    enrichedExtraction.category(),
+                    enrichedExtraction.vibe(),
+                    enrichedExtraction.searchQueries(),
+                    enrichedExtraction.locationHint(),
                     warnings,
                     places.isEmpty() ? AiFailureCode.NO_RESULTS : null);
         } catch (AiIntegrationException e) {
             warnings.add(e.getMessage());
+            AiFailureCode failureCode = failureCodeFor(e);
+            logAiFailure("suggestPlacesFromQuery", failureCode, query, e);
             return new AiPlaceSuggestionResult(
                     List.of(),
                     List.of(),
                     null,
                     null,
+                    List.of(),
+                    null,
                     warnings,
-                    failureCodeFor(e));
+                    failureCode);
         }
     }
 
     public AiTripDraftResult draftTripFromQuery(String query) {
         AiRequestDecision decision = aiRequestGuardService.evaluateCurrentRequest();
         if (!decision.allowed()) {
+            logDeniedRequest("draftTripFromQuery", decision, query);
             return deniedDraft(decision);
         }
         if (query == null || query.isBlank()) {
+            LOGGER.warn("AI draft request rejected: invalid blank query");
             return new AiTripDraftResult(
                     null,
+                    List.of(),
                     List.of(),
                     List.of("Query must not be blank."),
                     AiFailureCode.INVALID_QUERY);
@@ -106,46 +157,158 @@ public class AiOrchestratorService {
 
         List<String> warnings = new ArrayList<>();
         List<Place> candidatePlaces = List.of();
+        List<String> searchQueries = List.of();
+        TripScheduleHintExtractor.TripScheduleHints scheduleHints
+                = tripScheduleHintExtractor.extract(query);
         try {
             PlaceSearchExtraction extraction = withRetry(
                     () -> placeSuggestionAgent.extract(query),
                     reason -> placeSuggestionAgent.retry(query, reason),
                     "place suggestion",
                     warnings);
-            candidatePlaces = aiPlaceGroundingService.ground(extraction);
+            searchQueries = extraction.searchQueries().isEmpty()
+                    ? extraction.keywords()
+                    : extraction.searchQueries();
+            candidatePlaces = aiSearchOrchestratorService.resolveCandidates(extraction);
             if (candidatePlaces.isEmpty()) {
                 warnings.add("No candidate places were available for drafting.");
+                LOGGER.warn(
+                        "AI draft failed with no candidate places for query='{}' locationHint='{}' searchQueries={}",
+                        safeQuerySnippet(query),
+                        extraction.locationHint(),
+                        searchQueries);
                 return new AiTripDraftResult(
                         null,
                         List.of(),
+                        searchQueries,
                         warnings,
                         AiFailureCode.NO_CANDIDATE_PLACES);
             }
-            List<Place> resolvedCandidatePlaces = candidatePlaces;
+            List<Place> resolvedCandidatePlaces = prioritizeDraftCandidates(
+                    extraction,
+                    candidatePlaces,
+                    warnings);
+            candidatePlaces = resolvedCandidatePlaces;
 
             GeneratedItinerary itinerary = withRetry(
                     () -> validateGeneratedItinerary(
-                            tripDraftingAgent.draft(query, resolvedCandidatePlaces),
-                            resolvedCandidatePlaces),
+                            enrichGeneratedItinerary(
+                                    tripDraftingAgent.draft(
+                                            query,
+                                            resolvedCandidatePlaces,
+                                            scheduleHints.promptDirective()),
+                                    resolvedCandidatePlaces,
+                                    extraction,
+                                    scheduleHints),
+                            resolvedCandidatePlaces,
+                            extraction,
+                            scheduleHints),
                     reason -> validateGeneratedItinerary(
-                            tripDraftingAgent.retry(query, resolvedCandidatePlaces, reason),
-                            resolvedCandidatePlaces),
+                            enrichGeneratedItinerary(
+                                    tripDraftingAgent.retry(
+                                            query,
+                                            resolvedCandidatePlaces,
+                                            reason,
+                                            scheduleHints.promptDirective()),
+                                    resolvedCandidatePlaces,
+                                    extraction,
+                                    scheduleHints),
+                            resolvedCandidatePlaces,
+                            extraction,
+                            scheduleHints),
                     "trip drafting",
                     warnings);
 
             return new AiTripDraftResult(
                     mapDraft(itinerary, resolvedCandidatePlaces),
                     resolvedCandidatePlaces,
+                    searchQueries,
                     warnings,
                     null);
         } catch (AiIntegrationException e) {
             warnings.add(e.getMessage());
+            AiFailureCode failureCode = failureCodeFor(e);
+            logAiFailure("draftTripFromQuery", failureCode, query, e);
             return new AiTripDraftResult(
                     null,
                     candidatePlaces,
+                    searchQueries,
                     warnings,
-                    failureCodeFor(e));
+                    failureCode);
         }
+    }
+
+    private void logDeniedRequest(String operation, AiRequestDecision decision, String query) {
+        LOGGER.warn(
+                "AI {} denied with code={} message='{}' query='{}'",
+                operation,
+                decision.failureCode(),
+                decision.message(),
+                safeQuerySnippet(query));
+    }
+
+    private void logAiFailure(
+            String operation,
+            AiFailureCode failureCode,
+            String query,
+            AiIntegrationException exception) {
+        String querySnippet = safeQuerySnippet(query);
+        String reason = exception.getMessage();
+
+        if (failureCode == AiFailureCode.AI_PARSE_FAILURE
+                || failureCode == AiFailureCode.AI_VALIDATION_FAILURE) {
+            LOGGER.warn(
+                    "AI {} failed with code={} query='{}' reason='{}'",
+                    operation,
+                    failureCode,
+                    querySnippet,
+                    reason,
+                    exception);
+            return;
+        }
+
+        LOGGER.error(
+                "AI {} failed with code={} query='{}' reason='{}'",
+                operation,
+                failureCode,
+                querySnippet,
+                reason,
+                exception);
+    }
+
+    private String safeQuerySnippet(String query) {
+        if (query == null) {
+            return "<null>";
+        }
+        String normalized = query.replaceAll("\\s+", " ").trim();
+        if (normalized.length() <= 120) {
+            return normalized;
+        }
+        return normalized.substring(0, 117) + "...";
+    }
+
+    private List<Place> prioritizeDraftCandidates(
+            PlaceSearchExtraction extraction,
+            List<Place> candidates,
+            List<String> warnings) {
+        if (candidates == null || candidates.isEmpty()) {
+            return List.of();
+        }
+        if (extraction == null || !aiSearchOrchestratorService.hasLocationFocus(extraction)) {
+            return candidates;
+        }
+
+        List<Place> focusedCandidates = candidates.stream()
+                .filter(place -> aiSearchOrchestratorService.matchesLocationFocus(extraction, place))
+                .toList();
+
+        if (focusedCandidates.isEmpty()) {
+            return candidates;
+        }
+        if (focusedCandidates.size() < candidates.size()) {
+            warnings.add("Prioritized candidates within the requested area for drafting.");
+        }
+        return focusedCandidates;
     }
 
     private AiPlaceSuggestionResult deniedSuggestion(AiRequestDecision decision) {
@@ -154,13 +317,69 @@ public class AiOrchestratorService {
                 List.of(),
                 null,
                 null,
+                List.of(),
+                null,
                 List.of(decision.message()),
                 decision.failureCode());
+    }
+
+    private PlaceSearchExtraction applySuggestionBias(
+            PlaceSearchExtraction extraction,
+            String cityBias,
+            Double latitude,
+            Double longitude) {
+        if (extraction == null) {
+            return new PlaceSearchExtraction(List.of(), List.of(), null, null, normalizeBias(cityBias));
+        }
+
+        String normalizedCityBias = normalizeBias(cityBias);
+        String locationHint = extraction.locationHint();
+        if (locationHint == null && normalizedCityBias != null) {
+            locationHint = normalizedCityBias;
+        }
+
+        List<String> searchQueries = new ArrayList<>(extraction.searchQueries());
+        if (searchQueries.isEmpty()) {
+            searchQueries.addAll(extraction.keywords());
+        }
+        if (normalizedCityBias != null && searchQueries.stream().noneMatch(normalizedCityBias::equalsIgnoreCase)) {
+            searchQueries.add(0, normalizedCityBias);
+        }
+        if (isValidCoordinates(latitude, longitude)) {
+            searchQueries.add(0, String.format("near %.6f, %.6f", latitude, longitude));
+        }
+
+        return new PlaceSearchExtraction(
+                searchQueries,
+                extraction.keywords(),
+                extraction.category(),
+                extraction.vibe(),
+                locationHint);
+    }
+
+    private String normalizeBias(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isBlank() ? null : trimmed;
+    }
+
+    private boolean isValidCoordinates(Double latitude, Double longitude) {
+        return latitude != null
+                && longitude != null
+                && Double.isFinite(latitude)
+                && Double.isFinite(longitude)
+                && latitude >= -90d
+                && latitude <= 90d
+                && longitude >= -180d
+                && longitude <= 180d;
     }
 
     private AiTripDraftResult deniedDraft(AiRequestDecision decision) {
         return new AiTripDraftResult(
                 null,
+                List.of(),
                 List.of(),
                 List.of(decision.message()),
                 decision.failureCode());
@@ -168,14 +387,16 @@ public class AiOrchestratorService {
 
     private GeneratedItinerary validateGeneratedItinerary(
             GeneratedItinerary itinerary,
-            List<Place> candidatePlaces) {
+            List<Place> candidatePlaces,
+            PlaceSearchExtraction extraction,
+            TripScheduleHintExtractor.TripScheduleHints scheduleHints) {
         if (itinerary == null || itinerary.stops().isEmpty()) {
             throw new AiValidationException("AI draft did not contain any stops.");
         }
         if (itinerary.stops().size() > AiGenerationConstraints.MAX_STOPS) {
             throw new AiValidationException(
                     "AI draft exceeded the maximum number of stops ("
-                            + AiGenerationConstraints.MAX_STOPS + ").");
+                    + AiGenerationConstraints.MAX_STOPS + ").");
         }
 
         Map<String, Place> placeById = indexPlaces(candidatePlaces);
@@ -187,7 +408,7 @@ public class AiOrchestratorService {
         if (!invalidPlaceIds.isEmpty()) {
             throw new AiValidationException(
                     "AI draft referenced unknown placeId values: "
-                            + String.join(", ", invalidPlaceIds));
+                    + String.join(", ", invalidPlaceIds));
         }
 
         long distinctPlaceCount = itinerary.stops().stream()
@@ -201,8 +422,8 @@ public class AiOrchestratorService {
 
         boolean hasInvalidDuration = itinerary.stops().stream()
                 .anyMatch(stop -> stop.durationMinutes() == null
-                        || stop.durationMinutes() < AiGenerationConstraints.MIN_STOP_DURATION_MINUTES
-                        || stop.durationMinutes() > AiGenerationConstraints.MAX_STOP_DURATION_MINUTES);
+                || stop.durationMinutes() < AiGenerationConstraints.MIN_STOP_DURATION_MINUTES
+                || stop.durationMinutes() > AiGenerationConstraints.MAX_STOP_DURATION_MINUTES);
         if (hasInvalidDuration) {
             throw new AiValidationException(
                     "AI draft included an out-of-range durationMinutes value.");
@@ -211,14 +432,348 @@ public class AiOrchestratorService {
         int totalDurationMinutes = itinerary.stops().stream()
                 .mapToInt(GeneratedStop::durationMinutes)
                 .sum();
-        if (totalDurationMinutes > AiGenerationConstraints.MAX_TOTAL_DURATION_MINUTES) {
+        int allowedTotalDurationMinutes = resolveAllowedTotalDurationMinutes(itinerary, scheduleHints);
+        if (totalDurationMinutes > allowedTotalDurationMinutes) {
             throw new AiValidationException(
                     "AI draft exceeded total duration limit of "
-                            + AiGenerationConstraints.MAX_TOTAL_DURATION_MINUTES
-                            + " minutes.");
+                    + allowedTotalDurationMinutes
+                    + " minutes (current="
+                    + totalDurationMinutes
+                    + ").");
         }
 
+        OffsetDateTime previous = null;
+        for (GeneratedStop stop : itinerary.stops()) {
+            if (stop.plannedDateTime() == null) {
+                continue;
+            }
+
+            OffsetDateTime current;
+            try {
+                current = OffsetDateTime.parse(stop.plannedDateTime());
+            } catch (DateTimeParseException e) {
+                throw new AiValidationException("AI draft included an invalid plannedDateTime value.");
+            }
+
+            if (previous != null && current.isBefore(previous)) {
+                throw new AiValidationException(
+                        "AI draft included non-monotonic plannedDateTime values.");
+            }
+            previous = current;
+        }
+
+        validateLocationFocus(itinerary, candidatePlaces, extraction, placeById);
+
         return itinerary;
+    }
+
+    private int resolveAllowedTotalDurationMinutes(
+            GeneratedItinerary itinerary,
+            TripScheduleHintExtractor.TripScheduleHints scheduleHints) {
+        int daySpanFromHints = scheduleHints == null ? 0 : scheduleHints.daySpan();
+        int daySpanFromDraftedDateTime = estimateDaySpanFromPlannedDateTimes(itinerary);
+        int inferredDaySpan = Math.max(1, Math.max(daySpanFromHints, daySpanFromDraftedDateTime));
+        return AiGenerationConstraints.MAX_TOTAL_DURATION_MINUTES * inferredDaySpan;
+    }
+
+    private int estimateDaySpanFromPlannedDateTimes(GeneratedItinerary itinerary) {
+        if (itinerary == null || itinerary.stops() == null || itinerary.stops().isEmpty()) {
+            return 0;
+        }
+
+        OffsetDateTime min = null;
+        OffsetDateTime max = null;
+        for (GeneratedStop stop : itinerary.stops()) {
+            OffsetDateTime parsed = parseDateTimeQuietly(stop.plannedDateTime());
+            if (parsed == null) {
+                continue;
+            }
+            if (min == null || parsed.isBefore(min)) {
+                min = parsed;
+            }
+            if (max == null || parsed.isAfter(max)) {
+                max = parsed;
+            }
+        }
+
+        if (min == null || max == null) {
+            return 0;
+        }
+
+        long daysBetween = ChronoUnit.DAYS.between(min.toLocalDate(), max.toLocalDate()) + 1;
+        return (int) Math.max(1, daysBetween);
+    }
+
+    private GeneratedItinerary enrichGeneratedItinerary(
+            GeneratedItinerary itinerary,
+            List<Place> candidatePlaces,
+            PlaceSearchExtraction extraction,
+            TripScheduleHintExtractor.TripScheduleHints scheduleHints) {
+        if (itinerary == null || itinerary.stops().isEmpty()) {
+            return itinerary;
+        }
+
+        Map<String, Place> placeById = indexPlaces(candidatePlaces);
+        boolean shouldArrangeDateTime = scheduleHints.shouldArrangeDateTime();
+        List<GeneratedStop> normalizedStops = normalizeDuplicatePlaceIds(
+                itinerary.stops(),
+                placeById);
+
+        List<GeneratedStop> stops = enrichStops(
+                normalizedStops,
+                placeById,
+                extraction,
+                scheduleHints,
+                shouldArrangeDateTime);
+        return new GeneratedItinerary(itinerary.title(), itinerary.summary(), stops);
+    }
+
+    private List<GeneratedStop> normalizeDuplicatePlaceIds(
+            List<GeneratedStop> stops,
+            Map<String, Place> placeById) {
+        if (stops == null || stops.isEmpty() || placeById.isEmpty()) {
+            return stops;
+        }
+
+        List<String> candidateIds = new ArrayList<>(placeById.keySet());
+        Set<String> usedPlaceIds = new HashSet<>();
+        List<GeneratedStop> normalizedStops = new ArrayList<>(stops.size());
+        boolean rewritten = false;
+
+        for (GeneratedStop stop : stops) {
+            String placeId = stop.placeId();
+            if (usedPlaceIds.add(placeId)) {
+                normalizedStops.add(stop);
+                continue;
+            }
+
+            String replacementPlaceId = firstUnusedCandidateId(candidateIds, usedPlaceIds);
+            if (replacementPlaceId == null) {
+                normalizedStops.add(stop);
+                continue;
+            }
+
+            usedPlaceIds.add(replacementPlaceId);
+            rewritten = true;
+            LOGGER.warn(
+                    "AI draft duplicate placeId '{}' rewritten to grounded candidate '{}'",
+                    placeId,
+                    replacementPlaceId);
+            normalizedStops.add(new GeneratedStop(
+                    replacementPlaceId,
+                    stop.durationMinutes(),
+                    stop.note(),
+                    stop.plannedDateTime()));
+        }
+
+        return rewritten ? normalizedStops : stops;
+    }
+
+    private String firstUnusedCandidateId(List<String> candidateIds, Set<String> usedPlaceIds) {
+        for (String candidateId : candidateIds) {
+            if (!usedPlaceIds.contains(candidateId)) {
+                return candidateId;
+            }
+        }
+        return null;
+    }
+
+    private List<GeneratedStop> enrichStops(
+            List<GeneratedStop> stops,
+            Map<String, Place> placeById,
+            PlaceSearchExtraction extraction,
+            TripScheduleHintExtractor.TripScheduleHints scheduleHints,
+            boolean shouldArrangeDateTime) {
+        if (stops == null || stops.isEmpty()) {
+            return List.of();
+        }
+
+        OffsetDateTime initialStart = resolveInitialStart(stops, scheduleHints, shouldArrangeDateTime);
+        int daySpan = Math.max(1, scheduleHints.daySpan());
+        int stopsPerDay = Math.max(1, (int) Math.ceil((double) stops.size() / daySpan));
+        OffsetDateTime[] dayCursor = initializeDayCursor(initialStart, daySpan);
+
+        List<GeneratedStop> enriched = new ArrayList<>(stops.size());
+        for (int i = 0; i < stops.size(); i++) {
+            GeneratedStop stop = stops.get(i);
+            Place place = placeById.get(stop.placeId());
+
+            OffsetDateTime plannedDateTime = null;
+            String outputPlannedDateTime = stop.plannedDateTime();
+            if (shouldArrangeDateTime && dayCursor.length > 0) {
+                int dayIndex = Math.min(dayCursor.length - 1, i / stopsPerDay);
+                plannedDateTime = dayCursor[dayIndex];
+                int durationMinutes = stop.durationMinutes() == null ? 60 : stop.durationMinutes();
+                dayCursor[dayIndex] = plannedDateTime.plusMinutes(durationMinutes + TRAVEL_BUFFER_MINUTES);
+                outputPlannedDateTime = plannedDateTime.toString();
+            } else if (stop.plannedDateTime() != null) {
+                plannedDateTime = parseDateTimeQuietly(stop.plannedDateTime());
+                if (plannedDateTime != null) {
+                    outputPlannedDateTime = plannedDateTime.toString();
+                }
+            }
+
+            String note = enrichStopNote(
+                    stop.note(),
+                    place,
+                    extraction,
+                    plannedDateTime);
+
+            enriched.add(new GeneratedStop(
+                    stop.placeId(),
+                    stop.durationMinutes(),
+                    note,
+                    outputPlannedDateTime));
+        }
+
+        return enriched;
+    }
+
+    private OffsetDateTime resolveInitialStart(
+            List<GeneratedStop> stops,
+            TripScheduleHintExtractor.TripScheduleHints scheduleHints,
+            boolean shouldArrangeDateTime) {
+        if (!shouldArrangeDateTime) {
+            return null;
+        }
+
+        for (GeneratedStop stop : stops) {
+            OffsetDateTime parsed = parseDateTimeQuietly(stop.plannedDateTime());
+            if (parsed != null) {
+                return parsed;
+            }
+        }
+
+        return scheduleHints.suggestedStartDateTime();
+    }
+
+    private OffsetDateTime[] initializeDayCursor(OffsetDateTime initialStart, int daySpan) {
+        if (initialStart == null) {
+            return new OffsetDateTime[0];
+        }
+
+        OffsetDateTime[] cursor = new OffsetDateTime[daySpan];
+        for (int i = 0; i < daySpan; i++) {
+            cursor[i] = initialStart.plusDays(i).withSecond(0).withNano(0);
+        }
+        return cursor;
+    }
+
+    private OffsetDateTime parseDateTimeQuietly(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return OffsetDateTime.parse(value);
+        } catch (DateTimeParseException ignored) {
+            return null;
+        }
+    }
+
+    private String enrichStopNote(
+            String currentNote,
+            Place place,
+            PlaceSearchExtraction extraction,
+            OffsetDateTime plannedDateTime) {
+        if (currentNote != null && !currentNote.isBlank() && currentNote.trim().length() >= 10) {
+            return currentNote;
+        }
+
+        String placeName = place != null && place.getName() != null && !place.getName().isBlank()
+                ? place.getName().trim()
+                : "\u0111i\u1ec3m d\u1eebng";
+
+        String prefix = timeWindowPrefix(plannedDateTime);
+        String activity = suggestActivity(place, extraction);
+        String note = (prefix + " gh\u00e9 " + placeName + " \u0111\u1ec3 " + activity + ".").trim();
+
+        if (note.length() > 140) {
+            note = note.substring(0, 139).trim() + "\u2026";
+        }
+        return note;
+    }
+
+    private String timeWindowPrefix(OffsetDateTime plannedDateTime) {
+        if (plannedDateTime == null) {
+            return "";
+        }
+        int hour = plannedDateTime.getHour();
+        if (hour < 11) {
+            return "Bu\u1ed5i s\u00e1ng,";
+        }
+        if (hour < 14) {
+            return "Bu\u1ed5i tr\u01b0a,";
+        }
+        if (hour < 18) {
+            return "Bu\u1ed5i chi\u1ec1u,";
+        }
+        return "Bu\u1ed5i t\u1ed1i,";
+    }
+
+    private String suggestActivity(Place place, PlaceSearchExtraction extraction) {
+        List<String> tags = place == null || place.getTags() == null
+                ? List.of()
+                : place.getTags();
+
+        String loweredTags = String.join(" ", tags).toLowerCase(Locale.ROOT);
+        if (loweredTags.contains("cafe") || loweredTags.contains("coffee")) {
+            return "th\u01b0 gi\u00e3n v\u00e0 th\u01b0\u1edfng th\u1ee9c c\u00e0 ph\u00ea";
+        }
+        if (loweredTags.contains("restaurant") || loweredTags.contains("food") || loweredTags.contains("eat")) {
+            return "th\u01b0\u1edfng th\u1ee9c \u1ea9m th\u1ef1c \u0111\u1ecba ph\u01b0\u01a1ng";
+        }
+        if (loweredTags.contains("museum") || loweredTags.contains("history") || loweredTags.contains("historic")) {
+            return "tham quan v\u00e0 t\u00ecm hi\u1ec3u v\u0103n h\u00f3a";
+        }
+        if (loweredTags.contains("park") || loweredTags.contains("beach") || loweredTags.contains("nature")) {
+            return "th\u01b0 gi\u00e3n v\u00e0 ng\u1eafm c\u1ea3nh";
+        }
+
+        String vibe = extraction == null || extraction.vibe() == null
+                ? ""
+                : extraction.vibe().toLowerCase(Locale.ROOT);
+        if (vibe.contains("romantic") || vibe.contains("l\u00e3ng m\u1ea1n")) {
+            return "t\u1eadn h\u01b0\u1edfng kh\u00f4ng gian l\u00e3ng m\u1ea1n";
+        }
+        if (vibe.contains("quiet") || vibe.contains("y\u00ean t\u0129nh") || vibe.contains("relax")) {
+            return "th\u01b0 gi\u00e3n v\u00e0 n\u1ea1p l\u1ea1i n\u0103ng l\u01b0\u1ee3ng";
+        }
+        return "kh\u00e1m ph\u00e1 \u0111i\u1ec3m \u0111\u1ebfn n\u1ed5i b\u1eadt";
+    }
+
+    private void validateLocationFocus(
+            GeneratedItinerary itinerary,
+            List<Place> candidatePlaces,
+            PlaceSearchExtraction extraction,
+            Map<String, Place> placeById) {
+        if (extraction == null || !aiSearchOrchestratorService.hasLocationFocus(extraction)) {
+            return;
+        }
+
+        int availableFocusedCandidates = (int) candidatePlaces.stream()
+                .filter(place -> aiSearchOrchestratorService.matchesLocationFocus(extraction, place))
+                .count();
+        if (availableFocusedCandidates == 0) {
+            return;
+        }
+
+        int focusedStops = (int) itinerary.stops().stream()
+                .map(GeneratedStop::placeId)
+                .map(placeById::get)
+                .filter(place -> aiSearchOrchestratorService.matchesLocationFocus(extraction, place))
+                .count();
+
+        int requiredFocusedStops = Math.min(
+                availableFocusedCandidates,
+                itinerary.stops().size() / 2 + 1);
+        if (focusedStops >= requiredFocusedStops) {
+            return;
+        }
+
+        throw new AiValidationException(
+                "AI draft drifted away from the requested location focus ("
+                + aiSearchOrchestratorService.describeLocationFocus(extraction)
+                + "). Keep most stops in that area when grounded options are available.");
     }
 
     private AiTripDraft mapDraft(
@@ -227,10 +782,11 @@ public class AiOrchestratorService {
         Map<String, Place> placeById = indexPlaces(candidatePlaces);
         List<AiTripDraftStop> stops = itinerary.stops().stream()
                 .map(stop -> new AiTripDraftStop(
-                        stop.placeId(),
-                        placeById.get(stop.placeId()),
-                        stop.durationMinutes(),
-                        stop.note()))
+                stop.placeId(),
+                placeById.get(stop.placeId()),
+                stop.durationMinutes(),
+                stop.note(),
+                stop.plannedDateTime()))
                 .toList();
 
         return new AiTripDraft(
@@ -280,6 +836,13 @@ public class AiOrchestratorService {
             AiIntegrationException lastFailure = firstFailure;
             for (int attempt = 0; attempt < ollamaProperties.getRetryCount(); attempt++) {
                 warnings.add("Retried " + context + " after invalid model output.");
+                LOGGER.warn(
+                        "AI {} retry {}/{} after {} failure: {}",
+                        context,
+                        attempt + 1,
+                        ollamaProperties.getRetryCount(),
+                        lastFailure.getClass().getSimpleName(),
+                        lastFailure.getMessage());
                 try {
                     return retryHandler.retry(lastFailure.getMessage());
                 } catch (AiParseException | AiValidationException retryFailure) {
@@ -292,11 +855,13 @@ public class AiOrchestratorService {
 
     @FunctionalInterface
     private interface ThrowingSupplier<T> {
+
         T get();
     }
 
     @FunctionalInterface
     private interface RetryHandler<T> {
+
         T retry(String failureReason);
     }
 }

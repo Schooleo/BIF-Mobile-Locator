@@ -5,6 +5,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
@@ -85,6 +86,12 @@ public class OllamaJsonClient {
                     "Failed to decode Ollama transport payload: " + snippet(rawBody),
                     e
             );
+        } catch (HttpTimeoutException e) {
+            throw new AiUpstreamException(
+                "Ollama request timed out after "
+                    + ollamaProperties.getTimeoutMs()
+                    + " ms",
+                e);
         } catch (IOException e) {
             throw new AiUpstreamException("Failed to call Ollama", e);
         } catch (InterruptedException e) {

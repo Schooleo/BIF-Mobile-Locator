@@ -36,8 +36,8 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class ChatViewModelTest {
 
@@ -149,7 +149,7 @@ public class ChatViewModelTest {
     }
 
     @Test
-    public void sendMessage_AiModeFailureCode_ShowsSnackbarAndDoesNotInsertCard() {
+    public void sendMessage_AiModeFailureCode_InsertsAiErrorMessageAndDoesNotInsertCard() {
         viewModel.init("group1", "Group 1", "u1");
         AiTripDraft placeholderDraft = new AiTripDraft("", "", Collections.emptyList());
         MutableLiveData<AiTripDraftResult> aiResult = new MutableLiveData<>(
@@ -157,16 +157,17 @@ public class ChatViewModelTest {
         );
         when(mockChatRepository.draftTripFromQuery("draft me a weekend trip")).thenReturn(aiResult);
 
-        AtomicReference<String> snackbar = new AtomicReference<>();
-        viewModel.getSnackbarMessage().observeForever(snackbar::set);
-
         viewModel.enterAiDraftMode();
         viewModel.sendMessage("draft me a weekend trip");
 
         verify(mockChatRepository).draftTripFromQuery("draft me a weekend trip");
-        verify(mockChatRepository, org.mockito.Mockito.never()).insertLocalMessage(any());
-        String snackbarMessage = snackbar.get();
-        assertTrue(snackbarMessage != null && snackbarMessage.contains("AI_FAILURE"));
+
+        ArgumentCaptor<ChatMessage> captor = ArgumentCaptor.forClass(ChatMessage.class);
+        verify(mockChatRepository, org.mockito.Mockito.times(2)).insertLocalMessage(captor.capture());
+        List<ChatMessage> inserted = captor.getAllValues();
+
+        assertEquals("Drafting a trip...", inserted.get(0).getContent());
+        assertTrue(inserted.get(1).getContent().contains("Errors drafting trip: AI AI_FAILURE"));
     }
 
     @Test
@@ -174,7 +175,12 @@ public class ChatViewModelTest {
         viewModel.init("group1", "Group 1", "u1");
 
         Place place = new Place("place1", "Cafe", "Addr", 4.5, new Location(10.0, 20.0));
-        AiTripDraftStop stop = new AiTripDraftStop("place1", place, 90, "Morning coffee");
+        AiTripDraftStop stop = new AiTripDraftStop(
+            "place1",
+            place,
+            90,
+            "Morning coffee",
+            "2026-01-01T09:00:00Z");
         AiTripDraft draft = new AiTripDraft("Weekend plan", "Relaxed trip", Collections.singletonList(stop));
         MutableLiveData<AiTripDraftResult> aiResult = new MutableLiveData<>(
                 new AiTripDraftResult(draft, Collections.singletonList(place), Collections.emptyList(), null)
@@ -185,14 +191,19 @@ public class ChatViewModelTest {
         viewModel.sendMessage("draft me a weekend trip");
 
         ArgumentCaptor<ChatMessage> captor = ArgumentCaptor.forClass(ChatMessage.class);
-        verify(mockChatRepository).insertLocalMessage(captor.capture());
+        verify(mockChatRepository, org.mockito.Mockito.times(3)).insertLocalMessage(captor.capture());
+        List<ChatMessage> inserted = captor.getAllValues();
 
-        ChatMessage message = captor.getValue();
+        assertEquals("Drafting a trip...", inserted.get(0).getContent());
+        assertEquals("Drafted trip", inserted.get(1).getContent());
+
+        ChatMessage message = inserted.get(2);
         assertEquals("TRIP_CREATED_CARD", message.getType());
         assertTrue(message.getContent().contains("\"isSaved\":false"));
         assertTrue(message.getContent().contains("candidatePlaces"));
         assertTrue(message.getContent().contains("\"latitude\":10.0"));
         assertTrue(message.getContent().contains("\"longitude\":20.0"));
+        assertTrue(message.getContent().contains("\"plannedDateTime\":\"2026-01-01T09:00:00Z\""));
     }
 
     @Test
@@ -212,9 +223,13 @@ public class ChatViewModelTest {
         viewModel.sendMessage("best cafes");
 
         ArgumentCaptor<ChatMessage> captor = ArgumentCaptor.forClass(ChatMessage.class);
-        verify(mockChatRepository).insertLocalMessage(captor.capture());
+        verify(mockChatRepository, org.mockito.Mockito.times(3)).insertLocalMessage(captor.capture());
+        List<ChatMessage> inserted = captor.getAllValues();
 
-        ChatMessage message = captor.getValue();
+        assertEquals("Suggesting places...", inserted.get(0).getContent());
+        assertEquals("Suggested places", inserted.get(1).getContent());
+
+        ChatMessage message = inserted.get(2);
         assertEquals("AI_SUGGESTED_PLACES_CARD", message.getType());
         assertTrue(message.getContent().contains("\"places\""));
         assertTrue(message.getContent().contains("\"name\":\"Cafe\""));
@@ -222,7 +237,7 @@ public class ChatViewModelTest {
     }
 
     @Test
-    public void sendMessage_AiSuggestModeFailure_ShowsSnackbarAndDoesNotInsertCard() {
+    public void sendMessage_AiSuggestModeFailure_InsertsAiErrorMessageAndDoesNotInsertCard() {
         viewModel.init("group1", "Group 1", "u1");
 
         MutableLiveData<AiPlaceSuggestionResult> aiResult = new MutableLiveData<>(
@@ -232,15 +247,17 @@ public class ChatViewModelTest {
         when(mockPlaceRepository.suggestPlacesFromQuery("hidden gems"))
                 .thenReturn(aiResult);
 
-        AtomicReference<String> snackbar = new AtomicReference<>();
-        viewModel.getSnackbarMessage().observeForever(snackbar::set);
-
         viewModel.enterAiSuggestPlacesMode();
         viewModel.sendMessage("hidden gems");
 
         verify(mockPlaceRepository).suggestPlacesFromQuery("hidden gems");
-        String snackbarMessage = snackbar.get();
-        assertTrue(snackbarMessage != null && snackbarMessage.contains("OFFLINE"));
+
+        ArgumentCaptor<ChatMessage> captor = ArgumentCaptor.forClass(ChatMessage.class);
+        verify(mockChatRepository, org.mockito.Mockito.times(2)).insertLocalMessage(captor.capture());
+        List<ChatMessage> inserted = captor.getAllValues();
+
+        assertEquals("Suggesting places...", inserted.get(0).getContent());
+        assertTrue(inserted.get(1).getContent().contains("Errors suggesting places: AI OFFLINE"));
     }
 
         @Test
@@ -248,7 +265,12 @@ public class ChatViewModelTest {
         viewModel.init("group1", "Group 1", "u1");
 
         Place placeWithoutLocation = new Place("place1", "Cafe", "Addr", 4.5, null);
-        AiTripDraftStop stop = new AiTripDraftStop("place1", placeWithoutLocation, 90, "Morning coffee");
+        AiTripDraftStop stop = new AiTripDraftStop(
+            "place1",
+            placeWithoutLocation,
+            90,
+            "Morning coffee",
+            null);
         AiTripDraft draft = new AiTripDraft("Weekend plan", "Relaxed trip", Collections.singletonList(stop));
         MutableLiveData<AiTripDraftResult> aiResult = new MutableLiveData<>(
             new AiTripDraftResult(draft, Collections.singletonList(placeWithoutLocation), Collections.emptyList(), null)
@@ -266,9 +288,10 @@ public class ChatViewModelTest {
         viewModel.sendMessage("draft me a weekend trip");
 
         ArgumentCaptor<ChatMessage> messageCaptor = ArgumentCaptor.forClass(ChatMessage.class);
-        verify(mockChatRepository).insertLocalMessage(messageCaptor.capture());
+        verify(mockChatRepository, org.mockito.Mockito.times(3)).insertLocalMessage(messageCaptor.capture());
+        List<ChatMessage> inserted = messageCaptor.getAllValues();
 
-        String payload = messageCaptor.getValue().getContent();
+        String payload = inserted.get(2).getContent();
         String marker = "\"tripId\":\"";
         int start = payload.indexOf(marker);
         assertTrue(start >= 0);

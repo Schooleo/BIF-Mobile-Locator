@@ -144,8 +144,10 @@ public class PlaceRepository implements IPlaceRepository {
         }
 
         if (aiGraphQlClient == null) {
+            ArrayList<String> warnings = new ArrayList<>();
+            warnings.add("AI client is unavailable.");
             result.postValue(new AiPlaceSuggestionResult(new ArrayList<>(),
-                    new ArrayList<>(), "AI_FAILURE"));
+                warnings, "AI_FAILURE"));
             return result;
         }
 
@@ -153,8 +155,12 @@ public class PlaceRepository implements IPlaceRepository {
                 .whenComplete((payload, throwable) -> {
             if (throwable != null || payload == null) {
                 Log.e(TAG, "AI suggest query failed", throwable);
+                ArrayList<String> warnings = new ArrayList<>();
+                if (throwable != null && throwable.getMessage() != null) {
+                    warnings.add("Transport error: " + throwable.getMessage());
+                }
                 result.postValue(new AiPlaceSuggestionResult(new ArrayList<>(),
-                        new ArrayList<>(), "AI_FAILURE"));
+                        warnings, "AI_FAILURE"));
                 return;
             }
 
@@ -165,8 +171,15 @@ public class PlaceRepository implements IPlaceRepository {
                 String failureCode = payload.failureCode;
 
                 if (failureCode != null) {
-                    result.postValue(new AiPlaceSuggestionResult(new ArrayList<>(),
-                            warnings, failureCode));
+                        result.postValue(new AiPlaceSuggestionResult(
+                            new ArrayList<>(),
+                            payload.extractedKeywords,
+                            payload.category,
+                            payload.vibe,
+                            payload.searchQueries,
+                            payload.locationHint,
+                            warnings,
+                            failureCode));
                     return;
                 }
 
@@ -200,8 +213,19 @@ public class PlaceRepository implements IPlaceRepository {
                     }
                 }
 
-                result.postValue(new AiPlaceSuggestionResult(mappedPlaces,
-                        warnings, null));
+                if (mappedPlaces.isEmpty() && payload.places != null && !payload.places.isEmpty()) {
+                    warnings.add("All suggested places were filtered out due to missing required fields.");
+                }
+
+                result.postValue(new AiPlaceSuggestionResult(
+                    mappedPlaces,
+                    payload.extractedKeywords,
+                    payload.category,
+                    payload.vibe,
+                    payload.searchQueries,
+                    payload.locationHint,
+                    warnings,
+                    null));
         });
 
         return result;

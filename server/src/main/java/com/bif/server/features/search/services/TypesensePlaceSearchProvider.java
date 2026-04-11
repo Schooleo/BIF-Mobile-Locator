@@ -62,6 +62,10 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
         return search(request, "name,address");
     }
 
+    public List<Place> search(PlaceSearchRequestDTO request, String queryBy) {
+        return searchInternal(request, queryBy);
+    }
+
     public List<Place> search(String query) {
         PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
         request.setQuery(query);
@@ -72,10 +76,10 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
         PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
         request.setQuery(query);
         request.setPerPage(perPage);
-        return search(request, queryBy);
+        return searchInternal(request, queryBy);
     }
 
-    private List<Place> search(PlaceSearchRequestDTO request, String queryBy) {
+    private List<Place> searchInternal(PlaceSearchRequestDTO request, String queryBy) {
         if (request == null || request.getQuery() == null || request.getQuery().isBlank()) {
             return Collections.emptyList();
         }
@@ -188,6 +192,7 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
             place.setName(textOrDefault(doc, "name", "Unknown Place"));
             place.setAddress(textOrDefault(doc, "address", ""));
             place.setRating(doubleOrDefault(doc, "rating", 0.0));
+            place.setReviewCount(intOrDefault(doc, "reviewCount", 0));
             place.setPlaceSource(textOrDefault(doc, "placeSource", "typesense"));
             place.setPersistedByAction(textOrNull(doc, "persistedByAction"));
             place.setPersistedByUserId(textOrNull(doc, "persistedByUserId"));
@@ -267,6 +272,11 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
     private double doubleOrDefault(JsonNode node, String key, double fallback) {
         JsonNode value = node.path(key);
         return value.isNumber() ? value.asDouble() : fallback;
+    }
+
+    private int intOrDefault(JsonNode node, String key, int fallback) {
+        JsonNode value = node.path(key);
+        return value.isInt() || value.isLong() ? value.asInt() : fallback;
     }
 
     private String safe(String value, String fallback) {

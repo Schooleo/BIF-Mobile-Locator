@@ -17,6 +17,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
 import java.util.StringJoiner;
 
 @Component
@@ -27,6 +28,8 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
 
     private static final int MAX_RETRIES = 3;
     private static final long INITIAL_BACKOFF_MS = 500;
+    private static final String DEFAULT_PROTOCOL = "http";
+    private static final String DEFAULT_HOST = "localhost";
 
     private final TypesenseProperties typesenseProperties;
     private final ObjectMapper objectMapper;
@@ -76,6 +79,8 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
             sendWithRetry(request, "upsert place " + place.getId());
         } catch (IOException e) {
             LOGGER.error("Typesense upsert I/O failure for place {}", place.getId(), e);
+        } catch (IllegalArgumentException e) {
+            LOGGER.error("Typesense upsert URI configuration error for place {}", place.getId(), e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             LOGGER.error("Typesense upsert interrupted for place {}", place.getId(), e);
@@ -128,6 +133,8 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
             }
         } catch (IOException e) {
             LOGGER.error("Typesense batch import I/O failure", e);
+        } catch (IllegalArgumentException e) {
+            LOGGER.error("Typesense batch import URI configuration error", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             LOGGER.error("Typesense batch import interrupted", e);
@@ -181,6 +188,8 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
             }
         } catch (IOException e) {
             LOGGER.error("Typesense delete I/O failure for place {}", placeId, e);
+        } catch (IllegalArgumentException e) {
+            LOGGER.error("Typesense delete URI configuration error for place {}", placeId, e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             LOGGER.error("Typesense delete interrupted for place {}", placeId, e);
@@ -210,10 +219,7 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
         }
 
         String collection = safe(typesenseProperties.getPlacesCollection(), "places");
-        String baseUrl = String.format("%s://%s:%d",
-                safe(typesenseProperties.getProtocol(), "http"),
-                safe(typesenseProperties.getHost(), "localhost"),
-                typesenseProperties.getPort());
+        String baseUrl = buildBaseUrl();
 
         try {
             // 1. Wait for Typesense to be healthy
@@ -269,6 +275,8 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
             }
         } catch (IOException e) {
             LOGGER.error("I/O error ensuring Typesense collection exists", e);
+        } catch (IllegalArgumentException e) {
+            LOGGER.error("Invalid Typesense URI configuration. Skipping collection setup.", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             LOGGER.error("Interrupted while ensuring Typesense collection exists", e);
@@ -300,6 +308,9 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
             } catch (IOException e) {
                 LOGGER.warn("Typesense not reachable yet: {}. Waiting {}ms (attempt {}/{})...",
                         e.getMessage(), waitMs, attempt, maxAttempts);
+            } catch (IllegalArgumentException e) {
+                LOGGER.error("Invalid Typesense health URI '{}': {}", baseUrl + "/health", e.getMessage());
+                return false;
             }
             Thread.sleep(waitMs);
         }
@@ -308,20 +319,16 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
 
     private URI buildUpsertUri() {
         String collection = encode(safe(typesenseProperties.getPlacesCollection(), "places"));
-        String uri = String.format("%s://%s:%d/collections/%s/documents?action=upsert",
-                safe(typesenseProperties.getProtocol(), "http"),
-                safe(typesenseProperties.getHost(), "localhost"),
-                typesenseProperties.getPort(),
+        String uri = String.format("%s/collections/%s/documents?action=upsert",
+            buildBaseUrl(),
                 collection);
         return URI.create(uri);
     }
 
     private URI buildImportUri() {
         String collection = encode(safe(typesenseProperties.getPlacesCollection(), "places"));
-        String uri = String.format("%s://%s:%d/collections/%s/documents/import?action=upsert",
-                safe(typesenseProperties.getProtocol(), "http"),
-                safe(typesenseProperties.getHost(), "localhost"),
-                typesenseProperties.getPort(),
+        String uri = String.format("%s/collections/%s/documents/import?action=upsert",
+            buildBaseUrl(),
                 collection);
         return URI.create(uri);
     }
@@ -329,13 +336,28 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
     private URI buildDeleteUri(String placeId) {
         String collection = encode(safe(typesenseProperties.getPlacesCollection(), "places"));
         String encodedPlaceId = encode(placeId);
-        String uri = String.format("%s://%s:%d/collections/%s/documents/%s",
-                safe(typesenseProperties.getProtocol(), "http"),
-                safe(typesenseProperties.getHost(), "localhost"),
-                typesenseProperties.getPort(),
+        String uri = String.format("%s/collections/%s/documents/%s",
+                buildBaseUrl(),
                 collection,
                 encodedPlaceId);
         return URI.create(uri);
+    }
+
+    private String buildBaseUrl() {
+        return String.format("%s://%s:%d",
+                normalizedProtocol(),
+                safe(typesenseProperties.getHost(), DEFAULT_HOST).trim(),
+                typesenseProperties.getPort());
+    }
+
+    private String normalizedProtocol() {
+        String raw = safe(typesenseProperties.getProtocol(), DEFAULT_PROTOCOL);
+        String protocol = raw.trim().toLowerCase(Locale.ROOT);
+        if (!"http".equals(protocol) && !"https".equals(protocol)) {
+            LOGGER.warn("Invalid typesense.protocol '{}' configured. Falling back to '{}'.", raw, DEFAULT_PROTOCOL);
+            return DEFAULT_PROTOCOL;
+        }
+        return protocol;
     }
 
     private String safe(String value, String fallback) {
