@@ -124,23 +124,23 @@ public class RegisterFragment extends Fragment {
                                 AuthResponse auth = response.body();
                                 authSessionManager.saveSessionFromAuth(auth, username, email);
 
-                                AppSnackbar.show(requireContext(), "Registration successful");
+                                AppSnackbar.show(requireContext(), getString(R.string.registration_successful));
                                 navController.navigate(UriUtils.buildUri(UriUtils.PathTo.MAP));
                                 return;
                             }
 
                             if (response.code() == 409) {
-                                etEmail.setError("Email already used");
+                                etEmail.setError(getString(R.string.email_already_used));
                                 etEmail.requestFocus();
                                 return;
                             }
 
                             if (response.code() == 400) {
-                                AppSnackbar.show(requireContext(), "Invalid registration data");
+                                AppSnackbar.show(requireContext(), getString(R.string.invalid_registration_data));
                                 return;
                             }
 
-                            AppSnackbar.show(requireContext(), "Registration failed");
+                            AppSnackbar.show(requireContext(), getString(R.string.registration_failed));
                         }
 
                         @Override
@@ -150,7 +150,7 @@ public class RegisterFragment extends Fragment {
                                 return;
                             }
                             Log.e(TAG, "Register request failed", t);
-                            AppSnackbar.show(requireContext(), "Network error. Please try again.");
+                            AppSnackbar.show(requireContext(), getString(R.string.network_error_try_again));
                         }
                     });
         });

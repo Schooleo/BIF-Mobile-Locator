@@ -91,7 +91,7 @@ public class LoginFragment extends Fragment {
                         AuthResponse auth = response.body();
                         authSessionManager.saveSessionFromAuth(auth);
 
-                        AppSnackbar.show(requireContext(), "Login successful!");
+                        AppSnackbar.show(requireContext(), getString(R.string.login_successful));
                         navController.navigate(UriUtils.buildUri(UriUtils.PathTo.MAP));
                         return;
                     }
@@ -103,11 +103,11 @@ public class LoginFragment extends Fragment {
                     }
 
                     if (response.code() == 400) {
-                        AppSnackbar.show(requireContext(), "Invalid login data");
+                        AppSnackbar.show(requireContext(), getString(R.string.invalid_login_data));
                         return;
                     }
 
-                    AppSnackbar.show(requireContext(), "Login failed");
+                    AppSnackbar.show(requireContext(), getString(R.string.login_failed));
                 }
 
                 @Override
@@ -117,7 +117,7 @@ public class LoginFragment extends Fragment {
                         return;
                     }
                     Log.e(TAG, "Login request failed", t);
-                    AppSnackbar.show(requireContext(), "Network error. Please try again.");
+                    AppSnackbar.show(requireContext(), getString(R.string.network_error_try_again));
                 }
             });
         });

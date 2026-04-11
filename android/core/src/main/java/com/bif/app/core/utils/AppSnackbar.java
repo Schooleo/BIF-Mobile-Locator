@@ -41,7 +41,12 @@ public final class AppSnackbar {
     private static void showInternal(@Nullable Context context,
             @Nullable CharSequence message,
             int duration) {
-        if (context == null || message == null || message.length() == 0) {
+        if (context == null || message == null) {
+            return;
+        }
+
+        String displayMessage = message.toString().trim();
+        if (displayMessage.isEmpty()) {
             return;
         }
 
@@ -55,7 +60,7 @@ public final class AppSnackbar {
             return;
         }
 
-        Snackbar snackbar = Snackbar.make(anchor, message, duration);
+        Snackbar snackbar = Snackbar.make(anchor, displayMessage, duration);
         int backgroundColor = MaterialColors.getColor(anchor,
                 com.google.android.material.R.attr.colorSurface);
         int textColor = MaterialColors.getColor(anchor,

@@ -1037,7 +1037,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
         lastRemoteToastArea = area;
         lastRemoteToastAtMs = now;
-        AppSnackbar.show(requireContext(), "Showing results in " + area);
+        AppSnackbar.show(requireContext(), getString(R.string.search_results_in_area, area));
     }
 
     @NonNull

@@ -176,8 +176,8 @@ public class CommonChatFragment extends Fragment {
         viewModel.getAiBadgesEnabled().observe(getViewLifecycleOwner(), enabled -> {
             boolean isEnabled = supportsAiModes && Boolean.TRUE.equals(enabled);
             aiBadgesRow.setVisibility(isEnabled ? View.VISIBLE : View.GONE);
-            btnAiDraftTrip.setEnabled(isEnabled);
-            btnAiSuggestPlaces.setEnabled(isEnabled);
+            btnAiDraftTrip.setClickable(true);
+            btnAiSuggestPlaces.setClickable(true);
             float alpha = isEnabled ? 1f : 0.45f;
             btnAiDraftTrip.setAlpha(alpha);
             btnAiSuggestPlaces.setAlpha(alpha);
@@ -237,7 +237,7 @@ public class CommonChatFragment extends Fragment {
         });
 
         btnAiDraftTrip.setOnClickListener(v -> {
-            if (!btnAiDraftTrip.isEnabled()) {
+            if (!viewModel.isAiAvailable()) {
                 AppSnackbar.show(requireContext(), R.string.chat_ai_offline);
                 return;
             }
@@ -245,7 +245,7 @@ public class CommonChatFragment extends Fragment {
             focusInputAndShowKeyboard(etMessage);
         });
         btnAiSuggestPlaces.setOnClickListener(v -> {
-            if (!btnAiSuggestPlaces.isEnabled()) {
+            if (!viewModel.isAiAvailable()) {
                 AppSnackbar.show(requireContext(), R.string.chat_ai_offline);
                 return;
             }
