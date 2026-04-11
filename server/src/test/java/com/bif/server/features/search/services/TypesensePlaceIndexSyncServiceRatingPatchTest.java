@@ -18,6 +18,7 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.io.ByteArrayOutputStream;
 
 import org.junit.jupiter.api.Test;
@@ -128,7 +129,7 @@ class TypesensePlaceIndexSyncServiceRatingPatchTest {
         HttpRequest sentRequest = requestCaptor.getValue();
         assertEquals("PATCH", sentRequest.method());
         String uri = sentRequest.uri().toString();
-        assertTrue(uri.contains("/collections/places/documents/place+id%2F1"));
+        assertTrue(uri.contains("/collections/places/documents/place%20id%2F1"));
     }
 
     @Test
@@ -141,12 +142,16 @@ class TypesensePlaceIndexSyncServiceRatingPatchTest {
         @SuppressWarnings("unchecked")
         HttpResponse<String> patchResponse = Mockito.mock(HttpResponse.class);
         @SuppressWarnings("unchecked")
+        HttpResponse<String> fetchResponse = Mockito.mock(HttpResponse.class);
+        @SuppressWarnings("unchecked")
         HttpResponse<String> upsertResponse = Mockito.mock(HttpResponse.class);
         when(patchResponse.statusCode()).thenReturn(404);
+        when(fetchResponse.statusCode()).thenReturn(404);
         when(upsertResponse.statusCode()).thenReturn(201);
 
         when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
                 .thenReturn(patchResponse)
+                .thenReturn(fetchResponse)
                 .thenReturn(upsertResponse);
 
         PlaceRepository placeRepository = Mockito.mock(PlaceRepository.class);
@@ -165,72 +170,88 @@ class TypesensePlaceIndexSyncServiceRatingPatchTest {
         service.updateRatingOnly("p1", 4.8, 10);
 
         verify(placeRepository).findById("p1");
-        verify(httpClient, times(2)).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+        
+        // Verify that the third call (fallback upsert) contains correct rating and reviewCount
+        ArgumentCaptor<HttpRequest> upsertRequestCaptor = ArgumentCaptor.forClass(HttpRequest.class);
+        verify(httpClient, times(3)).send(upsertRequestCaptor.capture(), any(HttpResponse.BodyHandler.class));
+        
+        HttpRequest upsertRequest = upsertRequestCaptor.getAllValues().get(2);
+        String upsertBody = readBody(upsertRequest);
+        assertTrue(upsertBody.contains("\"rating\":4.8"), 
+            "Fallback upsert request body should contain rating 4.8, got: " + upsertBody);
+        assertTrue(upsertBody.contains("\"reviewCount\":10"),
+            "Fallback upsert request body should contain reviewCount 10, got: " + upsertBody);
     }
 
-        @Test
-        void updateRatingOnly_whenPatchReturnsNon404_doesNotFallbackOrThrows() throws Exception {
-                TypesenseProperties props = new TypesenseProperties();
-                props.setEnabled(true);
-                props.setApiKey("key");
+    @Test
+    void updateRatingOnly_whenPatchReturnsNon404_doesNotFallbackOrThrows() throws Exception {
+        TypesenseProperties props = new TypesenseProperties();
+        props.setEnabled(true);
+        props.setApiKey("key");
 
-                HttpClient httpClient = Mockito.mock(HttpClient.class);
-                @SuppressWarnings("unchecked")
-                HttpResponse<String> patchResponse = Mockito.mock(HttpResponse.class);
-                when(patchResponse.statusCode()).thenReturn(500);
+        HttpClient httpClient = Mockito.mock(HttpClient.class);
+        @SuppressWarnings("unchecked")
+        HttpResponse<String> patchResponse = Mockito.mock(HttpResponse.class);
+        when(patchResponse.statusCode()).thenReturn(500);
 
-                when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
-                                .thenReturn(patchResponse);
+        when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                .thenReturn(patchResponse);
 
-                PlaceRepository placeRepository = Mockito.mock(PlaceRepository.class);
-                Place place = new Place();
-                place.setId("p1");
-                place.setName("A");
-                place.setAddress("B");
-                place.setRating(4.5);
-                place.setReviewCount(3);
-                place.setLocation(new Location(10.77, 106.69));
-                when(placeRepository.findById("p1")).thenReturn(Optional.of(place));
+        PlaceRepository placeRepository = Mockito.mock(PlaceRepository.class);
+        Place place = new Place();
+        place.setId("p1");
+        place.setName("A");
+        place.setAddress("B");
+        place.setRating(4.5);
+        place.setReviewCount(3);
+        place.setLocation(new Location(10.77, 106.69));
+        when(placeRepository.findById("p1")).thenReturn(Optional.of(place));
 
-                TypesensePlaceIndexSyncService service = new TypesensePlaceIndexSyncService(
-                                props, new ObjectMapper(), httpClient, placeRepository);
+        TypesensePlaceIndexSyncService service = new TypesensePlaceIndexSyncService(
+                props, new ObjectMapper(), httpClient, placeRepository);
 
-                assertDoesNotThrow(() -> service.updateRatingOnly("p1", 4.8, 10));
+        assertDoesNotThrow(() -> service.updateRatingOnly("p1", 4.8, 10));
 
-                verify(httpClient, times(1)).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
-                verify(placeRepository, never()).findById("p1");
+        verify(httpClient, times(1)).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+        verify(placeRepository, never()).findById("p1");
+    }
+
+    private String readBody(HttpRequest request) throws Exception {
+        HttpRequest.BodyPublisher publisher = request.bodyPublisher().orElseThrow();
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        CountDownLatch done = new CountDownLatch(1);
+        AtomicReference<Throwable> errorRef = new AtomicReference<>();
+
+        publisher.subscribe(new Flow.Subscriber<>() {
+            @Override
+            public void onSubscribe(Flow.Subscription subscription) {
+                subscription.request(Long.MAX_VALUE);
+            }
+
+            @Override
+            public void onNext(ByteBuffer item) {
+                byte[] bytes = new byte[item.remaining()];
+                item.get(bytes);
+                output.write(bytes, 0, bytes.length);
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+                errorRef.set(throwable);
+                done.countDown();
+            }
+
+            @Override
+            public void onComplete() {
+                done.countDown();
+            }
+        });
+
+        assertTrue(done.await(2, TimeUnit.SECONDS), "Timed out waiting for body publisher completion");
+        Throwable subscriberError = errorRef.get();
+        if (subscriberError != null) {
+            throw new AssertionError("Body publisher subscriber failed", subscriberError);
         }
-
-        private String readBody(HttpRequest request) throws Exception {
-                HttpRequest.BodyPublisher publisher = request.bodyPublisher().orElseThrow();
-                ByteArrayOutputStream output = new ByteArrayOutputStream();
-                CountDownLatch done = new CountDownLatch(1);
-
-                publisher.subscribe(new Flow.Subscriber<>() {
-                        @Override
-                        public void onSubscribe(Flow.Subscription subscription) {
-                                subscription.request(Long.MAX_VALUE);
-                        }
-
-                        @Override
-                        public void onNext(ByteBuffer item) {
-                                byte[] bytes = new byte[item.remaining()];
-                                item.get(bytes);
-                                output.write(bytes, 0, bytes.length);
-                        }
-
-                        @Override
-                        public void onError(Throwable throwable) {
-                                done.countDown();
-                        }
-
-                        @Override
-                        public void onComplete() {
-                                done.countDown();
-                        }
-                });
-
-                done.await(2, TimeUnit.SECONDS);
-                return output.toString(StandardCharsets.UTF_8);
-        }
+        return output.toString(StandardCharsets.UTF_8);
+    }
 }

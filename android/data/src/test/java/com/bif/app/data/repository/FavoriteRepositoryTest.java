@@ -1,10 +1,12 @@
 package com.bif.app.data.repository;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -91,7 +93,7 @@ public class FavoriteRepositoryTest {
     }
 
     @Test
-    public void constructor_withApplicationContext_setsSyncContextFromUserId() {
+    public void constructor_withApplicationContext_doesNotSetSyncContextEagerly() {
         Context appContext = org.mockito.Mockito.mock(Context.class);
         try (MockedStatic<UserPreferences> userPrefs = org.mockito.Mockito
                 .mockStatic(UserPreferences.class)) {
@@ -108,8 +110,7 @@ public class FavoriteRepositoryTest {
                     appContext
             );
 
-                verify(mockSyncManager, org.mockito.Mockito.atLeastOnce())
-                    .setUserContext("user-123", null);
+            verify(mockSyncManager, never()).setUserContext(any(), any());
         }
     }
 
@@ -269,7 +270,7 @@ public class FavoriteRepositoryTest {
     }
 
     @Test
-    public void refreshFavorites_WhenBootstrapFails_DoesNotReportError() throws Exception {
+    public void refreshFavorites_WhenBootstrapFails_ReportsOfflineError() throws Exception {
         Context appContext = org.mockito.Mockito.mock(Context.class);
         try (MockedStatic<UserPreferences> userPrefs = org.mockito.Mockito
                 .mockStatic(UserPreferences.class)) {
@@ -308,9 +309,10 @@ public class FavoriteRepositoryTest {
                 }
             });
 
-            // Assert
-            assertTrue(success[0]);
-            assertEquals(null, errorMessage[0]);
+            // Assert - Bootstrap failure calls onError (offline-first approach: local data still available)
+            assertFalse(success[0]);
+            assertNotNull(errorMessage[0]);
+            assertTrue(errorMessage[0].contains("offline"));
         }
     }
 }

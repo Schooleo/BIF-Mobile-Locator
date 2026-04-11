@@ -46,8 +46,8 @@ public class FavoriteRepository implements IFavoriteRepository {
     private final RestApiService restApiService;
     private final SyncManager syncManager;
     private final ExecutorService executorService;
+    private final Context appContext;
     private final Gson gson;
-    private final String activeUserId;
 
     @Inject
     public FavoriteRepository(FavoriteDao favoriteDao,
@@ -63,12 +63,8 @@ public class FavoriteRepository implements IFavoriteRepository {
         this.restApiService = restApiService;
         this.syncManager = syncManager;
         this.executorService = executorService;
+        this.appContext = appContext;
         this.gson = new Gson();
-        this.activeUserId = resolveActiveUserId(appContext);
-
-        if (appContext != null && !activeUserId.trim().isEmpty()) {
-            syncManager.setUserContext(activeUserId, null);
-        }
     }
 
     // Backward-compatible constructor used by tests.
@@ -79,10 +75,28 @@ public class FavoriteRepository implements IFavoriteRepository {
                               ExecutorService executorService) {
         this(favoriteDao, syncQueueDao, appDatabase, null, syncManager,
                 executorService, null);
+        
+        // Validations after delegating constructor
+        if (favoriteDao == null) {
+            throw new IllegalArgumentException("favoriteDao cannot be null");
+        }
+        if (syncQueueDao == null) {
+            throw new IllegalArgumentException("syncQueueDao cannot be null");
+        }
+        if (appDatabase == null) {
+            throw new IllegalArgumentException("appDatabase cannot be null");
+        }
+        if (syncManager == null) {
+            throw new IllegalArgumentException("syncManager cannot be null");
+        }
+        if (executorService == null) {
+            throw new IllegalArgumentException("executorService cannot be null");
+        }
     }
 
     @Override
     public LiveData<List<Favorite>> searchFavorites(String query) {
+        String activeUserId = resolveActiveUserId(appContext);
         return Transformations.map(
                 favoriteDao.searchFavorites(activeUserId, query),
                 FavoriteMapper::toDomainList);
@@ -90,6 +104,7 @@ public class FavoriteRepository implements IFavoriteRepository {
 
     @Override
     public LiveData<List<Favorite>> getAllFavorites() {
+        String activeUserId = resolveActiveUserId(appContext);
         return Transformations.map(
                 favoriteDao.getAll(activeUserId),
                 FavoriteMapper::toDomainList);
@@ -98,6 +113,8 @@ public class FavoriteRepository implements IFavoriteRepository {
     @Override
     public void addFavorite(Favorite favorite) {
         executorService.execute(() -> {
+            String activeUserId = resolveActiveUserId(appContext);
+            applySyncUserContext(activeUserId);
             appDatabase.runInTransaction(() -> {
                 FavoriteEntity entity = FavoriteMapper.toEntity(favorite);
                 entity.userId = activeUserId;
@@ -109,6 +126,7 @@ public class FavoriteRepository implements IFavoriteRepository {
 
                 // Atomic Sync Enqueue
                 SyncQueueEntity syncEntry = createSyncEntry(
+                    activeUserId,
                         ENTITY_TYPE_FAVORITE,
                         syncFavorite.id,
                         "CREATE",
@@ -123,6 +141,8 @@ public class FavoriteRepository implements IFavoriteRepository {
     @Override
     public void updateFavorite(Favorite favorite) {
         executorService.execute(() -> {
+            String activeUserId = resolveActiveUserId(appContext);
+            applySyncUserContext(activeUserId);
             appDatabase.runInTransaction(() -> {
                 FavoriteEntity entity = FavoriteMapper.toEntity(favorite);
                 entity.userId = activeUserId;
@@ -134,6 +154,7 @@ public class FavoriteRepository implements IFavoriteRepository {
 
                 // Atomic Sync Enqueue
                 SyncQueueEntity syncEntry = createSyncEntry(
+                    activeUserId,
                         ENTITY_TYPE_FAVORITE,
                         syncFavorite.id,
                         "UPDATE",
@@ -149,6 +170,8 @@ public class FavoriteRepository implements IFavoriteRepository {
     public void updateAllFavorites(List<Favorite> favorites) {
         if (favorites == null) return;
         executorService.execute(() -> {
+            String activeUserId = resolveActiveUserId(appContext);
+            applySyncUserContext(activeUserId);
             appDatabase.runInTransaction(() -> {
                 List<FavoriteEntity> entities = FavoriteMapper.toEntityList(favorites);
                 for (FavoriteEntity entity : entities) {
@@ -159,6 +182,7 @@ public class FavoriteRepository implements IFavoriteRepository {
                 for (FavoriteEntity entity : entities) {
                     Favorite syncFavorite = FavoriteMapper.toDomain(entity);
                     SyncQueueEntity syncEntry = createSyncEntry(
+                            activeUserId,
                             ENTITY_TYPE_FAVORITE,
                             syncFavorite.id,
                             "UPDATE",
@@ -175,6 +199,8 @@ public class FavoriteRepository implements IFavoriteRepository {
     public void deleteFavorite(Favorite favorite) {
         if (favorite == null || favorite.id == null) return;
         executorService.execute(() -> {
+            String activeUserId = resolveActiveUserId(appContext);
+            applySyncUserContext(activeUserId);
             appDatabase.runInTransaction(() -> {
                 FavoriteEntity entity = FavoriteMapper.toEntity(favorite);
                 // Keep a local tombstone so delete can sync when offline.
@@ -185,6 +211,7 @@ public class FavoriteRepository implements IFavoriteRepository {
 
                 // Atomic Sync Enqueue
                 SyncQueueEntity syncEntry = createSyncEntry(
+                    activeUserId,
                         ENTITY_TYPE_FAVORITE,
                         favorite.id,
                         "DELETE",
@@ -196,9 +223,13 @@ public class FavoriteRepository implements IFavoriteRepository {
         });
     }
 
-    private SyncQueueEntity createSyncEntry(String entityType, String entityId, String operation, Object payload) {
+    private SyncQueueEntity createSyncEntry(String ownerUserId,
+                                            String entityType,
+                                            String entityId,
+                                            String operation,
+                                            Object payload) {
         SyncQueueEntity entry = new SyncQueueEntity();
-        entry.userId = activeUserId;
+        entry.userId = ownerUserId;
         entry.entityType = entityType;
         entry.entityId = entityId;
         entry.operation = operation;
@@ -220,13 +251,15 @@ public class FavoriteRepository implements IFavoriteRepository {
                 }
             } catch (Exception e) {
                 if (callback != null) {
-                    callback.onError(e.getMessage());
+                    String message = e.getMessage();
+                    callback.onError(message != null ? message : "Failed to refresh favorites");
                 }
             }
         });
     }
 
-    private void bootstrapFavorites() {
+    private void bootstrapFavorites() throws IOException {
+        String activeUserId = resolveActiveUserId(appContext);
         if (restApiService == null) {
             return;
         }
@@ -234,23 +267,23 @@ public class FavoriteRepository implements IFavoriteRepository {
             return;
         }
 
-        syncManager.setUserContext(activeUserId, null);
+        applySyncUserContext(activeUserId);
 
-        try {
-            Response<List<FavoriteResponseDto>> response = restApiService
-                    .getMyFavorites()
-                    .execute();
-            if (!response.isSuccessful() || response.body() == null) {
-                return;
-            }
-
-            mergeServerFavorites(response.body());
-        } catch (IOException ignored) {
-            // Keep local state on transient network failures.
+        Response<List<FavoriteResponseDto>> response = restApiService
+                .getMyFavorites()
+                .execute();
+        if (!response.isSuccessful()) {
+            throw new IOException("Failed to refresh favorites. HTTP " + response.code());
         }
+        if (response.body() == null) {
+            throw new IOException("Failed to refresh favorites. Empty response body");
+        }
+
+        mergeServerFavorites(response.body(), activeUserId);
     }
 
-    private void mergeServerFavorites(List<FavoriteResponseDto> serverFavorites) {
+    private void mergeServerFavorites(List<FavoriteResponseDto> serverFavorites,
+                                      String activeUserId) {
         appDatabase.runInTransaction(() -> {
             List<String> trackedIds = syncQueueDao.getTrackedEntityIds(activeUserId,
                     ENTITY_TYPE_FAVORITE);
@@ -311,6 +344,10 @@ public class FavoriteRepository implements IFavoriteRepository {
                     continue;
                 }
 
+                if (local.pendingSync) {
+                    continue;
+                }
+
                 if (!serverIds.contains(local.id)) {
                     favoriteDao.deleteById(local.id, activeUserId);
                 }
@@ -323,10 +360,24 @@ public class FavoriteRepository implements IFavoriteRepository {
             return ANONYMOUS_USER_ID;
         }
         String userId = UserPreferences.getUserId(appContext);
-        if (userId.trim().isEmpty()) {
+        if (userId == null || userId.isEmpty()) {
             return ANONYMOUS_USER_ID;
         }
-        return userId.trim();
+
+        String normalizedUserId = userId.trim();
+        if (normalizedUserId.isEmpty()) {
+            return ANONYMOUS_USER_ID;
+        }
+        return normalizedUserId;
+    }
+
+    private void applySyncUserContext(String activeUserId) {
+        if (activeUserId == null
+                || activeUserId.isEmpty()
+                || ANONYMOUS_USER_ID.equals(activeUserId)) {
+            return;
+        }
+        syncManager.setUserContext(activeUserId, null);
     }
 }
 

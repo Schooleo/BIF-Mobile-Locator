@@ -11,9 +11,9 @@ import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import com.bif.app.core.utils.AppSnackbar;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
@@ -242,7 +242,7 @@ public class TripItineraryFragment extends Fragment {
         btnSave.setOnClickListener(v -> {
             long selectedMillis = selected[0] != null ? selected[0].getTimeInMillis() : 0L;
             if (selectedMillis > 0L && !isWithinTripRange(selectedMillis)) {
-                Toast.makeText(requireContext(), R.string.trip_stop_time_out_of_range, Toast.LENGTH_SHORT).show();
+                AppSnackbar.show(requireContext(), R.string.trip_stop_time_out_of_range);
                 return;
             }
 
@@ -296,7 +296,7 @@ public class TripItineraryFragment extends Fragment {
                 }
             }
             if (!stillExists) {
-                Toast.makeText(requireContext(), R.string.remove, Toast.LENGTH_SHORT).show();
+                AppSnackbar.show(requireContext(), R.string.remove);
                 pendingRemovedStopId = null;
             }
         }
@@ -317,7 +317,7 @@ public class TripItineraryFragment extends Fragment {
 
                 if (pendingStopEdit.note.equals(currentNote)
                         && pendingStopEdit.scheduledAtMillis == currentSchedule) {
-                    Toast.makeText(requireContext(), R.string.save, Toast.LENGTH_SHORT).show();
+                    AppSnackbar.show(requireContext(), R.string.save);
                     pendingStopEdit = null;
                 }
                 break;

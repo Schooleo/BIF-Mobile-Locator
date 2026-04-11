@@ -1,6 +1,5 @@
 package com.bif.app.data.source.local.entity;
 
-import androidx.annotation.NonNull;
 import androidx.room.Entity;
 import androidx.room.Index;
 import androidx.room.PrimaryKey;
@@ -10,8 +9,7 @@ import androidx.room.PrimaryKey;
 public class SyncQueueEntity {
     @PrimaryKey(autoGenerate = true)
     public int id;
-    @NonNull
-    public String userId = "";
+    public String userId;
     public String clientChangeId;
     public String entityType;
     public String entityId;

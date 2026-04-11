@@ -20,9 +20,9 @@ import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import com.bif.app.core.utils.AppSnackbar;
 import androidx.annotation.Nullable;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.core.graphics.drawable.DrawableCompat;
@@ -384,27 +384,27 @@ public class AddTripStopFragment extends Fragment {
 
     private void addSelectedPlaceToTrip() {
         if (selectedItem == null) {
-            Toast.makeText(requireContext(), R.string.trip_select_place, Toast.LENGTH_SHORT).show();
+            AppSnackbar.show(requireContext(), R.string.trip_select_place);
             return;
         }
 
         if (viewModel.getCurrentTripId().trim().isEmpty()) {
-            Toast.makeText(requireContext(), R.string.trip_create_failed, Toast.LENGTH_SHORT).show();
+            AppSnackbar.show(requireContext(), R.string.trip_create_failed);
             return;
         }
 
         long selectedMillis = selectedDateTime.getTimeInMillis();
         if (!isWithinTripDateRange(selectedMillis)) {
-            Toast.makeText(requireContext(), R.string.trip_dates_invalid, Toast.LENGTH_SHORT).show();
+            AppSnackbar.show(requireContext(), R.string.trip_dates_invalid);
             return;
         }
 
         boolean added = viewModel.addStopToTrip(selectedItem, selectedMillis);
         if (!added) {
-            Toast.makeText(requireContext(), R.string.trip_create_failed, Toast.LENGTH_SHORT).show();
+            AppSnackbar.show(requireContext(), R.string.trip_create_failed);
             return;
         }
-        Toast.makeText(requireContext(), R.string.trip_stop_added_to_trip, Toast.LENGTH_SHORT).show();
+        AppSnackbar.show(requireContext(), R.string.trip_stop_added_to_trip);
         Navigation.findNavController(requireView()).popBackStack();
     }
 

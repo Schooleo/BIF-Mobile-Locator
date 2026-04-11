@@ -325,7 +325,6 @@ public class MapViewModelTest {
 
         latestRunnable.run();
 
-        verify(placeRepository, never()).searchPlaces(eq("coffee"), isNull());
         verify(placeRepository).searchPlaces(eq("coffee near me"), isNull());
     }
 

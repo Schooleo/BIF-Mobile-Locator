@@ -13,9 +13,9 @@ import android.widget.ImageButton;
 import android.widget.RatingBar;
 import android.widget.FrameLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import com.bif.app.core.utils.AppSnackbar;
 import androidx.annotation.Nullable;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.NavController;
@@ -224,7 +224,7 @@ public class FavoriteDetailBottomSheet extends BottomSheetDialogFragment {
     private void showShareToGroupDialog(@NonNull Favorite favorite) {
         List<Group> groups = viewModel.getGroups().getValue();
         if (groups == null || groups.isEmpty()) {
-            Toast.makeText(requireContext(), R.string.no_group_available, Toast.LENGTH_SHORT).show();
+            AppSnackbar.show(requireContext(), R.string.no_group_available);
             return;
         }
 
@@ -285,7 +285,7 @@ public class FavoriteDetailBottomSheet extends BottomSheetDialogFragment {
                 .setPositiveButton(R.string.save_note, (dialog, which) -> {
                     String note = input.getText() != null ? input.getText().toString() : "";
                     viewModel.updateNotes(note);
-                    Toast.makeText(requireContext(), R.string.favorite_note_saved, Toast.LENGTH_SHORT).show();
+                    AppSnackbar.show(requireContext(), R.string.favorite_note_saved);
                 })
                 .show();
     }

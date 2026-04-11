@@ -50,14 +50,14 @@ import com.bif.app.data.source.local.entity.TripStopEntity;
         TripPlanEntity.class,
         TripMemberCrossRef.class,
         TripStopEntity.class
-}, version = 20, exportSchema = false)
+}, version = 21, exportSchema = false)
 @TypeConverters({ FriendshipStatusConverter.class, UploadStatusConverter.class })
 public abstract class AppDatabase extends RoomDatabase {
     public static final Migration MIGRATION_19_20 = new Migration(19, 20) {
         @Override
         public void migrate(SupportSQLiteDatabase database) {
             if (!hasColumn(database, "sync_queue", "userId")) {
-                database.execSQL("ALTER TABLE sync_queue ADD COLUMN userId TEXT NOT NULL DEFAULT ''");
+                database.execSQL("ALTER TABLE sync_queue ADD COLUMN userId TEXT");
             }
 
             if (!hasIndex(database, "index_sync_queue_userId_entityType_status")) {
@@ -101,6 +101,8 @@ public abstract class AppDatabase extends RoomDatabase {
         public void migrate(SupportSQLiteDatabase database) {
             if (!hasColumn(database, "favorites", "pendingSync")) {
                 database.execSQL("ALTER TABLE favorites ADD COLUMN pendingSync INTEGER NOT NULL DEFAULT 0");
+            } else {
+                database.execSQL("UPDATE favorites SET pendingSync = 0 WHERE pendingSync IS NULL");
             }
 
             if (!hasIndex(database, "index_favorites_userId_deleted")) {
@@ -289,6 +291,79 @@ public abstract class AppDatabase extends RoomDatabase {
                     }
                 }
                 return false;
+            } finally {
+                cursor.close();
+            }
+        }
+    };
+
+    public static final Migration MIGRATION_20_21 = new Migration(20, 21) {
+        @Override
+        public void migrate(SupportSQLiteDatabase database) {
+            // Recreate sync_queue table to make userId nullable (was NOT NULL DEFAULT '')
+            // SQLite doesn't support modifying column constraints, so we must recreate
+            database.execSQL("CREATE TABLE sync_queue_new ("
+                    + "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "
+                    + "userId TEXT, "
+                    + "clientChangeId TEXT, "
+                    + "entityType TEXT, "
+                    + "entityId TEXT, "
+                    + "operation TEXT, "
+                    + "payload TEXT, "
+                    + "retryCount INTEGER NOT NULL, "
+                    + "createdAt INTEGER NOT NULL, "
+                    + "status TEXT)");
+
+            // Copy data from old table to new table
+                database.execSQL("INSERT INTO sync_queue_new SELECT "
+                    + "id, NULLIF(userId, ''), clientChangeId, entityType, entityId, operation, payload, "
+                    + "retryCount, createdAt, status FROM sync_queue");
+
+            // Drop old table
+            database.execSQL("DROP TABLE sync_queue");
+
+            // Rename new table
+            database.execSQL("ALTER TABLE sync_queue_new RENAME TO sync_queue");
+
+            // Recreate indices
+            if (!hasIndex(database, "index_sync_queue_userId_entityType_status")) {
+                database.execSQL("CREATE INDEX index_sync_queue_userId_entityType_status "
+                        + "ON sync_queue(userId, entityType, status)");
+            }
+
+            // Ensure favorites.pendingSync has default value of 0
+            if (!hasColumn(database, "favorites", "pendingSync")) {
+                database.execSQL("ALTER TABLE favorites ADD COLUMN pendingSync INTEGER NOT NULL DEFAULT 0");
+            } else {
+                // Ensure existing null values are set to 0
+                database.execSQL("UPDATE favorites SET pendingSync = 0 WHERE pendingSync IS NULL");
+            }
+        }
+
+        private boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
+            Cursor cursor = database.query("PRAGMA table_info(`" + tableName + "`)");
+            try {
+                int nameIndex = cursor.getColumnIndex("name");
+                if (nameIndex < 0) {
+                    nameIndex = 1;
+                }
+                while (cursor.moveToNext()) {
+                    String existing = cursor.getString(nameIndex);
+                    if (columnName.equals(existing)) {
+                        return true;
+                    }
+                }
+                return false;
+            } finally {
+                cursor.close();
+            }
+        }
+
+        private boolean hasIndex(SupportSQLiteDatabase database, String indexName) {
+            Cursor cursor = database.query("SELECT name FROM sqlite_master "
+                    + "WHERE type='index' AND name=?", new Object[]{indexName});
+            try {
+                return cursor.moveToFirst();
             } finally {
                 cursor.close();
             }

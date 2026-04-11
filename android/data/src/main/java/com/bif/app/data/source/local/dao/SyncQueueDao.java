@@ -15,6 +15,11 @@ public interface SyncQueueDao {
             + "ORDER BY createdAt ASC, id ASC")
     List<SyncQueueEntity> getPending();
 
+    @Query("SELECT * FROM sync_queue WHERE status = 'PENDING' "
+            + "AND (userId = :userId OR userId IS NULL) "
+            + "ORDER BY createdAt ASC, id ASC")
+    List<SyncQueueEntity> getPendingForUser(String userId);
+
     @Insert
     void enqueue(SyncQueueEntity entry);
 
@@ -27,7 +32,8 @@ public interface SyncQueueDao {
     @Query("DELETE FROM sync_queue WHERE entityType = :entityType AND entityId = :entityId")
     void removeByEntity(String entityType, String entityId);
 
-    @Query("SELECT DISTINCT entityId FROM sync_queue WHERE userId = :userId "
+    @Query("SELECT DISTINCT entityId FROM sync_queue "
+            + "WHERE (userId = :userId OR userId IS NULL) "
             + "AND entityType = :entityType "
             + "AND status IN ('PENDING', 'IN_FLIGHT', 'FAILED', 'BLOCKED')")
     List<String> getTrackedEntityIds(String userId, String entityType);

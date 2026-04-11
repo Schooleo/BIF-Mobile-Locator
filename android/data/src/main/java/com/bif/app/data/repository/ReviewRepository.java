@@ -274,11 +274,11 @@ public class ReviewRepository implements IReviewRepository {
                             ReviewEntity entity = ReviewMapper.fromDto(dto, resolvedPlaceId);
                             // Avoid overwriting a locally modified pending item
                             ReviewEntity local = reviewDao.getReviewSync(resolvedPlaceId, serverUserId);
+                            if (identityCorrected) {
+                                reviewDao.deleteByPlaceAndUserId(placeId, serverUserId);
+                                syncQueueDao.removeByEntity("review", placeId + ":" + serverUserId);
+                            }
                             if (local == null || !local.pendingSync) {
-                                if (identityCorrected) {
-                                    reviewDao.deleteByPlaceAndUserId(placeId, serverUserId);
-                                    syncQueueDao.removeByEntity("review", placeId + ":" + serverUserId);
-                                }
                                 reviewDao.upsert(entity);
                             }
                         }

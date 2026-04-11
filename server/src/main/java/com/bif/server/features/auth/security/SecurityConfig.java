@@ -15,6 +15,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,6 +26,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Configuration
 @EnableMethodSecurity
@@ -32,6 +34,9 @@ public class SecurityConfig {
 
     private static final long RESOLVE_RATE_LIMIT_WINDOW_MILLIS = TimeUnit.MINUTES.toMillis(1);
     private static final int RESOLVE_RATE_LIMIT_MAX_REQUESTS = 30;
+    private static final String TOMCAT_REQUEST_FORWARDED_ATTRIBUTE = "org.apache.tomcat.request.forwarded";
+    private static final String TOMCAT_REMOTE_ADDR_ATTRIBUTE = "org.apache.tomcat.remoteAddr";
+    private static final String TOMCAT_ACCESS_LOG_REMOTE_ADDR_ATTRIBUTE = "org.apache.catalina.AccessLog.RemoteAddr";
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter)
@@ -56,7 +61,6 @@ public class SecurityConfig {
                 "/graphiql",
                 "/graphql"
             ).permitAll()
-            .requestMatchers(HttpMethod.POST, "/api/places/resolve").permitAll()
             .requestMatchers(HttpMethod.GET, "/api/places/*/reviews").permitAll()
             .anyRequest().authenticated()
             )
@@ -65,23 +69,25 @@ public class SecurityConfig {
             .build();
     }
 
-    @Bean
-    OncePerRequestFilter placeResolveRateLimitFilter() {
+    private Filter placeResolveRateLimitFilter() {
         return new OncePerRequestFilter() {
             private final Map<String, WindowCounter> counters = new ConcurrentHashMap<>();
+            private final AtomicLong lastCleanupAt = new AtomicLong(System.currentTimeMillis());
 
             @Override
             protected void doFilterInternal(HttpServletRequest request,
                                             HttpServletResponse response,
                                             FilterChain filterChain) throws ServletException, IOException {
                 if (!HttpMethod.POST.matches(request.getMethod())
-                        || !"/api/places/resolve".equals(request.getRequestURI())) {
+                        || !"/api/places/resolve".equals(request.getServletPath())) {
                     filterChain.doFilter(request, response);
                     return;
                 }
 
-                String clientKey = resolveClientKey(request);
                 long now = System.currentTimeMillis();
+                evictStaleCountersIfNeeded(now);
+
+                String clientKey = resolveClientKey(request);
 
                 WindowCounter counter = counters.compute(clientKey, (key, existing) -> {
                     if (existing == null || now - existing.windowStartMillis >= RESOLVE_RATE_LIMIT_WINDOW_MILLIS) {
@@ -101,14 +107,45 @@ public class SecurityConfig {
                 filterChain.doFilter(request, response);
             }
 
-            private String resolveClientKey(HttpServletRequest request) {
-                String forwardedFor = request.getHeader("X-Forwarded-For");
-                if (forwardedFor != null && !forwardedFor.isBlank()) {
-                    return forwardedFor.split(",")[0].trim();
+            private void evictStaleCountersIfNeeded(long now) {
+                long lastCleanup = lastCleanupAt.get();
+                if (now - lastCleanup < RESOLVE_RATE_LIMIT_WINDOW_MILLIS) {
+                    return;
                 }
-                String remoteAddr = request.getRemoteAddr();
-                return remoteAddr != null ? remoteAddr : "unknown";
+
+                if (!lastCleanupAt.compareAndSet(lastCleanup, now)) {
+                    return;
+                }
+
+                counters.entrySet().removeIf(entry ->
+                        now - entry.getValue().windowStartMillis >= RESOLVE_RATE_LIMIT_WINDOW_MILLIS);
             }
+
+            private String resolveClientKey(HttpServletRequest request) {
+                String remoteAddr = request.getRemoteAddr();
+                if (remoteAddr == null || remoteAddr.isBlank()) {
+                    remoteAddr = "unknown";
+                }
+
+                Object tomcatRemoteAddr = request.getAttribute(TOMCAT_REMOTE_ADDR_ATTRIBUTE);
+                if (tomcatRemoteAddr instanceof String addr && !addr.isBlank()) {
+                    return addr;
+                }
+
+                Object tomcatAccessLogRemoteAddr = request.getAttribute(TOMCAT_ACCESS_LOG_REMOTE_ADDR_ATTRIBUTE);
+                if (tomcatAccessLogRemoteAddr instanceof String addr && !addr.isBlank()) {
+                    return addr;
+                }
+
+                Object forwardedAttribute = request.getAttribute(TOMCAT_REQUEST_FORWARDED_ATTRIBUTE);
+                if (Boolean.TRUE.equals(forwardedAttribute)) {
+                    return request.getRemoteAddr();
+                }
+
+                return remoteAddr;
+            }
+
+
         };
     }
 

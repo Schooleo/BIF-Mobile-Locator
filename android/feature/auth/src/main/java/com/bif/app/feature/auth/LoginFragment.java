@@ -9,9 +9,9 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import com.bif.app.core.utils.AppSnackbar;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.NavController;
@@ -91,7 +91,7 @@ public class LoginFragment extends Fragment {
                         AuthResponse auth = response.body();
                         authSessionManager.saveSessionFromAuth(auth);
 
-                        Toast.makeText(requireContext(), "Login successful!", Toast.LENGTH_SHORT).show();
+                        AppSnackbar.show(requireContext(), getString(R.string.login_successful));
                         navController.navigate(UriUtils.buildUri(UriUtils.PathTo.MAP));
                         return;
                     }
@@ -103,11 +103,11 @@ public class LoginFragment extends Fragment {
                     }
 
                     if (response.code() == 400) {
-                        Toast.makeText(requireContext(), "Invalid login data", Toast.LENGTH_SHORT).show();
+                        AppSnackbar.show(requireContext(), getString(R.string.invalid_login_data));
                         return;
                     }
 
-                    Toast.makeText(requireContext(), "Login failed", Toast.LENGTH_SHORT).show();
+                    AppSnackbar.show(requireContext(), getString(R.string.login_failed));
                 }
 
                 @Override
@@ -117,7 +117,7 @@ public class LoginFragment extends Fragment {
                         return;
                     }
                     Log.e(TAG, "Login request failed", t);
-                    Toast.makeText(requireContext(), "Network error. Please try again.", Toast.LENGTH_SHORT).show();
+                    AppSnackbar.show(requireContext(), getString(R.string.network_error_try_again));
                 }
             });
         });

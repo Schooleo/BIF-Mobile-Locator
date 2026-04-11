@@ -59,6 +59,7 @@
     <string name="edit_review_title">Edit Review</string>
     <string name="submit_review">Submit</string>
     <string name="provide_rating_error">Please provide a rating</string>
+    <string name="search_results_in_area">Showing results in %1$s</string>
     <string-array name="search_area_patterns">
         <item>phan thiet|Phan Thiet</item>
         <item>da lat|Da Lat</item>

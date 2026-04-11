@@ -26,9 +26,9 @@ import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.RatingBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import com.bif.app.core.utils.AppSnackbar;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresPermission;
 import androidx.appcompat.content.res.AppCompatResources;
@@ -375,7 +375,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             }
             String text = event.getContentIfNotHandled();
             if (text != null && !text.isEmpty()) {
-                Toast.makeText(requireContext(), text, Toast.LENGTH_SHORT).show();
+                AppSnackbar.show(requireContext(), text);
             }
         });
 
@@ -877,7 +877,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
         if (effectiveState.status == OfflineMapDownloadState.Status.COMPLETED
                 && lastOfflineMapDownloadStatus != OfflineMapDownloadState.Status.COMPLETED) {
-            Toast.makeText(requireContext(), R.string.download_map_success, Toast.LENGTH_SHORT).show();
+            AppSnackbar.show(requireContext(), R.string.download_map_success);
         }
 
         if (effectiveState.status == OfflineMapDownloadState.Status.FAILED
@@ -946,9 +946,11 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
         updateSearchMarkersSource(searchFeatures);
 
-        boolean hasUserLocation = lastKnownUserLocation != null;
-        double topDistanceFromUserKm = distanceKm(lastKnownUserLocation,
-            topResult.location);
+        boolean hasUserLocation = lastKnownUserLocation != null
+            && isValidLocation(lastKnownUserLocation);
+        double topDistanceFromUserKm = hasUserLocation
+            ? distanceKm(lastKnownUserLocation, topResult.location)
+            : Double.MAX_VALUE;
         boolean isLocalSearch = hasUserLocation
             && topDistanceFromUserKm <= LOCAL_SEARCH_RADIUS_KM;
 
@@ -1083,8 +1085,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
         lastRemoteToastArea = area;
         lastRemoteToastAtMs = now;
-        Toast.makeText(requireContext(), "Showing results in " + area,
-                Toast.LENGTH_SHORT).show();
+        AppSnackbar.show(requireContext(), getString(R.string.search_results_in_area, area));
     }
 
     @NonNull
@@ -2928,7 +2929,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                             viewModel.submitReview(stars, comment);
                         }
                     } else {
-                        Toast.makeText(getContext(), R.string.provide_rating_error, Toast.LENGTH_SHORT).show();
+                        AppSnackbar.show(getContext(), R.string.provide_rating_error);
                     }
                 })
                 .setNegativeButton(android.R.string.cancel, null)
@@ -3348,6 +3349,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         btnDownloadCityMap = null;
         progressDownloadCityMap = null;
         lastOfflineMapDownloadStatus = null;
+        progressSearchPlaces = null;
         super.onDestroyView();
     }
 }

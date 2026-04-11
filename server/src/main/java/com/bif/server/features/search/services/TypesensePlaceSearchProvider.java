@@ -147,7 +147,9 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
                 encodedQueryBy,
                 resolvedPerPage
         ));
-        uriBuilder.append("&query_by_weights=3,1");
+        if ("name,address".equals(queryBy)) {
+            uriBuilder.append("&query_by_weights=3,1");
+        }
         uriBuilder.append("&drop_tokens_threshold=0");
         uriBuilder.append("&num_typos=1");
 
@@ -301,12 +303,14 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
 
         Double latitude = request.getLatitude();
         Double longitude = request.getLongitude();
+        // Invalid only if BOTH axes are exactly 0.0 (placeholder coordinates)
+        if (latitude != null && longitude != null && latitude == 0.0d && longitude == 0.0d) {
+            return false;
+        }
         return latitude != null
                 && longitude != null
                 && Double.isFinite(latitude)
-            && Double.isFinite(longitude)
-            && Double.compare(latitude, 0.0d) != 0
-            && Double.compare(longitude, 0.0d) != 0;
+            && Double.isFinite(longitude);
     }
 
     private boolean shouldApplyGeoRadiusFilter(PlaceSearchRequestDTO request) {

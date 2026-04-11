@@ -61,8 +61,12 @@ public class AppModule {
                     AppDatabase.MIGRATION_16_17,
                     AppDatabase.MIGRATION_17_18,
                     AppDatabase.MIGRATION_18_19,
-                    AppDatabase.MIGRATION_19_20)
-                .build();
+                    AppDatabase.MIGRATION_19_20,
+                    AppDatabase.MIGRATION_20_21)
+            // Legacy schemas (v13/v14) have no safe forward chain to v17 in code.
+            // Recreate DB for those versions instead of crashing at startup.
+            .fallbackToDestructiveMigrationFrom(13, 14)
+            .build();
     }
 
     @Provides

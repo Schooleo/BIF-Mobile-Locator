@@ -92,8 +92,8 @@ public class AuthSessionManager {
             } catch (Exception syncInitException) {
                 Log.e(TAG, "Failed to initialize sync context after authentication",
                         syncInitException);
-                UserPreferences.setUserId(context, "");
-                syncInitializable.resetSyncContext();
+                clearCorruptedSessionState();
+                return;
             }
         }
 
@@ -130,5 +130,37 @@ public class AuthSessionManager {
                 clearSession(() -> callback.onComplete(false));
             }
         });
+    }
+
+    private void clearCorruptedSessionState() {
+        try {
+            UserPreferences.saveAuthSession(context, "", "");
+        } catch (Exception tokenClearException) {
+            Log.e(TAG, "Failed to clear persisted auth tokens", tokenClearException);
+        }
+
+        try {
+            UserPreferences.clearUser(context);
+        } catch (Exception profileClearException) {
+            Log.e(TAG, "Failed to clear persisted user profile", profileClearException);
+        }
+
+        try {
+            UserPreferences.setUserId(context, "");
+        } catch (Exception userIdResetException) {
+            Log.e(TAG, "Failed to reset persisted user id", userIdResetException);
+        }
+
+        try {
+            syncInitializable.resetSyncContext();
+        } catch (Exception syncResetException) {
+            Log.e(TAG, "Failed to reset sync context", syncResetException);
+        }
+
+        try {
+            localSessionDataCleaner.clearLocalUserData(null);
+        } catch (Exception localDataClearException) {
+            Log.e(TAG, "Failed to clear local session data", localDataClearException);
+        }
     }
 }

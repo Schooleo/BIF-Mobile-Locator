@@ -59,8 +59,8 @@ public class PlaceRepository implements IPlaceRepository {
     private final AiGraphQlClient aiGraphQlClient;
     private final ExecutorService executorService;
     private final String activeUserId;
-    private Double configuredDefaultLatitude;
-    private Double configuredDefaultLongitude;
+    private volatile Double configuredDefaultLatitude;
+    private volatile Double configuredDefaultLongitude;
 
     @Inject
     public PlaceRepository(AndroidGeocodingDataSource geocodingDataSource,
@@ -112,6 +112,29 @@ public class PlaceRepository implements IPlaceRepository {
                            NetworkMonitor networkMonitor) {
         this(geocodingDataSource, restApiService, placeDao,
                 searchHistoryDao, syncManager, networkMonitor, null, null);
+    }
+
+    // Package-private constructor for testing with custom executor
+    PlaceRepository(AndroidGeocodingDataSource geocodingDataSource,
+                    RestApiService restApiService,
+                    PlaceDao placeDao,
+                    SearchHistoryDao searchHistoryDao,
+                    SyncManager syncManager,
+                    NetworkMonitor networkMonitor,
+                    AiGraphQlClient aiGraphQlClient,
+                    String activeUserId,
+                    ExecutorService executorService) {
+        this.geocodingDataSource = geocodingDataSource;
+        this.restApiService = restApiService;
+        this.placeDao = placeDao;
+        this.searchHistoryDao = searchHistoryDao;
+        this.syncManager = syncManager;
+        this.networkMonitor = networkMonitor;
+        this.aiGraphQlClient = aiGraphQlClient;
+        this.executorService = executorService;
+        this.activeUserId = activeUserId;
+        this.configuredDefaultLatitude = null;
+        this.configuredDefaultLongitude = null;
     }
 
     public void setDefaultSearchCoordinates(Double latitude, Double longitude) {
@@ -258,39 +281,44 @@ public class PlaceRepository implements IPlaceRepository {
                     Double lng = validLocation != null ? validLocation.longitude : null;
                     boolean hasInvalidCoordinates = lat == null
                             || lng == null
-                            || Double.compare(lat, 0.0d) == 0
-                            || Double.compare(lng, 0.0d) == 0;
+                            || (Double.compare(lat, 0.0d) == 0 && Double.compare(lng, 0.0d) == 0);
                     if (hasInvalidCoordinates) {
                         Location fallbackLocation = resolveDefaultSearchLocation();
-                        lat = fallbackLocation.latitude;
-                        lng = fallbackLocation.longitude;
+                        if (fallbackLocation == null) {
+                            // No valid default location configured, skip remote search
+                            Log.d(TAG, "No valid default search location configured");
+                        } else {
+                            lat = fallbackLocation.latitude;
+                            lng = fallbackLocation.longitude;
+                        }
                     }
-                    PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
-                    request.query = query;
-                    request.latitude = lat;
-                    request.longitude = lng;
-                    Log.d(TAG, "Search request coordinates lat="
-                            + request.latitude + ", lng=" + request.longitude);
-                    Response<List<PlaceDto>> response = restApiService
-                        .searchServerPlaces(request).execute();
-                    if (response.isSuccessful() && response.body() != null) {
-                        for (PlaceDto dto : response.body()) {
-                            if (!isValidCoordinate(dto.latitude, dto.longitude)) {
-                                continue;
-                            }
+                    if (lat != null && lng != null) {
+                        PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
+                        request.query = query;
+                        request.latitude = lat;
+                        request.longitude = lng;
+                        Log.d(TAG, "Search request coordinates: coordinates present");
+                        Response<List<PlaceDto>> response = restApiService
+                            .searchServerPlaces(request).execute();
+                        if (response.isSuccessful() && response.body() != null) {
+                            for (PlaceDto dto : response.body()) {
+                                if (!isValidCoordinate(dto.latitude, dto.longitude)) {
+                                    continue;
+                                }
 
-                            Place mappedPlace = PlaceMapper.fromDto(dto, true);
-                            String dedupKey = buildDedupKey(mappedPlace);
-                            boolean isNewId = !seenIds.contains(dto.id);
-                            boolean isNewKey = !seenKeys.contains(dedupKey);
+                                Place mappedPlace = PlaceMapper.fromDto(dto, true);
+                                String dedupKey = buildDedupKey(mappedPlace);
+                                boolean isNewId = !seenIds.contains(dto.id);
+                                boolean isNewKey = !seenKeys.contains(dedupKey);
 
-                            if (isNewId && isNewKey) {
-                                combinedResults.add(mappedPlace);
-                                seenIds.add(dto.id);
-                                seenKeys.add(dedupKey);
+                                if (isNewId && isNewKey) {
+                                    combinedResults.add(mappedPlace);
+                                    seenIds.add(dto.id);
+                                    seenKeys.add(dedupKey);
+                                }
+                                placeDao.upsert(PlaceMapper.fromDto(dto,
+                                        activeUserId));
                             }
-                            placeDao.upsert(PlaceMapper.fromDto(dto,
-                                    activeUserId));
                         }
                     }
                 } catch (IOException e) {
@@ -372,6 +400,11 @@ public class PlaceRepository implements IPlaceRepository {
     public void persistPlace(Place place, String action) {
         executorService.execute(() -> {
             Place normalizedPlace = normalizePlaceForCache(place);
+            if (normalizedPlace == null) {
+                Log.w(TAG, "Cannot persist place with invalid/missing coordinates");
+                return;
+            }
+            
             PlaceEntity existing = placeDao.getByIdSync(normalizedPlace.id,
                     activeUserId);
 
@@ -499,10 +532,8 @@ public class PlaceRepository implements IPlaceRepository {
     }
 
     private Place normalizePlaceForCache(Place place) {
-        if (place == null) {
-            return new Place(UUID.randomUUID().toString(), "",
-                    ADDRESS_UNAVAILABLE, 0.0,
-                    new Location(0, 0));
+        if (place == null || place.location == null) {
+            return null;
         }
 
         String placeId = place.id;
@@ -521,8 +552,7 @@ public class PlaceRepository implements IPlaceRepository {
                 place.name != null ? place.name : "",
                 normalizedAddress,
                 place.rating,
-                place.location != null ? place.location
-                        : new Location(0, 0)
+                place.location
         );
     }
 
@@ -563,6 +593,10 @@ public class PlaceRepository implements IPlaceRepository {
     }
 
     private boolean isValidCoordinate(double latitude, double longitude) {
+        // Invalid only if BOTH axes are exactly 0.0 (placeholder coordinates)
+        if (latitude == 0.0d && longitude == 0.0d) {
+            return false;
+        }
         return Double.isFinite(latitude)
                 && Double.isFinite(longitude)
                 && latitude >= -90d && latitude <= 90d
@@ -577,7 +611,7 @@ public class PlaceRepository implements IPlaceRepository {
                 && configuredDefaultLongitude >= -180d && configuredDefaultLongitude <= 180d) {
             return new Location(configuredDefaultLatitude, configuredDefaultLongitude);
         }
-        return new Location(10.7769d, 106.7009d);
+        return null;
     }
 
     private String buildDedupKey(Place place) {

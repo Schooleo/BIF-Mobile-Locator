@@ -1,10 +1,10 @@
 package com.bif.server.features.place.services;
 
 import com.bif.server.features.place.dto.rest.ReviewDTO;
+import com.bif.server.features.place.events.PlaceRatingUpdatedEvent;
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.repositories.RatingRepository;
-import com.bif.server.features.search.services.TypesensePlaceIndexSyncService;
 import com.bif.server.features.sync.services.SyncVersionService;
 import com.bif.server.features.user.models.User;
 import com.bif.server.features.user.repositories.UserRepository;
@@ -14,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Query;
@@ -27,8 +28,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyDouble;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -45,7 +44,7 @@ class RatingServiceTest {
     private SyncVersionService syncVersionService;
 
     @Mock
-        private TypesensePlaceIndexSyncService typesensePlaceIndexSyncService;
+    private ApplicationEventPublisher applicationEventPublisher;
 
     @Mock
     private UserRepository userRepository;
@@ -57,7 +56,7 @@ class RatingServiceTest {
     void setUp() {
         updater = new PlaceRatingCacheUpdater(mongoTemplate, syncVersionService);
         ratingService = new RatingService(ratingRepository, updater,
-                typesensePlaceIndexSyncService, userRepository);
+                                applicationEventPublisher, userRepository);
     }
 
     @Test
@@ -84,7 +83,13 @@ class RatingServiceTest {
         when(ratingRepository.save(any(PlaceReview.class))).thenAnswer(i -> i.getArguments()[0]);
 
         ratingService.saveReview(userId, placeId, dto);
-        verify(typesensePlaceIndexSyncService).updateRatingOnly(placeId, 4.09, 11);
+        
+        ArgumentCaptor<PlaceRatingUpdatedEvent> eventCaptor = ArgumentCaptor.forClass(PlaceRatingUpdatedEvent.class);
+        verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
+        PlaceRatingUpdatedEvent event = eventCaptor.getValue();
+                assertEquals(placeId, event.placeId());
+                assertEquals(4.09, event.rating());
+                assertEquals(11, event.reviewCount());
         
         verify(mongoTemplate).findAndModify(any(Query.class), any(), any(), eq(Place.class));
     }
@@ -116,7 +121,13 @@ class RatingServiceTest {
         ratingService.deleteReview(userId, placeId);
 
         verify(ratingRepository).deleteById("r1");
-                verify(typesensePlaceIndexSyncService).updateRatingOnly(placeId, 4.0, 10);
+        
+        ArgumentCaptor<PlaceRatingUpdatedEvent> eventCaptor = ArgumentCaptor.forClass(PlaceRatingUpdatedEvent.class);
+        verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
+        PlaceRatingUpdatedEvent event = eventCaptor.getValue();
+        assertEquals(placeId, event.placeId());
+        assertEquals(4.0, event.rating());
+        assertEquals(10, event.reviewCount());
     }
 
     @Test
@@ -177,7 +188,7 @@ class RatingServiceTest {
                 () -> ratingService.saveReview("u1", "p1", new ReviewDTO(5, "Excellent")));
 
         verify(mongoTemplate, never()).findAndModify(any(Query.class), any(), any(), eq(Place.class));
-        verify(typesensePlaceIndexSyncService, never()).updateRatingOnly(any(), anyDouble(), anyInt());
+        verify(applicationEventPublisher, never()).publishEvent(any());
     }
 
     @Test

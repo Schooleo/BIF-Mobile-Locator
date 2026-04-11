@@ -12,18 +12,9 @@ public interface PlaceSearchIndexSyncService {
 
     /**
      * Update only rating fields for a place in the search index.
-     * Default implementation falls back to a full upsert-compatible payload.
+     * Implementations must preserve all non-rating fields (true partial update semantics).
      */
-    default void updateRatingOnly(String placeId, double rating, int reviewCount) {
-        if (placeId == null || placeId.isBlank()) {
-            return;
-        }
-        Place place = new Place();
-        place.setId(placeId);
-        place.setRating(rating);
-        place.setReviewCount(reviewCount);
-        upsert(place);
-    }
+    void updateRatingOnly(String placeId, double rating, int reviewCount);
 
     /** Create the backing collection/index if it does not already exist. */
     default void ensureCollectionExists() {

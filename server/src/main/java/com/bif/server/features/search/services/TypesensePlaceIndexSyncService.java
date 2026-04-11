@@ -4,8 +4,8 @@ import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.search.config.TypesenseProperties;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -95,7 +95,9 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
                 }
 
             if (response.statusCode() == 404) {
-                fallbackUpsertForMissingDocument(placeId);
+                    if (!mergeExistingDocumentAndUpsert(placeId, newRating, reviewCount)) {
+                        fallbackUpsertForMissingDocument(placeId, newRating, reviewCount);
+                    }
                 return;
             }
 
@@ -111,14 +113,114 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
         }
     }
 
-    private void fallbackUpsertForMissingDocument(String placeId) {
+    private boolean mergeExistingDocumentAndUpsert(String placeId, double newRating, int reviewCount) {
+        try {
+            HttpRequest getRequest = HttpRequest.newBuilder()
+                    .uri(buildDocumentUri(placeId))
+                    .timeout(Duration.ofMillis(typesenseProperties.getReadTimeoutMs()))
+                    .header("X-TYPESENSE-API-KEY", typesenseProperties.getApiKey())
+                    .GET()
+                    .build();
+
+            HttpResponse<String> getResponse = sendWithRetry(getRequest, "fetch place " + placeId + " before rating merge");
+            if (getResponse == null) {
+                return false;
+            }
+
+            if (getResponse.statusCode() == 404) {
+                return false;
+            }
+
+            if (getResponse.statusCode() < 200 || getResponse.statusCode() >= 300) {
+                LOGGER.warn("Typesense pre-merge fetch failed for place {} with status {}",
+                        placeId, getResponse.statusCode());
+                return false;
+            }
+
+            if (getResponse.body() == null || getResponse.body().isBlank()) {
+                LOGGER.warn("Typesense pre-merge fetch returned empty body for place {}", placeId);
+                return false;
+            }
+
+            Map<String, Object> existingDocument = objectMapper.readValue(
+                    getResponse.body(),
+                    new TypeReference<Map<String, Object>>() {
+                    });
+            existingDocument.put("rating", newRating);
+            existingDocument.put("reviewCount", reviewCount);
+            existingDocument.putIfAbsent("id", placeId);
+
+            String upsertBody = objectMapper.writeValueAsString(existingDocument);
+            HttpRequest upsertRequest = HttpRequest.newBuilder()
+                    .uri(buildUpsertUri())
+                    .timeout(Duration.ofMillis(typesenseProperties.getReadTimeoutMs()))
+                    .header("X-TYPESENSE-API-KEY", typesenseProperties.getApiKey())
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(upsertBody))
+                    .build();
+
+            HttpResponse<String> upsertResponse = sendWithRetry(upsertRequest,
+                    "merged upsert for place " + placeId + " after rating patch miss");
+            return upsertResponse != null && upsertResponse.statusCode() >= 200 && upsertResponse.statusCode() < 300;
+        } catch (IOException e) {
+            LOGGER.error("Typesense merge+upsert I/O failure for place {}", placeId, e);
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            LOGGER.error("Typesense merge+upsert interrupted for place {}", placeId, e);
+            return false;
+        }
+    }
+
+    private void fallbackUpsertForMissingDocument(String placeId, double newRating, int reviewCount) {
         if (placeRepository == null) {
             LOGGER.warn("Cannot fallback upsert for place {} because repository is unavailable", placeId);
             return;
         }
 
-        placeRepository.findById(placeId).ifPresentOrElse(this::upsert,
-                () -> LOGGER.warn("Typesense PATCH fallback skipped: place {} not found in Mongo", placeId));
+        placeRepository.findById(placeId).ifPresentOrElse(
+            place -> upsertWithRating(place, newRating, reviewCount),
+            () -> LOGGER.warn("Typesense PATCH fallback skipped: place {} not found in Mongo", placeId));
+    }
+
+    private void upsertWithRating(Place place, double newRating, int reviewCount) {
+        if (!isReady() || place == null || place.getId() == null
+                || place.getId().isBlank()) {
+            return;
+        }
+
+        try {
+            Map<String, Object> document = objectMapper.convertValue(
+                place, new TypeReference<Map<String, Object>>() {
+                });
+            document.put("rating", newRating);
+            document.put("reviewCount", reviewCount);
+            if (place.getLocation() != null) {
+                double latitude = place.getLocation().getLatitude();
+                double longitude = place.getLocation().getLongitude();
+                document.put("location", Arrays.asList(latitude, longitude));
+            } else {
+                // Do not send location: null
+                document.remove("location");
+            }
+
+            String body = objectMapper.writeValueAsString(document);
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(buildUpsertUri())
+                    .timeout(Duration.ofMillis(
+                            typesenseProperties.getReadTimeoutMs()))
+                    .header("X-TYPESENSE-API-KEY", typesenseProperties.getApiKey())
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+
+            sendWithRetry(request, "upsert place " + place.getId() + " with rating fallback");
+        } catch (IOException e) {
+            LOGGER.error("Typesense upsert I/O failure for place {}", place.getId(), e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            LOGGER.error("Typesense upsert interrupted for place {}", place.getId(), e);
+        }
     }
 
     @Override
@@ -136,6 +238,9 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
                 double latitude = place.getLocation().getLatitude();
                 double longitude = place.getLocation().getLongitude();
                 document.put("location", Arrays.asList(latitude, longitude));
+            } else {
+                // Do not send location: null
+                document.remove("location");
             }
 
             String body = objectMapper.writeValueAsString(document);
@@ -181,6 +286,9 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
                         double latitude = place.getLocation().getLatitude();
                         double longitude = place.getLocation().getLongitude();
                         document.put("location", Arrays.asList(latitude, longitude));
+                    } else {
+                        // Do not send location: null
+                        document.remove("location");
                     }
                     joiner.add(objectMapper.writeValueAsString(document));
                 }
@@ -333,7 +441,7 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
                         {"name": "name",              "type": "string"},
                         {"name": "address",           "type": "string",   "optional": true},
                         {"name": "rating",            "type": "float",    "optional": true},
-                                                {"name": "location",          "type": "geopoint"},
+                                                {"name": "location",          "type": "geopoint", "optional": true},
                         {"name": "tags",              "type": "string[]", "optional": true},
                         {"name": "placeSource",       "type": "string",   "optional": true},
                         {"name": "persistedByAction", "type": "string",   "optional": true},
@@ -376,6 +484,9 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
                             + "Collection may need reindex/migration to support geo search.",
                     collection);
         }
+        throw new IllegalStateException(
+                "Typesense collection '" + collection + "' schema is missing geopoint field 'location'. "
+                + "Cannot proceed with search indexing. Please recreate the collection.");
     }
 
     private boolean isLocationGeopointMissing(String schemaPayload) {
@@ -391,8 +502,18 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
             for (JsonNode field : fields) {
                 String name = field.path("name").asText("");
                 String type = field.path("type").asText("");
-                if ("location".equals(name) && "geopoint".equals(type)) {
-                    return false;
+                if ("location".equals(name)) {
+                    if ("geopoint".equals(type)) {
+                        boolean isOptional = field.path("optional").asBoolean(false);
+                        if (!isOptional) {
+                            LOGGER.warn("Typesense collection schema has non-optional location field. "
+                                    + "This may cause indexing issues when location is null.");
+                            return true;
+                        }
+                        return false;
+                    } else {
+                        return true;
+                    }
                 }
             }
             return true;
@@ -473,6 +594,7 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
     }
 
     private String encode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+        return URLEncoder.encode(value, StandardCharsets.UTF_8)
+                .replace("+", "%20");
     }
 }
