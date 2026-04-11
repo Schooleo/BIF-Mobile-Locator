@@ -40,7 +40,7 @@ public class ReviewSyncEntityHandlerTest {
         // Arrange
         String placeId = "p1";
         String userId = "u1";
-        String payload = "{\"placeId\":\"" + placeId + "\", \"userId\":\"" + userId + "\", \"rating\":4, \"comment\":\"Nice\"}";
+        String payload = "{\"placeId\":\"" + placeId + "\", \"userId\":\"" + userId + "\", \"stars\":4, \"comment\":\"Nice\"}";
         
         SyncChangeDto change = new SyncChangeDto();
         change.entityType = "review";

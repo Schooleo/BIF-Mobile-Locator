@@ -78,7 +78,12 @@ public class PlaceReviewController {
                     dto.comment(),
                     userId,
                     placeId,
-                    0L);
+                    0L,
+                    dto.externalSource(),
+                    dto.externalId(),
+                    dto.lat(),
+                    dto.lng(),
+                    dto.placeName());
             return ResponseEntity.ok(saved);
         } catch (NoSuchElementException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorDTO(e.getMessage()));

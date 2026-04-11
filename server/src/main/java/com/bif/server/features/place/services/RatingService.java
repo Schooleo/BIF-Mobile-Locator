@@ -66,7 +66,12 @@ public class RatingService {
         review.setPlaceId(resolvedPlaceId);
         review.setStars(dto.stars());
         review.setComment(normalizeComment(dto.comment()));
-        review.setCreatedAt(Instant.now());
+        review.setExternalSource(normalizeNullable(dto.externalSource()));
+        review.setExternalId(normalizeNullable(dto.externalId()));
+        review.setLat(dto.lat());
+        review.setLng(dto.lng());
+        review.setPlaceName(normalizeNullable(dto.placeName()));
+        review.setCreatedAt(dto.createdAt() > 0 ? Instant.ofEpochMilli(dto.createdAt()) : Instant.now());
 
         PlaceReview persistedReview;
         try {
@@ -110,6 +115,32 @@ public class RatingService {
             String placeId,
             long serverVersion
     ) {
+        return saveOrUpdateReview(
+            stars,
+            comment,
+            userId,
+            placeId,
+            serverVersion,
+            null,
+            null,
+            null,
+            null,
+            null);
+        }
+
+        @Transactional
+        public ReviewResponseDTO saveOrUpdateReview(
+            int stars,
+            String comment,
+            String userId,
+            String placeId,
+            long serverVersion,
+            String externalSource,
+            String externalId,
+            Double lat,
+            Double lng,
+            String placeName
+        ) {
         if (serverVersion > 0) {
             LOGGER.debug("saveOrUpdateReview invoked from sync version {}", serverVersion);
         }
@@ -128,6 +159,11 @@ public class RatingService {
             int oldStars = existingReview.getStars();
             existingReview.setStars(stars);
             existingReview.setComment(normalizedComment);
+            existingReview.setExternalSource(normalizeNullable(externalSource));
+            existingReview.setExternalId(normalizeNullable(externalId));
+            existingReview.setLat(lat);
+            existingReview.setLng(lng);
+            existingReview.setPlaceName(normalizeNullable(placeName));
             if (existingReview.getCreatedAt() == null) {
                 existingReview.setCreatedAt(Instant.now());
             }
@@ -152,6 +188,11 @@ public class RatingService {
         review.setPlaceId(resolvedPlaceId);
         review.setStars(stars);
         review.setComment(normalizedComment);
+        review.setExternalSource(normalizeNullable(externalSource));
+        review.setExternalId(normalizeNullable(externalId));
+        review.setLat(lat);
+        review.setLng(lng);
+        review.setPlaceName(normalizeNullable(placeName));
         review.setCreatedAt(Instant.now());
 
         PlaceReview persisted;
@@ -180,6 +221,11 @@ public class RatingService {
             int oldStars = existingReview.getStars();
             existingReview.setStars(stars);
             existingReview.setComment(normalizedComment);
+            existingReview.setExternalSource(normalizeNullable(externalSource));
+            existingReview.setExternalId(normalizeNullable(externalId));
+            existingReview.setLat(lat);
+            existingReview.setLng(lng);
+            existingReview.setPlaceName(normalizeNullable(placeName));
             if (existingReview.getCreatedAt() == null) {
                 existingReview.setCreatedAt(Instant.now());
             }
@@ -273,6 +319,7 @@ public class RatingService {
     }
 
     private ReviewResponseDTO toReviewResponseDTO(PlaceReview review, String userName) {
+        long createdAt = review.getCreatedAt() != null ? review.getCreatedAt().toEpochMilli() : 0L;
         return new ReviewResponseDTO(
                 review.getId(),
                 review.getPlaceId(),
@@ -280,7 +327,12 @@ public class RatingService {
                 userName,
                 review.getStars(),
                 review.getComment(),
-                review.getCreatedAt()
+                review.getExternalSource(),
+                review.getExternalId(),
+                review.getLat(),
+                review.getLng(),
+                review.getPlaceName(),
+                createdAt
         );
     }
 
@@ -321,6 +373,14 @@ public class RatingService {
     }
 
     private String normalizeComment(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeNullable(String value) {
         if (value == null) {
             return null;
         }

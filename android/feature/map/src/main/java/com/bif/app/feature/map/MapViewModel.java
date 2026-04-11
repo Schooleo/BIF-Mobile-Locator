@@ -15,6 +15,7 @@ import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
 import com.bif.app.domain.model.OfflineMapDownloadState;
 import com.bif.app.domain.model.Place;
+import com.bif.app.domain.model.PlaceIdentityContext;
 import com.bif.app.domain.model.Route;
 import com.bif.app.domain.model.Review;
 import com.bif.app.domain.repository.IFavoriteRepository;
@@ -37,7 +38,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel;
 
 @HiltViewModel
 public class MapViewModel extends ViewModel {
-
     private static final String NO_MAP_DATA_DOWNLOADED = "No map data downloaded";
     private static final String OFFLINE_ENGINE_UNAVAILABLE = "Offline routing engine unavailable";
     private static final String ROUTE_ESTIMATING = "Estimating route...";
@@ -97,6 +97,9 @@ public class MapViewModel extends ViewModel {
             new java.util.concurrent.atomic.AtomicBoolean(false);
         private final java.util.concurrent.atomic.AtomicLong reviewLoadRequestId =
             new java.util.concurrent.atomic.AtomicLong(0L);
+
+    @Nullable
+    private volatile PlaceIdentityContext currentPlaceIdentityContext;
 
     @Inject
     public MapViewModel(
@@ -222,12 +225,23 @@ public class MapViewModel extends ViewModel {
             return;
         }
 
+        final PlaceIdentityContext placeIdentityContext = new PlaceIdentityContext();
+        placeIdentityContext.externalSource = place.placeSource;
+        placeIdentityContext.externalId = place.id;
+        placeIdentityContext.lat = place.location.latitude;
+        placeIdentityContext.lng = place.location.longitude;
+        placeIdentityContext.placeName = place.name;
+
         final long requestId = reviewLoadRequestId.incrementAndGet();
         _isLoadingReviews.setValue(true);
         _currentPlaceId.setValue(null);
         reviewExecutor.execute(() -> {
             String internalId = reviewRepository.resolveInternalPlaceId(
-                place.placeSource, place.id, place.location.latitude, place.location.longitude, place.name);
+                placeIdentityContext.externalSource,
+                placeIdentityContext.externalId,
+                placeIdentityContext.lat,
+                placeIdentityContext.lng,
+                placeIdentityContext.placeName);
 
             if (requestId != reviewLoadRequestId.get()) {
                 return;
@@ -238,6 +252,7 @@ public class MapViewModel extends ViewModel {
                 return;
             }
 
+            updateCurrentReviewMetadata(placeIdentityContext);
             _currentPlaceId.postValue(internalId);
             reviewRepository.refreshReviews(internalId, () -> {
                 if (requestId == reviewLoadRequestId.get()) {
@@ -248,15 +263,16 @@ public class MapViewModel extends ViewModel {
     }
 
     public void submitReview(int stars, String comment) {
-        submitOrUpdateReview(null, stars, comment, false);
+        submitOrUpdateReview(null, null, stars, comment, false);
     }
 
     public void updateReview(@Nullable Review existingReview, int stars, String comment) {
         String expectedPlaceId = existingReview != null ? existingReview.placeId : null;
-        submitOrUpdateReview(expectedPlaceId, stars, comment, true);
+        submitOrUpdateReview(expectedPlaceId, existingReview, stars, comment, true);
     }
 
     private void submitOrUpdateReview(@Nullable String expectedPlaceId,
+                                      @Nullable Review existingReview,
                                       int stars,
                                       String comment,
                                       boolean isUpdate) {
@@ -276,6 +292,36 @@ public class MapViewModel extends ViewModel {
             return;
         }
 
+        PlaceIdentityContext identityContext = copyIdentityContext(currentPlaceIdentityContext);
+        if (identityContext == null) {
+            identityContext = new PlaceIdentityContext();
+        }
+
+        if (existingReview != null) {
+            if ((identityContext.externalSource == null || identityContext.externalSource.trim().isEmpty())
+                    && existingReview.externalSource != null) {
+                identityContext.externalSource = existingReview.externalSource;
+            }
+            if ((identityContext.externalId == null || identityContext.externalId.trim().isEmpty())
+                    && existingReview.externalId != null) {
+                identityContext.externalId = existingReview.externalId;
+            }
+            if ((identityContext.placeName == null || identityContext.placeName.trim().isEmpty())
+                    && existingReview.placeName != null) {
+                identityContext.placeName = existingReview.placeName;
+            }
+            if ((identityContext.lat == null || identityContext.lat == 0.0d)
+                    && existingReview.lat != null) {
+                identityContext.lat = existingReview.lat;
+            }
+            if ((identityContext.lng == null || identityContext.lng == 0.0d)
+                    && existingReview.lng != null) {
+                identityContext.lng = existingReview.lng;
+            }
+        }
+
+        final PlaceIdentityContext finalIdentityContext = copyIdentityContext(identityContext);
+
         reviewExecutor.execute(() -> {
             if (submitRequestId != reviewLoadRequestId.get()) {
                 return;
@@ -290,11 +336,37 @@ public class MapViewModel extends ViewModel {
             }
 
             if (isUpdate) {
-                reviewRepository.updateReview(placeId, stars, comment);
+                reviewRepository.updateReview(
+                        placeId,
+                        stars,
+                        comment,
+                        finalIdentityContext);
             } else {
-                reviewRepository.submitReview(placeId, stars, comment);
+                reviewRepository.submitReview(
+                        placeId,
+                        stars,
+                        comment,
+                        finalIdentityContext);
             }
         });
+    }
+
+    private void updateCurrentReviewMetadata(@Nullable PlaceIdentityContext identityContext) {
+        currentPlaceIdentityContext = copyIdentityContext(identityContext);
+    }
+
+    @Nullable
+    private PlaceIdentityContext copyIdentityContext(@Nullable PlaceIdentityContext source) {
+        if (source == null) {
+            return null;
+        }
+        PlaceIdentityContext copy = new PlaceIdentityContext();
+        copy.externalSource = source.externalSource;
+        copy.externalId = source.externalId;
+        copy.lat = source.lat;
+        copy.lng = source.lng;
+        copy.placeName = source.placeName;
+        return copy;
     }
 
     public void removeFromFavorites(Favorite favorite) {

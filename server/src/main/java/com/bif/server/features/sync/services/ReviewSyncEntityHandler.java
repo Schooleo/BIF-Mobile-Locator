@@ -87,9 +87,9 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
             throw new IllegalArgumentException("Review sync: invalid review payload");
         }
 
-        int stars = payload.rating > 0 ? payload.rating : payload.stars;
+        int stars = payload.stars;
         if (stars < 1 || stars > 5) {
-            throw new IllegalArgumentException("Review sync: stars/rating must be between 1 and 5");
+            throw new IllegalArgumentException("Review sync: stars must be between 1 and 5");
         }
         String comment = payload.comment;
 
@@ -98,7 +98,12 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
                 comment,
                 reviewUserId,
                 placeId,
-                newVersion);
+            newVersion,
+            payload.externalSource,
+            payload.externalId,
+            payload.lat,
+            payload.lng,
+            payload.placeName);
 
         LOGGER.debug("Review sync: saved review for place={} stars={}", placeId, stars);
 
@@ -167,11 +172,13 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
                 : "Anonymous";
 
         payload.stars = review.stars();
-        payload.rating = review.stars();
         payload.comment = review.comment();
-        payload.createdAt = review.createdAt() != null
-                ? review.createdAt().toString()
-                : null;
+        payload.externalSource = review.externalSource();
+        payload.externalId = review.externalId();
+        payload.lat = review.lat();
+        payload.lng = review.lng();
+        payload.placeName = review.placeName();
+        payload.createdAt = review.createdAt();
         return payload;
     }
 
@@ -180,9 +187,13 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
         public String userId;
         public String userName;
         public int stars;
-        public int rating;
         public String comment;
-        public String createdAt;
+        public String externalSource;
+        public String externalId;
+        public Double lat;
+        public Double lng;
+        public String placeName;
+        public long createdAt;
         public long serverVersion;
         public boolean deleted;
     }

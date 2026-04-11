@@ -12,7 +12,6 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -44,7 +43,7 @@ class PlaceReviewControllerTest {
 
     @Test
     void saveReview_WhenValid_ReturnsCreated() {
-        ReviewResponseDTO saved = new ReviewResponseDTO("r1", "p1", "u1", "Anonymous", 5, "nice", Instant.now());
+        ReviewResponseDTO saved = new ReviewResponseDTO("r1", "p1", "u1", "Anonymous", 5, "nice", 1764547200000L);
         when(ratingService.saveReview("u1", "p1", new ReviewDTO(5, "nice"))).thenReturn(saved);
 
         ResponseEntity<?> result = controller.saveReview("u1", "p1", new ReviewDTO(5, "nice"));
@@ -55,7 +54,7 @@ class PlaceReviewControllerTest {
 
     @Test
     void getReviews_ReturnsList() {
-        ReviewResponseDTO dto = new ReviewResponseDTO("r1", "p1", "u1", "Anonymous", 5, "good", Instant.now());
+        ReviewResponseDTO dto = new ReviewResponseDTO("r1", "p1", "u1", "Anonymous", 5, "good", 1764547200000L);
         when(ratingService.getPlaceReviewsWithUsers("p1")).thenReturn(List.of(dto));
 
         var result = controller.getReviews("p1");
@@ -73,7 +72,7 @@ class PlaceReviewControllerTest {
 
     @Test
     void getMyReview_WhenFound_ReturnsOk() {
-        ReviewResponseDTO dto = new ReviewResponseDTO("r1", "p1", "u1", "Me", 5, "great", Instant.now());
+        ReviewResponseDTO dto = new ReviewResponseDTO("r1", "p1", "u1", "Me", 5, "great", 1764547200000L);
         when(ratingService.getUserReviewWithUser("u1", "p1")).thenReturn(Optional.of(dto));
 
         ResponseEntity<ReviewResponseDTO> result = controller.getMyReview("u1", "p1");
@@ -113,8 +112,9 @@ class PlaceReviewControllerTest {
 
     @Test
     void updateMyReview_WhenValid_ReturnsOk() {
-        ReviewResponseDTO saved = new ReviewResponseDTO("r1", "p1", "u1", "Anonymous", 4, null, Instant.now());
-        when(ratingService.saveOrUpdateReview(4, null, "u1", "p1", 0L)).thenReturn(saved);
+        ReviewResponseDTO saved = new ReviewResponseDTO("r1", "p1", "u1", "Anonymous", 4, null, 1764547200000L);
+        when(ratingService.saveOrUpdateReview(4, null, "u1", "p1", 0L,
+            null, null, null, null, null)).thenReturn(saved);
 
         ResponseEntity<?> result = controller.updateMyReview("u1", "p1", new ReviewDTO(4, null));
 

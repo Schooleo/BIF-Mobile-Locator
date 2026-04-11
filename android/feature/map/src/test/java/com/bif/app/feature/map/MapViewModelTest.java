@@ -24,6 +24,7 @@ import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
 import com.bif.app.domain.model.Place;
+import com.bif.app.domain.model.PlaceIdentityContext;
 import com.bif.app.domain.model.Route;
 import com.bif.app.domain.model.Review;
 import com.bif.app.domain.repository.IFavoriteRepository;
@@ -492,13 +493,23 @@ public class MapViewModelTest {
         // Arrange - set current place
         when(reviewRepository.resolveInternalPlaceId(any(), any(), anyDouble(), anyDouble(), any()))
             .thenReturn("internal-123");
-        viewModel.loadReviews(new Place("ext-1", "Park", "Loc", 4.0, new Location(0,0)));
+        Place place = new Place("ext-1", "Park", "Loc", 4.0, new Location(0,0));
+        place.placeSource = "OSM";
+        viewModel.loadReviews(place);
         
         // Act
         viewModel.submitReview(5, "Excellent!");
 
         // Assert
-        verify(reviewRepository).submitReview("internal-123", 5, "Excellent!");
+        ArgumentCaptor<PlaceIdentityContext> contextCaptor = ArgumentCaptor.forClass(PlaceIdentityContext.class);
+        verify(reviewRepository).submitReview(eq("internal-123"), eq(5), eq("Excellent!"), contextCaptor.capture());
+        PlaceIdentityContext context = contextCaptor.getValue();
+        assertNotNull(context);
+        assertEquals("OSM", context.externalSource);
+        assertEquals("ext-1", context.externalId);
+        assertEquals(Double.valueOf(0.0), context.lat);
+        assertEquals(Double.valueOf(0.0), context.lng);
+        assertEquals("Park", context.placeName);
     }
 
     @Test
@@ -518,14 +529,16 @@ public class MapViewModelTest {
 
         queuedViewModel.submitReview(5, "Should be ignored");
 
-        verify(reviewRepository, never()).submitReview(anyString(), anyInt(), anyString());
+        verify(reviewRepository, never()).submitReview(anyString(), anyInt(), anyString(), any(PlaceIdentityContext.class));
     }
 
     @Test
     public void updateReview_WhenCalled_TriggersRepositoryUpdate() {
         when(reviewRepository.resolveInternalPlaceId(any(), any(), anyDouble(), anyDouble(), any()))
                 .thenReturn("internal-123");
-        viewModel.loadReviews(new Place("ext-1", "Park", "Loc", 4.0, new Location(0,0)));
+        Place place = new Place("ext-1", "Park", "Loc", 4.0, new Location(0,0));
+        place.placeSource = "OSM";
+        viewModel.loadReviews(place);
 
         Review existing = new Review();
         existing.placeId = "internal-123";
@@ -533,7 +546,15 @@ public class MapViewModelTest {
 
         viewModel.updateReview(existing, 4, "Updated");
 
-        verify(reviewRepository).updateReview("internal-123", 4, "Updated");
+        ArgumentCaptor<PlaceIdentityContext> contextCaptor = ArgumentCaptor.forClass(PlaceIdentityContext.class);
+        verify(reviewRepository).updateReview(eq("internal-123"), eq(4), eq("Updated"), contextCaptor.capture());
+        PlaceIdentityContext context = contextCaptor.getValue();
+        assertNotNull(context);
+        assertEquals("OSM", context.externalSource);
+        assertEquals("ext-1", context.externalId);
+        assertEquals(Double.valueOf(0.0), context.lat);
+        assertEquals(Double.valueOf(0.0), context.lng);
+        assertEquals("Park", context.placeName);
     }
 
     @Test

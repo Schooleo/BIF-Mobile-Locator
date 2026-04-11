@@ -4,18 +4,19 @@ public class PlaceReviewDto {
     public String placeId;
     public String userId;
     public String userName;
-    public int rating;
-    public int stars;  // Server uses 'stars', Android uses 'rating'
+    public int stars;
     public String comment;
-    public String createdAt;
+    public long createdAt;
+
+    // Place identity metadata for stable ID resolution across sync boundaries.
+    public String externalSource;
+    public String externalId;
+    public Double lat;
+    public Double lng;
+    public String placeName;
     
     // Sync metadata from server
     public long serverVersion;
     public String updatedAt; // ISO format
-
-    /** Returns the effective star count, preferring 'stars' over 'rating'. */
-    public int getEffectiveStars() {
-        return stars > 0 ? stars : rating;
-    }
 }
 

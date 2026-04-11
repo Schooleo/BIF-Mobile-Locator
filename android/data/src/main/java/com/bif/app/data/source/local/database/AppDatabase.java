@@ -50,7 +50,7 @@ import com.bif.app.data.source.local.entity.TripStopEntity;
         TripPlanEntity.class,
         TripMemberCrossRef.class,
         TripStopEntity.class
-}, version = 17, exportSchema = false)
+}, version = 18, exportSchema = false)
 @TypeConverters({ FriendshipStatusConverter.class, UploadStatusConverter.class })
 public abstract class AppDatabase extends RoomDatabase {
     public static final Migration MIGRATION_15_16 = new Migration(15, 16) {
@@ -147,6 +147,46 @@ public abstract class AppDatabase extends RoomDatabase {
                 return cursor.moveToFirst();
             } finally {
                 cursor.close();
+            }
+        }
+
+        private boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
+            Cursor cursor = database.query("PRAGMA table_info(`" + tableName + "`)");
+            try {
+                int nameIndex = cursor.getColumnIndex("name");
+                if (nameIndex < 0) {
+                    nameIndex = 1;
+                }
+                while (cursor.moveToNext()) {
+                    String existing = cursor.getString(nameIndex);
+                    if (columnName.equals(existing)) {
+                        return true;
+                    }
+                }
+                return false;
+            } finally {
+                cursor.close();
+            }
+        }
+    };
+
+    public static final Migration MIGRATION_17_18 = new Migration(17, 18) {
+        @Override
+        public void migrate(SupportSQLiteDatabase database) {
+            if (!hasColumn(database, "reviews", "externalSource")) {
+                database.execSQL("ALTER TABLE reviews ADD COLUMN externalSource TEXT");
+            }
+            if (!hasColumn(database, "reviews", "externalId")) {
+                database.execSQL("ALTER TABLE reviews ADD COLUMN externalId TEXT");
+            }
+            if (!hasColumn(database, "reviews", "lat")) {
+                database.execSQL("ALTER TABLE reviews ADD COLUMN lat REAL");
+            }
+            if (!hasColumn(database, "reviews", "lng")) {
+                database.execSQL("ALTER TABLE reviews ADD COLUMN lng REAL");
+            }
+            if (!hasColumn(database, "reviews", "placeName")) {
+                database.execSQL("ALTER TABLE reviews ADD COLUMN placeName TEXT");
             }
         }
 

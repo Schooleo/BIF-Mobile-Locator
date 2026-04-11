@@ -20,6 +20,7 @@ import com.bif.app.data.source.local.entity.PlaceEntity;
 import com.bif.app.data.source.local.entity.ReviewEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 import com.bif.app.data.sync.core.SyncManager;
+import com.bif.app.domain.model.PlaceIdentityContext;
 import com.bif.app.domain.model.Review;
 import com.bif.app.domain.repository.IReviewRepository;
 import com.google.gson.Gson;
@@ -105,15 +106,35 @@ public class ReviewRepository implements IReviewRepository {
     }
 
     @Override
-    public void submitReview(String placeId, int stars, String comment) {
+    public void submitReview(String placeId,
+                             int stars,
+                             String comment,
+                     PlaceIdentityContext identityContext) {
         String captureUserId = getActiveUserId();
-        executeReviewAction(placeId, stars, comment, "CREATE", captureUserId, getActiveUsername());
+        executeReviewAction(
+                placeId,
+                stars,
+                comment,
+                "CREATE",
+                captureUserId,
+                getActiveUsername(),
+                identityContext);
     }
 
     @Override
-    public void updateReview(String placeId, int stars, String comment) {
+    public void updateReview(String placeId,
+                             int stars,
+                             String comment,
+                     PlaceIdentityContext identityContext) {
         String captureUserId = getActiveUserId();
-        executeReviewAction(placeId, stars, comment, "UPDATE", captureUserId, getActiveUsername());
+        executeReviewAction(
+                placeId,
+                stars,
+                comment,
+                "UPDATE",
+                captureUserId,
+                getActiveUsername(),
+                identityContext);
     }
 
     private void executeReviewAction(String placeId,
@@ -121,7 +142,8 @@ public class ReviewRepository implements IReviewRepository {
                                      String comment,
                                      String operation,
                                      String userId,
-                                     String userName) {
+                                     String userName,
+                                     PlaceIdentityContext identityContext) {
         executorService.execute(() -> {
             Review review = new Review();
             review.placeId = placeId;
@@ -129,10 +151,40 @@ public class ReviewRepository implements IReviewRepository {
             review.userName = userName;
             review.stars = stars;
             review.comment = comment;
+            if (identityContext != null) {
+                review.externalSource = identityContext.externalSource;
+                review.externalId = identityContext.externalId;
+                review.lat = identityContext.lat;
+                review.lng = identityContext.lng;
+                review.placeName = identityContext.placeName;
+            }
             review.pendingSync = true;
             review.deleted = false;
 
+            if (identityContext != null
+                    && ((identityContext.lat != null && identityContext.lat == 0.0d)
+                    || (identityContext.lng != null && identityContext.lng == 0.0d))) {
+                Log.w(TAG, "Review metadata has suspicious coordinates (0.0). placeId=" + placeId);
+            }
+
             ReviewEntity existing = reviewDao.getReviewSync(placeId, userId);
+            if (existing != null) {
+                if (review.externalSource == null || review.externalSource.trim().isEmpty()) {
+                    review.externalSource = existing.externalSource;
+                }
+                if (review.externalId == null || review.externalId.trim().isEmpty()) {
+                    review.externalId = existing.externalId;
+                }
+                if (review.placeName == null || review.placeName.trim().isEmpty()) {
+                    review.placeName = existing.placeName;
+                }
+                if ((review.lat == null || review.lat == 0.0d) && existing.lat != null) {
+                    review.lat = existing.lat;
+                }
+                if ((review.lng == null || review.lng == 0.0d) && existing.lng != null) {
+                    review.lng = existing.lng;
+                }
+            }
 
             appDatabase.runInTransaction(() -> {
                 long timestamp = System.currentTimeMillis();

@@ -21,5 +21,10 @@ public class PlaceReview {
     private String placeId;
     private int stars;
     private String comment;
+    private String externalSource;
+    private String externalId;
+    private Double lat;
+    private Double lng;
+    private String placeName;
     private Instant createdAt;
 }

@@ -56,7 +56,10 @@ public class AppModule {
                 context,
                 AppDatabase.class,
                 "bif_database")
-            .addMigrations(AppDatabase.MIGRATION_15_16, AppDatabase.MIGRATION_16_17)
+            .addMigrations(
+                    AppDatabase.MIGRATION_15_16,
+                    AppDatabase.MIGRATION_16_17,
+                    AppDatabase.MIGRATION_17_18)
                 .build();
     }
 
