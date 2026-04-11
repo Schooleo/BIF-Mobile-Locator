@@ -37,6 +37,7 @@ import com.bif.app.domain.repository.IRouteRepository;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.concurrent.Executor;
 
 import org.junit.Before;
@@ -310,8 +311,17 @@ public class MapViewModelTest {
         vm.searchForPlaces("coffee near me");
 
         verify(handler, Mockito.atLeastOnce()).postDelayed(runnableCaptor.capture(), eq(400L));
-        Runnable latestRunnable = runnableCaptor.getValue();
+        List<Runnable> postedRunnables = new ArrayList<>(runnableCaptor.getAllValues());
+        assertTrue(postedRunnables.size() >= 2);
+
+        Runnable firstRunnable = postedRunnables.get(0);
+        Runnable latestRunnable = postedRunnables.get(postedRunnables.size() - 1);
+        assertNotNull(firstRunnable);
         assertNotNull(latestRunnable);
+
+        firstRunnable.run();
+
+        verify(placeRepository, never()).searchPlaces(eq("coffee"), isNull());
 
         latestRunnable.run();
 

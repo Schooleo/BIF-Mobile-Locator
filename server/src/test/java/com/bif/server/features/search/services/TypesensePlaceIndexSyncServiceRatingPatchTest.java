@@ -1,8 +1,10 @@
 package com.bif.server.features.search.services;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -165,6 +167,39 @@ class TypesensePlaceIndexSyncServiceRatingPatchTest {
         verify(placeRepository).findById("p1");
         verify(httpClient, times(2)).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
     }
+
+        @Test
+        void updateRatingOnly_whenPatchReturnsNon404_doesNotFallbackOrThrows() throws Exception {
+                TypesenseProperties props = new TypesenseProperties();
+                props.setEnabled(true);
+                props.setApiKey("key");
+
+                HttpClient httpClient = Mockito.mock(HttpClient.class);
+                @SuppressWarnings("unchecked")
+                HttpResponse<String> patchResponse = Mockito.mock(HttpResponse.class);
+                when(patchResponse.statusCode()).thenReturn(500);
+
+                when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                                .thenReturn(patchResponse);
+
+                PlaceRepository placeRepository = Mockito.mock(PlaceRepository.class);
+                Place place = new Place();
+                place.setId("p1");
+                place.setName("A");
+                place.setAddress("B");
+                place.setRating(4.5);
+                place.setReviewCount(3);
+                place.setLocation(new Location(10.77, 106.69));
+                when(placeRepository.findById("p1")).thenReturn(Optional.of(place));
+
+                TypesensePlaceIndexSyncService service = new TypesensePlaceIndexSyncService(
+                                props, new ObjectMapper(), httpClient, placeRepository);
+
+                assertDoesNotThrow(() -> service.updateRatingOnly("p1", 4.8, 10));
+
+                verify(httpClient, times(1)).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+                verify(placeRepository, never()).findById("p1");
+        }
 
         private String readBody(HttpRequest request) throws Exception {
                 HttpRequest.BodyPublisher publisher = request.bodyPublisher().orElseThrow();

@@ -1,6 +1,7 @@
 package com.bif.app.core.auth;
 
 import android.content.Context;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 
@@ -18,6 +19,8 @@ import retrofit2.Callback;
 import retrofit2.Response;
 
 public class AuthSessionManager {
+
+    private static final String TAG = "AuthSessionManager";
 
     public interface LogoutCallback {
         void onComplete(boolean remoteSuccess);
@@ -72,9 +75,26 @@ public class AuthSessionManager {
 
         if (!userId.isBlank()) {
             UserPreferences.setUserId(context, userId);
-            syncInitializable.setUserContext(userId, null);
-            syncInitializable.setLastPulledVersion(0L);
-            syncInitializable.syncIfOnline();
+            try {
+                syncInitializable.setUserContext(userId, null);
+                syncInitializable.setLastPulledVersion(0L);
+                try {
+                    syncInitializable.syncIfOnline();
+                } catch (Exception syncException) {
+                    Log.e(TAG, "Initial sync trigger failed, retry will happen on next sync cycle",
+                            syncException);
+                    try {
+                        syncInitializable.syncIfOnline();
+                    } catch (Exception retryException) {
+                        Log.e(TAG, "Retrying initial sync trigger failed", retryException);
+                    }
+                }
+            } catch (Exception syncInitException) {
+                Log.e(TAG, "Failed to initialize sync context after authentication",
+                        syncInitException);
+                UserPreferences.setUserId(context, "");
+                syncInitializable.resetSyncContext();
+            }
         }
 
         if (!username.isBlank() || !email.isBlank()) {

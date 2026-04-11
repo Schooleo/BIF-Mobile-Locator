@@ -55,6 +55,11 @@ public interface FavoriteDao {
     default void replaceAll(String userId, List<FavoriteEntity> favorites) {
         deleteAll(userId);
         if (favorites != null && !favorites.isEmpty()) {
+            for (FavoriteEntity favorite : favorites) {
+                if (favorite != null) {
+                    favorite.userId = userId;
+                }
+            }
             insertAll(favorites);
         }
     }

@@ -3,6 +3,7 @@ package com.bif.app.data.repository;
 import android.content.Context;
 import android.util.Log;
 
+import androidx.annotation.Nullable;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.Transformations;
 
@@ -109,7 +110,7 @@ public class ReviewRepository implements IReviewRepository {
     public void submitReview(String placeId,
                              int stars,
                              String comment,
-                     PlaceIdentityContext identityContext) {
+                     @Nullable PlaceIdentityContext identityContext) {
         String captureUserId = getActiveUserId();
         executeReviewAction(
                 placeId,
@@ -125,7 +126,7 @@ public class ReviewRepository implements IReviewRepository {
     public void updateReview(String placeId,
                              int stars,
                              String comment,
-                     PlaceIdentityContext identityContext) {
+                     @Nullable PlaceIdentityContext identityContext) {
         String captureUserId = getActiveUserId();
         executeReviewAction(
                 placeId,
@@ -143,7 +144,7 @@ public class ReviewRepository implements IReviewRepository {
                                      String operation,
                                      String userId,
                                      String userName,
-                                     PlaceIdentityContext identityContext) {
+                                     @Nullable PlaceIdentityContext identityContext) {
         executorService.execute(() -> {
             Review review = new Review();
             review.placeId = placeId;
@@ -168,6 +169,9 @@ public class ReviewRepository implements IReviewRepository {
             }
 
             ReviewEntity existing = reviewDao.getReviewSync(placeId, userId);
+            final long createdAt = existing != null
+                    ? existing.createdAt
+                    : System.currentTimeMillis();
             if (existing != null) {
                 if (review.externalSource == null || review.externalSource.trim().isEmpty()) {
                     review.externalSource = existing.externalSource;
@@ -186,25 +190,20 @@ public class ReviewRepository implements IReviewRepository {
                 }
             }
 
-            appDatabase.runInTransaction(() -> {
-                long timestamp = System.currentTimeMillis();
-                if (existing != null) {
-                    timestamp = existing.createdAt;
-                }
-                review.createdAt = timestamp;
-                ReviewEntity entity = ReviewMapper.toEntity(review);
-                reviewDao.upsert(entity);
-                updateCachedPlaceRating(placeId);
-            });
-
             boolean syncedOnline = syncReviewOnline(placeId, review, operation);
             if (!syncedOnline) {
                 appDatabase.runInTransaction(() -> {
+                    review.createdAt = createdAt;
+                    ReviewEntity entity = ReviewMapper.toEntity(review);
+                    reviewDao.upsert(entity);
+                    updateCachedPlaceRating(placeId);
+
                     SyncQueueEntity syncEntry = createSyncEntry(
                             "review",
                             placeId + ":" + userId,
                             operation,
-                            ReviewMapper.toDto(review)
+                            ReviewMapper.toDto(review),
+                            userId
                     );
                     syncQueueDao.enqueue(syncEntry);
                 });
@@ -234,7 +233,8 @@ public class ReviewRepository implements IReviewRepository {
                             "review",
                             placeId + ":" + userId,
                             "DELETE",
-                            null
+                            null,
+                            userId
                     );
                     syncQueueDao.enqueue(syncEntry);
                 });
@@ -515,8 +515,13 @@ public class ReviewRepository implements IReviewRepository {
         return value == null || value.trim().isEmpty();
     }
 
-    private SyncQueueEntity createSyncEntry(String entityType, String entityId, String operation, Object payload) {
+    private SyncQueueEntity createSyncEntry(String entityType,
+            String entityId,
+            String operation,
+            Object payload,
+            String userId) {
         SyncQueueEntity entry = new SyncQueueEntity();
+        entry.userId = userId != null ? userId : "";
         entry.entityType = entityType;
         entry.entityId = entityId;
         entry.operation = operation;

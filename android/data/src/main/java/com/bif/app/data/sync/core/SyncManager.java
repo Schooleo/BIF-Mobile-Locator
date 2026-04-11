@@ -301,6 +301,7 @@ public class SyncManager implements ISyncInitializable {
             Object payload) {
         enqueueExecutor.execute(() -> {
             SyncQueueEntity entry = new SyncQueueEntity();
+            entry.userId = userId != null ? userId : "";
             entry.entityType = entityType;
             entry.entityId = entityId;
             entry.operation = operation;

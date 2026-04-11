@@ -40,9 +40,12 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
     @Override
     public void applyPulledChange(SyncChangeDto change, String activeUserId) {
         String resolvedUserId = activeUserId != null
-                && !activeUserId.trim().isEmpty()
-                ? activeUserId.trim()
-                : "anonymous";
+            ? activeUserId.trim()
+            : "";
+        if (resolvedUserId.isEmpty()) {
+            Log.w(TAG, "Missing active user context, deferring pulled favorite change");
+            return;
+        }
 
         if ("DELETE".equalsIgnoreCase(change.operation)
                 && (change.payload == null || change.payload.isEmpty())) {

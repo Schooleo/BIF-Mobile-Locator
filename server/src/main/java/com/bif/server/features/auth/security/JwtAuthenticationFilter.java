@@ -1,5 +1,6 @@
 package com.bif.server.features.auth.security;
 
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -47,7 +48,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
-            } catch (RuntimeException ex) {
+            } catch (JwtException ex) {
                 LOGGER.warn("Ignoring invalid JWT on request uri={}", request.getRequestURI(), ex);
             }
         }

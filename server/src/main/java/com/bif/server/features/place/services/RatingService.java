@@ -5,7 +5,6 @@ import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.repositories.RatingRepository;
 import com.bif.server.features.search.services.PlaceSearchIndexSyncService;
-import com.bif.server.features.search.services.TypesensePlaceIndexSyncService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
@@ -69,12 +68,12 @@ public class RatingService {
         review.setUserId(resolvedUserId);
         review.setPlaceId(normalizedResolvedPlaceId);
         review.setStars(dto.stars());
-        review.setComment(normalizeComment(dto.comment()));
-        review.setExternalSource(normalizeNullable(dto.externalSource()));
-        review.setExternalId(normalizeNullable(dto.externalId()));
+        review.setComment(normalizeString(dto.comment()));
+        review.setExternalSource(normalizeString(dto.externalSource()));
+        review.setExternalId(normalizeString(dto.externalId()));
         review.setLat(dto.lat());
         review.setLng(dto.lng());
-        review.setPlaceName(normalizeNullable(dto.placeName()));
+        review.setPlaceName(normalizeString(dto.placeName()));
         review.setCreatedAt(dto.createdAt() > 0 ? Instant.ofEpochMilli(dto.createdAt()) : Instant.now());
 
         PlaceReview persistedReview;
@@ -147,7 +146,7 @@ public class RatingService {
         logPlaceIdCorrectionIfNeeded(normalizedOriginalPlaceId, normalizedResolvedPlaceId, "saveOrUpdateReview");
         validateStars(stars);
 
-        String normalizedComment = normalizeComment(comment);
+        String normalizedComment = normalizeString(comment);
 
         Optional<PlaceReview> existingOpt = ratingRepository
             .findByUserIdAndPlaceId(resolvedUserId, normalizedResolvedPlaceId);
@@ -157,11 +156,11 @@ public class RatingService {
             int oldStars = existingReview.getStars();
             existingReview.setStars(stars);
             existingReview.setComment(normalizedComment);
-            existingReview.setExternalSource(normalizeNullable(externalSource));
-            existingReview.setExternalId(normalizeNullable(externalId));
+            existingReview.setExternalSource(normalizeString(externalSource));
+            existingReview.setExternalId(normalizeString(externalId));
             existingReview.setLat(lat);
             existingReview.setLng(lng);
-            existingReview.setPlaceName(normalizeNullable(placeName));
+            existingReview.setPlaceName(normalizeString(placeName));
             if (existingReview.getCreatedAt() == null) {
                 existingReview.setCreatedAt(Instant.now());
             }
@@ -183,11 +182,11 @@ public class RatingService {
         review.setPlaceId(normalizedResolvedPlaceId);
         review.setStars(stars);
         review.setComment(normalizedComment);
-        review.setExternalSource(normalizeNullable(externalSource));
-        review.setExternalId(normalizeNullable(externalId));
+        review.setExternalSource(normalizeString(externalSource));
+        review.setExternalId(normalizeString(externalId));
         review.setLat(lat);
         review.setLng(lng);
-        review.setPlaceName(normalizeNullable(placeName));
+        review.setPlaceName(normalizeString(placeName));
         review.setCreatedAt(Instant.now());
 
         PlaceReview persisted;
@@ -213,11 +212,11 @@ public class RatingService {
             int oldStars = existingReview.getStars();
             existingReview.setStars(stars);
             existingReview.setComment(normalizedComment);
-            existingReview.setExternalSource(normalizeNullable(externalSource));
-            existingReview.setExternalId(normalizeNullable(externalId));
+            existingReview.setExternalSource(normalizeString(externalSource));
+            existingReview.setExternalId(normalizeString(externalId));
             existingReview.setLat(lat);
             existingReview.setLng(lng);
-            existingReview.setPlaceName(normalizeNullable(placeName));
+            existingReview.setPlaceName(normalizeString(placeName));
             if (existingReview.getCreatedAt() == null) {
                 existingReview.setCreatedAt(Instant.now());
             }
@@ -353,14 +352,10 @@ public class RatingService {
         }
 
         try {
-            if (placeSearchIndexSyncService instanceof TypesensePlaceIndexSyncService typesenseSync) {
-                typesenseSync.updateRatingOnly(
-                        updatedPlace.getId(),
-                        updatedPlace.getRating(),
-                        updatedPlace.getReviewCount());
-            } else {
-                placeSearchIndexSyncService.upsert(updatedPlace);
-            }
+            placeSearchIndexSyncService.updateRatingOnly(
+                    updatedPlace.getId(),
+                    updatedPlace.getRating(),
+                    updatedPlace.getReviewCount());
         } catch (Exception ex) {
             LOGGER.warn("Rating saved in Mongo but Typesense rating sync failed for place {}",
                     updatedPlace.getId(), ex);
@@ -373,15 +368,7 @@ public class RatingService {
         }
     }
 
-    private String normalizeComment(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private String normalizeNullable(String value) {
+    private String normalizeString(String value) {
         if (value == null) {
             return null;
         }

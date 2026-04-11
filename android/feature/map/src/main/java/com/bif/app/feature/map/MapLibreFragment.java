@@ -952,7 +952,10 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         boolean isLocalSearch = hasUserLocation
             && topDistanceFromUserKm <= LOCAL_SEARCH_RADIUS_KM;
 
-        String cameraSignature = buildSearchCameraSignature(topResult, isLocalSearch);
+        String cameraSignature = buildSearchCameraSignature(
+            topResult,
+            isLocalSearch,
+            lastKnownUserLocation);
         if (cameraSignature != null && cameraSignature.equals(lastSearchCameraSignature)) {
             viewModel.notifySearchDone(places.size());
             return;
@@ -1877,14 +1880,26 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
     @Nullable
     private String buildSearchCameraSignature(@NonNull Place topResult,
-            boolean isLocalSearch) {
+            boolean isLocalSearch,
+            @Nullable Location userLocation) {
         if (topResult.location == null) {
             return null;
         }
 
         long latBucket = Math.round(topResult.location.latitude * 100000d);
         long lngBucket = Math.round(topResult.location.longitude * 100000d);
-        return (isLocalSearch ? "local" : "remote") + "|" + latBucket + "|" + lngBucket;
+        StringBuilder signature = new StringBuilder((isLocalSearch ? "local" : "remote")
+                + "|" + latBucket + "|" + lngBucket);
+        if (isLocalSearch) {
+            String userBucket = "none";
+            if (isValidLocation(userLocation)) {
+                long userLatBucket = Math.round(userLocation.latitude * 10000d);
+                long userLngBucket = Math.round(userLocation.longitude * 10000d);
+                userBucket = userLatBucket + "|" + userLngBucket;
+            }
+            signature.append("|u|").append(userBucket);
+        }
+        return signature.toString();
     }
 
     @Nullable

@@ -198,6 +198,7 @@ public class FavoriteRepository implements IFavoriteRepository {
 
     private SyncQueueEntity createSyncEntry(String entityType, String entityId, String operation, Object payload) {
         SyncQueueEntity entry = new SyncQueueEntity();
+        entry.userId = activeUserId;
         entry.entityType = entityType;
         entry.entityId = entityId;
         entry.operation = operation;
@@ -251,7 +252,8 @@ public class FavoriteRepository implements IFavoriteRepository {
 
     private void mergeServerFavorites(List<FavoriteResponseDto> serverFavorites) {
         appDatabase.runInTransaction(() -> {
-            List<String> trackedIds = syncQueueDao.getTrackedEntityIds(ENTITY_TYPE_FAVORITE);
+            List<String> trackedIds = syncQueueDao.getTrackedEntityIds(activeUserId,
+                    ENTITY_TYPE_FAVORITE);
             Set<String> protectedIds = new HashSet<>();
             if (trackedIds != null) {
                 protectedIds.addAll(trackedIds);
@@ -268,7 +270,7 @@ public class FavoriteRepository implements IFavoriteRepository {
             }
 
             Set<String> serverIds = new HashSet<>();
-            boolean hasServerSnapshot = serverFavorites != null && !serverFavorites.isEmpty();
+            boolean hasServerSnapshot = serverFavorites != null;
             if (serverFavorites != null) {
                 for (FavoriteResponseDto dto : serverFavorites) {
                     Favorite mappedDomain = FavoriteMapper.toDomain(dto);

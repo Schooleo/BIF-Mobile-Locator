@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -29,9 +28,6 @@ public class TypesensePlaceIndexSyncServiceSendWithRetryTest {
         ObjectMapper mapper = new ObjectMapper();
         PlaceRepository placeRepository = Mockito.mock(PlaceRepository.class);
 
-        TypesensePlaceIndexSyncService svc = new TypesensePlaceIndexSyncService(
-            props, mapper, null, placeRepository);
-
         HttpClient mockClient = Mockito.mock(HttpClient.class);
         @SuppressWarnings("unchecked")
         HttpResponse<String> r1 = Mockito.mock(HttpResponse.class);
@@ -50,9 +46,8 @@ public class TypesensePlaceIndexSyncServiceSendWithRetryTest {
                 .thenReturn(r2)
                 .thenReturn(r3);
 
-        Field f = TypesensePlaceIndexSyncService.class.getDeclaredField("httpClient");
-        f.setAccessible(true);
-        f.set(svc, mockClient);
+        TypesensePlaceIndexSyncService svc = new TypesensePlaceIndexSyncService(
+            props, mapper, mockClient, placeRepository);
 
         Method m = TypesensePlaceIndexSyncService.class.getDeclaredMethod("sendWithRetry", HttpRequest.class, String.class);
         m.setAccessible(true);

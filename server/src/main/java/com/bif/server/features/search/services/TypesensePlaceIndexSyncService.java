@@ -5,6 +5,7 @@ import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.search.config.TypesenseProperties;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
 public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncService {
@@ -32,6 +34,7 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
 
     private static final int MAX_RETRIES = 3;
     private static final long INITIAL_BACKOFF_MS = 500;
+    private static final AtomicBoolean MISSING_GEOPOINT_WARNING_LOGGED = new AtomicBoolean(false);
 
     private final TypesenseProperties typesenseProperties;
     private final ObjectMapper objectMapper;
@@ -65,6 +68,7 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
             .build();
         }
 
+    @Override
     public void updateRatingOnly(String placeId, double newRating, int reviewCount) {
         if (!isReady() || placeId == null || placeId.isBlank()) {
             return;
@@ -77,7 +81,7 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
 
             String body = objectMapper.writeValueAsString(payload);
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(buildPatchRatingUri(placeId))
+                    .uri(buildDocumentUri(placeId))
                     .timeout(Duration.ofMillis(
                             typesenseProperties.getReadTimeoutMs()))
                     .header("X-TYPESENSE-API-KEY", typesenseProperties.getApiKey())
@@ -85,8 +89,10 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
                     .method("PATCH", HttpRequest.BodyPublishers.ofString(body))
                     .build();
 
-            HttpResponse<String> response = httpClient.send(
-                    request, HttpResponse.BodyHandlers.ofString());
+                HttpResponse<String> response = sendWithRetry(request, "patch rating for place " + placeId);
+                if (response == null) {
+                return;
+                }
 
             if (response.statusCode() == 404) {
                 fallbackUpsertForMissingDocument(placeId);
@@ -249,7 +255,7 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(buildDeleteUri(placeId))
+                    .uri(buildDocumentUri(placeId))
                     .timeout(Duration.ofMillis(
                             typesenseProperties.getReadTimeoutMs()))
                     .header("X-TYPESENSE-API-KEY", typesenseProperties.getApiKey())
@@ -292,8 +298,6 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
             return;
         }
 
-        LOGGER.warn("Schema changed: Collection must be dropped and re-indexed to apply geopoint");
-
         String collection = safe(typesenseProperties.getPlacesCollection(), "places");
         String baseUrl = String.format("%s://%s:%d",
                 safe(typesenseProperties.getProtocol(), "http"),
@@ -316,6 +320,7 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
 
             HttpResponse<String> getResp = httpClient.send(getReq, HttpResponse.BodyHandlers.ofString());
             if (getResp.statusCode() == 200) {
+                maybeLogMissingGeopointWarning(collection, getResp.body());
                 LOGGER.info("Typesense collection '{}' already exists.", collection);
                 return;
             }
@@ -358,6 +363,42 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             LOGGER.error("Interrupted while ensuring Typesense collection exists", e);
+        }
+    }
+
+    private void maybeLogMissingGeopointWarning(String collection, String schemaPayload) {
+        if (!isLocationGeopointMissing(schemaPayload)) {
+            return;
+        }
+        if (MISSING_GEOPOINT_WARNING_LOGGED.compareAndSet(false, true)) {
+            LOGGER.warn(
+                    "Typesense collection '{}' schema is missing geopoint field 'location'. "
+                            + "Collection may need reindex/migration to support geo search.",
+                    collection);
+        }
+    }
+
+    private boolean isLocationGeopointMissing(String schemaPayload) {
+        if (schemaPayload == null || schemaPayload.isBlank()) {
+            return true;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(schemaPayload);
+            JsonNode fields = root.path("fields");
+            if (!fields.isArray()) {
+                return true;
+            }
+            for (JsonNode field : fields) {
+                String name = field.path("name").asText("");
+                String type = field.path("type").asText("");
+                if ("location".equals(name) && "geopoint".equals(type)) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (IOException e) {
+            LOGGER.debug("Unable to parse Typesense schema payload", e);
+            return true;
         }
     }
 
@@ -412,19 +453,7 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
         return URI.create(uri);
     }
 
-    private URI buildDeleteUri(String placeId) {
-        String collection = encode(safe(typesenseProperties.getPlacesCollection(), "places"));
-        String encodedPlaceId = encode(placeId);
-        String uri = String.format("%s://%s:%d/collections/%s/documents/%s",
-                safe(typesenseProperties.getProtocol(), "http"),
-                safe(typesenseProperties.getHost(), "localhost"),
-                typesenseProperties.getPort(),
-                collection,
-                encodedPlaceId);
-        return URI.create(uri);
-    }
-
-    private URI buildPatchRatingUri(String placeId) {
+    private URI buildDocumentUri(String placeId) {
         String collection = encode(safe(typesenseProperties.getPlacesCollection(), "places"));
         String encodedPlaceId = encode(placeId);
         String uri = String.format("%s://%s:%d/collections/%s/documents/%s",

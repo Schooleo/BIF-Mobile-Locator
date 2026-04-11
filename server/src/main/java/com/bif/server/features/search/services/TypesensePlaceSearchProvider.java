@@ -29,6 +29,7 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(
             TypesensePlaceSearchProvider.class);
+    private static final int DEFAULT_GEO_RADIUS_KM = 25;
 
     private final TypesenseProperties typesenseProperties;
     private final ObjectMapper objectMapper;
@@ -146,10 +147,9 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
                 encodedQueryBy,
                 resolvedPerPage
         ));
-            uriBuilder.append("&query_by_weights=3,1");
-            uriBuilder.append("&drop_tokens_threshold=0");
-            uriBuilder.append("&remove_extra_tokens=true");
-        uriBuilder.append("&typo_tolerance=1");
+        uriBuilder.append("&query_by_weights=3,1");
+        uriBuilder.append("&drop_tokens_threshold=0");
+        uriBuilder.append("&num_typos=1");
 
         String sortBy = "_text_match:desc,rating:desc";
         String filterBy = null;
@@ -164,9 +164,10 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
             if (shouldApplyGeoRadiusFilter(request)) {
                 filterBy = String.format(
                         Locale.US,
-                    "location:(%s,%s,25km)",
+                        "location:(%s,%s,%skm)",
                         request.getLatitude(),
-                        request.getLongitude());
+                        request.getLongitude(),
+                        resolveGeoRadiusKm());
             }
         }
 
@@ -176,6 +177,14 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
         }
 
         return URI.create(uriBuilder.toString());
+    }
+
+    private int resolveGeoRadiusKm() {
+        Integer configuredRadius = typesenseProperties.getGeoRadiusKm();
+        if (configuredRadius == null || configuredRadius <= 0) {
+            return DEFAULT_GEO_RADIUS_KM;
+        }
+        return configuredRadius;
     }
 
     private List<Place> parsePlaces(String payload) throws IOException {

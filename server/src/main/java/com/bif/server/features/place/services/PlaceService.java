@@ -64,7 +64,7 @@ public class PlaceService {
     public Place saveFromSearch(Place place) {
         validateProjectLocation(place);
 
-        if (place != null && place.getPlaceSource() == null) {
+        if (place != null && (place.getPlaceSource() == null || place.getPlaceSource().isBlank())) {
             place.setPlaceSource(defaultSearchPlaceSource);
         }
 
@@ -77,9 +77,6 @@ public class PlaceService {
 
         return placeRepository.findById(place.getId()).orElseGet(() -> {
             enrichPlaceAddress(place);
-            if (place.getPlaceSource() == null || place.getPlaceSource().isBlank()) {
-                place.setPlaceSource(defaultSearchPlaceSource);
-            }
             place.setPersistedByAction("search_discovered");
             place.setServerVersion(syncVersionService.nextVersion());
             Place saved = placeRepository.save(place);
@@ -151,7 +148,7 @@ public class PlaceService {
 
     private void validateProjectLocation(Place place) {
         if (place == null || place.getLocation() == null) {
-            return;
+            throw new IllegalArgumentException("Missing or invalid place location");
         }
 
         double latitude = place.getLocation().getLatitude();

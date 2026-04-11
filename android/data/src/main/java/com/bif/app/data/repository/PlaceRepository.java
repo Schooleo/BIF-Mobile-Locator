@@ -49,8 +49,6 @@ public class PlaceRepository implements IPlaceRepository {
     private static final String TAG = "PlaceRepository";
     private static final int MAX_LOCAL_PLACES = 500;
     private static final String ADDRESS_UNAVAILABLE = "Address unavailable";
-    private static final double DEFAULT_SEARCH_LAT = 10.7769d;
-    private static final double DEFAULT_SEARCH_LNG = 106.7009d;
 
     private final AndroidGeocodingDataSource geocodingDataSource;
     private final RestApiService restApiService;
@@ -61,6 +59,8 @@ public class PlaceRepository implements IPlaceRepository {
     private final AiGraphQlClient aiGraphQlClient;
     private final ExecutorService executorService;
     private final String activeUserId;
+    private Double configuredDefaultLatitude;
+    private Double configuredDefaultLongitude;
 
     @Inject
     public PlaceRepository(AndroidGeocodingDataSource geocodingDataSource,
@@ -80,6 +80,8 @@ public class PlaceRepository implements IPlaceRepository {
         this.aiGraphQlClient = aiGraphQlClient;
         this.executorService = Executors.newFixedThreadPool(4);
         this.activeUserId = resolveActiveUserId(appContext);
+        this.configuredDefaultLatitude = null;
+        this.configuredDefaultLongitude = null;
 
         if (!activeUserId.trim().isEmpty()) {
             syncManager.setUserContext(activeUserId, null);
@@ -91,9 +93,30 @@ public class PlaceRepository implements IPlaceRepository {
                            PlaceDao placeDao,
                            SearchHistoryDao searchHistoryDao,
                            SyncManager syncManager,
+                           NetworkMonitor networkMonitor,
+                           AiGraphQlClient aiGraphQlClient,
+                           @ApplicationContext Context appContext,
+                           Double defaultLatitude,
+                           Double defaultLongitude) {
+        this(geocodingDataSource, restApiService, placeDao,
+                searchHistoryDao, syncManager, networkMonitor,
+                aiGraphQlClient, appContext);
+        setDefaultSearchCoordinates(defaultLatitude, defaultLongitude);
+    }
+
+    public PlaceRepository(AndroidGeocodingDataSource geocodingDataSource,
+                           RestApiService restApiService,
+                           PlaceDao placeDao,
+                           SearchHistoryDao searchHistoryDao,
+                           SyncManager syncManager,
                            NetworkMonitor networkMonitor) {
         this(geocodingDataSource, restApiService, placeDao,
                 searchHistoryDao, syncManager, networkMonitor, null, null);
+    }
+
+    public void setDefaultSearchCoordinates(Double latitude, Double longitude) {
+        this.configuredDefaultLatitude = latitude;
+        this.configuredDefaultLongitude = longitude;
     }
 
     @Override
@@ -238,8 +261,9 @@ public class PlaceRepository implements IPlaceRepository {
                             || Double.compare(lat, 0.0d) == 0
                             || Double.compare(lng, 0.0d) == 0;
                     if (hasInvalidCoordinates) {
-                        lat = DEFAULT_SEARCH_LAT;
-                        lng = DEFAULT_SEARCH_LNG;
+                        Location fallbackLocation = resolveDefaultSearchLocation();
+                        lat = fallbackLocation.latitude;
+                        lng = fallbackLocation.longitude;
                     }
                     PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
                     request.query = query;
@@ -304,7 +328,7 @@ public class PlaceRepository implements IPlaceRepository {
                                 combinedResults.add(place);
                                 seenIds.add(id);
                                 seenKeys.add(dedupKey);
-                                // autoPersistFromSearch(place);
+                                // TODO: auto-persist remains disabled to avoid caching transient geocoder hits.
                             }
                         }
                     }
@@ -541,10 +565,19 @@ public class PlaceRepository implements IPlaceRepository {
     private boolean isValidCoordinate(double latitude, double longitude) {
         return Double.isFinite(latitude)
                 && Double.isFinite(longitude)
-                && Double.compare(latitude, 0.0d) != 0
-                && Double.compare(longitude, 0.0d) != 0
                 && latitude >= -90d && latitude <= 90d
                 && longitude >= -180d && longitude <= 180d;
+    }
+
+    private Location resolveDefaultSearchLocation() {
+        if (configuredDefaultLatitude != null && configuredDefaultLongitude != null
+                && Double.isFinite(configuredDefaultLatitude)
+                && Double.isFinite(configuredDefaultLongitude)
+                && configuredDefaultLatitude >= -90d && configuredDefaultLatitude <= 90d
+                && configuredDefaultLongitude >= -180d && configuredDefaultLongitude <= 180d) {
+            return new Location(configuredDefaultLatitude, configuredDefaultLongitude);
+        }
+        return new Location(10.7769d, 106.7009d);
     }
 
     private String buildDedupKey(Place place) {

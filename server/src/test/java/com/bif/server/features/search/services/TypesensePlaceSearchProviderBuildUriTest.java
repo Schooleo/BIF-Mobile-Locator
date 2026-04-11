@@ -1,5 +1,6 @@
 package com.bif.server.features.search.services;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Method;
@@ -38,10 +39,10 @@ public class TypesensePlaceSearchProviderBuildUriTest {
         assertTrue(s.contains("per_page=15"));
         assertTrue(s.contains("query_by_weights=3,1"));
         assertTrue(s.contains("drop_tokens_threshold=0"));
-        assertTrue(s.contains("remove_extra_tokens=true"));
-        assertTrue(s.contains("typo_tolerance=1"));
+        assertTrue(!s.contains("remove_extra_tokens="));
+        assertTrue(s.contains("num_typos=1"));
         assertTrue(s.contains("sort_by=_text_match%3Adesc%2Crating%3Adesc"));
-        assertTrue(!s.contains("filter_by="));
+        assertFalse(s.contains("filter_by="));
     }
 
     @Test
@@ -66,8 +67,8 @@ public class TypesensePlaceSearchProviderBuildUriTest {
         assertTrue(s.contains("per_page=7"));
         assertTrue(s.contains("query_by_weights=3,1"));
         assertTrue(s.contains("drop_tokens_threshold=0"));
-        assertTrue(s.contains("remove_extra_tokens=true"));
-        assertTrue(s.contains("typo_tolerance=1"));
+        assertTrue(!s.contains("remove_extra_tokens="));
+        assertTrue(s.contains("num_typos=1"));
         assertTrue(s.contains("filter_by=location%3A%2821.0278%2C105.8342%2C25km%29"));
         assertTrue(s.contains("sort_by=location%2821.0278%2C105.8342%29%3Aasc%2C_text_match%3Adesc%2Crating%3Adesc"));
     }
@@ -93,8 +94,8 @@ public class TypesensePlaceSearchProviderBuildUriTest {
         assertTrue(s.contains("per_page=15"));
         assertTrue(s.contains("query_by_weights=3,1"));
         assertTrue(s.contains("drop_tokens_threshold=0"));
-        assertTrue(s.contains("remove_extra_tokens=true"));
-        assertTrue(s.contains("typo_tolerance=1"));
+        assertTrue(!s.contains("remove_extra_tokens="));
+        assertTrue(s.contains("num_typos=1"));
         assertTrue(s.contains("sort_by=location%2821.0278%2C105.8342%29%3Aasc%2C_text_match%3Adesc%2Crating%3Adesc"));
         assertTrue(s.contains("filter_by=location%3A%2821.0278%2C105.8342%2C25km%29"));
     }

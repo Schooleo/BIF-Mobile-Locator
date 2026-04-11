@@ -254,6 +254,7 @@ public class ProfileRepository implements IProfileRepository {
             String operation,
             Object payload) {
         SyncQueueEntity entry = new SyncQueueEntity();
+        entry.userId = resolveActiveUserId();
         entry.entityType = entityType;
         entry.entityId = entityId;
         entry.operation = operation;
