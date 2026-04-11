@@ -51,6 +51,7 @@ public class FavoriteDetailFragment extends Fragment {
 
         viewModel = new ViewModelProvider(this).get(FavoriteDetailViewModel.class);
         bindViews(view);
+        adjustForBottomNavigation(view);
 
         Favorite favorite = parseFavoriteArgs();
         if (favorite == null) {
@@ -137,7 +138,10 @@ public class FavoriteDetailFragment extends Fragment {
             groupNames[i] = groups.get(i).getName();
         }
 
-        new MaterialAlertDialogBuilder(requireContext())
+        new MaterialAlertDialogBuilder(
+                requireContext(),
+                com.bif.app.core.R.style.ThemeOverlay_BIFLocator_MaterialAlertDialog
+        )
                 .setTitle(R.string.select_group_to_share)
                 .setItems(groupNames, (dialog, which) -> {
                     Group targetGroup = groups.get(which);
@@ -172,7 +176,10 @@ public class FavoriteDetailFragment extends Fragment {
             }
         }
 
-        new MaterialAlertDialogBuilder(requireContext())
+        new MaterialAlertDialogBuilder(
+                requireContext(),
+                com.bif.app.core.R.style.ThemeOverlay_BIFLocator_MaterialAlertDialog
+        )
                 .setTitle(R.string.edit_note)
                 .setView(dialogView)
                 .setNegativeButton(android.R.string.cancel, null)
@@ -223,5 +230,39 @@ public class FavoriteDetailFragment extends Fragment {
     @NonNull
     private String defaultText(@Nullable String value, @NonNull String fallback) {
         return value == null || value.trim().isEmpty() ? fallback : value.trim();
+    }
+
+    private void adjustForBottomNavigation(@NonNull View contentView) {
+        if (getActivity() == null) {
+            return;
+        }
+
+        int bottomNavId = requireContext().getResources()
+                .getIdentifier("bottom_navigation", "id", requireContext().getPackageName());
+        if (bottomNavId == 0) {
+            return;
+        }
+
+        View bottomNavigation = getActivity().findViewById(bottomNavId);
+        if (bottomNavigation == null) {
+            return;
+        }
+
+        final int basePaddingBottom = contentView.getPaddingBottom();
+        bottomNavigation.post(() -> contentView.post(() -> {
+            int navHeight = bottomNavigation.getVisibility() == View.VISIBLE
+                    ? bottomNavigation.getHeight() + bottomNavigation.getPaddingBottom()
+                    : 0;
+
+            int desiredBottomPadding = basePaddingBottom + navHeight;
+            if (contentView.getPaddingBottom() != desiredBottomPadding) {
+                contentView.setPadding(
+                        contentView.getPaddingLeft(),
+                        contentView.getPaddingTop(),
+                        contentView.getPaddingRight(),
+                        desiredBottomPadding
+                );
+            }
+        }));
     }
 }

@@ -4,7 +4,6 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageButton;
-import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -86,7 +85,6 @@ public class FavoriteAdapter extends RecyclerView.Adapter<FavoriteAdapter.Favori
         holder.itemView.setOnClickListener(v -> listener.onFavoriteClicked(item));
         holder.btnRemove.setOnClickListener(v -> listener.onFavoriteRemoved(item));
 
-        holder.imgFavorite.setImageResource(android.R.drawable.ic_menu_gallery);
     }
 
     public void submitList(List<Favorite> favorites) {
@@ -95,7 +93,6 @@ public class FavoriteAdapter extends RecyclerView.Adapter<FavoriteAdapter.Favori
     }
 
     static class FavoriteViewHolder extends RecyclerView.ViewHolder {
-        final ImageView imgFavorite;
         final TextView tvName;
         final TextView tvAddress;
         final TextView tvRating;
@@ -106,7 +103,6 @@ public class FavoriteAdapter extends RecyclerView.Adapter<FavoriteAdapter.Favori
         FavoriteViewHolder(@NonNull View itemView) {
             super(itemView);
 
-            imgFavorite = itemView.findViewById(R.id.image_favorite);
             tvName = itemView.findViewById(R.id.tv_item_name);
             tvAddress = itemView.findViewById(R.id.tv_item_address);
             tvRating = itemView.findViewById(R.id.tv_item_rating);

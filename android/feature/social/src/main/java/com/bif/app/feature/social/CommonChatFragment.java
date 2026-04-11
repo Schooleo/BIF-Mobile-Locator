@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.text.format.DateFormat;
+import android.text.format.DateUtils;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
@@ -18,6 +19,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -60,7 +62,6 @@ public class CommonChatFragment extends Fragment {
     private EditText messageInput;
     private RecyclerView rvMessages;
     private View layoutInputBar;
-    private TextView tvAiDrafterPrefix;
     private Drawable defaultInputBarBackground;
     private List<ChatMessage> latestMessages = new ArrayList<>();
     private int previousSoftInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_UNSPECIFIED;
@@ -84,6 +85,8 @@ public class CommonChatFragment extends Fragment {
         chatId = getArg(args, "chatId", "");
         String chatName = getArg(args, "chatName", getString(R.string.chat_default_name));
         int memberCount = args != null ? args.getInt("memberCount", 0) : 0;
+        long friendshipCreatedAt = args != null ? args.getLong("friendshipCreatedAt", 0L) : 0L;
+        boolean supportsAiModes = "group".equalsIgnoreCase(chatType);
 
         TextView tvTitle = view.findViewById(R.id.tv_chat_title);
         TextView tvSubtitle = view.findViewById(R.id.tv_chat_subtitle);
@@ -96,17 +99,16 @@ public class CommonChatFragment extends Fragment {
         MaterialCardView btnAiDraftTrip = view.findViewById(R.id.btn_ai_draft_trip);
         MaterialCardView btnAiSuggestPlaces = view.findViewById(R.id.btn_ai_suggest_places);
         EditText etMessage = view.findViewById(R.id.et_message);
-        tvAiDrafterPrefix = view.findViewById(R.id.tv_ai_drafter_prefix);
         messageInput = etMessage;
         MaterialButton btnSend = view.findViewById(R.id.btn_send);
         applyKeyboardInsets(view, composerBar, rvMessages);
 
         tvTitle.setText(chatName);
-        tvSubtitle.setText(getString(R.string.chat_member_count, resolveMemberCount(memberCount)));
+        tvSubtitle.setText(resolveChatSubtitle(memberCount, friendshipCreatedAt));
+        aiBadgesRow.setVisibility(supportsAiModes ? View.VISIBLE : View.GONE);
 
         btnBack.setOnClickListener(v -> navigateBackFromChat(view));
-        view.setOnClickListener(v -> focusInputAndShowKeyboard(etMessage));
-        etMessage.post(() -> focusInputAndShowKeyboard(etMessage));
+        view.setOnClickListener(v -> dismissKeyboardAndClearFocus());
 
         adapter = new ChatMessageAdapter(new ChatMessageAdapter.ChatActionCallback() {
             @Override
@@ -161,7 +163,7 @@ public class CommonChatFragment extends Fragment {
             }
         });
         viewModel.getAiBadgesEnabled().observe(getViewLifecycleOwner(), enabled -> {
-            boolean isEnabled = Boolean.TRUE.equals(enabled);
+            boolean isEnabled = supportsAiModes && Boolean.TRUE.equals(enabled);
             aiBadgesRow.setVisibility(isEnabled ? View.VISIBLE : View.GONE);
             btnAiDraftTrip.setEnabled(isEnabled);
             btnAiSuggestPlaces.setEnabled(isEnabled);
@@ -177,10 +179,15 @@ public class CommonChatFragment extends Fragment {
             boolean enabled = Boolean.TRUE.equals(isDraftMode);
             boolean suggestEnabled = Boolean.TRUE.equals(viewModel.getAiSuggestPlacesModeEnabled().getValue());
             applyAiComposeMode(enabled, suggestEnabled, etMessage);
+            applyAiBadgeSelection(btnAiDraftTrip, enabled);
+            applyAiBadgeSelection(btnAiSuggestPlaces, suggestEnabled);
         });
         viewModel.getAiSuggestPlacesModeEnabled().observe(getViewLifecycleOwner(), isSuggestMode -> {
             boolean draftEnabled = Boolean.TRUE.equals(viewModel.getAiDraftModeEnabled().getValue());
-            applyAiComposeMode(draftEnabled, Boolean.TRUE.equals(isSuggestMode), etMessage);
+            boolean suggestEnabled = Boolean.TRUE.equals(isSuggestMode);
+            applyAiComposeMode(draftEnabled, suggestEnabled, etMessage);
+            applyAiBadgeSelection(btnAiDraftTrip, draftEnabled);
+            applyAiBadgeSelection(btnAiSuggestPlaces, suggestEnabled);
         });
         viewModel.getSnackbarMessage().observe(getViewLifecycleOwner(), message -> {
             if (message == null || message.trim().isEmpty()) {
@@ -196,10 +203,18 @@ public class CommonChatFragment extends Fragment {
 
         rvMessages.setOnTouchListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                focusInputAndShowKeyboard(etMessage);
-                v.performClick();
+                dismissKeyboardAndClearFocus();
             }
             return false;
+        });
+        rvMessages.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+                super.onScrollStateChanged(recyclerView, newState);
+                if (newState != RecyclerView.SCROLL_STATE_IDLE) {
+                    dismissKeyboardAndClearFocus();
+                }
+            }
         });
 
         btnSend.setOnClickListener(v -> {
@@ -252,7 +267,7 @@ public class CommonChatFragment extends Fragment {
         previousSoftInputMode = requireActivity().getWindow().getAttributes().softInputMode;
         requireActivity().getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
         if (messageInput != null) {
-            messageInput.post(() -> focusInputAndShowKeyboard(messageInput));
+            messageInput.clearFocus();
         }
     }
 
@@ -296,7 +311,7 @@ public class CommonChatFragment extends Fragment {
                 : (msg.getSenderUserId() != null ? msg.getSenderUserId() : "");
         if (msg.isOutgoing()) senderDisplay = getString(R.string.chat_you);
 
-        String time = DateFormat.format("HH:mm", new Date(msg.getSentAt())).toString();
+        String time = buildMessageStatusLabel(msg);
 
         if (msg.getMessageType() == ChatMessage.MessageType.TRIP_CREATED_CARD) {
             return buildTripCreatedCardMessage(msg, senderDisplay, time);
@@ -511,36 +526,78 @@ public class CommonChatFragment extends Fragment {
         return String.format(Locale.US, "%.1f", distance);
     }
 
+    private String buildMessageStatusLabel(ChatMessage msg) {
+        if (msg.isOutgoing() && !msg.isConfirmed()) {
+            return getString(R.string.chat_status_sending);
+        }
+        return DateFormat.format("HH:mm", new Date(msg.getSentAt())).toString();
+    }
+
     private void applyAiComposeMode(boolean draftEnabled,
                                     boolean suggestEnabled,
                                     EditText etMessage) {
-        if (layoutInputBar == null || tvAiDrafterPrefix == null) {
+        if (layoutInputBar == null) {
             return;
         }
         if (draftEnabled) {
             layoutInputBar.setBackgroundResource(R.drawable.bg_chat_input_ai_draft);
-            tvAiDrafterPrefix.setVisibility(View.VISIBLE);
-            tvAiDrafterPrefix.setText(R.string.chat_ai_drafter_prefix);
             etMessage.setHint(R.string.chat_ai_draft_hint);
         } else if (suggestEnabled) {
             layoutInputBar.setBackgroundResource(R.drawable.bg_chat_input_ai_draft);
-            tvAiDrafterPrefix.setVisibility(View.VISIBLE);
-            tvAiDrafterPrefix.setText(R.string.chat_ai_suggest_prefix);
             etMessage.setHint(R.string.chat_ai_suggest_hint);
         } else {
             if (defaultInputBarBackground != null) {
                 layoutInputBar.setBackground(defaultInputBarBackground);
             }
-            tvAiDrafterPrefix.setVisibility(View.GONE);
             etMessage.setHint(R.string.chat_hint);
         }
     }
 
-    private int resolveMemberCount(int memberCountArg) {
-        if ("group".equalsIgnoreCase(chatType)) {
-            return Math.max(memberCountArg, 1);
+    private void applyAiBadgeSelection(@NonNull MaterialCardView badge,
+                                       boolean selected) {
+        badge.setCardElevation(selected ? 6f : 2f);
+        badge.setStrokeWidth(selected ? 2 : 1);
+        badge.setStrokeColor(selected
+                ? resolveThemeColorByName("colorPrimary",
+                ContextCompat.getColor(requireContext(), com.bif.app.core.R.color.primary_green))
+                : resolveThemeColorByName("colorSurface",
+                android.graphics.Color.TRANSPARENT));
+        badge.setCardBackgroundColor(resolveThemeColorByName(
+                selected ? "colorListItemBackground" : "colorSurfaceBox",
+                android.graphics.Color.TRANSPARENT));
+    }
+
+    private int resolveThemeColorByName(@NonNull String attrName, int fallbackColor) {
+        int attrResId = requireContext().getResources().getIdentifier(
+                attrName,
+                "attr",
+                requireContext().getPackageName());
+        if (attrResId == 0) {
+            attrResId = requireContext().getResources().getIdentifier(attrName, "attr", "android");
         }
-        return Math.max(memberCountArg, 2);
+        if (attrResId == 0) {
+            return fallbackColor;
+        }
+
+        android.util.TypedValue typedValue = new android.util.TypedValue();
+        if (requireContext().getTheme().resolveAttribute(attrResId, typedValue, true)) {
+            return typedValue.data;
+        }
+        return fallbackColor;
+    }
+
+    private String resolveChatSubtitle(int memberCountArg, long friendshipCreatedAt) {
+        if ("group".equalsIgnoreCase(chatType)) {
+            return getString(R.string.chat_member_count, Math.max(memberCountArg, 1));
+        }
+        if (friendshipCreatedAt > 0L) {
+            CharSequence relativeTime = DateUtils.getRelativeTimeSpanString(
+                    friendshipCreatedAt,
+                    System.currentTimeMillis(),
+                    DateUtils.MINUTE_IN_MILLIS);
+            return getString(R.string.chat_friend_added_relative, relativeTime);
+        }
+        return getString(R.string.chat_direct_subtitle);
     }
 
     private void maybeShowMentionPopup(EditText input, String fullText) {
@@ -716,6 +773,28 @@ public class CommonChatFragment extends Fragment {
             return;
         }
         ChatReadStateStore.markGroupReadNow(requireContext(), chatId);
+    }
+
+    private void dismissKeyboardAndClearFocus() {
+        if (messageInput == null || !isAdded()) {
+            return;
+        }
+
+        messageInput.clearFocus();
+        View rootView = getView();
+        if (rootView != null) {
+            rootView.requestFocus();
+        }
+
+        WindowInsetsControllerCompat controller = ViewCompat.getWindowInsetsController(messageInput);
+        if (controller != null) {
+            controller.hide(WindowInsetsCompat.Type.ime());
+        }
+
+        InputMethodManager imm = requireContext().getSystemService(InputMethodManager.class);
+        if (imm != null) {
+            imm.hideSoftInputFromWindow(messageInput.getWindowToken(), 0);
+        }
     }
 
     private void focusInputAndShowKeyboard(EditText etMessage) {

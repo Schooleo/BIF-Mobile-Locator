@@ -1,5 +1,6 @@
 package com.bif.app.feature.favorites;
 
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -14,10 +15,12 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import com.bif.app.core.utils.UriUtils;
 import com.bif.app.domain.model.Favorite;
 
 import dagger.hilt.android.AndroidEntryPoint;
@@ -100,12 +103,32 @@ public class FavoritesFragment extends Fragment
 
     @Override
     public void onFavoriteClicked(Favorite favorite) {
-        FavoriteDetailBottomSheet.newInstance(favorite)
-                .show(getChildFragmentManager(), "FavoriteDetailBottomSheet");
+        if (favorite == null) {
+            return;
+        }
+
+        Uri detailUri = UriUtils.buildUri(UriUtils.PathTo.FAVORITES_DETAIL)
+                .buildUpon()
+                .appendQueryParameter("favId", safeString(favorite.id))
+                .appendQueryParameter("favName", safeString(favorite.name))
+                .appendQueryParameter("favAddress", safeString(favorite.address))
+                .appendQueryParameter("favDescription", safeString(favorite.description))
+                .appendQueryParameter("favNotes", safeString(favorite.notes))
+                .appendQueryParameter("favRating", String.valueOf(favorite.rating))
+                .appendQueryParameter("favLatitude", String.valueOf(favorite.latitude))
+                .appendQueryParameter("favLongitude", String.valueOf(favorite.longitude))
+                .build();
+
+        Navigation.findNavController(requireView()).navigate(detailUri);
     }
 
     @Override
     public void onFavoriteRemoved(Favorite favorite) {
         viewModel.removeFavoriteItem(favorite);
+    }
+
+    @NonNull
+    private String safeString(@Nullable String value) {
+        return value == null ? "" : value;
     }
 }

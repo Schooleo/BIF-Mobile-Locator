@@ -1,12 +1,17 @@
 package com.bif.app.feature.favorites;
 
+import android.app.Dialog;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.view.Window;
+import android.view.Gravity;
 import android.widget.ImageButton;
 import android.widget.RatingBar;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -19,6 +24,7 @@ import androidx.navigation.Navigation;
 import com.bif.app.core.utils.UriUtils;
 import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.model.Group;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -61,6 +67,33 @@ public class FavoriteDetailBottomSheet extends BottomSheetDialogFragment {
         return inflater.inflate(R.layout.fragment_favorite_detail, container, false);
     }
 
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        configureBottomSheetWindow();
+        adjustForBottomNavigation();
+    }
+
+    private void configureBottomSheetWindow() {
+        Dialog dialog = getDialog();
+        if (!(dialog instanceof BottomSheetDialog)) {
+            return;
+        }
+
+        BottomSheetDialog bottomSheetDialog = (BottomSheetDialog) dialog;
+        bottomSheetDialog.setCanceledOnTouchOutside(false);
+        Window window = bottomSheetDialog.getWindow();
+        if (window == null) {
+            return;
+        }
+
+        window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        window.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
+        window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        window.setGravity(Gravity.BOTTOM);
+    }
+
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
@@ -77,6 +110,53 @@ public class FavoriteDetailBottomSheet extends BottomSheetDialogFragment {
         viewModel.initializeFavorite(favorite);
         setupActions(view);
         observeFavorite();
+    }
+
+    private void adjustForBottomNavigation() {
+        Dialog dialog = getDialog();
+        if (!(dialog instanceof BottomSheetDialog) || getActivity() == null) {
+            return;
+        }
+
+        int bottomNavId = requireContext().getResources()
+                .getIdentifier("bottom_navigation", "id", requireContext().getPackageName());
+        if (bottomNavId == 0) {
+            return;
+        }
+
+        BottomSheetDialog bottomSheetDialog = (BottomSheetDialog) dialog;
+        FrameLayout bottomSheet = bottomSheetDialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+        View bottomNavigation = getActivity().findViewById(bottomNavId);
+        if (bottomSheet == null || bottomNavigation == null) {
+            return;
+        }
+
+        bottomNavigation.post(() -> bottomSheet.post(() -> {
+            int navHeight = bottomNavigation.getVisibility() == View.VISIBLE
+                    ? bottomNavigation.getHeight() + bottomNavigation.getPaddingBottom()
+                    : 0;
+
+            View parent = (View) bottomSheet.getParent();
+            if (parent != null && parent.getPaddingBottom() != navHeight) {
+                parent.setPadding(
+                        parent.getPaddingLeft(),
+                        parent.getPaddingTop(),
+                        parent.getPaddingRight(),
+                        navHeight
+                );
+            }
+
+            ViewGroup.LayoutParams params = bottomSheet.getLayoutParams();
+            if (params instanceof ViewGroup.MarginLayoutParams) {
+                ViewGroup.MarginLayoutParams marginParams = (ViewGroup.MarginLayoutParams) params;
+                if (marginParams.bottomMargin != navHeight) {
+                    marginParams.bottomMargin = navHeight;
+                    bottomSheet.setLayoutParams(marginParams);
+                }
+            }
+
+            bottomSheet.requestLayout();
+        }));
     }
 
     private void bindViews(@NonNull View view) {
@@ -153,7 +233,10 @@ public class FavoriteDetailBottomSheet extends BottomSheetDialogFragment {
             groupNames[i] = groups.get(i).getName();
         }
 
-        new MaterialAlertDialogBuilder(requireContext())
+        new MaterialAlertDialogBuilder(
+                requireContext(),
+                com.bif.app.core.R.style.ThemeOverlay_BIFLocator_MaterialAlertDialog
+        )
                 .setTitle(R.string.select_group_to_share)
                 .setItems(groupNames, (dialog, which) -> {
                     Group targetGroup = groups.get(which);
@@ -192,7 +275,10 @@ public class FavoriteDetailBottomSheet extends BottomSheetDialogFragment {
             }
         }
 
-        new MaterialAlertDialogBuilder(requireContext())
+        new MaterialAlertDialogBuilder(
+                requireContext(),
+                com.bif.app.core.R.style.ThemeOverlay_BIFLocator_MaterialAlertDialog
+        )
                 .setTitle(R.string.edit_note)
                 .setView(dialogView)
                 .setNegativeButton(android.R.string.cancel, null)

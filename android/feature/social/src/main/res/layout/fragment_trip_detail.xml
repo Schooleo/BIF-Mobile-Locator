@@ -33,12 +33,24 @@
                 android:textSize="18sp"
                 android:textColor="?attr/colorTextPrimary"
                 android:textStyle="bold" />
+
+            <ImageButton
+                android:id="@+id/btn_home"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/go_home"
+                android:src="@drawable/ic_home"
+                app:tint="?attr/colorTextPrimary" />
         </RelativeLayout>
 
         <com.google.android.material.tabs.TabLayout
             android:id="@+id/tab_layout_detail"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:background="?attr/colorListItemBackground"
             app:tabIndicatorColor="?attr/colorPrimary"
             app:tabSelectedTextColor="?attr/colorPrimary"
             app:tabTextColor="?attr/colorTextSecondary" />

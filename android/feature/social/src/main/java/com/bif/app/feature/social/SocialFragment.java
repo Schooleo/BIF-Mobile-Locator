@@ -3,6 +3,7 @@ package com.bif.app.feature.social;
 import android.annotation.SuppressLint;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
@@ -10,13 +11,13 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.PopupMenu;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.widget.PopupMenu;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.Navigation;
@@ -480,7 +481,13 @@ public class SocialFragment extends Fragment {
             return;
         }
 
-        PopupMenu popupMenu = new PopupMenu(requireContext(), anchorView);
+        PopupMenu popupMenu = new PopupMenu(
+                requireContext(),
+                anchorView,
+                Gravity.NO_GRAVITY,
+                0,
+                com.bif.app.core.R.style.Widget_BIFLocator_PopupMenu
+        );
         popupMenu.getMenuInflater().inflate(R.menu.menu_trip_options, popupMenu.getMenu());
         popupMenu.setOnMenuItemClickListener(item -> onTripOptionSelected(item, trip));
         popupMenu.show();
@@ -627,6 +634,7 @@ public class SocialFragment extends Fragment {
                 .appendQueryParameter("avatarLetter", friend.getAvatarLetter())
                 .appendQueryParameter("avatarColor", String.valueOf(friend.getAvatarColor()))
                 .appendQueryParameter("memberCount", "0")
+                .appendQueryParameter("friendshipCreatedAt", String.valueOf(friend.getFriendshipCreatedAt()))
                 .build();
         Navigation.findNavController(requireView()).navigate(destUri);
     }

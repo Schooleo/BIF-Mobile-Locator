@@ -14,6 +14,7 @@ import com.bif.server.features.trip.repositories.TripPlanRepository;
 import com.bif.server.features.sync.repositories.SyncChangeRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -37,6 +38,7 @@ public class SyncService {
     private final ChatMessageRepository chatMessageRepository;
     private final ObjectMapper objectMapper;
 
+    @Autowired
     public SyncService(SyncVersionService syncVersionService,
                        SyncChangeRepository syncChangeRepository,
                        GroupRepository groupRepository,

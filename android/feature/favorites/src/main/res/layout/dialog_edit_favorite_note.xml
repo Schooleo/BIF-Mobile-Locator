@@ -4,7 +4,8 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:paddingTop="8dp">
+    android:paddingTop="8dp"
+    android:background="?attr/colorListItemBackground">
 
     <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Dark mode colors for Social Screen -->
-    <color name="item_background">#2C3E50</color>
+    <color name="item_background">@color/dark_mode_box</color>
     <color name="text_secondary">#B0B0B0</color>
     <color name="primary_grey">#8E8E93</color>
 </resources>

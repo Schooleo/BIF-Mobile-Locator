@@ -22,9 +22,11 @@ import com.bif.app.domain.repository.IFriendshipRepository;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -336,7 +338,56 @@ public class FriendshipRepository implements IFriendshipRepository {
             friendsLiveData.postValue(Collections.emptyList());
             return;
         }
-        friendsLiveData.postValue(FriendMapper.toDomainList(entities));
+
+        String currentUserId = fetchCurrentUserId();
+        Map<String, Long> friendshipCreatedAtByUserId = new HashMap<>();
+        if (!isBlank(currentUserId)) {
+            List<FriendshipEntity> acceptedFriendships = friendshipDao.getByUserIdAndStatus(
+                    currentUserId.trim(), FriendshipStatus.ACCEPTED);
+            if (acceptedFriendships != null) {
+                for (FriendshipEntity friendship : acceptedFriendships) {
+                    if (friendship == null) {
+                        continue;
+                    }
+                    String otherUserId = currentUserId.trim().equalsIgnoreCase(friendship.requesterId)
+                            ? friendship.receiverId
+                            : friendship.requesterId;
+                    if (!isBlank(otherUserId)) {
+                        friendshipCreatedAtByUserId.put(otherUserId.trim(), friendship.createdAt);
+                    }
+                }
+            }
+        }
+
+        List<Friend> friends = FriendMapper.toDomainList(entities);
+        if (!friendshipCreatedAtByUserId.isEmpty()) {
+            List<Friend> enrichedFriends = new ArrayList<>(friends.size());
+            for (Friend friend : friends) {
+                if (friend == null) {
+                    continue;
+                }
+                long friendshipCreatedAt = 0L;
+                if (!isBlank(friend.getServerUserId())) {
+                    Long mappedValue = friendshipCreatedAtByUserId.get(friend.getServerUserId().trim());
+                    if (mappedValue != null) {
+                        friendshipCreatedAt = mappedValue;
+                    }
+                }
+                enrichedFriends.add(new Friend(
+                        friend.getId(),
+                        friend.getServerUserId(),
+                        friend.getName(),
+                        friend.getAvatarLetter(),
+                        friend.getAvatarColor(),
+                        friend.isOnline(),
+                        friendshipCreatedAt
+                ));
+            }
+            friendsLiveData.postValue(enrichedFriends);
+            return;
+        }
+
+        friendsLiveData.postValue(friends);
     }
 
     private void handleFriendRequestDecision(int friendshipId, boolean accept) {

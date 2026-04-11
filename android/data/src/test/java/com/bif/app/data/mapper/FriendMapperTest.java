@@ -29,6 +29,7 @@ public class FriendMapperTest {
         assertEquals("A", domain.getAvatarLetter());
         assertEquals(12345, domain.getAvatarColor());
         assertTrue(domain.isOnline());
+        assertEquals(0L, domain.getFriendshipCreatedAt());
     }
 
     @Test
