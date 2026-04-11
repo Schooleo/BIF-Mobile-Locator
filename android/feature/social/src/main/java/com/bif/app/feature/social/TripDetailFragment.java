@@ -13,6 +13,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.Navigation;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import androidx.viewpager2.widget.ViewPager2;
 
 import com.bif.app.core.utils.UriUtils;
@@ -30,6 +31,7 @@ public class TripDetailFragment extends Fragment {
     private String tripTitle = "";
     private int tripMemberCount = 0;
     private TripDetailViewModel viewModel;
+    private SwipeRefreshLayout swipeRefreshLayout;
 
     @Nullable
     @Override
@@ -53,6 +55,7 @@ public class TripDetailFragment extends Fragment {
         ImageButton btnHome = view.findViewById(R.id.btn_home);
         TextView tvTitle = view.findViewById(R.id.tv_trip_title);
         TabLayout tabLayout = view.findViewById(R.id.tab_layout_detail);
+        swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_trip_detail);
         ViewPager2 viewPager = view.findViewById(R.id.view_pager_detail);
         FloatingActionButton fabChat = view.findViewById(R.id.fab_chat);
         View unreadDot = view.findViewById(R.id.view_chat_unread_dot);
@@ -97,7 +100,18 @@ public class TripDetailFragment extends Fragment {
         if (tripId != null && !tripId.trim().isEmpty()) {
             viewModel.loadTrip(tripId);
         }
-        viewModel.getTrip().observe(getViewLifecycleOwner(), trip -> tripMemberCount = resolveTripMemberCount(trip));
+        swipeRefreshLayout.setOnRefreshListener(() -> {
+            viewModel.refreshTripContent();
+            swipeRefreshLayout.postDelayed(() -> {
+                if (isAdded()) {
+                    swipeRefreshLayout.setRefreshing(false);
+                }
+            }, 1000L);
+        });
+        viewModel.getTrip().observe(getViewLifecycleOwner(), trip -> {
+            tripMemberCount = resolveTripMemberCount(trip);
+            swipeRefreshLayout.setRefreshing(false);
+        });
         viewModel.getHasUnreadGroupMessages().observe(getViewLifecycleOwner(), hasUnread -> unreadDot.setVisibility(Boolean.TRUE.equals(hasUnread) ? View.VISIBLE : View.GONE));
     }
 
@@ -116,4 +130,3 @@ public class TripDetailFragment extends Fragment {
         return trip.getParticipantIds().size();
     }
 }
-

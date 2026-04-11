@@ -124,6 +124,16 @@ public class TripDetailViewModelTest {
         assertNotEquals(Boolean.TRUE, viewModel.getHasUnreadGroupMessages().getValue());
     }
 
+    @Test
+    public void refreshTripContent_RefreshesTripAndChatSources() {
+        viewModel.loadTrip("trip-1");
+
+        viewModel.refreshTripContent();
+
+        verify(mockTripRepository).refreshTrips("");
+        verify(mockChatRepository).refreshMessages("trip-1");
+    }
+
     private ChatMessage message(String id, String groupId, boolean isOutgoing, long sentAt) {
         return new ChatMessage(
                 id,

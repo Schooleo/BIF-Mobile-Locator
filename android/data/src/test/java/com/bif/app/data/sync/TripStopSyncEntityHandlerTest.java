@@ -55,7 +55,7 @@ public class TripStopSyncEntityHandlerTest {
         change.operation = "UPDATE";
         change.serverVersion = 10L;
         change.payload = "{\"id\":\"stop-1\",\"tripId\":\"trip-1\","
-                + "\"title\":\"Museum\",\"note\":\"visit\","
+                + "\"title\":\"Museum\",\"address\":\"1 Art St\",\"note\":\"visit\","
                 + "\"location\":{\"latitude\":10.5,\"longitude\":20.25},"
                 + "\"arrivalTime\":\"2026-03-28T09:00:00Z\","
                 + "\"departureTime\":\"2026-03-28T10:00:00Z\","
@@ -69,8 +69,28 @@ public class TripStopSyncEntityHandlerTest {
         org.junit.Assert.assertEquals("stop-1", saved.id);
         org.junit.Assert.assertEquals("trip-1", saved.tripId);
         org.junit.Assert.assertEquals("Museum", saved.title);
+        org.junit.Assert.assertEquals("1 Art St", saved.address);
+        org.junit.Assert.assertEquals("visit", saved.note);
         org.junit.Assert.assertEquals(2, saved.orderIndex);
         org.junit.Assert.assertEquals(10L, saved.serverVersion);
+    }
+
+    @Test
+    public void applyPulledChange_missingAddressDoesNotOverwriteFromNote() {
+        SyncChangeDto change = new SyncChangeDto();
+        change.operation = "UPDATE";
+        change.serverVersion = 12L;
+        change.payload = "{\"id\":\"stop-2\",\"tripId\":\"trip-1\","
+                + "\"title\":\"Museum\",\"note\":\"visit only\","
+                + "\"orderIndex\":1,\"serverVersion\":12,\"deleted\":false}";
+
+        handler.applyPulledChange(change, "user-1");
+
+        ArgumentCaptor<TripStopEntity> captor = ArgumentCaptor.forClass(TripStopEntity.class);
+        verify(mockTripDao).upsertStop(captor.capture());
+        TripStopEntity saved = captor.getValue();
+        org.junit.Assert.assertEquals("", saved.address);
+        org.junit.Assert.assertEquals("visit only", saved.note);
     }
 
     @Test

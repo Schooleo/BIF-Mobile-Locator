@@ -12,6 +12,7 @@ public class TripStop {
     private String id = UUID.randomUUID().toString();
     private String placeId;
     private String title;
+    private String address;
     private String note;
     private Location location;
     private Instant arrivalTime;

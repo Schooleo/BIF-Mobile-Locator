@@ -98,4 +98,8 @@ public class GroupDetailViewModel extends ViewModel {
         if (currentGroup == null) return;
         groupRepository.disbandGroup(currentGroup);
     }
+
+    public void refreshGroup() {
+        groupRepository.refreshGroups();
+    }
 }

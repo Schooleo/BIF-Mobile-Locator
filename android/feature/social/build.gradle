@@ -47,6 +47,7 @@ dependencies {
     implementation libs.material
     implementation libs.navigation.runtime
     implementation libs.viewpager2
+    implementation libs.swiperefreshlayout
     testImplementation libs.junit
     testImplementation libs.core.testing
     testImplementation libs.mockito.core

@@ -23,6 +23,7 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.bif.app.core.utils.DialogUtils;
 import com.bif.app.core.utils.UriUtils;
@@ -50,6 +51,7 @@ public class SocialFragment extends Fragment {
     private LinearLayout stateLayout;
     private TextView tvStateMessage;
     private Button btnRetry;
+    private SwipeRefreshLayout swipeRefreshLayout;
     private FriendsAdapter friendsAdapter;
     private TripListAdapter tripListAdapter;
     private SocialViewModel viewModel;
@@ -90,20 +92,15 @@ public class SocialFragment extends Fragment {
         viewModel = new ViewModelProvider(this).get(SocialViewModel.class);
 
         tabLayout = view.findViewById(R.id.tab_layout);
+        swipeRefreshLayout = view.findViewById(R.id.swipe_refresh);
         recyclerView = view.findViewById(R.id.recycler_view);
         progressLoading = view.findViewById(R.id.progress_loading);
         stateLayout = view.findViewById(R.id.layout_state);
         tvStateMessage = view.findViewById(R.id.tv_state_message);
         btnRetry = view.findViewById(R.id.btn_retry);
 
-        btnRetry.setOnClickListener(v -> {
-            if (tabLayout.getSelectedTabPosition() == 0) {
-                viewModel.retryTrips();
-            } else {
-                viewModel.retryFriends();
-            }
-            renderCurrentTabState();
-        });
+        swipeRefreshLayout.setOnRefreshListener(this::refreshCurrentTab);
+        btnRetry.setOnClickListener(v -> refreshCurrentTab());
 
         setupRecyclerView();
         setupTabs();
@@ -313,6 +310,7 @@ public class SocialFragment extends Fragment {
             showLoading();
             return;
         }
+        stopRefreshing();
         if (state instanceof UiState.Empty) {
             tripListAdapter.setTrips(new ArrayList<>());
             showList(tripListAdapter);
@@ -334,6 +332,7 @@ public class SocialFragment extends Fragment {
             showLoading();
             return;
         }
+        stopRefreshing();
         if (state instanceof UiState.Empty) {
             friendsAdapter.setFriends(new ArrayList<>());
             showList(friendsAdapter);
@@ -376,6 +375,27 @@ public class SocialFragment extends Fragment {
         recyclerView.setVisibility(View.VISIBLE);
         recyclerView.setAdapter(adapter);
         updateActionLoadingUi();
+    }
+
+    private void refreshCurrentTab() {
+        if (tabLayout == null || viewModel == null) {
+            stopRefreshing();
+            return;
+        }
+        if (tabLayout.getSelectedTabPosition() == 0) {
+            viewModel.retryTrips();
+        } else {
+            viewModel.retryFriends();
+            viewModel.refreshRequestsOnly();
+        }
+        renderCurrentTabState();
+        swipeRefreshLayout.postDelayed(this::stopRefreshing, 1000L);
+    }
+
+    private void stopRefreshing() {
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.setRefreshing(false);
+        }
     }
 
     @SuppressLint("ClickableViewAccessibility")

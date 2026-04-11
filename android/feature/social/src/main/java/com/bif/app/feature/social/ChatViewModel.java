@@ -290,8 +290,9 @@ public class ChatViewModel extends ViewModel {
     }
 
     public void refreshMessages() {
-        if (groupId != null) {
+        if (groupId != null && !groupId.trim().isEmpty()) {
             chatRepository.refreshMessages(groupId);
+            tripRepository.refreshTrips(groupId);
         }
     }
 

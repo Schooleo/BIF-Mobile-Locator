@@ -145,6 +145,7 @@ public class ChatViewModelTest {
         viewModel.refreshMessages();
 
         verify(mockChatRepository, org.mockito.Mockito.times(2)).refreshMessages("group1"); // Twice total: init + here
+        verify(mockTripRepository, org.mockito.Mockito.times(2)).refreshTrips("group1");
     }
 
     @Test

@@ -85,9 +85,6 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
             if (incomingAddress.isEmpty() && existing != null && existing.address != null) {
                 incomingAddress = existing.address.trim();
             }
-            if (incomingAddress.isEmpty() && payload.note != null && !payload.note.trim().isEmpty()) {
-                incomingAddress = payload.note.trim();
-            }
             entity.address = incomingAddress;
             entity.note = payload.note;
             entity.photoUrl = payload.photoUrl;

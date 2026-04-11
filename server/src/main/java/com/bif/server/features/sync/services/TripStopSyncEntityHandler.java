@@ -83,6 +83,7 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
 
         target.setPlaceId(payload.placeId);
         target.setTitle(payload.title);
+        target.setAddress(payload.address);
         target.setNote(payload.note);
         if (payload.photoUrlProvided) {
             target.setPhotoUrl(normalizeNullable(payload.photoUrl));
@@ -182,6 +183,7 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
             putText(node, "tripId", payload.tripId);
             putText(node, "placeId", payload.placeId);
             putText(node, "title", payload.title);
+            putText(node, "address", payload.address);
             putText(node, "note", payload.note);
             putText(node, "photoUrl", payload.photoUrl);
             if (payload.location != null && payload.location.latitude != null
@@ -211,6 +213,7 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         payload.tripId = tripId;
         payload.placeId = stop.getPlaceId();
         payload.title = stop.getTitle();
+        payload.address = stop.getAddress();
         payload.note = stop.getNote();
         payload.photoUrl = stop.getPhotoUrl();
         payload.arrivalTime = stop.getArrivalTime();

@@ -88,6 +88,15 @@ public class TripDetailViewModel extends ViewModel {
         unreadRefreshToken.setValue(token == null ? 1 : token + 1);
     }
 
+    public void refreshTripContent() {
+        if (currentTripId == null || currentTripId.trim().isEmpty()) {
+            return;
+        }
+        tripRepository.refreshTrips("");
+        chatRepository.refreshMessages(currentTripId);
+        refreshUnreadState();
+    }
+
     public void removeStop(String stopId) {
         if (currentTripId == null || currentTripId.trim().isEmpty()
                 || stopId == null || stopId.trim().isEmpty()) {

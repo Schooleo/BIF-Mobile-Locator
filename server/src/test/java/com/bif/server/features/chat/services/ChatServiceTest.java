@@ -115,6 +115,18 @@ class ChatServiceTest {
     }
 
     @Test
+    void save_AutoConfirmsAcceptedMessage() {
+        ChatMessage msg = new ChatMessage();
+        msg.setConfirmed(false);
+        msg.setSentAt(Instant.now());
+        when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(i -> i.getArgument(0));
+
+        ChatMessage result = chatService.save(msg);
+
+        assertTrue(result.isConfirmed());
+    }
+
+    @Test
     void confirmMessage_WhenFound_SetsConfirmedTrue() {
         ChatMessage msg = new ChatMessage();
         msg.setClientMessageId("client-1");

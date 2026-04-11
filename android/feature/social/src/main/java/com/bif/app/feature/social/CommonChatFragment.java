@@ -30,6 +30,7 @@ import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.bif.app.core.utils.ChatReadStateStore;
 import com.bif.app.core.utils.UriUtils;
@@ -61,6 +62,7 @@ public class CommonChatFragment extends Fragment {
     private String chatId;
     private EditText messageInput;
     private RecyclerView rvMessages;
+    private SwipeRefreshLayout swipeRefreshLayout;
     private View layoutInputBar;
     private Drawable defaultInputBarBackground;
     private List<ChatMessage> latestMessages = new ArrayList<>();
@@ -91,6 +93,7 @@ public class CommonChatFragment extends Fragment {
         TextView tvTitle = view.findViewById(R.id.tv_chat_title);
         TextView tvSubtitle = view.findViewById(R.id.tv_chat_subtitle);
         View btnBack = view.findViewById(R.id.btn_back);
+        swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_messages);
         rvMessages = view.findViewById(R.id.rv_messages);
         View composerBar = view.findViewById(R.id.layout_chat_composer);
         layoutInputBar = view.findViewById(R.id.layout_input_bar);
@@ -143,6 +146,14 @@ public class CommonChatFragment extends Fragment {
         });
         rvMessages.setLayoutManager(new LinearLayoutManager(requireContext()));
         rvMessages.setAdapter(adapter);
+        swipeRefreshLayout.setOnRefreshListener(() -> {
+            viewModel.refreshMessages();
+            swipeRefreshLayout.postDelayed(() -> {
+                if (isAdded()) {
+                    swipeRefreshLayout.setRefreshing(false);
+                }
+            }, 1000L);
+        });
 
         viewModel = new ViewModelProvider(this).get(ChatViewModel.class);
 
@@ -280,6 +291,9 @@ public class CommonChatFragment extends Fragment {
     // ─── LiveData observers ────────────────────────────────────────────────────
 
     private void onMessagesUpdated(List<ChatMessage> messages) {
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.setRefreshing(false);
+        }
         renderMessages(messages, true);
     }
 

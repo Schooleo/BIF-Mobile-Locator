@@ -72,7 +72,7 @@ class TripStopSyncEntityHandlerTest {
         pushed.setEntityId("s1");
         pushed.setOperation("UPDATE");
         pushed.setPayload("{\"id\":\"s1\",\"tripId\":\"trip-1\","
-                + "\"title\":\"Updated\",\"note\":\"n\","
+                + "\"title\":\"Updated\",\"address\":\"123 Main St\",\"note\":\"n\","
                 + "\"location\":{\"latitude\":1.2,\"longitude\":2.3},"
                 + "\"arrivalTime\":\"2026-03-28T09:00:00Z\","
                 + "\"departureTime\":\"2026-03-28T10:00:00Z\","
@@ -85,12 +85,14 @@ class TripStopSyncEntityHandlerTest {
         TripPlan saved = captor.getValue();
         assertEquals(2, saved.getStops().size());
         assertEquals("Updated", saved.getStops().get(0).getTitle());
+        assertEquals("123 Main St", saved.getStops().get(0).getAddress());
         assertEquals("B", saved.getStops().get(1).getTitle());
         assertEquals(17L, saved.getServerVersion());
 
         JsonNode response = objectMapper.readTree(payload);
         assertEquals("s1", response.get("id").asText());
         assertEquals("trip-1", response.get("tripId").asText());
+        assertEquals("123 Main St", response.get("address").asText());
         assertEquals(17L, response.get("serverVersion").asLong());
         assertNotNull(response.get("location"));
         assertEquals(1.2, response.get("location").get("latitude").asDouble(), 0.001);
@@ -104,6 +106,7 @@ class TripStopSyncEntityHandlerTest {
         TripStop stop = new TripStop();
         stop.setId("s9");
         stop.setTitle("Stop 9");
+        stop.setAddress("9 Side St");
         stop.setOrderIndex(4);
         stop.setServerVersion(2L);
         stop.setDeleted(false);
@@ -128,6 +131,7 @@ class TripStopSyncEntityHandlerTest {
         JsonNode response = objectMapper.readTree(resolved);
         assertEquals("s9", response.get("id").asText());
         assertEquals("trip-2", response.get("tripId").asText());
+        assertEquals("9 Side St", response.get("address").asText());
         assertEquals(12L, response.get("serverVersion").asLong());
     }
 

@@ -19,6 +19,7 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.bif.app.core.utils.DialogUtils;
 import com.bif.app.domain.model.Friend;
@@ -38,6 +39,7 @@ public class GroupDetailFragment extends Fragment {
     private Button btnSave;
     private TextView tvMembersHeader;
     private RecyclerView rvMembers;
+    private SwipeRefreshLayout swipeRefreshLayout;
     private ImageButton btnRenameGroup;
     private ImageButton btnDisband;
 
@@ -62,6 +64,7 @@ public class GroupDetailFragment extends Fragment {
         btnSave = view.findViewById(R.id.btn_save);
         tvMembersHeader = view.findViewById(R.id.tv_members_header);
         rvMembers = view.findViewById(R.id.rv_members);
+        swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_group_detail);
         btnRenameGroup = view.findViewById(R.id.btn_rename_group);
         btnDisband = view.findViewById(R.id.btn_disband);
 
@@ -74,6 +77,15 @@ public class GroupDetailFragment extends Fragment {
             String groupId = args.getString("groupId", "");
             viewModel.loadGroup(groupId);
         }
+
+        swipeRefreshLayout.setOnRefreshListener(() -> {
+            viewModel.refreshGroup();
+            swipeRefreshLayout.postDelayed(() -> {
+                if (isAdded()) {
+                    swipeRefreshLayout.setRefreshing(false);
+                }
+            }, 1000L);
+        });
 
         observeViewModel();
         setupSaveButton();
@@ -88,6 +100,7 @@ public class GroupDetailFragment extends Fragment {
 
     private void observeViewModel() {
         viewModel.getGroup().observe(getViewLifecycleOwner(), group -> {
+            swipeRefreshLayout.setRefreshing(false);
             if (group == null) return;
 
             // Update header title with group name

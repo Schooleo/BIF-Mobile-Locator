@@ -42,6 +42,9 @@ public class ChatService {
         if (message.getType() == null) {
             message.setType("TEXT");
         }
+        if (!message.isDeleted()) {
+            message.setConfirmed(true);
+        }
         return chatMessageRepository.save(message);
     }
 
@@ -63,4 +66,3 @@ public class ChatService {
         return true;
     }
 }
-
