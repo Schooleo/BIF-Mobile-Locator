@@ -1,6 +1,7 @@
 package com.bif.server.features.sync.services;
 
 import com.bif.server.features.place.dto.rest.ReviewResponseDTO;
+import com.bif.server.features.place.services.PlaceIdentityService;
 import com.bif.server.features.place.services.RatingService;
 import com.bif.server.features.sync.models.SyncChange;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,11 +25,14 @@ class ReviewSyncEntityHandlerTest {
     @Mock
     private RatingService ratingService;
 
+    @Mock
+    private PlaceIdentityService placeIdentityService;
+
     private ReviewSyncEntityHandler handler;
 
     @BeforeEach
     void setUp() {
-        handler = new ReviewSyncEntityHandler(ratingService, new ObjectMapper());
+        handler = new ReviewSyncEntityHandler(ratingService, placeIdentityService, new ObjectMapper());
     }
 
     @Test
@@ -72,25 +76,65 @@ class ReviewSyncEntityHandlerTest {
             4,
             "nice",
             1764547200000L);
-        when(ratingService.saveOrUpdateReview(4, "nice", "u1", "place-1", 2L,
+        when(ratingService.saveOrUpdateReview(4, "nice", "u1", "place-1", "place-1", 2L,
             null, null, null, null, null))
             .thenReturn(persisted);
 
         String payload = handler.applyPushedChange(pushed, "u1", 2L);
 
         verify(ratingService).saveOrUpdateReview(
-            eq(4),
-            eq("nice"),
-            eq("u1"),
-            eq("place-1"),
-            eq(2L),
-            eq(null),
-            eq(null),
-            eq(null),
-            eq(null),
-            eq(null));
+                eq(4),
+                eq("nice"),
+                eq("u1"),
+                eq("place-1"),
+                eq("place-1"),
+                eq(2L),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null));
         assertTrue(payload.contains("\"placeId\":\"place-1\""));
         assertFalse(payload.contains("\"placeId\":\"place-2\""));
         assertTrue(payload.contains("\"userId\":\"u1\""));
+    }
+
+    @Test
+    void applyPushedChange_WhenMetadataResolves_UsesResolvedPlaceId() {
+        SyncChange pushed = new SyncChange();
+        pushed.setEntityId("GHOST_ID:u1");
+        pushed.setOperation("CREATE");
+        pushed.setPayload("{\"stars\":5,\"comment\":\"ok\",\"externalSource\":\"GOOGLE_MAPS\",\"externalId\":\"ext-1\",\"lat\":10.0,\"lng\":20.0,\"placeName\":\"Cafe\"}");
+
+        when(placeIdentityService.resolveInternalPlaceId("GOOGLE_MAPS", "ext-1", 10.0, 20.0, "Cafe"))
+                .thenReturn("REAL_ID");
+
+        ReviewResponseDTO persisted = new ReviewResponseDTO(
+                "r1",
+                "REAL_ID",
+                "u1",
+                "Anonymous",
+                5,
+                "ok",
+                1764547200000L);
+        when(ratingService.saveOrUpdateReview(5, "ok", "u1", "GHOST_ID", "REAL_ID", 7L,
+                "GOOGLE_MAPS", "ext-1", 10.0, 20.0, "Cafe"))
+                .thenReturn(persisted);
+
+        String payload = handler.applyPushedChange(pushed, "u1", 7L);
+
+        verify(ratingService).saveOrUpdateReview(
+                eq(5),
+                eq("ok"),
+                eq("u1"),
+                eq("GHOST_ID"),
+                eq("REAL_ID"),
+                eq(7L),
+                eq("GOOGLE_MAPS"),
+                eq("ext-1"),
+                eq(10.0),
+                eq(20.0),
+                eq("Cafe"));
+        assertTrue(payload.contains("\"placeId\":\"REAL_ID\""));
     }
 }

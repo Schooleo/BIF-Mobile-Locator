@@ -57,13 +57,23 @@ public class RatingService {
      */
     @Transactional
     public ReviewResponseDTO saveReview(String userId, String placeId, ReviewDTO dto) {
+        return saveReview(userId, placeId, placeId, dto);
+    }
+
+    @Transactional
+    public ReviewResponseDTO saveReview(String userId,
+                                        String originalPlaceId,
+                                        String resolvedPlaceId,
+                                        ReviewDTO dto) {
         String resolvedUserId = required(userId, "userId");
-        String resolvedPlaceId = required(placeId, "placeId");
+        String normalizedOriginalPlaceId = required(originalPlaceId, "placeId");
+        String normalizedResolvedPlaceId = required(resolvedPlaceId, "placeId");
+        logPlaceIdCorrectionIfNeeded(normalizedOriginalPlaceId, normalizedResolvedPlaceId, "saveReview");
         validateStars(dto.stars());
 
         PlaceReview review = new PlaceReview();
         review.setUserId(resolvedUserId);
-        review.setPlaceId(resolvedPlaceId);
+        review.setPlaceId(normalizedResolvedPlaceId);
         review.setStars(dto.stars());
         review.setComment(normalizeComment(dto.comment()));
         review.setExternalSource(normalizeNullable(dto.externalSource()));
@@ -80,13 +90,13 @@ public class RatingService {
         } catch (DuplicateKeyException ex) {
             throw new DuplicateKeyException(
                 "Review already exists for user " + resolvedUserId
-                    + " and place " + resolvedPlaceId,
+                    + " and place " + normalizedResolvedPlaceId,
                 ex);
         }
 
         // Cập nhật cache bằng optimistic retries tại PlaceRatingCacheUpdater.
         Place updatedPlace = placeRatingCacheUpdater.incrementAndRecalculate(
-                resolvedUserId, resolvedPlaceId, dto.stars());
+            resolvedUserId, normalizedResolvedPlaceId, dto.stars());
 
         // Phát sự kiện
         applicationEventPublisher.publishEvent(new PlaceRatingUpdatedEvent(
@@ -116,43 +126,47 @@ public class RatingService {
             long serverVersion
     ) {
         return saveOrUpdateReview(
-            stars,
-            comment,
-            userId,
-            placeId,
-            serverVersion,
-            null,
-            null,
-            null,
-            null,
-            null);
-        }
+                stars,
+                comment,
+                userId,
+                placeId,
+                placeId,
+                serverVersion,
+                null,
+                null,
+                null,
+                null,
+                null);
+    }
 
-        @Transactional
-        public ReviewResponseDTO saveOrUpdateReview(
+    @Transactional
+    public ReviewResponseDTO saveOrUpdateReview(
             int stars,
             String comment,
             String userId,
-            String placeId,
+            String originalPlaceId,
+            String resolvedPlaceId,
             long serverVersion,
             String externalSource,
             String externalId,
             Double lat,
             Double lng,
             String placeName
-        ) {
+    ) {
         if (serverVersion > 0) {
             LOGGER.debug("saveOrUpdateReview invoked from sync version {}", serverVersion);
         }
 
         String resolvedUserId = required(userId, "userId");
-        String resolvedPlaceId = required(placeId, "placeId");
+        String normalizedOriginalPlaceId = required(originalPlaceId, "placeId");
+        String normalizedResolvedPlaceId = required(resolvedPlaceId, "placeId");
+        logPlaceIdCorrectionIfNeeded(normalizedOriginalPlaceId, normalizedResolvedPlaceId, "saveOrUpdateReview");
         validateStars(stars);
 
         String normalizedComment = normalizeComment(comment);
 
         Optional<PlaceReview> existingOpt = ratingRepository
-                .findByUserIdAndPlaceId(resolvedUserId, resolvedPlaceId);
+            .findByUserIdAndPlaceId(resolvedUserId, normalizedResolvedPlaceId);
 
         if (existingOpt.isPresent()) {
             PlaceReview existingReview = existingOpt.get();
@@ -172,7 +186,7 @@ public class RatingService {
             if (oldStars != stars) {
                 Place updatedPlace = placeRatingCacheUpdater.replaceAndRecalculate(
                         resolvedUserId,
-                        resolvedPlaceId,
+                        normalizedResolvedPlaceId,
                         oldStars,
                         stars);
                 applicationEventPublisher.publishEvent(new PlaceRatingUpdatedEvent(
@@ -185,7 +199,7 @@ public class RatingService {
 
         PlaceReview review = new PlaceReview();
         review.setUserId(resolvedUserId);
-        review.setPlaceId(resolvedPlaceId);
+        review.setPlaceId(normalizedResolvedPlaceId);
         review.setStars(stars);
         review.setComment(normalizedComment);
         review.setExternalSource(normalizeNullable(externalSource));
@@ -200,7 +214,7 @@ public class RatingService {
             persisted = ratingRepository.save(review);
             Place updatedPlace = placeRatingCacheUpdater.incrementAndRecalculate(
                     resolvedUserId,
-                    resolvedPlaceId,
+                    normalizedResolvedPlaceId,
                     stars);
             applicationEventPublisher.publishEvent(new PlaceRatingUpdatedEvent(
                     updatedPlace.getId(),
@@ -209,11 +223,11 @@ public class RatingService {
             return mapToReviewResponseDTO(persisted);
         } catch (DuplicateKeyException ex) {
             Optional<PlaceReview> concurrent = ratingRepository
-                    .findByUserIdAndPlaceId(resolvedUserId, resolvedPlaceId);
+                    .findByUserIdAndPlaceId(resolvedUserId, normalizedResolvedPlaceId);
             if (concurrent.isEmpty()) {
                 throw new DuplicateKeyException(
                         "Review already exists for user " + resolvedUserId
-                                + " and place " + resolvedPlaceId,
+                            + " and place " + normalizedResolvedPlaceId,
                         ex);
             }
 
@@ -234,7 +248,7 @@ public class RatingService {
             if (oldStars != stars) {
                 Place updatedPlace = placeRatingCacheUpdater.replaceAndRecalculate(
                         resolvedUserId,
-                        resolvedPlaceId,
+                        normalizedResolvedPlaceId,
                         oldStars,
                         stars);
                 applicationEventPublisher.publishEvent(new PlaceRatingUpdatedEvent(
@@ -386,6 +400,17 @@ public class RatingService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private void logPlaceIdCorrectionIfNeeded(String originalPlaceId,
+                                              String resolvedPlaceId,
+                                              String operation) {
+        if (!Objects.equals(originalPlaceId, resolvedPlaceId)) {
+            LOGGER.info("{} corrected placeId from {} to {}",
+                    operation,
+                    originalPlaceId,
+                    resolvedPlaceId);
+        }
     }
 
     private String required(String value, String fieldName) {
