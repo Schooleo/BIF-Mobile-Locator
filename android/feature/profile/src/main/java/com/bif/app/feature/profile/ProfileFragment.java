@@ -15,9 +15,9 @@ import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import com.bif.app.core.utils.AppSnackbar;
 import androidx.annotation.Nullable;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -105,7 +105,7 @@ public class ProfileFragment extends Fragment {
             if (messageId == null || !isAdded()) {
                 return;
             }
-            Toast.makeText(requireContext(), messageId, Toast.LENGTH_SHORT).show();
+            AppSnackbar.show(requireContext(), messageId);
             viewModel.consumeMessage();
         });
 
@@ -277,7 +277,7 @@ public class ProfileFragment extends Fragment {
                                 if (!isAdded()) {
                                     return;
                                 }
-                                Toast.makeText(requireContext(), R.string.logout_success, Toast.LENGTH_SHORT).show();
+                                AppSnackbar.show(requireContext(), R.string.logout_success);
                                 navController.navigate(UriUtils.buildUri(UriUtils.PathTo.LOGIN));
                             });
                         });
@@ -325,9 +325,7 @@ public class ProfileFragment extends Fragment {
                                     if (!isAdded()) {
                                         return;
                                     }
-                                    Toast.makeText(v.getContext(),
-                                            R.string.image_unavailable_offline,
-                                            Toast.LENGTH_SHORT).show();
+                                    AppSnackbar.show(v.getContext(), R.string.image_unavailable_offline);
                                     viewModel.refreshProfileFromServer(true);
                                 });
                             }
@@ -381,7 +379,7 @@ public class ProfileFragment extends Fragment {
         btnSave.setOnClickListener(v -> {
             String updatedUsername = etUsername.getText().toString().trim();
             if (updatedUsername.isEmpty()) {
-                Toast.makeText(requireContext(), R.string.username_required, Toast.LENGTH_SHORT).show();
+                AppSnackbar.show(requireContext(), R.string.username_required);
                 return;
             }
 

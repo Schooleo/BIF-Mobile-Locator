@@ -10,9 +10,9 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import com.bif.app.core.utils.AppSnackbar;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.NavController;
@@ -124,7 +124,7 @@ public class RegisterFragment extends Fragment {
                                 AuthResponse auth = response.body();
                                 authSessionManager.saveSessionFromAuth(auth, username, email);
 
-                                Toast.makeText(requireContext(), "Registration successful", Toast.LENGTH_SHORT).show();
+                                AppSnackbar.show(requireContext(), "Registration successful");
                                 navController.navigate(UriUtils.buildUri(UriUtils.PathTo.MAP));
                                 return;
                             }
@@ -136,11 +136,11 @@ public class RegisterFragment extends Fragment {
                             }
 
                             if (response.code() == 400) {
-                                Toast.makeText(requireContext(), "Invalid registration data", Toast.LENGTH_SHORT).show();
+                                AppSnackbar.show(requireContext(), "Invalid registration data");
                                 return;
                             }
 
-                            Toast.makeText(requireContext(), "Registration failed", Toast.LENGTH_SHORT).show();
+                            AppSnackbar.show(requireContext(), "Registration failed");
                         }
 
                         @Override
@@ -150,7 +150,7 @@ public class RegisterFragment extends Fragment {
                                 return;
                             }
                             Log.e(TAG, "Register request failed", t);
-                            Toast.makeText(requireContext(), "Network error. Please try again.", Toast.LENGTH_SHORT).show();
+                            AppSnackbar.show(requireContext(), "Network error. Please try again.");
                         }
                     });
         });
