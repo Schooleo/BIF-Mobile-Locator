@@ -15,9 +15,9 @@ import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import com.bif.app.core.utils.AppSnackbar;
 import androidx.annotation.Nullable;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -105,7 +105,7 @@ public class ProfileFragment extends Fragment {
             if (messageId == null || !isAdded()) {
                 return;
             }
-            Toast.makeText(requireContext(), messageId, Toast.LENGTH_SHORT).show();
+            AppSnackbar.show(requireContext(), messageId);
             viewModel.consumeMessage();
         });
 
@@ -139,7 +139,6 @@ public class ProfileFragment extends Fragment {
 
         View sectionAccount = view.findViewById(R.id.sectionAccount);
         View menuPersonalInfoView = view.findViewById(R.id.menuPersonalInfo);
-        View menuPrivacySecurity = view.findViewById(R.id.menuPrivacySecurity);
         View logoutButton = view.findViewById(R.id.btnLogout);
 
         if (state.isLoggedIn) {
@@ -160,7 +159,6 @@ public class ProfileFragment extends Fragment {
 
             sectionAccount.setVisibility(View.VISIBLE);
             menuPersonalInfoView.setVisibility(View.VISIBLE);
-            menuPrivacySecurity.setVisibility(View.VISIBLE);
             logoutButton.setVisibility(View.VISIBLE);
             return;
         }
@@ -182,7 +180,6 @@ public class ProfileFragment extends Fragment {
 
         sectionAccount.setVisibility(View.GONE);
         menuPersonalInfoView.setVisibility(View.GONE);
-        menuPrivacySecurity.setVisibility(View.GONE);
         logoutButton.setVisibility(View.GONE);
     }
 
@@ -201,19 +198,38 @@ public class ProfileFragment extends Fragment {
                 .setImageResource(com.bif.app.core.R.drawable.ic_person);
         ((android.widget.TextView) menuPersonalInfo.findViewById(com.bif.app.core.R.id.tvTitle))
                 .setText(R.string.personal_information);
-        menuPersonalInfo
-                .setOnClickListener(v -> navController.navigate(UriUtils.buildUri(UriUtils.PathTo.PERSONAL_INFO)));
-
-        // Privacy & Security
-        View menuPrivacySecurity = view.findViewById(R.id.menuPrivacySecurity);
-        ImageView iconPrivacySecurity = menuPrivacySecurity.findViewById(com.bif.app.core.R.id.ivIcon);
-        TextView titlePrivacySecurity = menuPrivacySecurity.findViewById(com.bif.app.core.R.id.tvTitle);
-        iconPrivacySecurity.setImageResource(com.bif.app.core.R.drawable.ic_security);
-        titlePrivacySecurity.setText(R.string.privacy_security);
-        menuPrivacySecurity.setOnClickListener(v -> {
-            // TODO: Navigate to privacy & security screen
-        });
+        menuPersonalInfo.setOnClickListener(v -> showPersonalInfoDialog());
     }
+
+        private void showPersonalInfoDialog() {
+        if (!isAdded()) {
+            return;
+        }
+
+        ProfileViewModel.ProfileUiState state = viewModel.getProfileState().getValue();
+        if (state == null) {
+            return;
+        }
+
+        View dialogView = LayoutInflater.from(requireContext())
+            .inflate(R.layout.dialog_personal_information, null, false);
+
+        TextView tvAuthStatusValue = dialogView.findViewById(R.id.tvAuthStatusValue);
+        TextView tvUsernameValue = dialogView.findViewById(R.id.tvUsernameValue);
+        TextView tvEmailValue = dialogView.findViewById(R.id.tvEmailValue);
+
+        tvAuthStatusValue.setText(state.isLoggedIn
+            ? R.string.logged_in_status
+            : R.string.guest_status);
+        tvUsernameValue.setText(state.usernameForDisplay);
+        tvEmailValue.setText(state.emailForDisplay);
+
+        new AlertDialog.Builder(requireContext())
+            .setTitle(R.string.personal_information)
+            .setView(dialogView)
+            .setPositiveButton(android.R.string.ok, null)
+            .show();
+        }
 
     private void setupDarkModeToggle(View view) {
         View menuDarkMode = view.findViewById(R.id.menuDarkMode);
@@ -261,7 +277,7 @@ public class ProfileFragment extends Fragment {
                                 if (!isAdded()) {
                                     return;
                                 }
-                                Toast.makeText(requireContext(), R.string.logout_success, Toast.LENGTH_SHORT).show();
+                                AppSnackbar.show(requireContext(), R.string.logout_success);
                                 navController.navigate(UriUtils.buildUri(UriUtils.PathTo.LOGIN));
                             });
                         });
@@ -309,9 +325,7 @@ public class ProfileFragment extends Fragment {
                                     if (!isAdded()) {
                                         return;
                                     }
-                                    Toast.makeText(v.getContext(),
-                                            R.string.image_unavailable_offline,
-                                            Toast.LENGTH_SHORT).show();
+                                    AppSnackbar.show(v.getContext(), R.string.image_unavailable_offline);
                                     viewModel.refreshProfileFromServer(true);
                                 });
                             }
@@ -365,7 +379,7 @@ public class ProfileFragment extends Fragment {
         btnSave.setOnClickListener(v -> {
             String updatedUsername = etUsername.getText().toString().trim();
             if (updatedUsername.isEmpty()) {
-                Toast.makeText(requireContext(), R.string.username_required, Toast.LENGTH_SHORT).show();
+                AppSnackbar.show(requireContext(), R.string.username_required);
                 return;
             }
 

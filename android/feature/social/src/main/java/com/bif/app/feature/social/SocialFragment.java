@@ -13,9 +13,9 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import com.bif.app.core.utils.AppSnackbar;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.PopupMenu;
 import androidx.fragment.app.Fragment;
@@ -191,7 +191,7 @@ public class SocialFragment extends Fragment {
                         textRes = R.string.trip_create_failed;
                         break;
                 }
-                Toast.makeText(requireContext(), getString(textRes), Toast.LENGTH_SHORT).show();
+                AppSnackbar.show(requireContext(), getString(textRes));
                 viewModel.clearTripActionMessage();
             }
         });
@@ -247,7 +247,7 @@ public class SocialFragment extends Fragment {
                         viewModel.retryFriends();
                         break;
                 }
-                Toast.makeText(requireContext(), toastMessage, Toast.LENGTH_SHORT).show();
+                AppSnackbar.show(requireContext(), toastMessage);
                 viewModel.clearFriendActionMessage();
             }
         });
@@ -428,7 +428,7 @@ public class SocialFragment extends Fragment {
                     if (!inputText.isEmpty()) {
                         viewModel.addFriend(inputText);
                     } else {
-                        Toast.makeText(requireContext(), "Please enter a name", Toast.LENGTH_SHORT).show();
+                        AppSnackbar.show(requireContext(), "Please enter a name");
                     }
                 }
         );
@@ -477,15 +477,15 @@ public class SocialFragment extends Fragment {
                         String description = etDescription.getText().toString().trim();
 
                         if (title.isEmpty()) {
-                            Toast.makeText(requireContext(), R.string.trip_title_required, Toast.LENGTH_SHORT).show();
+                            AppSnackbar.show(requireContext(), R.string.trip_title_required);
                             return;
                         }
                         if (startMillis[0] == 0L || endMillis[0] == 0L) {
-                            Toast.makeText(requireContext(), R.string.trip_dates_required, Toast.LENGTH_SHORT).show();
+                            AppSnackbar.show(requireContext(), R.string.trip_dates_required);
                             return;
                         }
                         if (endMillis[0] < startMillis[0]) {
-                            Toast.makeText(requireContext(), R.string.trip_dates_invalid, Toast.LENGTH_SHORT).show();
+                            AppSnackbar.show(requireContext(), R.string.trip_dates_invalid);
                             return;
                         }
 
@@ -579,15 +579,15 @@ public class SocialFragment extends Fragment {
                         String description = etDescription.getText().toString().trim();
 
                         if (title.isEmpty()) {
-                            Toast.makeText(requireContext(), R.string.trip_title_required, Toast.LENGTH_SHORT).show();
+                            AppSnackbar.show(requireContext(), R.string.trip_title_required);
                             return;
                         }
                         if (startMillis[0] == 0L || endMillis[0] == 0L) {
-                            Toast.makeText(requireContext(), R.string.trip_dates_required, Toast.LENGTH_SHORT).show();
+                            AppSnackbar.show(requireContext(), R.string.trip_dates_required);
                             return;
                         }
                         if (endMillis[0] < startMillis[0]) {
-                            Toast.makeText(requireContext(), R.string.trip_dates_invalid, Toast.LENGTH_SHORT).show();
+                            AppSnackbar.show(requireContext(), R.string.trip_dates_invalid);
                             return;
                         }
 
@@ -608,7 +608,7 @@ public class SocialFragment extends Fragment {
                 : trip.getTitle().trim();
 
         if (!isCurrentUserTripOwner(trip)) {
-            Toast.makeText(requireContext(), R.string.trip_delete_owner_only, Toast.LENGTH_SHORT).show();
+            AppSnackbar.show(requireContext(), R.string.trip_delete_owner_only);
             return;
         }
 

@@ -8,9 +8,9 @@ import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.RatingBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import com.bif.app.core.utils.AppSnackbar;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
@@ -129,7 +129,7 @@ public class FavoriteDetailFragment extends Fragment {
     private void showShareToGroupDialog(@NonNull Favorite favorite) {
         List<Group> groups = viewModel.getGroups().getValue();
         if (groups == null || groups.isEmpty()) {
-            Toast.makeText(requireContext(), R.string.no_group_available, Toast.LENGTH_SHORT).show();
+            AppSnackbar.show(requireContext(), R.string.no_group_available);
             return;
         }
 
@@ -186,7 +186,7 @@ public class FavoriteDetailFragment extends Fragment {
                 .setPositiveButton(R.string.save_note, (dialog, which) -> {
                     String note = input.getText() != null ? input.getText().toString() : "";
                     viewModel.updateNotes(note);
-                    Toast.makeText(requireContext(), R.string.favorite_note_saved, Toast.LENGTH_SHORT).show();
+                    AppSnackbar.show(requireContext(), R.string.favorite_note_saved);
                 })
                 .show();
     }

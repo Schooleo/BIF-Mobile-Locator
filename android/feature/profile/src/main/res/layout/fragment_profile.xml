@@ -74,14 +74,6 @@
                     android:layout_marginTop="4dp"
                     layout="@layout/component_menu_item"/>
 
-                <include
-                    android:id="@+id/menuPrivacySecurity"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="16dp"
-                    android:layout_marginTop="8dp"
-                    layout="@layout/component_menu_item"/>
-
                 <LinearLayout
                     android:id="@+id/btnLogout"
                     android:layout_width="match_parent"
