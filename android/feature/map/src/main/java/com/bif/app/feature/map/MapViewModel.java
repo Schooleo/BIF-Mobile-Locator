@@ -7,7 +7,6 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.Transformations;
 import androidx.lifecycle.ViewModel;
-import androidx.lifecycle.ViewModelKt;
 
 import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.model.Group;
@@ -25,6 +24,7 @@ import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.IRouteRepository;
 import com.bif.app.domain.repository.IReviewRepository;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -65,10 +65,14 @@ public class MapViewModel extends ViewModel {
     private final MutableLiveData<String> locationSearchQuery = new MutableLiveData<>();
     public final LiveData<Location> searchResult;
 
-    private String lastSearchQuery = null;
-        private final MutableLiveData<List<Place>> _searchResults =
-            new MutableLiveData<>(Collections.emptyList());
     public final LiveData<List<Place>> searchResults;
+    private final MutableLiveData<SearchTrigger> searchTrigger = new MutableLiveData<>();
+
+    private final MutableLiveData<Boolean> _isSearchingPlaces = new MutableLiveData<>(false);
+    public final LiveData<Boolean> isSearchingPlaces = _isSearchingPlaces;
+
+    @Nullable
+    private String lastSearchQuery = null;
 
     private final MutableLiveData<String> placesHistoryQuery = new MutableLiveData<>();
     public final LiveData<List<Place>> historySearchResults;
@@ -87,11 +91,12 @@ public class MapViewModel extends ViewModel {
     @Nullable
     private Location currentSearchUserLocation;
     @Nullable
-    private LiveData<List<Place>> activeSearchSource;
-    @Nullable
-    private Observer<List<Place>> activeSearchObserver;
-    @Nullable
     private android.os.Handler searchHandler;
+    @Nullable
+    private Runnable searchRunnable;
+    @Nullable
+    private String pendingSearchQuery;
+    private final long searchDebounceMs;
 
     private final java.util.concurrent.atomic.AtomicBoolean activeSearchPending =
             new java.util.concurrent.atomic.AtomicBoolean(false);
@@ -110,6 +115,27 @@ public class MapViewModel extends ViewModel {
             IRouteRepository routeRepository,
             IReviewRepository reviewRepository,
             Executor reviewExecutor) {
+        this(mapRepository,
+                placeRepository,
+                favoriteRepository,
+                groupRepository,
+                routeRepository,
+                reviewRepository,
+                reviewExecutor,
+                null,
+                400L);
+    }
+
+    MapViewModel(
+            IMapRepository mapRepository,
+            IPlaceRepository placeRepository,
+            IFavoriteRepository favoriteRepository,
+            IGroupRepository groupRepository,
+            IRouteRepository routeRepository,
+            IReviewRepository reviewRepository,
+            Executor reviewExecutor,
+            @Nullable android.os.Handler injectedSearchHandler,
+            long searchDebounceMs) {
         this.mapRepository = mapRepository;
         this.placeRepository = placeRepository;
         this.favoriteRepository = favoriteRepository;
@@ -117,11 +143,41 @@ public class MapViewModel extends ViewModel {
         this.routeRepository = routeRepository;
         this.reviewRepository = reviewRepository;
         this.reviewExecutor = reviewExecutor;
+        this.searchDebounceMs = searchDebounceMs;
 
         this.searchResult = Transformations.switchMap(locationSearchQuery, placeRepository::searchLocation);
-        this.searchResults = _searchResults;
+        this.searchResults = Transformations.switchMap(searchTrigger, trigger -> {
+            if (trigger == null || trigger.query.isEmpty()) {
+                MutableLiveData<List<Place>> empty = new MutableLiveData<>();
+                empty.setValue(new ArrayList<>());
+                _isSearchingPlaces.postValue(false);
+                return empty;
+            }
+
+            LiveData<List<Place>> source = placeRepository.searchPlaces(
+                    trigger.query,
+                    cloneLocation(trigger.userLocation));
+            if (source == null) {
+                MutableLiveData<List<Place>> empty = new MutableLiveData<>();
+                empty.setValue(new ArrayList<>());
+                _isSearchingPlaces.postValue(false);
+                return empty;
+            }
+
+            return Transformations.map(source, places -> {
+                _isSearchingPlaces.postValue(false);
+                return places != null ? places : Collections.emptyList();
+            });
+        });
+
         this.historySearchResults = Transformations.switchMap(
-                placesHistoryQuery, placeRepository::searchPlacesFromHistory);
+                placesHistoryQuery,
+                query -> Transformations.map(
+                        placeRepository.searchPlacesFromHistory(query),
+                        places -> {
+                            _isSearchingPlaces.postValue(false);
+                            return places != null ? places : Collections.emptyList();
+                        }));
         this.allFavorites = favoriteRepository.getAllFavorites();
         this.allGroups = groupRepository.getGroups();
         this.searchHistory = placeRepository.getSearchHistory();
@@ -129,10 +185,14 @@ public class MapViewModel extends ViewModel {
         this.currentPlaceReviews = Transformations.switchMap(_currentPlaceId, reviewRepository::getReviewsForPlace);
         this.currentMyReview = Transformations.switchMap(_currentPlaceId, reviewRepository::getMyReview);
 
-        try {
-            this.searchHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-        } catch (Exception ignored) {
-            this.searchHandler = null;
+        if (injectedSearchHandler != null) {
+            this.searchHandler = injectedSearchHandler;
+        } else {
+            try {
+                this.searchHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+            } catch (Exception ignored) {
+                this.searchHandler = null;
+            }
         }
     }
 
@@ -145,28 +205,38 @@ public class MapViewModel extends ViewModel {
     }
 
     public void searchForPlaces(String query) {
-        activeSearchPending.set(true);
         String normalized = query == null ? "" : query.trim();
-        Location loc = currentSearchUserLocation;
-        String locKey = loc == null ? "none" : String.format(Locale.US, "%.4f,%.4f", loc.latitude, loc.longitude);
-        String dedupeKey = normalized + "|" + locKey;
-        
-        if (dedupeKey.equals(lastSearchQuery)) {
+        if (normalized.isEmpty()) {
+            if (searchHandler != null && searchRunnable != null) {
+                searchHandler.removeCallbacks(searchRunnable);
+            }
+            pendingSearchQuery = null;
+            lastSearchQuery = null;
+            _isSearchingPlaces.setValue(false);
+            activeSearchPending.set(false);
+            searchTrigger.setValue(SearchTrigger.empty());
             return;
         }
-        lastSearchQuery = dedupeKey;
+
+        activeSearchPending.set(true);
+        _isSearchingPlaces.setValue(true);
+        pendingSearchQuery = normalized;
  
         if (searchHandler == null) {
             dispatchSearchQuery(normalized);
             return;
         }
  
-        searchHandler.removeCallbacksAndMessages(null);
-        if (normalized.isEmpty()) {
-            searchHandler.post(() -> dispatchSearchQuery(normalized));
-        } else {
-            searchHandler.postDelayed(() -> dispatchSearchQuery(normalized), 400L);
+        if (searchRunnable != null) {
+            searchHandler.removeCallbacks(searchRunnable);
         }
+        searchRunnable = () -> {
+            String queryToDispatch = pendingSearchQuery;
+            if (queryToDispatch != null) {
+                dispatchSearchQuery(queryToDispatch);
+            }
+        };
+        searchHandler.postDelayed(searchRunnable, searchDebounceMs);
     }
 
     public void updateSearchUserLocation(@Nullable Location userLocation) {
@@ -174,11 +244,12 @@ public class MapViewModel extends ViewModel {
     }
 
     public void searchForPlacesFromHistory(String query) {
-        if (searchHandler != null) {
-            searchHandler.removeCallbacksAndMessages(null);
+        if (searchHandler != null && searchRunnable != null) {
+            searchHandler.removeCallbacks(searchRunnable);
         }
-        clearActiveSearchSource();
+        pendingSearchQuery = null;
         activeSearchPending.set(true);
+        _isSearchingPlaces.setValue(true);
         placesHistoryQuery.setValue(query);
     }
 
@@ -547,9 +618,8 @@ public class MapViewModel extends ViewModel {
 
     @Override
     protected void onCleared() {
-        clearActiveSearchSource();
-        if (searchHandler != null) {
-            searchHandler.removeCallbacksAndMessages(null);
+        if (searchHandler != null && searchRunnable != null) {
+            searchHandler.removeCallbacks(searchRunnable);
         }
         super.onCleared();
     }
@@ -559,39 +629,39 @@ public class MapViewModel extends ViewModel {
     private void dispatchSearchQuery(@Nullable String rawQuery) {
         String query = rawQuery == null ? "" : rawQuery.trim();
         if (query.isEmpty()) {
-            clearActiveSearchSource();
-            _searchResults.postValue(Collections.emptyList());
-            notifySearchDone(0);
+            _isSearchingPlaces.postValue(false);
+            activeSearchPending.set(false);
+            searchTrigger.postValue(SearchTrigger.empty());
             return;
         }
 
-        Location locationSnapshot = cloneLocation(currentSearchUserLocation);
-        LiveData<List<Place>> nextSource = placeRepository.searchPlaces(query, locationSnapshot);
-        if (nextSource == null) {
-            clearActiveSearchSource();
-            _searchResults.postValue(Collections.emptyList());
-            notifySearchDone(0);
+        Location loc = currentSearchUserLocation;
+        String locKey = loc == null
+                ? "none"
+                : String.format(Locale.US, "%.4f,%.4f", loc.latitude, loc.longitude);
+        String dedupeKey = query + "|" + locKey;
+        if (dedupeKey.equals(lastSearchQuery)) {
+            _isSearchingPlaces.postValue(false);
             return;
         }
+        lastSearchQuery = dedupeKey;
 
-        clearActiveSearchSource();
-        Observer<List<Place>> observer = places -> {
-            List<Place> safeResults = places != null ? places : Collections.emptyList();
-            _searchResults.postValue(safeResults);
-            notifySearchDone(safeResults.size());
-        };
-
-        activeSearchSource = nextSource;
-        activeSearchObserver = observer;
-        nextSource.observeForever(observer);
+        searchTrigger.postValue(new SearchTrigger(query, cloneLocation(currentSearchUserLocation)));
     }
 
-    private void clearActiveSearchSource() {
-        if (activeSearchSource != null && activeSearchObserver != null) {
-            activeSearchSource.removeObserver(activeSearchObserver);
+    private static final class SearchTrigger {
+        private final String query;
+        @Nullable
+        private final Location userLocation;
+
+        SearchTrigger(@NonNull String query, @Nullable Location userLocation) {
+            this.query = query;
+            this.userLocation = userLocation;
         }
-        activeSearchSource = null;
-        activeSearchObserver = null;
+
+        static SearchTrigger empty() {
+            return new SearchTrigger("", null);
+        }
     }
 
     @Nullable

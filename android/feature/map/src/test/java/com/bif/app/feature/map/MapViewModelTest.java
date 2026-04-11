@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.timeout;
@@ -282,6 +283,67 @@ public class MapViewModelTest {
 
         // Assert
         Mockito.verify(placeRepository, timeout(1200)).searchPlaces(eq(query), isNull());
+    }
+
+    @Test
+    public void searchForPlaces_rapidInput_dispatchesOnlyLatestDebouncedQuery() {
+        android.os.Handler handler = Mockito.mock(android.os.Handler.class);
+        ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+
+        MapViewModel vm = new MapViewModel(
+                mapRepository,
+                placeRepository,
+                favoriteRepository,
+                groupRepository,
+                routeRepository,
+                reviewRepository,
+                directExecutor,
+                handler,
+                400L);
+
+        MutableLiveData<List<Place>> finalResults = new MutableLiveData<>(Collections.emptyList());
+        when(placeRepository.searchPlaces("coffee near me", null)).thenReturn(finalResults);
+        vm.searchResults.observeForever(list -> {
+        });
+
+        vm.searchForPlaces("coffee");
+        vm.searchForPlaces("coffee near me");
+
+        verify(handler, Mockito.atLeastOnce()).postDelayed(runnableCaptor.capture(), eq(400L));
+        Runnable latestRunnable = runnableCaptor.getValue();
+        assertNotNull(latestRunnable);
+
+        latestRunnable.run();
+
+        verify(placeRepository, never()).searchPlaces(eq("coffee"), isNull());
+        verify(placeRepository).searchPlaces(eq("coffee near me"), isNull());
+    }
+
+    @Test
+    public void searchForPlaces_emptyQuery_emitsEmptyImmediatelyWithoutRepositoryCall() {
+        android.os.Handler handler = Mockito.mock(android.os.Handler.class);
+
+        MapViewModel vm = new MapViewModel(
+                mapRepository,
+                placeRepository,
+                favoriteRepository,
+                groupRepository,
+                routeRepository,
+                reviewRepository,
+                directExecutor,
+                handler,
+                400L);
+
+        vm.searchResults.observeForever(list -> {
+        });
+
+        vm.searchForPlaces("   ");
+
+        List<Place> results = vm.searchResults.getValue();
+        assertNotNull(results);
+        assertTrue(results.isEmpty());
+        verify(placeRepository, never()).searchPlaces(anyString(), any());
+        verify(handler, never()).postDelayed(any(Runnable.class), anyLong());
     }
 
     // allFavorites

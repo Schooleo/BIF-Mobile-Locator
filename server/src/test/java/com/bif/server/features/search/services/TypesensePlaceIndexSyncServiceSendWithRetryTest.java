@@ -15,6 +15,7 @@ import java.net.http.HttpResponse;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.search.config.TypesenseProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -26,8 +27,10 @@ public class TypesensePlaceIndexSyncServiceSendWithRetryTest {
         props.setEnabled(true);
         props.setApiKey("key");
         ObjectMapper mapper = new ObjectMapper();
+        PlaceRepository placeRepository = Mockito.mock(PlaceRepository.class);
 
-        TypesensePlaceIndexSyncService svc = new TypesensePlaceIndexSyncService(props, mapper);
+        TypesensePlaceIndexSyncService svc = new TypesensePlaceIndexSyncService(
+            props, mapper, null, placeRepository);
 
         HttpClient mockClient = Mockito.mock(HttpClient.class);
         @SuppressWarnings("unchecked")

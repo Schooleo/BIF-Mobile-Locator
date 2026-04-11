@@ -146,24 +146,33 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
                 encodedQueryBy,
                 resolvedPerPage
         ));
-        uriBuilder.append("&prioritize_exact_match=true");
+            uriBuilder.append("&query_by_weights=3,1");
+            uriBuilder.append("&drop_tokens_threshold=0");
+            uriBuilder.append("&remove_extra_tokens=true");
+        uriBuilder.append("&typo_tolerance=1");
+
+        String sortBy = "_text_match:desc,rating:desc";
+        String filterBy = null;
 
         if (hasCoordinates(request)) {
-            String sortBy = String.format(
+            sortBy = String.format(
                     Locale.US,
-                    "_geo_distance(%s,%s):asc,rating:desc",
+                "location(%s,%s):asc,_text_match:desc,rating:desc",
                     request.getLatitude(),
                     request.getLongitude());
-            uriBuilder.append("&sort_by=").append(encode(sortBy));
 
             if (shouldApplyGeoRadiusFilter(request)) {
-                String filterBy = String.format(
+                filterBy = String.format(
                         Locale.US,
-                        "location:(%s,%s,50km)",
+                    "location:(%s,%s,25km)",
                         request.getLatitude(),
                         request.getLongitude());
-                uriBuilder.append("&filter_by=").append(encode(filterBy));
             }
+        }
+
+        uriBuilder.append("&sort_by=").append(encode(sortBy));
+        if (filterBy != null && !filterBy.isBlank()) {
+            uriBuilder.append("&filter_by=").append(encode(filterBy));
         }
 
         return URI.create(uriBuilder.toString());
@@ -286,7 +295,9 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
         return latitude != null
                 && longitude != null
                 && Double.isFinite(latitude)
-                && Double.isFinite(longitude);
+            && Double.isFinite(longitude)
+            && Double.compare(latitude, 0.0d) != 0
+            && Double.compare(longitude, 0.0d) != 0;
     }
 
     private boolean shouldApplyGeoRadiusFilter(PlaceSearchRequestDTO request) {

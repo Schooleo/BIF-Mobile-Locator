@@ -1,13 +1,13 @@
 package com.bif.server.features.place.services;
 
 import com.bif.server.features.place.dto.rest.ReviewDTO;
-import com.bif.server.features.place.events.PlaceRatingUpdatedEvent;
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.models.PlaceReview;
 import com.bif.server.features.place.repositories.RatingRepository;
+import com.bif.server.features.search.services.PlaceSearchIndexSyncService;
+import com.bif.server.features.search.services.TypesensePlaceIndexSyncService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -33,16 +33,16 @@ public class RatingService {
 
     private final RatingRepository ratingRepository;
     private final PlaceRatingCacheUpdater placeRatingCacheUpdater;
-    private final ApplicationEventPublisher applicationEventPublisher;
+    private final PlaceSearchIndexSyncService placeSearchIndexSyncService;
     private final UserRepository userRepository;
 
     public RatingService(RatingRepository ratingRepository,
                          PlaceRatingCacheUpdater placeRatingCacheUpdater,
-                         ApplicationEventPublisher applicationEventPublisher,
+                         PlaceSearchIndexSyncService placeSearchIndexSyncService,
                          UserRepository userRepository) {
         this.ratingRepository = ratingRepository;
         this.placeRatingCacheUpdater = placeRatingCacheUpdater;
-        this.applicationEventPublisher = applicationEventPublisher;
+        this.placeSearchIndexSyncService = placeSearchIndexSyncService;
         this.userRepository = userRepository;
     }
 
@@ -91,12 +91,7 @@ public class RatingService {
         // Cập nhật cache bằng optimistic retries tại PlaceRatingCacheUpdater.
         Place updatedPlace = placeRatingCacheUpdater.incrementAndRecalculate(
             resolvedUserId, normalizedResolvedPlaceId, dto.stars());
-
-        // Phát sự kiện
-        applicationEventPublisher.publishEvent(new PlaceRatingUpdatedEvent(
-                updatedPlace.getId(),
-                updatedPlace.getRating(),
-                updatedPlace.getReviewCount()));
+        syncRatingToSearch(updatedPlace);
 
         return mapToReviewResponseDTO(persistedReview);
     }  
@@ -178,10 +173,7 @@ public class RatingService {
                         normalizedResolvedPlaceId,
                         oldStars,
                         stars);
-                applicationEventPublisher.publishEvent(new PlaceRatingUpdatedEvent(
-                        updatedPlace.getId(),
-                        updatedPlace.getRating(),
-                        updatedPlace.getReviewCount()));
+                syncRatingToSearch(updatedPlace);
             }
             return mapToReviewResponseDTO(persisted);
         }
@@ -205,10 +197,7 @@ public class RatingService {
                     resolvedUserId,
                     normalizedResolvedPlaceId,
                     stars);
-            applicationEventPublisher.publishEvent(new PlaceRatingUpdatedEvent(
-                    updatedPlace.getId(),
-                    updatedPlace.getRating(),
-                    updatedPlace.getReviewCount()));
+                syncRatingToSearch(updatedPlace);
             return mapToReviewResponseDTO(persisted);
         } catch (DuplicateKeyException ex) {
             Optional<PlaceReview> concurrent = ratingRepository
@@ -240,10 +229,7 @@ public class RatingService {
                         normalizedResolvedPlaceId,
                         oldStars,
                         stars);
-                applicationEventPublisher.publishEvent(new PlaceRatingUpdatedEvent(
-                        updatedPlace.getId(),
-                        updatedPlace.getRating(),
-                        updatedPlace.getReviewCount()));
+                syncRatingToSearch(updatedPlace);
             }
             return mapToReviewResponseDTO(persisted);
         }
@@ -358,11 +344,27 @@ public class RatingService {
                 resolvedUserId,
                 resolvedPlaceId,
                 review.getStars());
+        syncRatingToSearch(updatedPlace);
+    }
 
-        applicationEventPublisher.publishEvent(new PlaceRatingUpdatedEvent(
-            updatedPlace.getId(),
-            updatedPlace.getRating(),
-            updatedPlace.getReviewCount()));
+    private void syncRatingToSearch(Place updatedPlace) {
+        if (updatedPlace == null || updatedPlace.getId() == null || updatedPlace.getId().isBlank()) {
+            return;
+        }
+
+        try {
+            if (placeSearchIndexSyncService instanceof TypesensePlaceIndexSyncService typesenseSync) {
+                typesenseSync.updateRatingOnly(
+                        updatedPlace.getId(),
+                        updatedPlace.getRating(),
+                        updatedPlace.getReviewCount());
+            } else {
+                placeSearchIndexSyncService.upsert(updatedPlace);
+            }
+        } catch (Exception ex) {
+            LOGGER.warn("Rating saved in Mongo but Typesense rating sync failed for place {}",
+                    updatedPlace.getId(), ex);
+        }
     }
 
     private void validateStars(int stars) {
