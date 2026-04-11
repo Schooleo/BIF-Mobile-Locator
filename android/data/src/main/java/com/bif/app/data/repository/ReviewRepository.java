@@ -257,6 +257,8 @@ public class ReviewRepository implements IReviewRepository {
                     List<PlaceReviewDto> serverReviews = response.body();
                     appDatabase.runInTransaction(() -> {
                         Set<String> serverUserIds = new HashSet<>();
+                        Set<String> affectedPlaceIds = new HashSet<>();
+                        affectedPlaceIds.add(placeId);
 
                         for (PlaceReviewDto dto : serverReviews) {
                             if (dto == null || dto.userId == null || dto.userId.trim().isEmpty()) {
@@ -265,11 +267,18 @@ public class ReviewRepository implements IReviewRepository {
 
                             String serverUserId = dto.userId.trim();
                             serverUserIds.add(serverUserId);
+                            String resolvedPlaceId = normalizeServerPlaceId(dto.placeId, placeId);
+                            boolean identityCorrected = !resolvedPlaceId.equals(placeId);
+                            affectedPlaceIds.add(resolvedPlaceId);
 
-                            ReviewEntity entity = ReviewMapper.fromDto(dto, placeId);
+                            ReviewEntity entity = ReviewMapper.fromDto(dto, resolvedPlaceId);
                             // Avoid overwriting a locally modified pending item
-                            ReviewEntity local = reviewDao.getReviewSync(placeId, serverUserId);
+                            ReviewEntity local = reviewDao.getReviewSync(resolvedPlaceId, serverUserId);
                             if (local == null || !local.pendingSync) {
+                                if (identityCorrected) {
+                                    reviewDao.deleteByPlaceAndUserId(placeId, serverUserId);
+                                    syncQueueDao.removeByEntity("review", placeId + ":" + serverUserId);
+                                }
                                 reviewDao.upsert(entity);
                             }
                         }
@@ -293,7 +302,9 @@ public class ReviewRepository implements IReviewRepository {
                             }
                         }
 
-                        updateCachedPlaceRating(placeId);
+                        for (String affectedPlaceId : affectedPlaceIds) {
+                            updateCachedPlaceRating(affectedPlaceId);
+                        }
                     });
                 }
             } catch (IOException e) {
@@ -383,14 +394,15 @@ public class ReviewRepository implements IReviewRepository {
             }
 
             PlaceReviewDto dto = response.body();
-            appDatabase.runInTransaction(() -> {
-                ReviewEntity entity = ReviewMapper.fromDto(dto, placeId);
-                entity.pendingSync = false;
-                entity.deleted = false;
-                reviewDao.upsert(entity);
-                syncQueueDao.removeByEntity("review", placeId + ":" + review.userId);
-                updateCachedPlaceRating(placeId);
-            });
+            String localPlaceId = review.placeId;
+            if (isBlank(localPlaceId)) {
+                localPlaceId = placeId;
+            }
+            String reviewUserId = review.userId;
+            if (isBlank(reviewUserId)) {
+                reviewUserId = getActiveUserId();
+            }
+            persistServerReviewWithHealing(localPlaceId, reviewUserId, dto);
             return true;
         } catch (IOException e) {
             Log.e(TAG, "Review write-through failed for place " + placeId, e);
@@ -446,6 +458,61 @@ public class ReviewRepository implements IReviewRepository {
 
         place.rating = count > 0 ? (double) totalStars / count : 0.0;
         placeDao.upsert(place);
+    }
+
+    private void persistServerReviewWithHealing(String localPlaceId,
+                                                String userId,
+                                                PlaceReviewDto dto) {
+        String normalizedLocalPlaceId = normalizeServerPlaceId(localPlaceId, localPlaceId);
+        String normalizedUserId = userId;
+        if (isBlank(normalizedUserId) && dto != null && !isBlank(dto.userId)) {
+            normalizedUserId = dto.userId.trim();
+        }
+        if (isBlank(normalizedUserId)) {
+            normalizedUserId = getActiveUserId();
+        }
+
+        String resolvedPlaceId = normalizeServerPlaceId(dto != null ? dto.placeId : null,
+                normalizedLocalPlaceId);
+        boolean identityCorrected = !resolvedPlaceId.equals(normalizedLocalPlaceId);
+        String finalNormalizedLocalPlaceId = normalizedLocalPlaceId;
+        String finalNormalizedUserId = normalizedUserId;
+        String finalResolvedPlaceId = resolvedPlaceId;
+        boolean finalIdentityCorrected = identityCorrected;
+
+        appDatabase.runInTransaction(() -> {
+            if (finalIdentityCorrected) {
+                reviewDao.deleteByPlaceAndUserId(finalNormalizedLocalPlaceId, finalNormalizedUserId);
+            }
+
+            ReviewEntity entity = ReviewMapper.fromDto(dto, finalResolvedPlaceId);
+            entity.pendingSync = false;
+            entity.deleted = false;
+            reviewDao.upsert(entity);
+
+            syncQueueDao.removeByEntity("review", finalNormalizedLocalPlaceId + ":" + finalNormalizedUserId);
+
+            if (finalIdentityCorrected) {
+                updateCachedPlaceRating(finalNormalizedLocalPlaceId);
+                Log.w(TAG, "Identity correction detected. oldPlaceId="
+                        + finalNormalizedLocalPlaceId + " newPlaceId=" + finalResolvedPlaceId);
+            }
+            updateCachedPlaceRating(finalResolvedPlaceId);
+        });
+    }
+
+    private String normalizeServerPlaceId(String serverPlaceId, String fallbackPlaceId) {
+        if (serverPlaceId != null && !serverPlaceId.trim().isEmpty()) {
+            return serverPlaceId.trim();
+        }
+        if (fallbackPlaceId != null && !fallbackPlaceId.trim().isEmpty()) {
+            return fallbackPlaceId.trim();
+        }
+        return "";
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     private SyncQueueEntity createSyncEntry(String entityType, String entityId, String operation, Object payload) {

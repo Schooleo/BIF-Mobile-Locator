@@ -59,7 +59,8 @@ public class AppModule {
             .addMigrations(
                     AppDatabase.MIGRATION_15_16,
                     AppDatabase.MIGRATION_16_17,
-                    AppDatabase.MIGRATION_17_18)
+                    AppDatabase.MIGRATION_17_18,
+                    AppDatabase.MIGRATION_18_19)
                 .build();
     }
 
@@ -146,14 +147,6 @@ public class AppModule {
                 executor.execute(() -> {
                     try {
                         appDatabase.clearAllTables();
-                        boolean prefsCleared = context.getSharedPreferences(
-                                "SYNC_PREF", Context.MODE_PRIVATE)
-                                .edit()
-                                .clear()
-                                .commit();
-                        if (!prefsCleared) {
-                            throw new IllegalStateException("Failed to clear SYNC_PREF");
-                        }
                         if (onComplete != null) {
                             new android.os.Handler(android.os.Looper.getMainLooper()).post(onComplete);
                         }

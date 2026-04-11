@@ -50,9 +50,51 @@ import com.bif.app.data.source.local.entity.TripStopEntity;
         TripPlanEntity.class,
         TripMemberCrossRef.class,
         TripStopEntity.class
-}, version = 18, exportSchema = false)
+}, version = 19, exportSchema = false)
 @TypeConverters({ FriendshipStatusConverter.class, UploadStatusConverter.class })
 public abstract class AppDatabase extends RoomDatabase {
+    public static final Migration MIGRATION_18_19 = new Migration(18, 19) {
+        @Override
+        public void migrate(SupportSQLiteDatabase database) {
+            if (!hasColumn(database, "favorites", "pendingSync")) {
+                database.execSQL("ALTER TABLE favorites ADD COLUMN pendingSync INTEGER NOT NULL DEFAULT 0");
+            }
+
+            if (!hasIndex(database, "index_favorites_userId_deleted")) {
+                database.execSQL("CREATE INDEX index_favorites_userId_deleted ON favorites(userId, deleted)");
+            }
+        }
+
+        private boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
+            Cursor cursor = database.query("PRAGMA table_info(`" + tableName + "`)");
+            try {
+                int nameIndex = cursor.getColumnIndex("name");
+                if (nameIndex < 0) {
+                    nameIndex = 1;
+                }
+                while (cursor.moveToNext()) {
+                    String existing = cursor.getString(nameIndex);
+                    if (columnName.equals(existing)) {
+                        return true;
+                    }
+                }
+                return false;
+            } finally {
+                cursor.close();
+            }
+        }
+
+        private boolean hasIndex(SupportSQLiteDatabase database, String indexName) {
+            Cursor cursor = database.query("SELECT name FROM sqlite_master "
+                    + "WHERE type='index' AND name=?", new Object[]{indexName});
+            try {
+                return cursor.moveToFirst();
+            } finally {
+                cursor.close();
+            }
+        }
+    };
+
     public static final Migration MIGRATION_15_16 = new Migration(15, 16) {
         @Override
         public void migrate(SupportSQLiteDatabase database) {

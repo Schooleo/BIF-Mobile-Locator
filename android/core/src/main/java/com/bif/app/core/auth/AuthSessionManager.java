@@ -8,6 +8,7 @@ import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.auth.AuthResponse;
 import com.bif.app.core.network.dto.auth.RefreshTokenRequest;
 import com.bif.app.core.utils.UserPreferences;
+import com.bif.app.domain.sync.ISyncInitializable;
 
 import javax.inject.Inject;
 
@@ -18,8 +19,6 @@ import retrofit2.Response;
 
 public class AuthSessionManager {
 
-    private static final String SYNC_PREF_NAME = "SYNC_PREF";
-
     public interface LogoutCallback {
         void onComplete(boolean remoteSuccess);
     }
@@ -27,16 +26,19 @@ public class AuthSessionManager {
     private final Context context;
     private final RestApiService restApiService;
     private final LocalSessionDataCleaner localSessionDataCleaner;
+    private final ISyncInitializable syncInitializable;
 
     @Inject
     public AuthSessionManager(
             @ApplicationContext Context context,
             RestApiService restApiService,
-            LocalSessionDataCleaner localSessionDataCleaner
+            LocalSessionDataCleaner localSessionDataCleaner,
+            ISyncInitializable syncInitializable
     ) {
         this.context = context;
         this.restApiService = restApiService;
         this.localSessionDataCleaner = localSessionDataCleaner;
+        this.syncInitializable = syncInitializable;
     }
 
     public void saveSessionFromAuth(AuthResponse authResponse) {
@@ -70,6 +72,9 @@ public class AuthSessionManager {
 
         if (!userId.isBlank()) {
             UserPreferences.setUserId(context, userId);
+            syncInitializable.setUserContext(userId, null);
+            syncInitializable.setLastPulledVersion(0L);
+            syncInitializable.syncIfOnline();
         }
 
         if (!username.isBlank() || !email.isBlank()) {
@@ -82,16 +87,9 @@ public class AuthSessionManager {
     }
 
     public void clearSession(Runnable onComplete) {
+        syncInitializable.resetSyncContext();
         UserPreferences.clearUser(context);
-        clearPersistedSyncState();
         localSessionDataCleaner.clearLocalUserData(onComplete);
-    }
-
-    private void clearPersistedSyncState() {
-        context.getSharedPreferences(SYNC_PREF_NAME, Context.MODE_PRIVATE)
-                .edit()
-                .clear()
-                .apply();
     }
 
     public void logout(@NonNull LogoutCallback callback) {

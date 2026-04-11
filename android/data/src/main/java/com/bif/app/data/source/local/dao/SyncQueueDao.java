@@ -27,6 +27,10 @@ public interface SyncQueueDao {
     @Query("DELETE FROM sync_queue WHERE entityType = :entityType AND entityId = :entityId")
     void removeByEntity(String entityType, String entityId);
 
+    @Query("SELECT DISTINCT entityId FROM sync_queue WHERE entityType = :entityType "
+            + "AND status IN ('PENDING', 'IN_FLIGHT', 'FAILED', 'BLOCKED')")
+    List<String> getTrackedEntityIds(String entityType);
+
     @Query("UPDATE sync_queue SET status = 'PENDING' "
             + "WHERE status = 'IN_FLIGHT'")
     void resetInFlight();

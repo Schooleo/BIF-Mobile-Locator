@@ -22,6 +22,7 @@ import com.bif.app.data.source.local.dao.ProfileDao;
 import com.bif.app.data.source.local.dao.ReviewDao;
 import com.bif.app.data.source.local.dao.SyncQueueDao;
 import com.bif.app.data.source.local.dao.TripDao;
+import com.bif.app.data.source.local.database.AppDatabase;
 import com.bif.app.data.source.local.entity.ChatMessageEntity;
 import com.bif.app.data.source.local.entity.GroupEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
@@ -34,6 +35,7 @@ import com.bif.app.data.sync.handler.ReviewSyncEntityHandler;
 import com.bif.app.data.sync.handler.SyncEntityHandler;
 import com.bif.app.data.sync.handler.TripStopSyncEntityHandler;
 import com.bif.app.data.sync.handler.TripSyncEntityHandler;
+import com.bif.app.domain.sync.ISyncInitializable;
 import com.google.gson.Gson;
 
 import java.io.IOException;
@@ -58,7 +60,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext;
 import retrofit2.Response;
 
 @Singleton
-public class SyncManager {
+public class SyncManager implements ISyncInitializable {
 
     private static final String TAG = "SyncManager";
     private static final int MAX_RETRY_COUNT = 5;
@@ -105,6 +107,7 @@ public class SyncManager {
             FavoriteDao favoriteDao,
             ProfileDao profileDao,
             ReviewDao reviewDao,
+            AppDatabase appDatabase,
             NetworkMonitor networkMonitor,
             @ApplicationContext Context appContext) {
         this.restApiService = restApiService;
@@ -128,7 +131,12 @@ public class SyncManager {
         registerHandler(new GroupSyncEntityHandler(groupDao, gson));
         registerHandler(new FavoriteSyncEntityHandler(favoriteDao, gson));
         registerHandler(new ProfileSyncEntityHandler(profileDao, gson, appContext));
-        registerHandler(new ReviewSyncEntityHandler(reviewDao, gson));
+        registerHandler(new ReviewSyncEntityHandler(
+                reviewDao,
+                placeDao,
+                syncQueueDao,
+                appDatabase,
+                gson));
 
         loadPersistedSyncState();
         registerReconnectAutoSync();
@@ -153,6 +161,7 @@ public class SyncManager {
         registerReconnectAutoSync();
     }
 
+    @Override
     public void setUserContext(String userId, String deviceId) {
         String normalizedUserId = userId != null ? userId.trim() : null;
         boolean hasCurrentUser = this.userId != null
@@ -161,6 +170,9 @@ public class SyncManager {
                 && !normalizedUserId.isEmpty();
         if (hasCurrentUser && hasIncomingUser
                 && !this.userId.equals(normalizedUserId)) {
+            Log.w(TAG, "Sync user context changed. oldUserId=" + this.userId
+                + " newUserId=" + normalizedUserId
+                + " -> reset lastPulledVersion");
             setLastPulledVersion(0L);
         }
 
@@ -175,6 +187,7 @@ public class SyncManager {
         }
     }
 
+    @Override
     public void setLastPulledVersion(long version) {
         this.lastPulledVersion = version;
         if (syncPrefs != null) {
@@ -186,6 +199,24 @@ public class SyncManager {
 
     public long getLastPulledVersion() {
         return lastPulledVersion;
+    }
+
+    @Override
+    public void resetSyncContext() {
+        userId = null;
+        lastPulledVersion = 0L;
+
+        if (syncPrefs == null) {
+            return;
+        }
+
+        boolean committed = syncPrefs.edit()
+                .remove(KEY_USER_ID)
+                .remove(KEY_LAST_PULLED_VERSION)
+                .commit();
+        if (!committed) {
+            Log.w(TAG, "Failed to commit sync context reset");
+        }
     }
 
     public SyncResponseDto sync() {
@@ -247,8 +278,8 @@ public class SyncManager {
 
                 return syncResponse;
             } else {
-                Log.e(TAG, "Sync failed with status: "
-                        + response.code());
+                Log.e(TAG, "Sync failed with status=" + response.code()
+                        + " message=" + response.message());
                 handleFailedPush(pending);
                 return null;
             }
@@ -282,6 +313,7 @@ public class SyncManager {
         });
     }
 
+    @Override
     public void syncIfOnline() {
         reconnectSyncExecutor.execute(() -> {
             if (networkMonitor.isOnline()) {

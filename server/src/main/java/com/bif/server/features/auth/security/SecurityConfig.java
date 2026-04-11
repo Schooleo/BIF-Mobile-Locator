@@ -3,6 +3,7 @@ package com.bif.server.features.auth.security;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -35,9 +36,12 @@ public class SecurityConfig {
                 "/ws/**",
                 "/swagger-ui/**",
                 "/v3/api-docs/**",
+                "/error",
                 "/graphiql",
                 "/graphql"
             ).permitAll()
+            .requestMatchers(HttpMethod.POST, "/api/places/resolve").permitAll()
+            .requestMatchers(HttpMethod.GET, "/api/places/*/reviews").permitAll()
             .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

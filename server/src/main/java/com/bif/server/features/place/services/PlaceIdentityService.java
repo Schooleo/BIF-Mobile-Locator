@@ -18,7 +18,6 @@ import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
@@ -43,7 +42,6 @@ public class PlaceIdentityService {
         this.mongoTemplate = mongoTemplate;
     }
 
-    @Transactional
     public String resolveInternalPlaceId(String source, String extId, double lat, double lng, String name) {
         LOGGER.info("Resolving internalPlaceId for externalId: {}, name: {}, coordinates: [{}, {}]", extId, name, lat, lng);
 

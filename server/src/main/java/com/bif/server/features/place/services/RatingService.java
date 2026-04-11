@@ -12,7 +12,6 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Collections;
@@ -48,19 +47,14 @@ public class RatingService {
     }
 
     /**
-     * Saves a review and updates the place rating cache atomically.
-     * Both the review persistence and place aggregate update are wrapped in a single
-     * MongoDB transaction. The PlaceRatingUpdatedEvent is published after the
-     * transaction commits, ensuring consistency.
+     * Saves a review and updates the place rating cache sequentially.
      *
      * @throws DuplicateKeyException if a review already exists for this user/place
      */
-    @Transactional
     public ReviewResponseDTO saveReview(String userId, String placeId, ReviewDTO dto) {
         return saveReview(userId, placeId, placeId, dto);
     }
 
-    @Transactional
     public ReviewResponseDTO saveReview(String userId,
                                         String originalPlaceId,
                                         String resolvedPlaceId,
@@ -108,16 +102,12 @@ public class RatingService {
     }  
 
     /**
-     * Saves or updates a review and updates the place rating cache atomically.
-     * Both the review persistence and place aggregate update are wrapped in a single
-     * MongoDB transaction. The PlaceRatingUpdatedEvent is published after the
-     * transaction commits, ensuring consistency.
+     * Saves or updates a review and updates the place rating cache sequentially.
      * Handles three scenarios:
      * 1. Existing review update - calls replaceAndRecalculate
      * 2. New review create - calls incrementAndRecalculate
      * 3. Concurrent race condition - retries with updated state
      */
-    @Transactional
     public ReviewResponseDTO saveOrUpdateReview(
             int stars,
             String comment,
@@ -139,7 +129,6 @@ public class RatingService {
                 null);
     }
 
-    @Transactional
     public ReviewResponseDTO saveOrUpdateReview(
             int stars,
             String comment,
@@ -351,14 +340,10 @@ public class RatingService {
     }
 
     /**
-     * Deletes the caller's review and updates the place rating cache atomically.
-     * Both the review deletion and place aggregate update are wrapped in a single
-     * MongoDB transaction. The PlaceRatingUpdatedEvent is published after the
-     * transaction commits, ensuring consistency.
+     * Deletes the caller's review and updates the place rating cache sequentially.
      *
      * @throws NoSuchElementException if the review does not exist
      */
-    @Transactional
     public void deleteReview(String userId, String placeId) {
         String resolvedUserId = required(userId, "userId");
         String resolvedPlaceId = required(placeId, "placeId");
