@@ -15,7 +15,7 @@ public class DialogUtils {
     public static void showConfirmDialog(Context context, String title, String message,
                                          String positiveText, String negativeText,
                                          Runnable onConfirm) {
-        new MaterialAlertDialogBuilder(context)
+        new MaterialAlertDialogBuilder(context, com.bif.app.core.R.style.ThemeOverlay_BIFLocator_MaterialAlertDialog)
                 .setTitle(title)
                 .setMessage(message)
                 .setPositiveButton(positiveText, (dialog, which) -> {
@@ -37,7 +37,10 @@ public class DialogUtils {
         View dialogView = LayoutInflater.from(context).inflate(layoutId, null);
         if (dialogView == null) return;
 
-        androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(context)
+        androidx.appcompat.app.AlertDialog dialog = new MaterialAlertDialogBuilder(
+                context,
+                com.bif.app.core.R.style.ThemeOverlay_BIFLocator_MaterialAlertDialog
+        )
                 .setView(dialogView)
                 .create();
         if (dialog.getWindow() != null) {
@@ -65,7 +68,10 @@ public class DialogUtils {
 
         View dialogView = LayoutInflater.from(context).inflate(layoutId, null);
         if (dialogView == null) return;
-        AlertDialog dialog = new AlertDialog.Builder(context)
+        AlertDialog dialog = new MaterialAlertDialogBuilder(
+                context,
+                com.bif.app.core.R.style.ThemeOverlay_BIFLocator_MaterialAlertDialog
+        )
                 .setView(dialogView)
                 .create();
         if (dialog.getWindow() != null) {

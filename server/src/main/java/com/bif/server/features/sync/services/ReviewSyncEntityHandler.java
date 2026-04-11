@@ -92,9 +92,6 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
             throw new IllegalArgumentException("Review sync: stars/rating must be between 1 and 5");
         }
         String comment = payload.comment;
-        if (comment == null || comment.isBlank()) {
-            throw new IllegalArgumentException("Review sync: comment cannot be empty");
-        }
 
         ReviewResponseDTO savedReview = ratingService.saveOrUpdateReview(
                 stars,

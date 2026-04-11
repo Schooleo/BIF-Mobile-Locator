@@ -11,6 +11,8 @@
         <item name="colorOnBackground">@color/white</item>
 
         <!-- Surface (card / box UI) -->
+        <item name="colorSurface">@color/dark_mode_box</item>
+        <item name="colorOnSurface">@color/white</item>
         <item name="colorSurfaceBox">@color/dark_mode_box</item>
 
         <!-- Text on surface -->
@@ -24,6 +26,8 @@
         <item name="colorListItemBackground">@color/item_background</item>
         <item name="colorTextPrimary">@color/white</item>
         <item name="colorTextSecondary">@color/text_secondary</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.BIFLocator.MaterialAlertDialog</item>
+        <item name="popupMenuStyle">@style/Widget.BIFLocator.PopupMenu</item>
 
     </style>
 </resources>

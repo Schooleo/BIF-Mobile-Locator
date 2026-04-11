@@ -18,6 +18,8 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -107,6 +109,25 @@ class PlaceReviewControllerTest {
         ResponseEntity<?> result = controller.saveReview("u1", "p1", new ReviewDTO(5, "ok"));
 
         assertEquals(HttpStatus.CONFLICT, result.getStatusCode());
+    }
+
+    @Test
+    void updateMyReview_WhenValid_ReturnsOk() {
+        ReviewResponseDTO saved = new ReviewResponseDTO("r1", "p1", "u1", "Anonymous", 4, null, Instant.now());
+        when(ratingService.saveOrUpdateReview(4, null, "u1", "p1", 0L)).thenReturn(saved);
+
+        ResponseEntity<?> result = controller.updateMyReview("u1", "p1", new ReviewDTO(4, null));
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertSame(saved, result.getBody());
+    }
+
+    @Test
+    void deleteMyReview_WhenValid_ReturnsNoContent() {
+        ResponseEntity<?> result = controller.deleteMyReview("u1", "p1");
+
+        assertEquals(HttpStatus.NO_CONTENT, result.getStatusCode());
+        verify(ratingService).deleteReview(eq("u1"), eq("p1"));
     }
 
     // paging test removed because getReviews no longer utilizes paging parameters

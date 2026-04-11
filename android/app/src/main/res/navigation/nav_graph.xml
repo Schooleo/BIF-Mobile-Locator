@@ -13,7 +13,13 @@
         app:route="/map"
         tools:layout="@layout/fragment_map_entry">
 
+        <argument android:name="location" app:argType="string" android:defaultValue="" />
+        <argument android:name="focusName" app:argType="string" android:defaultValue="" />
+        <argument android:name="focusAddress" app:argType="string" android:defaultValue="" />
+
         <deepLink app:uri="app://bif.app/map" />
+        <deepLink app:uri="app://bif.app/map?location={location}" />
+        <deepLink app:uri="app://bif.app/map?location={location}&amp;focusName={focusName}&amp;focusAddress={focusAddress}" />
     </fragment>
 
     <fragment
@@ -33,7 +39,7 @@
         app:route="/favorites/detail"
         tools:layout="@layout/fragment_favorite_detail">
 
-        <argument android:name="favId" app:argType="integer" android:defaultValue="0" />
+        <argument android:name="favId" app:argType="string" android:defaultValue="" />
         <argument android:name="favName" app:argType="string" android:defaultValue="" />
         <argument android:name="favAddress" app:argType="string" android:defaultValue="" />
         <argument android:name="favDescription" app:argType="string" android:defaultValue="" />
@@ -108,11 +114,12 @@
         <argument android:name="avatarLetter" app:argType="string" android:defaultValue="?" />
         <argument android:name="avatarColor" app:argType="integer" android:defaultValue="0" />
         <argument android:name="memberCount" app:argType="integer" android:defaultValue="0" />
+        <argument android:name="friendshipCreatedAt" app:argType="long" android:defaultValue="0L" />
         <argument android:name="sharedPlaceName" app:argType="string" android:defaultValue="" />
         <argument android:name="sharedPlaceAddress" app:argType="string" android:defaultValue="" />
         <argument android:name="sharedPlaceLink" app:argType="string" android:defaultValue="" />
 
-        <deepLink app:uri="app://bif.app/social/chat?chatType={chatType}&amp;chatId={chatId}&amp;chatName={chatName}&amp;avatarLetter={avatarLetter}&amp;avatarColor={avatarColor}&amp;memberCount={memberCount}&amp;sharedPlaceName={sharedPlaceName}&amp;sharedPlaceAddress={sharedPlaceAddress}&amp;sharedPlaceLink={sharedPlaceLink}" />
+        <deepLink app:uri="app://bif.app/social/chat?chatType={chatType}&amp;chatId={chatId}&amp;chatName={chatName}&amp;avatarLetter={avatarLetter}&amp;avatarColor={avatarColor}&amp;memberCount={memberCount}&amp;friendshipCreatedAt={friendshipCreatedAt}&amp;sharedPlaceName={sharedPlaceName}&amp;sharedPlaceAddress={sharedPlaceAddress}&amp;sharedPlaceLink={sharedPlaceLink}" />
     </fragment>
 
     <fragment

@@ -50,6 +50,7 @@ public class TripDetailFragment extends Fragment {
         }
 
         ImageButton btnBack = view.findViewById(R.id.btn_back);
+        ImageButton btnHome = view.findViewById(R.id.btn_home);
         TextView tvTitle = view.findViewById(R.id.tv_trip_title);
         TabLayout tabLayout = view.findViewById(R.id.tab_layout_detail);
         ViewPager2 viewPager = view.findViewById(R.id.view_pager_detail);
@@ -77,6 +78,8 @@ public class TripDetailFragment extends Fragment {
         }).attach();
 
         btnBack.setOnClickListener(v -> Navigation.findNavController(view).popBackStack());
+        btnHome.setOnClickListener(v -> Navigation.findNavController(view)
+                .navigate(UriUtils.buildUri(UriUtils.PathTo.SOCIAL)));
         fabChat.setOnClickListener(v -> {
             viewModel.markGroupChatReadNow();
             Uri destUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL_CHAT).buildUpon()

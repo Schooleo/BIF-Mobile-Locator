@@ -2,6 +2,9 @@ package com.bif.app.data.repository;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -67,6 +70,25 @@ public class GroupRepositoryApiFallbackTest {
             mockSyncManager, mockNetworkMonitor, mockFriendDao);
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
         stubAuthenticatedUser();
+    }
+
+    @Test
+    public void createGroup_whenApiFails_enqueuesAndTriggersImmediateSync() throws Exception {
+        @SuppressWarnings("unchecked")
+        Call<List<UserApiModel>> usersCall = Mockito.mock(Call.class);
+        when(usersCall.execute()).thenReturn(Response.success(Collections.emptyList()));
+        when(mockRestApiService.getUsers()).thenReturn(usersCall);
+
+        @SuppressWarnings("unchecked")
+        Call<GroupApiModel> createCall = Mockito.mock(Call.class);
+        when(createCall.execute()).thenThrow(new IOException("offline create"));
+        when(mockRestApiService.createGroup(any())).thenReturn(createCall);
+
+        repository.createGroup("Explorers", Collections.emptyList());
+
+        verify(mockSyncManager, timeout(1000)).enqueueChange(
+                eq("group"), any(), eq("CREATE"), any(), any());
+        verify(mockSyncManager, timeout(1000)).syncIfOnline();
     }
 
     @Test
@@ -173,6 +195,25 @@ public class GroupRepositoryApiFallbackTest {
         assertEquals("group-2", result.get(0).getServerId());
         assertEquals("Offline Group", result.get(0).getName());
         verify(mockGroupDao, timeout(1000).atLeastOnce()).getAllGroupsSync();
+    }
+
+    @Test
+    public void createGroup_whenApiFails_enqueuesChangeAndTriggersImmediateSync() throws Exception {
+        @SuppressWarnings("unchecked")
+        Call<GroupApiModel> createCall = Mockito.mock(Call.class);
+        when(createCall.execute()).thenThrow(new IOException("offline create"));
+        when(mockRestApiService.createGroup(any())).thenReturn(createCall);
+
+        repository.createGroup("Explorers", Collections.emptyList());
+
+        verify(mockSyncManager, timeout(1000)).enqueueChange(
+                eq("group"),
+                anyString(),
+                eq("CREATE"),
+                anyString(),
+                any()
+        );
+        verify(mockSyncManager, timeout(1000)).syncIfOnline();
     }
 
     private void stubAuthenticatedUser() throws Exception {

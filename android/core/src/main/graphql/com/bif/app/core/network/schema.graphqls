@@ -98,7 +98,6 @@ type Favorite {
   description: String
   notes: String
   rating: Int
-  imagePath: String
   userId: ID
 }
 
@@ -192,6 +191,7 @@ type SyncResponse {
   currentServerVersion: Int!
   pulledChanges: [SyncChange!]!
   conflicts: [SyncConflict!]
+  pushResults: [SyncPushResult!]
 }
 
 type SyncChange {
@@ -211,6 +211,12 @@ type SyncConflict {
   clientVersion: Int
   serverVersion: Int
   resolution: String
+}
+
+type SyncPushResult {
+  clientChangeId: String
+  status: String
+  reasonCode: String
 }
 
 enum DeleteMyFavoriteResult {
@@ -265,7 +271,6 @@ input FavoriteInput {
   description: String
   notes: String
   rating: Int
-  imagePath: String
   userId: ID
 }
 

@@ -8,5 +8,4 @@ public class FavoriteResponseDto {
     public String description;
     public String notes;
     public int rating;
-    public String imagePath;
 }

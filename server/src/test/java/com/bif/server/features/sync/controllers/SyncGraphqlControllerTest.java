@@ -3,6 +3,8 @@ package com.bif.server.features.sync.controllers;
 import com.bif.server.features.sync.models.SyncRequest;
 import com.bif.server.features.sync.models.SyncResponse;
 import com.bif.server.features.sync.services.SyncService;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -93,5 +95,14 @@ class SyncGraphqlControllerTest {
 
         assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatusCode());
         verify(syncService, never()).sync(any());
+    }
+
+    @Test
+    void graphqlSchema_exposesPushResults() throws Exception {
+        String schema = Files.readString(Path.of("src/main/resources/graphql/schema.graphqls"));
+
+        assertTrue(schema.contains("pushResults: [SyncPushResult!]"));
+        assertTrue(schema.contains("type SyncPushResult"));
+        assertTrue(schema.contains("reasonCode: String"));
     }
 }

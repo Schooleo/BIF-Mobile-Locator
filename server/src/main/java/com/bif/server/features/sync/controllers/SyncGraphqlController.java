@@ -51,6 +51,6 @@ public class SyncGraphqlController {
         if (authentication == null || authentication.getPrincipal() == null) {
             return null;
         }
-        return authentication.getPrincipal().toString();
+        return authentication.getName();
     }
 }

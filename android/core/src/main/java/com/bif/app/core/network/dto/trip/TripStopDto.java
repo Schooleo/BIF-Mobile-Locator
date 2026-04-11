@@ -10,10 +10,11 @@ public class TripStopDto {
     public String note;
     public String photoUrl;
     public ChatMessageDto.LocationDto location;
+    public Double latitude;
+    public Double longitude;
     public String arrivalTime;
     public String departureTime;
     public int orderIndex;
     public long serverVersion;
     public boolean deleted;
 }
-

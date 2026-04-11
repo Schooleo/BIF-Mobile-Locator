@@ -16,6 +16,8 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
+import com.bif.app.core.network.dto.sync.SyncPushResultDto;
+import com.bif.app.core.network.dto.sync.SyncResponseDto;
 import com.bif.app.data.source.local.dao.TripDao;
 import com.bif.app.data.source.local.entity.TripPlanEntity;
 import com.bif.app.data.source.local.entity.TripStopEntity;
@@ -32,7 +34,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class TripRepositoryTest {
@@ -138,8 +142,6 @@ public class TripRepositoryTest {
 
         verify(mockSyncManager).enqueueChange(eq("trip_stop"),
                 eq("stop-1"), eq("UPDATE"), anyString(), any());
-        verify(mockSyncManager).enqueueChange(eq("trip_plan"),
-                eq("trip-1"), eq("UPDATE"), anyString(), any());
         verify(mockSyncManager).sync();
     }
 
@@ -220,6 +222,49 @@ public class TripRepositoryTest {
         verify(mockTripDao, atLeastOnce()).upsertStop(any());
         verify(mockSyncManager, atLeastOnce()).enqueueChange(eq("trip_stop"),
                 anyString(), eq("UPDATE"), anyString(), any());
+        verify(mockSyncManager).sync();
+    }
+
+    @Test
+    public void updateStopInTrip_updatesSingleStopAndEnqueuesSync()
+            throws InterruptedException {
+        when(mockSyncManager.isOnline()).thenReturn(true);
+
+        TripStopEntity existing = new TripStopEntity();
+        existing.id = "stop-1";
+        existing.tripId = "trip-1";
+        existing.title = "Museum";
+        existing.note = "old";
+        existing.orderIndex = 3;
+        when(mockTripDao.getStopByIdSync("stop-1")).thenReturn(existing);
+
+        TripStop updated = new TripStop(
+                "stop-1",
+                "Museum",
+                "",
+                "new note",
+                null,
+                null,
+                1.0,
+                2.0,
+                1000L,
+                1000L,
+                3
+        );
+
+        tripRepository.updateStopInTrip("trip-1", updated);
+        Thread.sleep(250);
+
+        ArgumentCaptor<TripStopEntity> captor =
+                ArgumentCaptor.forClass(TripStopEntity.class);
+        verify(mockTripDao).upsertStop(captor.capture());
+        assertEquals("stop-1", captor.getValue().id);
+        assertEquals("new note", captor.getValue().note);
+        assertEquals(1000L, captor.getValue().arrivalTime);
+        assertEquals(3, captor.getValue().orderIndex);
+
+        verify(mockSyncManager).enqueueChange(eq("trip_stop"),
+                eq("stop-1"), eq("UPDATE"), anyString(), any());
         verify(mockSyncManager).sync();
     }
 
@@ -367,6 +412,14 @@ public class TripRepositoryTest {
 
         assertNotNull(liveData.getValue());
         assertEquals(0, liveData.getValue().size());
+    }
+
+    private SyncPushResultDto pushResult(String clientChangeId, String status) {
+        SyncPushResultDto result = new SyncPushResultDto();
+        result.clientChangeId = clientChangeId;
+        result.status = status;
+        result.reasonCode = status;
+        return result;
     }
 }
 

@@ -8,6 +8,7 @@ import androidx.lifecycle.Transformations;
 
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.chat.ChatMessageDto;
+import com.bif.app.core.network.dto.sync.SyncResponseDto;
 import com.bif.app.core.network.dto.trip.TripPlanDto;
 import com.bif.app.core.network.dto.trip.TripStopDto;
 import com.bif.app.core.utils.UserPreferences;
@@ -290,6 +291,7 @@ public class TripRepository implements ITripRepository {
                     ));
                 }
 
+                List<String> trackedStopChangeIds = new ArrayList<>();
                 List<TripStopEntity> existingStops = tripDao.getActiveStopsByTripSync(safeTripId);
                 if (existingStops != null) {
                     for (TripStopEntity existingStop : existingStops) {
@@ -300,7 +302,7 @@ public class TripRepository implements ITripRepository {
                         existingStop.serverVersion = Math.max(1L,
                                 existingStop.serverVersion + 1L);
                         tripDao.upsertStop(existingStop);
-                        enqueueStopUpdate(existingStop);
+                        trackedStopChangeIds.add(enqueueStopUpdate(existingStop));
                     }
                 }
 
@@ -316,12 +318,16 @@ public class TripRepository implements ITripRepository {
                         stopEntity.serverVersion = Math.max(1L,
                                 stopEntity.serverVersion + 1L);
                         tripDao.upsertStop(stopEntity);
-                        enqueueStopUpdate(stopEntity);
+                        trackedStopChangeIds.add(enqueueStopUpdate(stopEntity));
                     }
                 }
 
                 enqueueTripPlanChange(safeTripId, isNew ? "CREATE" : "UPDATE");
-                syncAndReconcileTrip(safeTripId);
+                if (trackedStopChangeIds.isEmpty()) {
+                    syncAndReconcileTrip(safeTripId);
+                } else {
+                    syncAndReconcileTripStops(safeTripId, trackedStopChangeIds);
+                }
                 success = true;
             } catch (Exception ignored) {
                 success = false;
@@ -375,11 +381,38 @@ public class TripRepository implements ITripRepository {
             entity.serverVersion = Math.max(1L, entity.serverVersion + 1L);
 
             tripDao.upsertStop(entity);
-            // Ensure the trip exists/refreshes on server before trip_stop mutations are applied.
-            enqueueTripPlanChange(tripId, "UPDATE");
             enqueueImageUploadIfPending(entity);
-            enqueueStopUpdate(entity);
-            syncAndReconcileTrip(tripId);
+            String trackedClientChangeId = enqueueStopUpdate(entity);
+            syncAndReconcileTripStops(tripId, Collections.singletonList(trackedClientChangeId));
+        });
+    }
+
+    @Override
+    public void updateStopInTrip(String tripId, TripStop stop) {
+        executorService.execute(() -> {
+            String safeTripId = normalize(tripId);
+            if (safeTripId.isEmpty() || stop == null) {
+                return;
+            }
+
+            String safeStopId = normalize(stop.getId());
+            if (safeStopId.isEmpty()) {
+                return;
+            }
+
+            TripStopEntity existing = tripDao.getStopByIdSync(safeStopId);
+            if (existing == null) {
+                return;
+            }
+
+            TripStopEntity entity = toStopEntity(safeTripId, stop);
+            entity.deleted = false;
+            entity.serverVersion = Math.max(1L, entity.serverVersion + 1L);
+
+            tripDao.upsertStop(entity);
+            enqueueImageUploadIfPending(entity);
+            String trackedClientChangeId = enqueueStopUpdate(entity);
+            syncAndReconcileTripStops(safeTripId, Collections.singletonList(trackedClientChangeId));
         });
     }
 
@@ -420,10 +453,11 @@ public class TripRepository implements ITripRepository {
             entity.deleted = true;
             entity.serverVersion = Math.max(1L, entity.serverVersion + 1L);
             tripDao.upsertStop(entity);
-            enqueueStopUpdate(entity);
+            List<String> trackedClientChangeIds = new ArrayList<>();
+            trackedClientChangeIds.add(enqueueStopUpdate(entity));
 
-            normalizeActiveOrderIndexes(tripId, true);
-            syncAndReconcileTrip(tripId);
+            trackedClientChangeIds.addAll(normalizeActiveOrderIndexes(tripId, true));
+            syncAndReconcileTripStops(tripId, trackedClientChangeIds);
         });
     }
 
@@ -478,16 +512,17 @@ public class TripRepository implements ITripRepository {
                 return;
             }
 
+            List<String> trackedClientChangeIds = new ArrayList<>();
             for (int i = 0; i < newStops.size(); i++) {
                 TripStopEntity entity = toStopEntity(tripId, newStops.get(i));
                 entity.orderIndex = i;
                 entity.deleted = false;
                 entity.serverVersion = Math.max(1L, entity.serverVersion + 1L);
                 tripDao.upsertStop(entity);
-                enqueueStopUpdate(entity);
+                trackedClientChangeIds.add(enqueueStopUpdate(entity));
             }
 
-            syncAndReconcileTrip(tripId);
+            syncAndReconcileTripStops(tripId, trackedClientChangeIds);
         });
     }
 
@@ -688,11 +723,12 @@ public class TripRepository implements ITripRepository {
         return result;
     }
 
-    private void normalizeActiveOrderIndexes(String tripId,
-                                             boolean enqueueChanges) {
+    private List<String> normalizeActiveOrderIndexes(String tripId,
+                                                     boolean enqueueChanges) {
+        List<String> trackedClientChangeIds = new ArrayList<>();
         List<TripStopEntity> activeStops = tripDao.getActiveStopsByTripSync(tripId);
         if (activeStops == null || activeStops.isEmpty()) {
-            return;
+            return trackedClientChangeIds;
         }
 
         for (int i = 0; i < activeStops.size(); i++) {
@@ -702,20 +738,23 @@ public class TripRepository implements ITripRepository {
                 stop.serverVersion = Math.max(1L, stop.serverVersion + 1L);
                 tripDao.upsertStop(stop);
                 if (enqueueChanges) {
-                    enqueueStopUpdate(stop);
+                    trackedClientChangeIds.add(enqueueStopUpdate(stop));
                 }
             }
         }
+        return trackedClientChangeIds;
     }
 
-    private void enqueueStopUpdate(TripStopEntity entity) {
+    private String enqueueStopUpdate(TripStopEntity entity) {
+        String clientChangeId = UUID.randomUUID().toString();
         syncManager.enqueueChange(
                 "trip_stop",
                 entity.id,
                 "UPDATE",
-                UUID.randomUUID().toString(),
+                clientChangeId,
                 toStopDto(entity)
         );
+        return clientChangeId;
     }
 
     private void syncAndReconcileTrip(String tripId) {
@@ -730,8 +769,34 @@ public class TripRepository implements ITripRepository {
                 return;
             }
 
-            syncManager.sync();
-            reconcileTripFromServer(safeTripId);
+            SyncResponseDto syncResponse = syncManager.sync();
+            if (syncResponse != null) {
+                reconcileTripFromServer(safeTripId);
+            }
+        });
+    }
+
+    private void syncAndReconcileTripStops(String tripId,
+                                           List<String> trackedClientChangeIds) {
+        String safeTripId = normalize(tripId);
+        if (safeTripId.isEmpty()) {
+            syncManager.syncIfOnline();
+            return;
+        }
+
+        List<String> trackedIds = trackedClientChangeIds == null
+                ? Collections.emptyList()
+                : new ArrayList<>(trackedClientChangeIds);
+
+        networkExecutor.execute(() -> {
+            if (!syncManager.isOnline()) {
+                return;
+            }
+
+            SyncResponseDto syncResponse = syncManager.sync();
+            if (syncManager.areTrackedChangesAccepted(syncResponse, trackedIds)) {
+                reconcileTripFromServer(safeTripId);
+            }
         });
     }
 

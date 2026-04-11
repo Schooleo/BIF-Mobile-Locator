@@ -4,4 +4,27 @@
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">50%</item>
     </style>
+
+
+    <style name="ThemeOverlay.BIFLocator.MaterialAlertDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="backgroundTint">?attr/colorListItemBackground</item>
+        <item name="android:textColorPrimary">?attr/colorTextPrimary</item>
+        <item name="android:textColorSecondary">?attr/colorTextSecondary</item>
+    </style>
+
+    <style name="TextAppearance.BIFLocator.PopupMenuItem" parent="TextAppearance.AppCompat.Body1">
+        <item name="android:textColor">?attr/colorTextPrimary</item>
+    </style>
+
+    <style name="Widget.BIFLocator.PopupMenu" parent="Widget.AppCompat.PopupMenu">
+        <item name="android:popupBackground">@drawable/bg_popup_menu</item>
+        <item name="android:textAppearance">@style/TextAppearance.BIFLocator.PopupMenuItem</item>
+    </style>
+
+    <style name="ThemeOverlay.BIFLocator.PopupMenu" parent="ThemeOverlay.AppCompat">
+        <item name="popupMenuStyle">@style/Widget.BIFLocator.PopupMenu</item>
+        <item name="textAppearanceLargePopupMenu">@style/TextAppearance.BIFLocator.PopupMenuItem</item>
+        <item name="textAppearanceSmallPopupMenu">@style/TextAppearance.BIFLocator.PopupMenuItem</item>
+    </style>
+
 </resources>

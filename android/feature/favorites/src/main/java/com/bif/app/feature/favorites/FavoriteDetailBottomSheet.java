@@ -1,24 +1,31 @@
 package com.bif.app.feature.favorites;
 
+import android.app.Dialog;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.view.Window;
+import android.view.Gravity;
 import android.widget.ImageButton;
 import android.widget.RatingBar;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 
 import com.bif.app.core.utils.UriUtils;
 import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.model.Group;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
@@ -28,7 +35,7 @@ import java.util.List;
 import dagger.hilt.android.AndroidEntryPoint;
 
 @AndroidEntryPoint
-public class FavoriteDetailFragment extends Fragment {
+public class FavoriteDetailBottomSheet extends BottomSheetDialogFragment {
 
     private FavoriteDetailViewModel viewModel;
     private TextView tvName;
@@ -36,6 +43,21 @@ public class FavoriteDetailFragment extends Fragment {
     private TextView tvDescription;
     private TextView tvNotes;
     private RatingBar ratingBar;
+
+    public static FavoriteDetailBottomSheet newInstance(@NonNull Favorite favorite) {
+        FavoriteDetailBottomSheet sheet = new FavoriteDetailBottomSheet();
+        Bundle args = new Bundle();
+        args.putString("favId", favorite.id != null ? favorite.id : "");
+        args.putString("favName", favorite.name != null ? favorite.name : "");
+        args.putString("favAddress", favorite.address != null ? favorite.address : "");
+        args.putString("favDescription", favorite.description != null ? favorite.description : "");
+        args.putString("favNotes", favorite.notes != null ? favorite.notes : "");
+        args.putInt("favRating", favorite.rating);
+        args.putString("favLatitude", String.valueOf(favorite.latitude));
+        args.putString("favLongitude", String.valueOf(favorite.longitude));
+        sheet.setArguments(args);
+        return sheet;
+    }
 
     @Nullable
     @Override
@@ -45,23 +67,96 @@ public class FavoriteDetailFragment extends Fragment {
         return inflater.inflate(R.layout.fragment_favorite_detail, container, false);
     }
 
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        configureBottomSheetWindow();
+        adjustForBottomNavigation();
+    }
+
+    private void configureBottomSheetWindow() {
+        Dialog dialog = getDialog();
+        if (!(dialog instanceof BottomSheetDialog)) {
+            return;
+        }
+
+        BottomSheetDialog bottomSheetDialog = (BottomSheetDialog) dialog;
+        bottomSheetDialog.setCanceledOnTouchOutside(false);
+        Window window = bottomSheetDialog.getWindow();
+        if (window == null) {
+            return;
+        }
+
+        window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        window.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
+        window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        window.setGravity(Gravity.BOTTOM);
+    }
+
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
         viewModel = new ViewModelProvider(this).get(FavoriteDetailViewModel.class);
         bindViews(view);
-        adjustForBottomNavigation(view);
 
         Favorite favorite = parseFavoriteArgs();
         if (favorite == null) {
-            Navigation.findNavController(view).popBackStack();
+            dismissAllowingStateLoss();
             return;
         }
 
         viewModel.initializeFavorite(favorite);
         setupActions(view);
         observeFavorite();
+    }
+
+    private void adjustForBottomNavigation() {
+        Dialog dialog = getDialog();
+        if (!(dialog instanceof BottomSheetDialog) || getActivity() == null) {
+            return;
+        }
+
+        int bottomNavId = requireContext().getResources()
+                .getIdentifier("bottom_navigation", "id", requireContext().getPackageName());
+        if (bottomNavId == 0) {
+            return;
+        }
+
+        BottomSheetDialog bottomSheetDialog = (BottomSheetDialog) dialog;
+        FrameLayout bottomSheet = bottomSheetDialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+        View bottomNavigation = getActivity().findViewById(bottomNavId);
+        if (bottomSheet == null || bottomNavigation == null) {
+            return;
+        }
+
+        bottomNavigation.post(() -> bottomSheet.post(() -> {
+            int navHeight = bottomNavigation.getVisibility() == View.VISIBLE
+                    ? bottomNavigation.getHeight() + bottomNavigation.getPaddingBottom()
+                    : 0;
+
+            View parent = (View) bottomSheet.getParent();
+            if (parent != null && parent.getPaddingBottom() != navHeight) {
+                parent.setPadding(
+                        parent.getPaddingLeft(),
+                        parent.getPaddingTop(),
+                        parent.getPaddingRight(),
+                        navHeight
+                );
+            }
+
+            ViewGroup.LayoutParams params = bottomSheet.getLayoutParams();
+            if (params instanceof ViewGroup.MarginLayoutParams) {
+                ViewGroup.MarginLayoutParams marginParams = (ViewGroup.MarginLayoutParams) params;
+                if (marginParams.bottomMargin != navHeight) {
+                    marginParams.bottomMargin = navHeight;
+                    bottomSheet.setLayoutParams(marginParams);
+                }
+            }
+
+            bottomSheet.requestLayout();
+        }));
     }
 
     private void bindViews(@NonNull View view) {
@@ -78,7 +173,7 @@ public class FavoriteDetailFragment extends Fragment {
         MaterialButton btnViewOnMap = view.findViewById(R.id.btn_navigate_place);
         MaterialButton btnEditNote = view.findViewById(R.id.btn_edit_note);
 
-        btnBack.setOnClickListener(v -> Navigation.findNavController(v).popBackStack());
+        btnBack.setOnClickListener(v -> dismissAllowingStateLoss());
         btnSharePlace.setOnClickListener(v -> {
             Favorite favorite = viewModel.getCurrentFavorite().getValue();
             if (favorite != null) {
@@ -159,7 +254,11 @@ public class FavoriteDetailFragment extends Fragment {
                             .appendQueryParameter("sharedPlaceLink", sharedLink)
                             .build();
 
-                    Navigation.findNavController(requireView()).navigate(destUri);
+                    NavController navController = resolveNavController();
+                    if (navController != null) {
+                        dismissAllowingStateLoss();
+                        navController.navigate(destUri);
+                    }
                 })
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
@@ -198,7 +297,19 @@ public class FavoriteDetailFragment extends Fragment {
                 .appendQueryParameter("focusName", favorite.name != null ? favorite.name : "")
                 .appendQueryParameter("focusAddress", favorite.address != null ? favorite.address : "")
                 .build();
-        Navigation.findNavController(requireView()).navigate(mapUri);
+        NavController navController = resolveNavController();
+        if (navController != null) {
+            dismissAllowingStateLoss();
+            navController.navigate(mapUri);
+        }
+    }
+
+    @Nullable
+    private NavController resolveNavController() {
+        if (getParentFragment() != null) {
+            return Navigation.findNavController(getParentFragment().requireView());
+        }
+        return null;
     }
 
     @NonNull
@@ -230,39 +341,5 @@ public class FavoriteDetailFragment extends Fragment {
     @NonNull
     private String defaultText(@Nullable String value, @NonNull String fallback) {
         return value == null || value.trim().isEmpty() ? fallback : value.trim();
-    }
-
-    private void adjustForBottomNavigation(@NonNull View contentView) {
-        if (getActivity() == null) {
-            return;
-        }
-
-        int bottomNavId = requireContext().getResources()
-                .getIdentifier("bottom_navigation", "id", requireContext().getPackageName());
-        if (bottomNavId == 0) {
-            return;
-        }
-
-        View bottomNavigation = getActivity().findViewById(bottomNavId);
-        if (bottomNavigation == null) {
-            return;
-        }
-
-        final int basePaddingBottom = contentView.getPaddingBottom();
-        bottomNavigation.post(() -> contentView.post(() -> {
-            int navHeight = bottomNavigation.getVisibility() == View.VISIBLE
-                    ? bottomNavigation.getHeight() + bottomNavigation.getPaddingBottom()
-                    : 0;
-
-            int desiredBottomPadding = basePaddingBottom + navHeight;
-            if (contentView.getPaddingBottom() != desiredBottomPadding) {
-                contentView.setPadding(
-                        contentView.getPaddingLeft(),
-                        contentView.getPaddingTop(),
-                        contentView.getPaddingRight(),
-                        desiredBottomPadding
-                );
-            }
-        }));
     }
 }

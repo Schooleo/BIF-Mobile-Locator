@@ -25,7 +25,6 @@ public class FavoriteMapper {
         domain.description = entity.description;
         domain.notes = entity.notes;
         domain.rating = entity.rating;
-        domain.imagePath = entity.imagePath;
         domain.serverVersion = entity.serverVersion;
         domain.deleted = entity.deleted;
         domain.userId = entity.userId;
@@ -46,7 +45,6 @@ public class FavoriteMapper {
         entity.description = domain.description;
         entity.notes = domain.notes;
         entity.rating = domain.rating;
-        entity.imagePath = domain.imagePath;
         entity.serverVersion = domain.serverVersion;
         entity.deleted = domain.deleted;
         entity.userId = domain.userId;
@@ -72,7 +70,6 @@ public class FavoriteMapper {
         entity.description = dto.description;
         entity.notes = dto.notes;
         entity.rating = dto.rating;
-        entity.imagePath = dto.imagePath;
         entity.serverVersion = dto.serverVersion;
         entity.deleted = dto.deleted;
         return entity;
@@ -93,7 +90,6 @@ public class FavoriteMapper {
         dto.description = domain.description;
         dto.notes = domain.notes;
         dto.rating = domain.rating;
-        dto.imagePath = domain.imagePath;
         dto.userId = userId != null ? userId : domain.userId;
         dto.serverVersion = domain.serverVersion;
         dto.deleted = domain.deleted;
@@ -130,7 +126,6 @@ public class FavoriteMapper {
         dto.description = domain.description;
         dto.notes = domain.notes;
         dto.rating = domain.rating;
-        dto.imagePath = domain.imagePath;
         return dto;
     }
 
@@ -145,7 +140,6 @@ public class FavoriteMapper {
         favorite.description = dto.description;
         favorite.notes = dto.notes;
         favorite.rating = dto.rating;
-        favorite.imagePath = dto.imagePath;
         return favorite;
     }
 

@@ -44,6 +44,10 @@ public class MapEntryFragment extends Fragment {
         }
 
         Fragment targetFragment = new MapLibreFragment();
+        Bundle args = getArguments();
+        if (args != null && !args.isEmpty()) {
+            targetFragment.setArguments(new Bundle(args));
+        }
 
         getChildFragmentManager()
                 .beginTransaction()

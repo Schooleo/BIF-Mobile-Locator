@@ -8,6 +8,8 @@ import com.bif.app.data.source.local.dao.TripDao;
 import com.bif.app.data.source.local.entity.TripStopEntity;
 import com.bif.app.data.source.local.entity.UploadStatus;
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 public class TripStopSyncEntityHandler implements SyncEntityHandler {
 
@@ -68,6 +70,8 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
                 return;
             }
 
+            hydrateFlatLocationFallback(payload, change.payload);
+
             TripStopEntity existing = tripDao.getStopByIdSync(payload.id);
             long incomingVersion = Math.max(payload.serverVersion, change.serverVersion);
             if (existing != null && existing.serverVersion > incomingVersion) {
@@ -103,6 +107,30 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
             tripDao.upsertStop(entity);
         } catch (Exception e) {
             Log.e(TAG, "Failed applying pulled trip stop change", e);
+        }
+    }
+
+    private void hydrateFlatLocationFallback(TripStopDto payload, String rawPayload) {
+        if (payload == null || payload.location != null
+                || rawPayload == null || rawPayload.trim().isEmpty()) {
+            return;
+        }
+        try {
+            JsonObject root = JsonParser.parseString(rawPayload).getAsJsonObject();
+            if (!root.has("latitude") && !root.has("longitude")) {
+                return;
+            }
+            com.bif.app.core.network.dto.chat.ChatMessageDto.LocationDto location =
+                    new com.bif.app.core.network.dto.chat.ChatMessageDto.LocationDto();
+            location.latitude = root.has("latitude") && !root.get("latitude").isJsonNull()
+                    ? root.get("latitude").getAsDouble()
+                    : 0d;
+            location.longitude = root.has("longitude") && !root.get("longitude").isJsonNull()
+                    ? root.get("longitude").getAsDouble()
+                    : 0d;
+            payload.location = location;
+        } catch (Exception ignored) {
+            // Keep original payload if fallback parsing fails.
         }
     }
 

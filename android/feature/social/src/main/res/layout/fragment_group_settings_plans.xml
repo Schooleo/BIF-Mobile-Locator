@@ -87,11 +87,11 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:background="?attr/colorScreenBackground"
-                app:tabIndicatorColor="@color/primary_blue"
+                app:tabIndicatorColor="?attr/colorPrimary"
                 app:tabIndicatorHeight="3dp"
                 app:tabBackground="@android:color/transparent"
                 app:tabMode="fixed"
-                app:tabSelectedTextColor="@color/primary_blue"
+                app:tabSelectedTextColor="?attr/colorPrimary"
                 app:tabTextColor="?attr/colorTextSecondary">
 
                 <com.google.android.material.tabs.TabItem android:text="@string/group_tab_plans" />
@@ -122,7 +122,7 @@
                     android:paddingHorizontal="18dp"
                     android:text="@string/group_new_plan"
                     android:textAllCaps="false"
-                    android:textColor="@color/white"
+                    android:textColor="?attr/colorOnPrimary"
                     android:textSize="16sp" />
             </LinearLayout>
 

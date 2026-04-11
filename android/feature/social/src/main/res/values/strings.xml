@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="social">Social</string>
+    <string name="social">Trip planning with friends</string>
     <string name="trips">Trips</string>
     <string name="friends">Friends</string>
     <string name="groups">Groups</string>
@@ -56,6 +56,7 @@
     <string name="close">Close</string>
     <string name="group_detail">Group</string>
     <string name="go_back">Go back</string>
+    <string name="go_home">Go to trip home</string>
     <string name="save">Save</string>
     <string name="members_header">Members (%d)</string>
     <string name="remove_member">Remove Member</string>
@@ -72,10 +73,12 @@
     <string name="group_disbanded">Group has been disbanded</string>
     <string name="chat_default_name">Conversation</string>
     <string name="chat_direct_subtitle">Direct message</string>
+    <string name="chat_friend_added_relative">Added %1$s</string>
     <string name="chat_member_count">%d members</string>
     <string name="chat_you">You</string>
     <string name="chat_hint">Type a message…</string>
     <string name="chat_send">Send</string>
+    <string name="chat_status_sending">Sending...</string>
     <string name="chat_friend_name">Friend</string>
     <string name="chat_seed_friend_1">On my way to the cafe, see you soon!</string>
     <string name="chat_seed_friend_2">Great, I will be there in 10 minutes.</string>
@@ -95,9 +98,12 @@
     <string name="chat_ai_draft_trip">Draft a Trip</string>
     <string name="chat_ai_suggest_places">Suggest Places</string>
     <string name="chat_ai_drafter_prefix">AI Trip Drafter</string>
+    <string name="chat_ai_suggest_prefix">AI Place Scout</string>
     <string name="chat_ai_draft_hint">Describe the trip you want to draft…</string>
+    <string name="chat_ai_suggest_hint">Describe the places you want suggested…</string>
     <string name="chat_ai_offline">AI tools are unavailable while offline.</string>
     <string name="chat_ai_draft_failed">AI draft failed (%1$s)</string>
+    <string name="chat_ai_suggest_failed">AI place suggestions failed (%1$s)</string>
     <string name="chat_ai_mention">AI Trip Drafter</string>
     <string name="group_settings_title">Group Settings</string>
     <string name="group_tab_plans">Plans</string>

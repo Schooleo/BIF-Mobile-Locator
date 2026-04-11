@@ -49,6 +49,7 @@ public interface ITripRepository {
     LiveData<List<TripPlan>> getTripsByGroup(String groupId);
     LiveData<List<TripMember>> getTripMembers(String tripId);
     void addStopToTrip(String tripId, TripStop stop);
+    void updateStopInTrip(String tripId, TripStop stop);
     void stageStopImageUpload(String tripId, String stopId, String localImagePath);
     void removeStopFromTrip(String tripId, String stopId);
     void addCollaborator(String tripId,

@@ -9,6 +9,7 @@ import androidx.lifecycle.LiveData;
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.chat.ChatMessageDto;
 import com.bif.app.core.network.dto.sync.SyncChangeDto;
+import com.bif.app.core.network.dto.sync.SyncPushResultDto;
 import com.bif.app.core.network.dto.sync.SyncRequestDto;
 import com.bif.app.core.network.dto.sync.SyncResponseDto;
 import com.bif.app.data.source.local.dao.ChatMessageDao;
@@ -26,13 +27,11 @@ import com.bif.app.data.source.local.entity.GroupEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 import com.bif.app.data.sync.handler.ChatMessageSyncEntityHandler;
 import com.bif.app.data.sync.handler.FavoriteSyncEntityHandler;
-import com.bif.app.data.sync.handler.FriendshipSyncEntityHandler;
 import com.bif.app.data.sync.handler.GroupSyncEntityHandler;
 import com.bif.app.data.sync.handler.PlaceSyncEntityHandler;
 import com.bif.app.data.sync.handler.ProfileSyncEntityHandler;
 import com.bif.app.data.sync.handler.ReviewSyncEntityHandler;
 import com.bif.app.data.sync.handler.SyncEntityHandler;
-import com.bif.app.data.sync.handler.TripMemberSyncEntityHandler;
 import com.bif.app.data.sync.handler.TripStopSyncEntityHandler;
 import com.bif.app.data.sync.handler.TripSyncEntityHandler;
 import com.google.gson.Gson;
@@ -41,12 +40,16 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -59,6 +62,14 @@ public class SyncManager {
 
     private static final String TAG = "SyncManager";
     private static final int MAX_RETRY_COUNT = 5;
+    public static final String QUEUE_STATUS_PENDING = "PENDING";
+    public static final String QUEUE_STATUS_IN_FLIGHT = "IN_FLIGHT";
+    public static final String QUEUE_STATUS_FAILED = "FAILED";
+    public static final String QUEUE_STATUS_BLOCKED = "BLOCKED";
+    public static final String PUSH_STATUS_APPLIED = "APPLIED";
+    public static final String PUSH_STATUS_ALREADY_APPLIED = "ALREADY_APPLIED";
+    public static final String PUSH_STATUS_REJECTED_VALIDATION = "REJECTED_VALIDATION";
+    public static final String PUSH_STATUS_RETRYABLE_FAILURE = "RETRYABLE_FAILURE";
     private static final String PREF_NAME = "SYNC_PREF";
     private static final String KEY_USER_ID = "sync_user_id";
     private static final String KEY_DEVICE_ID = "sync_device_id";
@@ -112,12 +123,9 @@ public class SyncManager {
 
         registerHandler(new PlaceSyncEntityHandler(placeDao, gson));
         registerHandler(new TripSyncEntityHandler(tripDao, gson));
-        registerHandler(new TripMemberSyncEntityHandler(tripDao, gson));
         registerHandler(new TripStopSyncEntityHandler(tripDao, gson));
         registerHandler(new ChatMessageSyncEntityHandler(chatMessageDao, gson));
         registerHandler(new GroupSyncEntityHandler(groupDao, gson));
-        registerHandler(new FriendshipSyncEntityHandler(friendshipDao,
-                friendDao, gson));
         registerHandler(new FavoriteSyncEntityHandler(favoriteDao, gson));
         registerHandler(new ProfileSyncEntityHandler(profileDao, gson, appContext));
         registerHandler(new ReviewSyncEntityHandler(reviewDao, gson));
@@ -192,6 +200,7 @@ public class SyncManager {
             return null;
         }
 
+        waitForPendingEnqueues();
         syncQueueDao.resetInFlight();
 
         SyncRequestDto request = new SyncRequestDto();
@@ -224,10 +233,7 @@ public class SyncManager {
 
             if (response.isSuccessful() && response.body() != null) {
                 SyncResponseDto syncResponse = response.body();
-
-                for (SyncQueueEntity entry : pending) {
-                    syncQueueDao.remove(entry.id);
-                }
+                settlePendingEntries(pending, syncResponse);
 
                 applyPulledChanges(syncResponse.pulledChanges);
                 hydrateChatCachesForAllGroups();
@@ -269,7 +275,7 @@ public class SyncManager {
             entry.operation = operation;
             entry.clientChangeId = clientChangeId;
             entry.payload = serializePayload(entityType, payload);
-            entry.status = "PENDING";
+            entry.status = QUEUE_STATUS_PENDING;
             entry.retryCount = 0;
             entry.createdAt = System.currentTimeMillis();
             syncQueueDao.enqueue(entry);
@@ -288,18 +294,124 @@ public class SyncManager {
         return networkMonitor.isOnline();
     }
 
+    public boolean areTrackedChangesAccepted(SyncResponseDto syncResponse,
+                                             List<String> trackedClientChangeIds) {
+        if (syncResponse == null) {
+            return false;
+        }
+        if (trackedClientChangeIds == null || trackedClientChangeIds.isEmpty()) {
+            return true;
+        }
+        for (String clientChangeId : trackedClientChangeIds) {
+            if (!isAcceptedPushResult(syncResponse, clientChangeId)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private void handleFailedPush(List<SyncQueueEntity> failed) {
         for (SyncQueueEntity entry : failed) {
             entry.retryCount++;
             if (entry.retryCount > MAX_RETRY_COUNT) {
-                entry.status = "FAILED";
+                entry.status = QUEUE_STATUS_FAILED;
                 Log.e(TAG, "Change exceeded max retries: "
                         + entry.clientChangeId);
             } else {
-                entry.status = "PENDING";
+                entry.status = QUEUE_STATUS_PENDING;
             }
             syncQueueDao.update(entry);
         }
+    }
+
+    private void settlePendingEntries(List<SyncQueueEntity> pending,
+                                      SyncResponseDto syncResponse) {
+        Map<String, SyncPushResultDto> resultsByClientChangeId =
+                indexPushResults(syncResponse != null ? syncResponse.pushResults : null);
+        Set<Integer> removedIds = new HashSet<>();
+
+        for (SyncQueueEntity entry : pending) {
+            SyncPushResultDto result = resultsByClientChangeId.get(entry.clientChangeId);
+            if (result == null || result.status == null || result.status.trim().isEmpty()) {
+                entry.status = QUEUE_STATUS_PENDING;
+                syncQueueDao.update(entry);
+                Log.w(TAG, "Missing push result for clientChangeId=" + entry.clientChangeId);
+                continue;
+            }
+
+            String normalizedStatus = result.status.trim().toUpperCase(Locale.ROOT);
+            switch (normalizedStatus) {
+                case PUSH_STATUS_APPLIED:
+                case PUSH_STATUS_ALREADY_APPLIED:
+                    syncQueueDao.remove(entry.id);
+                    removedIds.add(entry.id);
+                    break;
+                case PUSH_STATUS_REJECTED_VALIDATION:
+                    entry.status = QUEUE_STATUS_BLOCKED;
+                    syncQueueDao.update(entry);
+                    Log.w(TAG, "Blocked sync change clientChangeId=" + entry.clientChangeId
+                            + " reason=" + result.reasonCode);
+                    break;
+                case PUSH_STATUS_RETRYABLE_FAILURE:
+                    entry.retryCount++;
+                    if (entry.retryCount > MAX_RETRY_COUNT) {
+                        entry.status = QUEUE_STATUS_FAILED;
+                    } else {
+                        entry.status = QUEUE_STATUS_PENDING;
+                    }
+                    syncQueueDao.update(entry);
+                    Log.w(TAG, "Retryable sync failure clientChangeId=" + entry.clientChangeId
+                            + " reason=" + result.reasonCode);
+                    break;
+                default:
+                    entry.status = QUEUE_STATUS_PENDING;
+                    syncQueueDao.update(entry);
+                    Log.w(TAG, "Unknown push result status clientChangeId=" + entry.clientChangeId
+                            + " status=" + result.status);
+                    break;
+            }
+        }
+
+        for (SyncQueueEntity entry : pending) {
+            if (!removedIds.contains(entry.id) && QUEUE_STATUS_IN_FLIGHT.equals(entry.status)) {
+                entry.status = QUEUE_STATUS_PENDING;
+                syncQueueDao.update(entry);
+            }
+        }
+    }
+
+    private Map<String, SyncPushResultDto> indexPushResults(List<SyncPushResultDto> pushResults) {
+        Map<String, SyncPushResultDto> resultsByClientChangeId = new HashMap<>();
+        if (pushResults == null) {
+            return resultsByClientChangeId;
+        }
+        for (SyncPushResultDto result : pushResults) {
+            if (result == null || result.clientChangeId == null
+                    || result.clientChangeId.trim().isEmpty()) {
+                continue;
+            }
+            resultsByClientChangeId.put(result.clientChangeId, result);
+        }
+        return resultsByClientChangeId;
+    }
+
+    private boolean isAcceptedPushResult(SyncResponseDto syncResponse,
+                                         String clientChangeId) {
+        if (syncResponse == null || syncResponse.pushResults == null
+                || clientChangeId == null || clientChangeId.trim().isEmpty()) {
+            return false;
+        }
+        for (SyncPushResultDto result : syncResponse.pushResults) {
+            if (result == null || result.clientChangeId == null) {
+                continue;
+            }
+            if (!clientChangeId.equals(result.clientChangeId)) {
+                continue;
+            }
+            return PUSH_STATUS_APPLIED.equals(result.status)
+                    || PUSH_STATUS_ALREADY_APPLIED.equals(result.status);
+        }
+        return false;
     }
 
     private void applyPulledChanges(List<SyncChangeDto> pulledChanges) {
@@ -494,6 +606,20 @@ public class SyncManager {
             }
             lastObservedOnline = online;
         });
+    }
+
+    private void waitForPendingEnqueues() {
+        CountDownLatch latch = new CountDownLatch(1);
+        enqueueExecutor.execute(latch::countDown);
+        try {
+            if (!latch.await(5, TimeUnit.SECONDS)) {
+                Log.w(TAG, "Timed out waiting for pending sync queue writes");
+            }
+        } catch (InterruptedException interruptedException) {
+            Thread.currentThread().interrupt();
+            Log.w(TAG, "Interrupted while waiting for sync queue writes",
+                    interruptedException);
+        }
     }
 
     private String serializePayload(String entityType, Object payload) {

@@ -204,8 +204,6 @@ public class MapViewModel extends ViewModel {
         favorite.rating = (int) place.rating;
         favorite.description = "";
         favorite.notes = "";
-        favorite.imagePath = "";
-
         if (place.location != null) {
             favorite.latitude = place.location.latitude;
             favorite.longitude = place.location.longitude;

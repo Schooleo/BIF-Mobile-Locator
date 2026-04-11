@@ -1,5 +1,6 @@
 package com.bif.app.feature.favorites;
 
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -102,23 +103,32 @@ public class FavoritesFragment extends Fragment
 
     @Override
     public void onFavoriteClicked(Favorite favorite) {
-        // Deep Link
-        android.net.Uri destUri = UriUtils.buildUri(UriUtils.PathTo.FAVORITES_DETAIL).buildUpon()
-            .appendQueryParameter("favId", favorite.id != null ? favorite.id : "")
-                .appendQueryParameter("favName", favorite.name != null ? favorite.name : "")
-                .appendQueryParameter("favAddress", favorite.address != null ? favorite.address : "")
-                .appendQueryParameter("favDescription", favorite.description != null ? favorite.description : "")
-                .appendQueryParameter("favNotes", favorite.notes != null ? favorite.notes : "")
+        if (favorite == null) {
+            return;
+        }
+
+        Uri detailUri = UriUtils.buildUri(UriUtils.PathTo.FAVORITES_DETAIL)
+                .buildUpon()
+                .appendQueryParameter("favId", safeString(favorite.id))
+                .appendQueryParameter("favName", safeString(favorite.name))
+                .appendQueryParameter("favAddress", safeString(favorite.address))
+                .appendQueryParameter("favDescription", safeString(favorite.description))
+                .appendQueryParameter("favNotes", safeString(favorite.notes))
                 .appendQueryParameter("favRating", String.valueOf(favorite.rating))
-            .appendQueryParameter("favLatitude", String.valueOf(favorite.latitude))
-            .appendQueryParameter("favLongitude", String.valueOf(favorite.longitude))
+                .appendQueryParameter("favLatitude", String.valueOf(favorite.latitude))
+                .appendQueryParameter("favLongitude", String.valueOf(favorite.longitude))
                 .build();
 
-        Navigation.findNavController(requireView()).navigate(destUri);
+        Navigation.findNavController(requireView()).navigate(detailUri);
     }
 
     @Override
     public void onFavoriteRemoved(Favorite favorite) {
         viewModel.removeFavoriteItem(favorite);
+    }
+
+    @NonNull
+    private String safeString(@Nullable String value) {
+        return value == null ? "" : value;
     }
 }

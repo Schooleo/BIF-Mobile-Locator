@@ -1,7 +1,9 @@
 package com.bif.server.features.sync.controllers;
 
 import com.bif.server.features.sync.models.SyncRequest;
+import com.bif.server.features.sync.models.SyncPushResult;
 import com.bif.server.features.sync.models.SyncResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.bif.server.features.sync.services.SyncService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,5 +60,19 @@ class SyncControllerTest {
 
         assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatusCode());
         verify(syncService, never()).sync(any());
+    }
+
+    @Test
+    void syncResponse_serializesPushResults() throws Exception {
+        SyncResponse response = new SyncResponse();
+        response.setPushResults(java.util.List.of(
+                new SyncPushResult("cid-1", "APPLIED", "APPLIED")
+        ));
+
+        String json = new ObjectMapper().writeValueAsString(response);
+
+        assertTrue(json.contains("\"pushResults\""));
+        assertTrue(json.contains("\"status\":\"APPLIED\""));
+        assertTrue(json.contains("\"reasonCode\":\"APPLIED\""));
     }
 }

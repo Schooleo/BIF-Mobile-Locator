@@ -128,16 +128,13 @@ public class ChatRepository implements IChatRepository {
     @Override
     public void sendMessage(ChatMessage message) {
         dbExecutor.execute(() -> {
-            // 1. Persist locally first (optimistic insert).
             ChatMessageEntity entity = chatMapper.mapToEntity(message);
             chatMessageDao.insert(entity);
             pruneMessageCache(message.getGroupId());
 
-            // 2. Try to send via STOMP (real-time).
             if (stompClient != null && stompClient.isConnected()) {
                 sendViaWebSocket(message);
             } else {
-                // 3. Fallback: REST POST + enqueue in sync queue for retry.
                 sendViaRest(message);
             }
         });
@@ -267,7 +264,6 @@ public class ChatRepository implements IChatRepository {
         stompClient = Stomp.over(Stomp.ConnectionProvider.OKHTTP, wsUrl);
         backgroundExecutor.execute(() -> refreshUserNameCache());
 
-        // Lifecycle events for logging.
         wsDisposables.add(
                 stompClient.lifecycle()
                         .subscribeOn(Schedulers.io())
@@ -318,12 +314,6 @@ public class ChatRepository implements IChatRepository {
         );
     }
 
-    // Internal helpers
-
-    /**
-     * Handle a message pushed from the server via STOMP.
-     * Only inserts if it's not a message we sent ourselves (checked via clientMessageId).
-     */
     private void handleIncomingMessage(StompMessage stompMessage) {
         try {
             ChatMessageDto dto = gson.fromJson(stompMessage.getPayload(), ChatMessageDto.class);
@@ -331,8 +321,6 @@ public class ChatRepository implements IChatRepository {
 
             refreshUserNameCache();
 
-            // Determine current user's ID to tag isOutgoing; the entity stores
-            // everything, the mapper derives isOutgoing at query time.
             ChatMessageEntity entity = dtoToEntity(dto);
             dbExecutor.execute(() -> {
                 chatMessageDao.insert(entity);
@@ -343,7 +331,6 @@ public class ChatRepository implements IChatRepository {
         }
     }
 
-    /** Send via STOMP WebSocket for real-time delivery. */
     private void sendViaWebSocket(ChatMessage message) {
         String destination = "/app/chat.send/" + message.getGroupId();
         if ("LOCATION".equals(message.getType())) {
@@ -366,7 +353,6 @@ public class ChatRepository implements IChatRepository {
         );
     }
 
-    /** Send via REST and enqueue for offline retry if it also fails. */
     private void sendViaRest(ChatMessage message) {
         if (!networkMonitor.isOnline()) {
             syncManager.enqueueChange(
@@ -376,6 +362,7 @@ public class ChatRepository implements IChatRepository {
                     message.getClientMessageId(),
                     buildDto(message)
             );
+            syncManager.syncIfOnline();
             return;
         }
 
@@ -385,7 +372,6 @@ public class ChatRepository implements IChatRepository {
             public void onResponse(@NonNull Call<ChatMessageDto> call,
                                    @NonNull Response<ChatMessageDto> response) {
                 if (response.isSuccessful() && response.body() != null) {
-                    // Update local entity with confirmed state if server echoes it back.
                     ChatMessageDto confirmed = response.body();
                     if (confirmed.confirmed) {
                         dbExecutor.execute(() -> {
@@ -400,7 +386,6 @@ public class ChatRepository implements IChatRepository {
             @Override
             public void onFailure(@NonNull Call<ChatMessageDto> call, @NonNull Throwable t) {
                 Log.w(TAG, "REST send failed - queuing for sync retry", t);
-                // Enqueue for retry via SyncManager when network restores.
                 syncManager.enqueueChange(
                         "chatMessage",
                         message.getId(),
@@ -408,6 +393,7 @@ public class ChatRepository implements IChatRepository {
                         message.getClientMessageId(),
                         buildDto(message)
                 );
+                syncManager.syncIfOnline();
             }
         });
     }
@@ -586,14 +572,7 @@ public class ChatRepository implements IChatRepository {
         }
     }
 
-    /**
-     * Resolve the server hostname from UserPreferences or fall back to emulator default.
-     */
     private String resolveHost() {
-        // The app already reads the REST_BASE_URL from BuildConfig at module level.
-        // For the WebSocket we replicate the same host logic used in the okhttp setup.
-        // Default to Android emulator localhost alias.
         return "10.0.2.2";
     }
 }
-

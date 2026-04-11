@@ -2,6 +2,9 @@ services:
   tailscale:
     image: tailscale/tailscale:stable
     container_name: tailscale-router
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
     profiles:
       - tailscale
     depends_on:
@@ -24,6 +27,11 @@ services:
       context: ./server
       dockerfile: Dockerfile
     container_name: bif-server-dev
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun:/dev/net/tun
     ports:
       - "8080:8080"
     volumes:

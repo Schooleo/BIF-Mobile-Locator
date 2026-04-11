@@ -76,6 +76,9 @@ public class AddTripStopFragment extends Fragment {
     private static final String MARKER_ICON_SEARCH_ID = "trip-stop-marker-search";
     private static final String MARKER_ICON_SELECTED_ID = "trip-stop-marker-selected";
     private static final String PROP_PLACE_ID = "placeId";
+    private static final String PROP_RESULT_INDEX = "resultIndex";
+    private static final String PROP_LATITUDE = "latitude";
+    private static final String PROP_LONGITUDE = "longitude";
 
     private AddTripStopViewModel viewModel;
     private TripDetailViewModel tripDetailViewModel;
@@ -89,6 +92,7 @@ public class AddTripStopFragment extends Fragment {
     private ImageButton btnAiToggle;
     private TextView tvAiLoading;
     private TextView tvEmpty;
+    private View searchResultsContainer;
 
     private TextView tvSelectedPlaceName;
     private TextView tvSelectedPlaceAddress;
@@ -174,6 +178,7 @@ public class AddTripStopFragment extends Fragment {
         btnAiToggle = view.findViewById(R.id.btn_ai_toggle);
         tvAiLoading = view.findViewById(R.id.tv_ai_loading);
         tvEmpty = view.findViewById(R.id.tv_empty_state);
+        searchResultsContainer = view.findViewById(R.id.layout_search_results_container);
 
         tvSelectedPlaceName = view.findViewById(R.id.tv_selected_place_name);
         tvSelectedPlaceAddress = view.findViewById(R.id.tv_selected_place_address);
@@ -282,6 +287,9 @@ public class AddTripStopFragment extends Fragment {
                 AddTripStopViewModel.SearchState.Loading loadingState =
                         (AddTripStopViewModel.SearchState.Loading) state;
                 showAiLoading(loadingState.aiMode);
+                if (searchResultsContainer != null) {
+                    searchResultsContainer.setVisibility(View.GONE);
+                }
                 tvEmpty.setVisibility(View.GONE);
                 return;
             }
@@ -294,6 +302,10 @@ public class AddTripStopFragment extends Fragment {
                 currentResults.clear();
                 currentResults.addAll(success.items);
                 adapter.submitItems(success.items);
+                if (searchResultsContainer != null) {
+                    searchResultsContainer.setVisibility(
+                            success.items.isEmpty() ? View.GONE : View.VISIBLE);
+                }
                 renderSearchResultsOnMap(success.items);
                 tvEmpty.setVisibility(View.GONE);
 
@@ -307,6 +319,9 @@ public class AddTripStopFragment extends Fragment {
             adapter.submitItems(Collections.emptyList());
             clearMapResults();
             bindSelectedPlace(null);
+            if (searchResultsContainer != null) {
+                searchResultsContainer.setVisibility(View.GONE);
+            }
             if (state instanceof AddTripStopViewModel.SearchState.Empty) {
                 AddTripStopViewModel.SearchState.Empty empty =
                         (AddTripStopViewModel.SearchState.Empty) state;
@@ -536,6 +551,9 @@ public class AddTripStopFragment extends Fragment {
             Feature feature = Feature.fromGeometry(
                     Point.fromLngLat(place.location.longitude, place.location.latitude));
             feature.addStringProperty(PROP_PLACE_ID, place.id == null ? "" : place.id);
+            feature.addNumberProperty(PROP_RESULT_INDEX, features.size());
+            feature.addNumberProperty(PROP_LATITUDE, place.location.latitude);
+            feature.addNumberProperty(PROP_LONGITUDE, place.location.longitude);
             features.add(feature);
 
             builder.include(new LatLng(place.location.latitude, place.location.longitude));
@@ -597,16 +615,69 @@ public class AddTripStopFragment extends Fragment {
         }
 
         String placeId = features.get(0).getStringProperty(PROP_PLACE_ID);
-        if (placeId == null) {
-            return null;
+        Number resultIndex = features.get(0).getNumberProperty(PROP_RESULT_INDEX);
+        if (resultIndex != null) {
+            int index = resultIndex.intValue();
+            if (index >= 0 && index < currentResults.size()) {
+                return currentResults.get(index);
+            }
         }
 
-        for (AddTripStopViewModel.StopSearchResultItem item : currentResults) {
+        AddTripStopViewModel.StopSearchResultItem byId = findCurrentResultById(currentResults, placeId);
+        if (byId != null) {
+            return byId;
+        }
+
+        Double latitude = getFeatureDouble(features.get(0), PROP_LATITUDE);
+        Double longitude = getFeatureDouble(features.get(0), PROP_LONGITUDE);
+        if (latitude != null && longitude != null) {
+            return findNearestCurrentResult(currentResults, latitude, longitude);
+        }
+
+        return findNearestCurrentResult(currentResults, point.getLatitude(), point.getLongitude());
+    }
+
+    @Nullable
+    static AddTripStopViewModel.StopSearchResultItem findCurrentResultById(
+            @NonNull List<AddTripStopViewModel.StopSearchResultItem> items,
+            @Nullable String placeId) {
+        if (placeId == null || placeId.trim().isEmpty()) {
+            return null;
+        }
+        for (AddTripStopViewModel.StopSearchResultItem item : items) {
             if (item != null && item.place != null && placeId.equals(item.place.id)) {
                 return item;
             }
         }
         return null;
+    }
+
+    @Nullable
+    static AddTripStopViewModel.StopSearchResultItem findNearestCurrentResult(
+            @NonNull List<AddTripStopViewModel.StopSearchResultItem> items,
+            double latitude,
+            double longitude) {
+        AddTripStopViewModel.StopSearchResultItem best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (AddTripStopViewModel.StopSearchResultItem item : items) {
+            if (item == null || item.place == null || item.place.location == null) {
+                continue;
+            }
+            double latDiff = item.place.location.latitude - latitude;
+            double lonDiff = item.place.location.longitude - longitude;
+            double distance = (latDiff * latDiff) + (lonDiff * lonDiff);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = item;
+            }
+        }
+        return best;
+    }
+
+    @Nullable
+    private Double getFeatureDouble(@NonNull Feature feature, @NonNull String property) {
+        Number value = feature.getNumberProperty(property);
+        return value != null ? value.doubleValue() : null;
     }
 
     @Override

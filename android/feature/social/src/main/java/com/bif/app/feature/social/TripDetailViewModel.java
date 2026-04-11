@@ -15,7 +15,6 @@ import com.bif.app.domain.model.TripStop;
 import com.bif.app.domain.repository.IChatRepository;
 import com.bif.app.domain.repository.ITripRepository;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import javax.inject.Inject;
@@ -106,7 +105,7 @@ public class TripDetailViewModel extends ViewModel {
             return;
         }
 
-        List<TripStop> updatedStops = rebuildStopsWithUpdate(targetId, item -> new TripStop(
+        TripStop updatedStop = rebuildStopWithUpdate(targetId, item -> new TripStop(
                 item.getId(),
                 item.getTitle(),
                 item.getAddress(),
@@ -118,11 +117,11 @@ public class TripDetailViewModel extends ViewModel {
                 scheduledAtMillis,
                 scheduledAtMillis,
                 item.getOrderIndex()));
-        if (updatedStops == null) {
+        if (updatedStop == null) {
             return;
         }
 
-        tripRepository.rearrangeStopsInTrip(currentTripId, updatedStops);
+        tripRepository.updateStopInTrip(currentTripId, updatedStop);
     }
 
     public void updateStopDetails(TripStop stop, String note, long scheduledAtMillis) {
@@ -135,7 +134,7 @@ public class TripDetailViewModel extends ViewModel {
         }
 
         String nextNote = note == null ? "" : note.trim();
-        List<TripStop> updatedStops = rebuildStopsWithUpdate(targetId, item -> new TripStop(
+        TripStop updatedStop = rebuildStopWithUpdate(targetId, item -> new TripStop(
                 item.getId(),
                 item.getTitle(),
                 item.getAddress(),
@@ -147,28 +146,25 @@ public class TripDetailViewModel extends ViewModel {
                 scheduledAtMillis,
                 scheduledAtMillis,
                 item.getOrderIndex()));
-        if (updatedStops == null) {
+        if (updatedStop == null) {
             return;
         }
 
-        tripRepository.rearrangeStopsInTrip(currentTripId, updatedStops);
+        tripRepository.updateStopInTrip(currentTripId, updatedStop);
     }
 
-    private List<TripStop> rebuildStopsWithUpdate(@NonNull String targetId, @NonNull StopUpdater updater) {
+    private TripStop rebuildStopWithUpdate(@NonNull String targetId, @NonNull StopUpdater updater) {
         TripPlan currentTrip = trip == null ? null : trip.getValue();
         if (currentTrip == null || currentTrip.getStops() == null || currentTrip.getStops().isEmpty()) {
             return null;
         }
 
-        List<TripStop> updatedStops = new ArrayList<>();
         for (TripStop item : currentTrip.getStops()) {
             if (item != null && targetId.equals(item.getId())) {
-                updatedStops.add(updater.apply(item));
-            } else {
-                updatedStops.add(item);
+                return updater.apply(item);
             }
         }
-        return updatedStops;
+        return null;
     }
 
     private interface StopUpdater {
@@ -202,4 +198,3 @@ public class TripDetailViewModel extends ViewModel {
         hasUnreadGroupMessages.setValue(hasUnread);
     }
 }
-

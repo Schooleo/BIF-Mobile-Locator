@@ -45,16 +45,15 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.bif.app.core.utils.DialogUtils;
 import com.bif.app.core.utils.UriUtils;
-import com.bif.app.feature.map.BuildConfig;
-import com.bif.app.feature.map.R;
 import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.model.Group;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
 import com.bif.app.domain.model.OfflineMapDownloadState;
 import com.bif.app.domain.model.Place;
-import com.bif.app.domain.model.Review;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.progressindicator.CircularProgressIndicator;
 
 import org.json.JSONException;
@@ -70,11 +69,11 @@ import org.maplibre.android.maps.MapLibreMap;
 import org.maplibre.android.maps.MapView;
 import org.maplibre.android.maps.OnMapReadyCallback;
 import org.maplibre.android.maps.Style;
+import org.maplibre.android.style.expressions.Expression;
+import org.maplibre.android.style.layers.LineLayer;
 import org.maplibre.android.style.layers.Property;
 import org.maplibre.android.style.layers.PropertyFactory;
-import org.maplibre.android.style.layers.LineLayer;
 import org.maplibre.android.style.layers.SymbolLayer;
-import org.maplibre.android.style.expressions.Expression;
 import org.maplibre.android.style.sources.GeoJsonSource;
 import org.maplibre.geojson.Feature;
 import org.maplibre.geojson.FeatureCollection;
@@ -93,8 +92,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
-
-import com.google.android.material.button.MaterialButton;
 
 import dagger.hilt.android.AndroidEntryPoint;
 import timber.log.Timber;
@@ -132,6 +129,9 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private static final String PROP_LAT = "lat";
     private static final String PROP_LNG = "lng";
     private static final String PROP_BEARING = "bearing";
+    private static final String ARG_LOCATION = "location";
+    private static final String ARG_FOCUS_NAME = "focusName";
+    private static final String ARG_FOCUS_ADDRESS = "focusAddress";
     private static final double VIETNAM_MIN_LAT = 8.56;
     private static final double VIETNAM_MAX_LAT = 23.39;
     private static final double VIETNAM_MIN_LON = 102.14;
@@ -161,7 +161,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private MaterialButton btnCancelRoute;
     private MaterialButton btnFollowRoute;
     private ImageButton btnMapCompass;
-    
+
     // Review and rating related views
     private RecyclerView rvReviews;
     private com.facebook.shimmer.ShimmerFrameLayout shimmerReviews;
@@ -169,7 +169,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private ReviewAdapter reviewAdapter;
     private List<ReviewItem> allReviews = new ArrayList<>();
     private androidx.recyclerview.widget.LinearSnapHelper snapHelper;
-    
+
     private final MapLibreMap.OnCameraMoveListener onCameraMoveListener = this::updateCompassButtonVisibility;
     private final MapLibreMap.OnCameraIdleListener onCameraIdleListener = this::updateCompassButtonVisibility;
     private MapViewModel viewModel;
@@ -198,6 +198,11 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     };
     private boolean suppressQueryTextChange;
     private boolean rvReviewsTouchListenerRegistered = false;
+    @Nullable
+    private Place pendingNavigationPlace;
+    @Nullable
+    private String pendingNavigationQuery;
+    private boolean navigationRequestHandled;
 
     private final Handler locationHandler = new Handler(Looper.getMainLooper());
     private final Runnable locationTimeoutRunnable = () -> {
@@ -307,6 +312,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         super.onViewCreated(view, savedInstanceState);
         viewModel = new ViewModelProvider(requireActivity()).get(MapViewModel.class);
         syncSearchUserLocation(lastKnownUserLocation);
+        captureNavigationRequest();
 
         tvRouteTitle = view.findViewById(R.id.tv_route_title);
         tvRouteAddress = view.findViewById(R.id.tv_route_address);
@@ -489,6 +495,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             renderUserLocationIndicator(lastKnownUserLocation, lastKnownUserBearingDegrees);
             renderRouteSession(viewModel.getCurrentRouteSession());
             updateCompassButtonVisibility();
+            applyPendingNavigationRequest();
         });
 
     }
@@ -549,6 +556,99 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     @NonNull
     private String safeLower(@Nullable String value) {
         return value == null ? "" : value.toLowerCase(Locale.US);
+    }
+
+    private void captureNavigationRequest() {
+        if (navigationRequestHandled) {
+            return;
+        }
+
+        navigationRequestHandled = true;
+        Bundle args = getArguments();
+        if (args == null) {
+            return;
+        }
+
+        String locationQuery = args.getString(ARG_LOCATION, "").trim();
+        String focusName = args.getString(ARG_FOCUS_NAME, "").trim();
+        String focusAddress = args.getString(ARG_FOCUS_ADDRESS, "").trim();
+
+        Point coordinatePoint = parseCoordinateQuery(locationQuery);
+        if (coordinatePoint != null) {
+            double lat = coordinatePoint.latitude();
+            double lng = coordinatePoint.longitude();
+            String resolvedName = !focusName.isEmpty()
+                    ? focusName
+                    : getString(R.string.default_place_name);
+            String resolvedAddress = !focusAddress.isEmpty()
+                    ? focusAddress
+                    : String.format(Locale.getDefault(), "%.5f, %.5f", lat, lng);
+            pendingNavigationPlace = new Place(
+                    buildStablePlaceId(lat, lng),
+                    resolvedName,
+                    resolvedAddress,
+                    0.0,
+                    new Location(lat, lng));
+            pendingNavigationQuery = null;
+            return;
+        }
+
+        if (!locationQuery.isEmpty()) {
+            pendingNavigationQuery = locationQuery;
+        }
+    }
+
+    @Nullable
+    private Point parseCoordinateQuery(@Nullable String rawQuery) {
+        if (rawQuery == null) {
+            return null;
+        }
+
+        String query = rawQuery.trim();
+        if (query.isEmpty()) {
+            return null;
+        }
+
+        String[] parts = query.split(",");
+        if (parts.length != 2) {
+            return null;
+        }
+
+        try {
+            double first = Double.parseDouble(parts[0].trim());
+            double second = Double.parseDouble(parts[1].trim());
+            if (Math.abs(first) > 90.0 || Math.abs(second) > 180.0) {
+                return null;
+            }
+            return Point.fromLngLat(second, first);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private void applyPendingNavigationRequest() {
+        if (mapLibreMap == null) {
+            return;
+        }
+
+        if (pendingNavigationPlace != null && pendingNavigationPlace.location != null) {
+            selectedPlace = pendingNavigationPlace;
+            renderSelectedPlace();
+            animateCameraToSelection(new LatLng(
+                    pendingNavigationPlace.location.latitude,
+                    pendingNavigationPlace.location.longitude));
+            if (getView() != null) {
+                showPlaceBottomSheet(pendingNavigationPlace, requireView());
+            }
+            pendingNavigationPlace = null;
+            pendingNavigationQuery = null;
+            return;
+        }
+
+        if (pendingNavigationQuery != null && !pendingNavigationQuery.trim().isEmpty()) {
+            viewModel.searchForPlaces(pendingNavigationQuery.trim());
+            pendingNavigationQuery = null;
+        }
     }
 
     private void configureCompassAboveMyLocation() {
@@ -946,7 +1046,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         String haystack = ((place.name != null ? place.name : "") + " "
                 + (place.address != null ? place.address : ""))
                 .toLowerCase(Locale.ROOT);
-                
+
         String[] patterns = getResources().getStringArray(R.array.search_area_patterns);
         for (String patternDef : patterns) {
             String[] parts = patternDef.split("\\|");
@@ -2151,18 +2251,22 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     @NonNull
     private Feature createFeatureForPlace(@NonNull LatLng position,
             @NonNull Place place) {
+        double latitude = position.getLatitude();
+        double longitude = position.getLongitude();
         Feature feature = Feature.fromGeometry(Point.fromLngLat(
-                position.getLongitude(),
-                position.getLatitude()));
+                longitude,
+                latitude));
         feature.addStringProperty(PROP_PLACE_ID,
-                place.id != null ? place.id : UUID.randomUUID().toString());
+                !TextUtils.isEmpty(place.id)
+                        ? place.id
+                        : buildStablePlaceId(latitude, longitude));
         feature.addStringProperty(PROP_NAME,
                 place.name != null ? place.name : "Selected Location");
         feature.addStringProperty(PROP_ADDRESS,
                 place.address != null ? place.address : "Address unavailable");
         feature.addNumberProperty(PROP_RATING, place.rating);
-        feature.addNumberProperty(PROP_LAT, position.getLatitude());
-        feature.addNumberProperty(PROP_LNG, position.getLongitude());
+        feature.addNumberProperty(PROP_LAT, latitude);
+        feature.addNumberProperty(PROP_LNG, longitude);
         return feature;
     }
 
@@ -2244,15 +2348,15 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             return null;
         }
 
-        String id = feature.hasProperty(PROP_PLACE_ID)
-                ? feature.getStringProperty(PROP_PLACE_ID)
-                : UUID.randomUUID().toString();
         String name = feature.hasProperty(PROP_NAME)
                 ? feature.getStringProperty(PROP_NAME)
                 : "Selected Location";
         String address = feature.hasProperty(PROP_ADDRESS)
                 ? feature.getStringProperty(PROP_ADDRESS)
                 : "Address unavailable";
+        String id = feature.hasProperty(PROP_PLACE_ID)
+                ? feature.getStringProperty(PROP_PLACE_ID)
+                : buildStablePlaceId(lat.doubleValue(), lng.doubleValue());
         Number ratingNumber = feature.hasProperty(PROP_RATING)
                 ? feature.getNumberProperty(PROP_RATING)
                 : 0.0;
@@ -2305,7 +2409,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 }
 
                 Place clickedPlace = new Place(
-                        UUID.randomUUID().toString(),
+                        buildStablePlaceId(latLng.getLatitude(), latLng.getLongitude()),
                         finalName,
                         addressText != null ? addressText : quickPlace.address,
                         0.0,
@@ -2342,11 +2446,21 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 latLng.getLongitude());
 
         return new Place(
-                UUID.randomUUID().toString(),
+                buildStablePlaceId(latLng.getLatitude(), latLng.getLongitude()),
                 resolvedName,
                 resolvedAddress,
                 0.0,
                 new Location(latLng.getLatitude(), latLng.getLongitude()));
+    }
+
+    @NonNull
+    private String buildStablePlaceId(double latitude, double longitude) {
+        String seed = String.format(
+                Locale.US,
+                "map:%1$.6f:%2$.6f",
+                latitude,
+                longitude);
+        return UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8)).toString();
     }
 
     private boolean isCurrentSelection(@NonNull LatLng latLng) {
@@ -2448,7 +2562,6 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         viewModel.cacheViewedPlace(place);
         showPlaceSheetOnly();
 
-        // Bind basic place details
         TextView tvName = root.findViewById(R.id.tv_place_name);
         TextView tvAddress = root.findViewById(R.id.tv_place_address);
         TextView tvRatingValue = root.findViewById(R.id.tv_rating_value);
@@ -2460,8 +2573,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
         tvName.setText(place.name);
         tvAddress.setText(place.address);
-        
-        // Update rating summary
+
         if (place.rating > 0) {
             tvRatingValue.setText(String.format(Locale.getDefault(), "%.1f", place.rating));
             rbPlaceRating.setRating((float) place.rating);
@@ -2494,10 +2606,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         btnRoutePlace.setOnClickListener(v -> routeToPlace(place));
         btnSharePlace.setOnClickListener(v -> showShareToGroupDialog(place));
 
-        // Setup Reviews RecyclerView and Adapter
         setupReviewsRecyclerView(root);
-        
-        // Setup Chip filters
         setupChipFilters(root);
 
         allReviews.clear();
@@ -2529,26 +2638,22 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private void setupReviewsRecyclerView(View root) {
         rvReviews = root.findViewById(R.id.rv_reviews);
         shimmerReviews = root.findViewById(R.id.shimmer_reviews);
-        
+
         if (rvReviews == null) {
             return;
         }
 
-        // Set item width to 85% of screen width (adapter owns view sizing).
-        int screenWidth = requireActivity().getResources().getDisplayMetrics().widthPixels;
-        int itemWidth = (int) (screenWidth * 0.85f);
+        int itemWidth = calculateReviewCardWidth();
         reviewAdapter.setItemWidthPx(itemWidth);
 
         rvReviews.setAdapter(reviewAdapter);
 
-        // Setup LinearLayoutManager for horizontal carousel
         LinearLayoutManager layoutManager = new LinearLayoutManager(
-                requireContext(), 
-                LinearLayoutManager.HORIZONTAL, 
+                requireContext(),
+                LinearLayoutManager.HORIZONTAL,
                 false);
         rvReviews.setLayoutManager(layoutManager);
 
-        // Attach LinearSnapHelper for carousel snapping
         if (snapHelper == null) {
             snapHelper = new androidx.recyclerview.widget.LinearSnapHelper();
             snapHelper.attachToRecyclerView(rvReviews);
@@ -2577,16 +2682,25 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         }
     }
 
+    private int calculateReviewCardWidth() {
+        float density = requireActivity().getResources().getDisplayMetrics().density;
+        int screenWidth = requireActivity().getResources().getDisplayMetrics().widthPixels;
+        int horizontalPaddingPx = (int) (16f * density * 2f);
+        int carouselGapPx = (int) (12f * density);
+        int minWidthPx = (int) (220f * density);
+        int maxWidthPx = (int) (320f * density);
+        int targetWidthPx = (screenWidth - horizontalPaddingPx - carouselGapPx) / 2;
+        return Math.max(minWidthPx, Math.min(maxWidthPx, targetWidthPx));
+    }
+
     private void setupChipFilters(View root) {
         chipGroupFilters = root.findViewById(R.id.chip_group_filters);
         if (chipGroupFilters == null) {
             return;
         }
 
-        // Setup chip click listeners
         chipGroupFilters.setOnCheckedStateChangeListener((group, checkedIds) -> {
             if (checkedIds.isEmpty()) {
-                // All reviews
                 reviewAdapter.showAllReviews(allReviews);
             } else {
                 int selectedChipId = checkedIds.get(0);
@@ -2611,9 +2725,11 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
     private void updateReviewList(java.util.List<com.bif.app.domain.model.Review> reviews, com.bif.app.domain.model.Review myReview) {
         allReviews.clear();
+        java.util.List<com.bif.app.domain.model.Review> combinedReviews = new java.util.ArrayList<>();
 
         if (myReview != null) {
             allReviews.add(new ReviewItem(ReviewItem.VIEW_TYPE_MINE, myReview, true));
+            combinedReviews.add(myReview);
         } else {
             allReviews.add(new ReviewItem());
         }
@@ -2624,14 +2740,17 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                     continue;
                 }
                 allReviews.add(new ReviewItem(ReviewItem.VIEW_TYPE_OTHERS, review, false));
+                if (review != null) {
+                    combinedReviews.add(review);
+                }
             }
         }
 
-        int count = (reviews != null ? reviews.size() : 0);
+        int count = combinedReviews.size();
         double totalStars = 0;
 
-        if (reviews != null) {
-            for (com.bif.app.domain.model.Review review : reviews) {
+        for (com.bif.app.domain.model.Review review : combinedReviews) {
+            if (review != null) {
                 totalStars += review.stars;
             }
         }
@@ -2663,6 +2782,18 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             rvReviews.setVisibility(View.VISIBLE);
         }
 
+        int activeStarFilter = getActiveStarFilter();
+
+        if (reviewAdapter != null) {
+            if (activeStarFilter == 0) {
+                reviewAdapter.showAllReviews(allReviews);
+            } else {
+                reviewAdapter.filterByStarRating(allReviews, activeStarFilter);
+            }
+        }
+    }
+
+    private int getActiveStarFilter() {
         int activeStarFilter = 0;
         if (chipGroupFilters != null) {
             List<Integer> checkedIds = chipGroupFilters.getCheckedChipIds();
@@ -2675,14 +2806,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 else if (selectedId == R.id.chip_filter_1) activeStarFilter = 1;
             }
         }
-
-        if (reviewAdapter != null) {
-            if (activeStarFilter == 0) {
-                reviewAdapter.showAllReviews(allReviews);
-            } else {
-                reviewAdapter.filterByStarRating(allReviews, activeStarFilter);
-            }
-        }
+        return activeStarFilter;
     }
 
     private void showAddReviewDialog(@Nullable com.bif.app.domain.model.Review existingReview) {
@@ -2697,10 +2821,12 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             }
         }
 
-        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
-                .setTitle(existingReview == null ? "Add Review" : "Edit Review")
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(existingReview == null
+                        ? R.string.add_review_title
+                        : R.string.edit_review_title)
                 .setView(view)
-                .setPositiveButton("Submit", (dialog, which) -> {
+                .setPositiveButton(R.string.submit_review, (dialog, which) -> {
                     int stars = (int) ratingBar.getRating();
                     if (stars > 0) {
                         String comment = etComment.getText() != null ? etComment.getText().toString().trim() : "";
@@ -2710,10 +2836,10 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                             viewModel.submitReview(stars, comment);
                         }
                     } else {
-                        Toast.makeText(getContext(), "Please provide a rating", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getContext(), R.string.provide_rating_error, Toast.LENGTH_SHORT).show();
                     }
                 })
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(android.R.string.cancel, null)
                 .show();
     }
 

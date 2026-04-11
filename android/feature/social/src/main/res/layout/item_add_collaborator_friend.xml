@@ -16,7 +16,7 @@
         android:background="@drawable/bg_avatar"
         android:gravity="center"
         android:text="A"
-        android:textColor="@color/white"
+        android:textColor="?attr/colorOnPrimary"
         android:textSize="14sp"
         android:textStyle="bold" />
 
@@ -41,6 +41,6 @@
         android:textColor="@android:color/white"
         android:textSize="13sp"
         app:cornerRadius="18dp"
-        app:backgroundTint="@color/primary_blue" />
+        app:backgroundTint="?attr/colorPrimary" />
 
 </LinearLayout>

@@ -941,5 +941,6 @@ public class GroupRepository implements IGroupRepository {
         }
         syncManager.enqueueChange("group", entityId, operation,
                 UUID.randomUUID().toString(), payload);
+        syncManager.syncIfOnline();
     }
 }
