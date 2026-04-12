@@ -53,16 +53,20 @@ public class AppModule {
     @Singleton
     public AppDatabase provideAppDatabase(@ApplicationContext Context context) {
         return Room.databaseBuilder(
-                context,
-                AppDatabase.class,
-                "bif_database")
+                        context,
+                        AppDatabase.class,
+                        "bif_database")
                 .addMigrations(
-                    AppDatabase.MIGRATION_15_16,
-                    AppDatabase.MIGRATION_16_17,
-                    AppDatabase.MIGRATION_17_18)
-            // Legacy schemas (v13/v14) have no safe forward chain to v17 in code.
-            // Recreate DB for those versions instead of crashing at startup.
-            .fallbackToDestructiveMigrationFrom(true, 13, 14)
+                        AppDatabase.MIGRATION_15_16,
+                        AppDatabase.MIGRATION_16_17,
+                        AppDatabase.MIGRATION_17_18,
+                        AppDatabase.MIGRATION_18_19,
+                        AppDatabase.MIGRATION_19_20,
+                        AppDatabase.MIGRATION_20_21,
+                        AppDatabase.MIGRATION_21_22)
+                // Legacy schemas (v13/v14) have no safe forward chain to v17 in code.
+                // Recreate DB for those versions instead of crashing at startup.
+                .fallbackToDestructiveMigrationFrom(13, 14)
                 .build();
     }
 
@@ -149,14 +153,6 @@ public class AppModule {
                 executor.execute(() -> {
                     try {
                         appDatabase.clearAllTables();
-                        boolean prefsCleared = context.getSharedPreferences(
-                                "SYNC_PREF", Context.MODE_PRIVATE)
-                                .edit()
-                                .clear()
-                                .commit();
-                        if (!prefsCleared) {
-                            throw new IllegalStateException("Failed to clear SYNC_PREF");
-                        }
                         if (onComplete != null) {
                             new android.os.Handler(android.os.Looper.getMainLooper()).post(onComplete);
                         }
