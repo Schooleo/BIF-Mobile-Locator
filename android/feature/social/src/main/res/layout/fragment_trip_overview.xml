@@ -47,13 +47,15 @@
 
                 <ImageButton
                     android:id="@+id/btn_edit_overview_cover"
-                    android:layout_width="32dp"
-                    android:layout_height="32dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:minWidth="48dp"
+                    android:minHeight="48dp"
                     android:layout_gravity="top|end"
                     android:layout_marginTop="10dp"
                     android:background="@drawable/bg_camera_badge"
                     android:contentDescription="@string/trip_edit_title_card"
-                    android:padding="7dp"
+                    android:padding="10dp"
                     android:src="@drawable/ic_camera"
                     app:tint="@color/white" />
             </FrameLayout>
