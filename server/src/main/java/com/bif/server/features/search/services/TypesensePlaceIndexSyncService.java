@@ -19,9 +19,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.StringJoiner;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -34,6 +36,8 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
 
     private static final int MAX_RETRIES = 3;
     private static final long INITIAL_BACKOFF_MS = 500;
+    private static final String DEFAULT_PROTOCOL = "http";
+    private static final String DEFAULT_HOST = "localhost";
     private static final AtomicBoolean MISSING_GEOPOINT_WARNING_LOGGED = new AtomicBoolean(false);
 
     private final TypesenseProperties typesenseProperties;
@@ -190,19 +194,9 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
         }
 
         try {
-            Map<String, Object> document = objectMapper.convertValue(
-                place, new TypeReference<Map<String, Object>>() {
-                });
+            Map<String, Object> document = toDocument(place);
             document.put("rating", newRating);
             document.put("reviewCount", reviewCount);
-            if (place.getLocation() != null) {
-                double latitude = place.getLocation().getLatitude();
-                double longitude = place.getLocation().getLongitude();
-                document.put("location", Arrays.asList(latitude, longitude));
-            } else {
-                // Do not send location: null
-                document.remove("location");
-            }
 
             String body = objectMapper.writeValueAsString(document);
             HttpRequest request = HttpRequest.newBuilder()
@@ -231,19 +225,7 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
         }
 
         try {
-                Map<String, Object> document = objectMapper.convertValue(
-                    place, new TypeReference<Map<String, Object>>() {
-                    });
-            if (place.getLocation() != null) {
-                double latitude = place.getLocation().getLatitude();
-                double longitude = place.getLocation().getLongitude();
-                document.put("location", Arrays.asList(latitude, longitude));
-            } else {
-                // Do not send location: null
-                document.remove("location");
-            }
-
-            String body = objectMapper.writeValueAsString(document);
+            String body = objectMapper.writeValueAsString(toDocument(place));
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(buildUpsertUri())
                     .timeout(Duration.ofMillis(
@@ -256,6 +238,8 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
             sendWithRetry(request, "upsert place " + place.getId());
         } catch (IOException e) {
             LOGGER.error("Typesense upsert I/O failure for place {}", place.getId(), e);
+        } catch (IllegalArgumentException e) {
+            LOGGER.error("Typesense upsert URI configuration error for place {}", place.getId(), e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             LOGGER.error("Typesense upsert interrupted for place {}", place.getId(), e);
@@ -279,18 +263,7 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
             StringJoiner joiner = new StringJoiner("\n");
             for (Place place : places) {
                 if (place != null && place.getId() != null && !place.getId().isBlank()) {
-                        Map<String, Object> document = objectMapper.convertValue(
-                            place, new TypeReference<Map<String, Object>>() {
-                            });
-                    if (place.getLocation() != null) {
-                        double latitude = place.getLocation().getLatitude();
-                        double longitude = place.getLocation().getLongitude();
-                        document.put("location", Arrays.asList(latitude, longitude));
-                    } else {
-                        // Do not send location: null
-                        document.remove("location");
-                    }
-                    joiner.add(objectMapper.writeValueAsString(document));
+                    joiner.add(objectMapper.writeValueAsString(toDocument(place)));
                 }
             }
             String jsonlBody = joiner.toString();
@@ -325,6 +298,8 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
             }
         } catch (IOException e) {
             LOGGER.error("Typesense batch import I/O failure", e);
+        } catch (IllegalArgumentException e) {
+            LOGGER.error("Typesense batch import URI configuration error", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             LOGGER.error("Typesense batch import interrupted", e);
@@ -378,6 +353,8 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
             }
         } catch (IOException e) {
             LOGGER.error("Typesense delete I/O failure for place {}", placeId, e);
+        } catch (IllegalArgumentException e) {
+            LOGGER.error("Typesense delete URI configuration error for place {}", placeId, e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             LOGGER.error("Typesense delete interrupted for place {}", placeId, e);
@@ -407,10 +384,7 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
         }
 
         String collection = safe(typesenseProperties.getPlacesCollection(), "places");
-        String baseUrl = String.format("%s://%s:%d",
-                safe(typesenseProperties.getProtocol(), "http"),
-                safe(typesenseProperties.getHost(), "localhost"),
-                typesenseProperties.getPort());
+        String baseUrl = buildBaseUrl();
 
         try {
             // 1. Wait for Typesense to be healthy
@@ -439,14 +413,23 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
                       "name": "%s",
                       "fields": [
                         {"name": "name",              "type": "string"},
+                        {"name": "nameNormalized",    "type": "string",   "optional": true},
                         {"name": "address",           "type": "string",   "optional": true},
+                        {"name": "addressNormalized", "type": "string",   "optional": true},
+                        {"name": "country",           "type": "string",   "optional": true},
+                        {"name": "region",            "type": "string",   "optional": true},
+                        {"name": "locality",          "type": "string",   "optional": true},
+                        {"name": "city",              "type": "string",   "optional": true},
+                        {"name": "district",          "type": "string",   "optional": true},
                         {"name": "rating",            "type": "float",    "optional": true},
-                                                {"name": "location",          "type": "geopoint", "optional": true},
                         {"name": "tags",              "type": "string[]", "optional": true},
+                        {"name": "categoryMain",      "type": "string",   "optional": true},
+                        {"name": "categoryAlternates","type": "string[]", "optional": true},
                         {"name": "placeSource",       "type": "string",   "optional": true},
                         {"name": "persistedByAction", "type": "string",   "optional": true},
                         {"name": "persistedByUserId", "type": "string",   "optional": true},
-                        {"name": "reviewCount",       "type": "int32",    "optional": true}
+                        {"name": "reviewCount",       "type": "int32",    "optional": true},
+                        {"name": "location",          "type": "geopoint", "optional": true}
                       ]
                     }
                     """.formatted(collection);
@@ -468,6 +451,8 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
             }
         } catch (IOException e) {
             LOGGER.error("I/O error ensuring Typesense collection exists", e);
+        } catch (IllegalArgumentException e) {
+            LOGGER.error("Invalid Typesense URI configuration. Skipping collection setup.", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             LOGGER.error("Interrupted while ensuring Typesense collection exists", e);
@@ -548,6 +533,9 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
             } catch (IOException e) {
                 LOGGER.warn("Typesense not reachable yet: {}. Waiting {}ms (attempt {}/{})...",
                         e.getMessage(), waitMs, attempt, maxAttempts);
+            } catch (IllegalArgumentException e) {
+                LOGGER.error("Invalid Typesense health URI '{}': {}", baseUrl + "/health", e.getMessage());
+                return false;
             }
             Thread.sleep(waitMs);
         }
@@ -556,20 +544,16 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
 
     private URI buildUpsertUri() {
         String collection = encode(safe(typesenseProperties.getPlacesCollection(), "places"));
-        String uri = String.format("%s://%s:%d/collections/%s/documents?action=upsert",
-                safe(typesenseProperties.getProtocol(), "http"),
-                safe(typesenseProperties.getHost(), "localhost"),
-                typesenseProperties.getPort(),
+        String uri = String.format("%s/collections/%s/documents?action=upsert",
+            buildBaseUrl(),
                 collection);
         return URI.create(uri);
     }
 
     private URI buildImportUri() {
         String collection = encode(safe(typesenseProperties.getPlacesCollection(), "places"));
-        String uri = String.format("%s://%s:%d/collections/%s/documents/import?action=upsert",
-                safe(typesenseProperties.getProtocol(), "http"),
-                safe(typesenseProperties.getHost(), "localhost"),
-                typesenseProperties.getPort(),
+        String uri = String.format("%s/collections/%s/documents/import?action=upsert",
+            buildBaseUrl(),
                 collection);
         return URI.create(uri);
     }
@@ -577,13 +561,32 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
     private URI buildDocumentUri(String placeId) {
         String collection = encode(safe(typesenseProperties.getPlacesCollection(), "places"));
         String encodedPlaceId = encode(placeId);
-        String uri = String.format("%s://%s:%d/collections/%s/documents/%s",
-                safe(typesenseProperties.getProtocol(), "http"),
-                safe(typesenseProperties.getHost(), "localhost"),
-                typesenseProperties.getPort(),
+        String uri = String.format("%s/collections/%s/documents/%s",
+                buildBaseUrl(),
                 collection,
                 encodedPlaceId);
         return URI.create(uri);
+    }
+
+    private String buildBaseUrl() {
+        return String.format("%s://%s:%d",
+                normalizedProtocol(),
+                safe(typesenseProperties.getHost(), DEFAULT_HOST).trim(),
+                typesenseProperties.getPort());
+    }
+
+    private String normalizedProtocol() {
+        String configuredProtocol = typesenseProperties.getProtocol();
+        if (configuredProtocol == null || configuredProtocol.isBlank()) {
+            return DEFAULT_PROTOCOL;
+        }
+
+        String protocol = configuredProtocol.trim().toLowerCase(Locale.ROOT);
+        if (!"http".equals(protocol) && !"https".equals(protocol)) {
+            throw new IllegalArgumentException(
+                    "Invalid typesense.protocol '" + configuredProtocol + "'. Expected 'http' or 'https'.");
+        }
+        return protocol;
     }
 
     private String safe(String value, String fallback) {
@@ -594,7 +597,37 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
     }
 
     private String encode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8)
-                .replace("+", "%20");
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
+    }
+
+    private Map<String, Object> toDocument(Place place) {
+        Map<String, Object> document = new LinkedHashMap<>();
+        document.put("id", place.getId());
+        document.put("name", place.getName());
+        document.put("nameNormalized", place.getNameNormalized());
+        document.put("address", place.getAddress());
+        document.put("addressNormalized", place.getAddressNormalized());
+        document.put("country", place.getCountry());
+        document.put("region", place.getRegion());
+        document.put("locality", place.getLocality());
+        document.put("city", place.getCity());
+        document.put("district", place.getDistrict());
+        document.put("rating", place.getRating());
+        document.put("tags", place.getTags());
+        document.put("categoryMain", place.getCategoryMain());
+        document.put("categoryAlternates", place.getCategoryAlternates());
+        document.put("placeSource", place.getPlaceSource());
+        document.put("persistedByAction", place.getPersistedByAction());
+        document.put("persistedByUserId", place.getPersistedByUserId());
+        document.put("reviewCount", place.getReviewCount());
+        if (place.getLocation() != null
+                && Double.isFinite(place.getLocation().getLatitude())
+                && Double.isFinite(place.getLocation().getLongitude())) {
+            List<Double> geoPoint = new ArrayList<>(2);
+            geoPoint.add(place.getLocation().getLatitude());
+            geoPoint.add(place.getLocation().getLongitude());
+            document.put("location", geoPoint);
+        }
+        return document;
     }
 }

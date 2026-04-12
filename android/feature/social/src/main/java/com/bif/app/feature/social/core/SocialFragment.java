@@ -17,6 +17,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import com.bif.app.core.utils.AppSnackbar;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.PopupMenu;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
@@ -32,6 +33,7 @@ import com.bif.app.domain.model.Friend;
 import com.bif.app.domain.model.Friendship;
 import com.bif.app.domain.model.TripPlan;
 import com.google.android.material.datepicker.MaterialDatePicker;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.tabs.TabLayout;
 
 import java.text.SimpleDateFormat;
@@ -56,6 +58,19 @@ public class SocialFragment extends Fragment {
     private TripListAdapter tripListAdapter;
     private SocialViewModel viewModel;
     private boolean isActionLoading = false;
+    private FloatingActionButton fabAiTripDrafter;
+    private AlertDialog aiTripDrafterDialog;
+    private LinearLayout aiLayoutInput;
+    private LinearLayout aiLayoutLoading;
+    private LinearLayout aiLayoutResult;
+    private LinearLayout aiLayoutError;
+    private EditText etAiRequest;
+    private EditText etAiErrorRequest;
+    private TextView tvAiResultTitle;
+    private TextView tvAiResultDescription;
+    private TextView tvAiResultStopCount;
+    private TextView tvAiErrorMessage;
+    private AiTripDraftStopPreviewAdapter aiTripDraftStopPreviewAdapter;
 
     @Nullable
     @Override
@@ -86,6 +101,12 @@ public class SocialFragment extends Fragment {
     }
 
     @Override
+    public void onDestroyView() {
+        dismissAiTripDrafterDialog();
+        super.onDestroyView();
+    }
+
+    @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
@@ -98,13 +119,16 @@ public class SocialFragment extends Fragment {
         stateLayout = view.findViewById(R.id.layout_state);
         tvStateMessage = view.findViewById(R.id.tv_state_message);
         btnRetry = view.findViewById(R.id.btn_retry);
+        fabAiTripDrafter = view.findViewById(R.id.fab_ai_trip_drafter);
 
         swipeRefreshLayout.setOnRefreshListener(this::refreshCurrentTab);
         btnRetry.setOnClickListener(v -> refreshCurrentTab());
+        fabAiTripDrafter.setOnClickListener(v -> showAiTripDrafterDialog());
 
         setupRecyclerView();
         setupTabs();
         observeViewModel();
+        updateAiTripDrafterFabVisibility();
     }
 
     private void setupRecyclerView() {
@@ -147,7 +171,7 @@ public class SocialFragment extends Fragment {
 
             @Override
             public void onFriendClick(Friend friend) {
-                navigateToChatFromFriend(friend);
+                navigateToFriendSettingsTrips(friend);
             }
 
             @Override
@@ -186,6 +210,12 @@ public class SocialFragment extends Fragment {
                         break;
                     case "__MSG_TRIP_DELETE_FAILED__":
                         textRes = R.string.trip_delete_failed;
+                        break;
+                    case SocialViewModel.AI_DRAFT_SAVE_SUCCESS_MESSAGE:
+                        textRes = R.string.trip_ai_saved_success;
+                        break;
+                    case SocialViewModel.AI_DRAFT_SAVE_FAILED_MESSAGE:
+                        textRes = R.string.trip_ai_saved_failed;
                         break;
                     default:
                         textRes = R.string.trip_create_failed;
@@ -276,6 +306,11 @@ public class SocialFragment extends Fragment {
                 renderFriendState(state);
             }
         });
+
+        viewModel.getAiTripDrafterUiState().observe(
+                getViewLifecycleOwner(),
+                this::renderAiTripDrafterState
+        );
     }
 
     private void setupTabs() {
@@ -283,6 +318,7 @@ public class SocialFragment extends Fragment {
             @Override
             public void onTabSelected(TabLayout.Tab tab) {
                 renderCurrentTabState();
+                updateAiTripDrafterFabVisibility();
             }
 
             @Override
@@ -303,6 +339,7 @@ public class SocialFragment extends Fragment {
         } else {
             renderFriendState(viewModel.getFriendUiState().getValue());
         }
+        updateAiTripDrafterFabVisibility();
     }
 
     private void renderTripState(UiState<List<TripPlan>> state) {
@@ -415,6 +452,212 @@ public class SocialFragment extends Fragment {
             recyclerView.setAlpha(1f);
             recyclerView.setOnTouchListener(null);
         }
+    }
+
+    private void updateAiTripDrafterFabVisibility() {
+        if (fabAiTripDrafter == null || tabLayout == null) {
+            return;
+        }
+        fabAiTripDrafter.setVisibility(
+                tabLayout.getSelectedTabPosition() == 0 ? View.VISIBLE : View.GONE
+        );
+    }
+
+    private void showAiTripDrafterDialog() {
+        if (aiTripDrafterDialog != null && aiTripDrafterDialog.isShowing()) {
+            return;
+        }
+
+        DialogUtils.showCustomViewDialog(
+                requireContext(),
+                R.layout.dialog_ai_trip_drafter,
+                R.id.btn_close,
+                (dialogView, dialog) -> {
+                    aiTripDrafterDialog = dialog;
+                    bindAiTripDrafterDialog(dialogView);
+                    dialog.setOnDismissListener(d -> clearAiTripDrafterDialogBindings());
+                    viewModel.openAiTripDrafter();
+                    renderAiTripDrafterState(viewModel.getAiTripDrafterUiState().getValue());
+                }
+        );
+    }
+
+    private void bindAiTripDrafterDialog(View dialogView) {
+        aiLayoutInput = dialogView.findViewById(R.id.layout_ai_input);
+        aiLayoutLoading = dialogView.findViewById(R.id.layout_ai_loading);
+        aiLayoutResult = dialogView.findViewById(R.id.layout_ai_result);
+        aiLayoutError = dialogView.findViewById(R.id.layout_ai_error);
+        etAiRequest = dialogView.findViewById(R.id.et_ai_request);
+        etAiErrorRequest = dialogView.findViewById(R.id.et_ai_error_request);
+        tvAiResultTitle = dialogView.findViewById(R.id.tv_ai_result_title);
+        tvAiResultDescription = dialogView.findViewById(R.id.tv_ai_result_description);
+        tvAiResultStopCount = dialogView.findViewById(R.id.tv_ai_result_stop_count);
+        tvAiErrorMessage = dialogView.findViewById(R.id.tv_ai_error_message);
+
+        RecyclerView rvStops = dialogView.findViewById(R.id.rv_ai_result_stops);
+        rvStops.setLayoutManager(new LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false));
+        aiTripDraftStopPreviewAdapter = new AiTripDraftStopPreviewAdapter();
+        rvStops.setAdapter(aiTripDraftStopPreviewAdapter);
+
+        Button btnSend = dialogView.findViewById(R.id.btn_ai_send);
+        Button btnClear = dialogView.findViewById(R.id.btn_ai_clear);
+        Button btnLoadingBack = dialogView.findViewById(R.id.btn_ai_loading_back);
+        Button btnRetry = dialogView.findViewById(R.id.btn_ai_retry);
+        Button btnSave = dialogView.findViewById(R.id.btn_ai_save);
+        Button btnErrorClear = dialogView.findViewById(R.id.btn_ai_error_clear);
+        Button btnErrorSend = dialogView.findViewById(R.id.btn_ai_error_send);
+
+        btnSend.setOnClickListener(v ->
+                viewModel.submitAiTripDraftQuery(etAiRequest.getText().toString())
+        );
+        btnClear.setOnClickListener(v -> {
+            etAiRequest.setText("");
+            viewModel.clearAiDraftRequest();
+        });
+        btnLoadingBack.setOnClickListener(v -> viewModel.backToAiInput());
+        btnRetry.setOnClickListener(v -> viewModel.retryAiTripDraft());
+        btnSave.setOnClickListener(v ->
+                viewModel.saveCurrentAiDraftTrip(success -> {
+                    if (success && aiTripDrafterDialog != null && aiTripDrafterDialog.isShowing()) {
+                        aiTripDrafterDialog.dismiss();
+                    }
+                })
+        );
+        btnErrorClear.setOnClickListener(v -> {
+            etAiErrorRequest.setText("");
+            etAiRequest.setText("");
+            viewModel.clearAiDraftRequest();
+        });
+        btnErrorSend.setOnClickListener(v ->
+                viewModel.submitAiTripDraftQuery(etAiErrorRequest.getText().toString())
+        );
+    }
+
+    private void clearAiTripDrafterDialogBindings() {
+        aiTripDrafterDialog = null;
+        aiLayoutInput = null;
+        aiLayoutLoading = null;
+        aiLayoutResult = null;
+        aiLayoutError = null;
+        etAiRequest = null;
+        etAiErrorRequest = null;
+        tvAiResultTitle = null;
+        tvAiResultDescription = null;
+        tvAiResultStopCount = null;
+        tvAiErrorMessage = null;
+        aiTripDraftStopPreviewAdapter = null;
+    }
+
+    private void dismissAiTripDrafterDialog() {
+        if (aiTripDrafterDialog != null && aiTripDrafterDialog.isShowing()) {
+            aiTripDrafterDialog.dismiss();
+        } else {
+            clearAiTripDrafterDialogBindings();
+        }
+    }
+
+    private void renderAiTripDrafterState(SocialViewModel.AiTripDrafterUiState state) {
+        if (state == null || aiTripDrafterDialog == null || !aiTripDrafterDialog.isShowing()) {
+            return;
+        }
+        if (aiLayoutInput == null || aiLayoutLoading == null || aiLayoutResult == null || aiLayoutError == null) {
+            return;
+        }
+
+        if (state instanceof SocialViewModel.AiTripDrafterUiState.Input) {
+            SocialViewModel.AiTripDrafterUiState.Input inputState =
+                    (SocialViewModel.AiTripDrafterUiState.Input) state;
+            showAiTripDrafterSection(aiLayoutInput);
+            setEditTextValue(etAiRequest, inputState.getQuery());
+            setEditTextValue(etAiErrorRequest, inputState.getQuery());
+            return;
+        }
+
+        if (state instanceof SocialViewModel.AiTripDrafterUiState.Loading) {
+            SocialViewModel.AiTripDrafterUiState.Loading loadingState =
+                    (SocialViewModel.AiTripDrafterUiState.Loading) state;
+            showAiTripDrafterSection(aiLayoutLoading);
+            setEditTextValue(etAiRequest, loadingState.getQuery());
+            setEditTextValue(etAiErrorRequest, loadingState.getQuery());
+            return;
+        }
+
+        if (state instanceof SocialViewModel.AiTripDrafterUiState.Success) {
+            SocialViewModel.AiTripDrafterUiState.Success successState =
+                    (SocialViewModel.AiTripDrafterUiState.Success) state;
+            showAiTripDrafterSection(aiLayoutResult);
+
+            String title = successState.getTitle();
+            if (title == null || title.trim().isEmpty()) {
+                title = getString(R.string.trip_ai_title_fallback);
+            }
+            tvAiResultTitle.setText(title);
+
+            String description = successState.getDescription();
+            if (description == null || description.trim().isEmpty()) {
+                description = getString(R.string.trip_overview_no_description);
+            }
+            tvAiResultDescription.setText(getString(R.string.trip_ai_description_prefix, description));
+
+            List<SocialViewModel.AiDraftStopPreview> stops = successState.getStops();
+            tvAiResultStopCount.setText(getString(R.string.trip_ai_stop_count, stops.size()));
+            if (aiTripDraftStopPreviewAdapter != null) {
+                aiTripDraftStopPreviewAdapter.submit(stops);
+            }
+
+            setEditTextValue(etAiRequest, successState.getQuery());
+            setEditTextValue(etAiErrorRequest, successState.getQuery());
+            return;
+        }
+
+        if (state instanceof SocialViewModel.AiTripDrafterUiState.Error) {
+            SocialViewModel.AiTripDrafterUiState.Error errorState =
+                    (SocialViewModel.AiTripDrafterUiState.Error) state;
+            showAiTripDrafterSection(aiLayoutError);
+            tvAiErrorMessage.setText(resolveAiDraftErrorMessage(errorState));
+            setEditTextValue(etAiErrorRequest, errorState.getQuery());
+            setEditTextValue(etAiRequest, errorState.getQuery());
+        }
+    }
+
+    private void showAiTripDrafterSection(View visibleSection) {
+        aiLayoutInput.setVisibility(visibleSection == aiLayoutInput ? View.VISIBLE : View.GONE);
+        aiLayoutLoading.setVisibility(visibleSection == aiLayoutLoading ? View.VISIBLE : View.GONE);
+        aiLayoutResult.setVisibility(visibleSection == aiLayoutResult ? View.VISIBLE : View.GONE);
+        aiLayoutError.setVisibility(visibleSection == aiLayoutError ? View.VISIBLE : View.GONE);
+    }
+
+    private void setEditTextValue(EditText editText, String value) {
+        if (editText == null) {
+            return;
+        }
+        String nextValue = value == null ? "" : value;
+        String currentValue = editText.getText() == null ? "" : editText.getText().toString();
+        if (nextValue.equals(currentValue)) {
+            return;
+        }
+        editText.setText(nextValue);
+        editText.setSelection(nextValue.length());
+    }
+
+    private String resolveAiDraftErrorMessage(SocialViewModel.AiTripDrafterUiState.Error errorState) {
+        if (errorState == null) {
+            return getString(R.string.trip_ai_error_fallback);
+        }
+        String code = errorState.getErrorCode();
+        if (SocialViewModel.AI_DRAFT_EMPTY_QUERY_MESSAGE.equals(code)) {
+            return getString(R.string.trip_ai_empty_query);
+        }
+        if (SocialViewModel.AI_DRAFT_INVALID_MESSAGE.equals(code)) {
+            return getString(R.string.trip_ai_invalid_draft);
+        }
+        if (SocialViewModel.AI_DRAFT_FAILED_MESSAGE.equals(code)) {
+            String failureCode = errorState.getFailureCode();
+            if (failureCode != null && !failureCode.trim().isEmpty()) {
+                return getString(R.string.chat_ai_draft_failed, failureCode);
+            }
+        }
+        return getString(R.string.trip_ai_error_fallback);
     }
 
     private void showAddFriendDialog() {
@@ -646,16 +889,41 @@ public class SocialFragment extends Fragment {
         return new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(new Date(millis));
     }
 
-    private void navigateToChatFromFriend(Friend friend) {
-        Uri destUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL_CHAT).buildUpon()
-                .appendQueryParameter("chatType", "friend")
-                .appendQueryParameter("chatId", String.valueOf(friend.getId()))
-                .appendQueryParameter("chatName", friend.getName())
-                .appendQueryParameter("avatarLetter", friend.getAvatarLetter())
-                .appendQueryParameter("avatarColor", String.valueOf(friend.getAvatarColor()))
-                .appendQueryParameter("memberCount", "0")
-                .appendQueryParameter("friendshipCreatedAt", String.valueOf(friend.getFriendshipCreatedAt()))
-                .build();
+    private void navigateToFriendSettingsTrips(Friend friend) {
+        if (friend == null) {
+            return;
+        }
+
+        int friendId = friend.getId();
+        if (friendId <= 0) {
+            return;
+        }
+
+        Uri.Builder builder = UriUtils.buildUri(UriUtils.PathTo.FRIEND_SETTINGS_TRIPS)
+                .buildUpon()
+                .appendQueryParameter("friendId", String.valueOf(friendId));
+
+        String friendName = friend.getName();
+        if (friendName != null && !friendName.trim().isEmpty()) {
+            builder.appendQueryParameter("friendName", friendName);
+        }
+
+        String avatarLetter = friend.getAvatarLetter();
+        if (avatarLetter != null && !avatarLetter.trim().isEmpty()) {
+            builder.appendQueryParameter("avatarLetter", avatarLetter);
+        }
+
+        int avatarColor = friend.getAvatarColor();
+        if (avatarColor != 0) {
+            builder.appendQueryParameter("avatarColor", String.valueOf(avatarColor));
+        }
+
+        long friendshipCreatedAt = friend.getFriendshipCreatedAt();
+        if (friendshipCreatedAt > 0L) {
+            builder.appendQueryParameter("friendshipCreatedAt", String.valueOf(friendshipCreatedAt));
+        }
+
+        Uri destUri = builder.build();
         Navigation.findNavController(requireView()).navigate(destUri);
     }
 

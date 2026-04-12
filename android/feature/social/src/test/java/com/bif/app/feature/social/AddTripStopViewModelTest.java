@@ -56,7 +56,11 @@ public class AddTripStopViewModelTest {
 
         Mockito.lenient().when(placeRepository.searchPlaces(anyString(), any(Location.class)))
                 .thenReturn(new MutableLiveData<>(Collections.emptyList()));
-        Mockito.lenient().when(placeRepository.suggestPlacesFromQuery(anyString()))
+        Mockito.lenient().when(placeRepository.suggestPlacesFromQuery(
+                        anyString(),
+                        any(),
+                        any(),
+                        any()))
                 .thenReturn(new MutableLiveData<>(new AiPlaceSuggestionResult(
                         new ArrayList<>(),
                         new ArrayList<>(),
@@ -92,7 +96,11 @@ public class AddTripStopViewModelTest {
         MutableLiveData<AiPlaceSuggestionResult> aiResult = new MutableLiveData<>(
                 new AiPlaceSuggestionResult(Collections.emptyList(),
                         Collections.emptyList(), "RATE_LIMITED"));
-        when(placeRepository.suggestPlacesFromQuery("green park")).thenReturn(aiResult);
+        when(placeRepository.suggestPlacesFromQuery(
+                Mockito.eq("green park"),
+                any(),
+                any(),
+                any())).thenReturn(aiResult);
 
         viewModel.search("green park");
 
@@ -106,13 +114,40 @@ public class AddTripStopViewModelTest {
         MutableLiveData<AiPlaceSuggestionResult> aiResult = new MutableLiveData<>(
                 new AiPlaceSuggestionResult(Collections.emptyList(),
                         Collections.emptyList(), "OFFLINE"));
-        when(placeRepository.suggestPlacesFromQuery("hidden cafe")).thenReturn(aiResult);
+        when(placeRepository.suggestPlacesFromQuery(
+                Mockito.eq("hidden cafe"),
+                any(),
+                any(),
+                any())).thenReturn(aiResult);
 
         viewModel.search("hidden cafe");
 
         assertNotEquals(Boolean.TRUE, viewModel.getAiModeEnabled().getValue());
         assertNotEquals(Boolean.TRUE, viewModel.getAiToggleEnabled().getValue());
         assertTrue(viewModel.getSearchState().getValue() instanceof AddTripStopViewModel.SearchState.Empty);
+    }
+
+    @Test
+    public void aiSearch_usesConfiguredBiasContext() {
+        viewModel.toggleAiMode();
+        viewModel.setAiSearchBias(10.7769, 106.7009, "District 1, Ho Chi Minh City");
+
+        MutableLiveData<AiPlaceSuggestionResult> aiResult = new MutableLiveData<>(
+                new AiPlaceSuggestionResult(Collections.emptyList(),
+                        Collections.emptyList(), "NO_RESULTS"));
+        when(placeRepository.suggestPlacesFromQuery(
+                Mockito.eq("coffee"),
+                Mockito.eq(10.7769),
+                Mockito.eq(106.7009),
+                Mockito.eq("District 1, Ho Chi Minh City"))).thenReturn(aiResult);
+
+        viewModel.search("coffee");
+
+        verify(placeRepository).suggestPlacesFromQuery(
+                "coffee",
+                10.7769,
+                106.7009,
+                "District 1, Ho Chi Minh City");
     }
 
     @Test

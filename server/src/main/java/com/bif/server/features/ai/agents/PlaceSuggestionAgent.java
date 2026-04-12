@@ -13,6 +13,15 @@ public class PlaceSuggestionAgent {
             {
                 "type": "object",
                 "properties": {
+                    "searchQueries": {
+                        "type": "array",
+                        "minItems": %d,
+                        "maxItems": %d,
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
                     "keywords": {
                         "type": "array",
                         "minItems": %d,
@@ -27,12 +36,17 @@ public class PlaceSuggestionAgent {
                     },
                     "vibe": {
                         "type": ["string", "null"]
+                    },
+                    "locationHint": {
+                        "type": ["string", "null"]
                     }
                 },
-                "required": ["keywords", "category", "vibe"],
+                "required": ["searchQueries", "keywords", "category", "vibe", "locationHint"],
                 "additionalProperties": false
             }
             """.formatted(
+            AiGenerationConstraints.MIN_SEARCH_QUERIES,
+            AiGenerationConstraints.MAX_SEARCH_QUERIES,
             AiGenerationConstraints.MIN_KEYWORDS,
             AiGenerationConstraints.MAX_KEYWORDS
     );
@@ -70,11 +84,17 @@ public class PlaceSuggestionAgent {
                 Do not include markdown fences, explanations, or conversational filler.
                 Return exactly this schema:
                 {
+                                    "searchQueries": ["string"],
                   "keywords": ["string"],
                   "category": "string|null",
-                  "vibe": "string|null"
+                                    "vibe": "string|null",
+                                    "locationHint": "string|null"
                 }
+                searchQueries must be concise, high-signal place-search strings ordered by best first.
                 Use concise keywords suitable for place search grounding.
+                When the user specifies both a city and a narrower district/neighborhood, preserve that full hierarchy in the best searchQueries.
+                Set locationHint to the strongest location focus from the user request, keeping parent-city context when it disambiguates the area.
+                Do not drop explicit city/district constraints in favor of generic tourism wording.
                 """;
     }
 

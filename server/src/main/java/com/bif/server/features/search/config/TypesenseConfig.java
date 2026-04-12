@@ -10,15 +10,18 @@ import org.typesense.resources.Node;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.Executor;
 
 @Configuration
 @EnableAsync
 public class TypesenseConfig {
 
+    private static final String DEFAULT_PROTOCOL = "http";
+
     @Bean
     public Client typesenseClient(TypesenseProperties properties) {
-        String protocol = safe(properties.getProtocol(), "http");
+        String protocol = normalizeProtocol(properties.getProtocol());
         String host = safe(properties.getHost(), "localhost");
         String port = Integer.toString(properties.getPort());
 
@@ -46,5 +49,13 @@ public class TypesenseConfig {
 
     private String safe(String value, String fallback) {
         return StringUtils.hasText(value) ? value.trim() : fallback;
+    }
+
+    private String normalizeProtocol(String value) {
+        String protocol = safe(value, DEFAULT_PROTOCOL).toLowerCase(Locale.ROOT);
+        if (!"http".equals(protocol) && !"https".equals(protocol)) {
+            return DEFAULT_PROTOCOL;
+        }
+        return protocol;
     }
 }

@@ -13,6 +13,7 @@ import androidx.room.Transaction;
 import com.bif.app.data.source.local.entity.TripMemberCrossRef;
 import com.bif.app.data.source.local.entity.TripPlanEntity;
 import com.bif.app.data.source.local.entity.TripStopEntity;
+import com.bif.app.data.source.local.entity.UploadStatus;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -91,15 +92,38 @@ public interface TripDao {
             + "AND uploadStatus IN ('PENDING','ERROR') ORDER BY serverVersion ASC LIMIT 1")
     TripStopEntity getFirstPendingUploadStop();
 
+    @Query("SELECT * FROM trip_plans WHERE deleted = 0 AND localCoverImagePath IS NOT NULL "
+            + "AND coverUploadStatus IN ('PENDING','ERROR') ORDER BY serverVersion ASC LIMIT 1")
+    TripPlanEntity getFirstPendingUploadTripCover();
+
     @Query("SELECT * FROM trip_stops WHERE deleted = 0 AND uploadStatus = 'SYNCED' "
             + "AND localImagePath IS NOT NULL")
     List<TripStopEntity> getSyncedStopsWithLocalImagePath();
 
+    @Query("SELECT * FROM trip_plans WHERE deleted = 0 AND coverUploadStatus = 'SYNCED' "
+            + "AND localCoverImagePath IS NOT NULL")
+    List<TripPlanEntity> getSyncedTripsWithLocalCoverImagePath();
+
     @Query("SELECT localImagePath FROM trip_stops WHERE localImagePath IS NOT NULL")
     List<String> getAllReferencedLocalImagePaths();
 
+        @Query("SELECT localCoverImagePath FROM trip_plans WHERE localCoverImagePath IS NOT NULL")
+        List<String> getAllReferencedTripLocalCoverImagePaths();
+
     @Query("SELECT * FROM trip_plans WHERE id = :tripId LIMIT 1")
     TripPlanEntity getTripByIdSync(String tripId);
+
+    @Query("UPDATE trip_plans SET coverUploadStatus = :coverUploadStatus WHERE id = :tripId")
+    void updateTripCoverUploadStatus(String tripId, UploadStatus coverUploadStatus);
+
+    @Query("UPDATE trip_plans SET coverImageUrl = :coverImageUrl, "
+            + "coverUploadStatus = :coverUploadStatus, "
+            + "localCoverImagePath = :localCoverImagePath "
+            + "WHERE id = :tripId")
+    void updateTripCoverFields(String tripId,
+                               String coverImageUrl,
+                               UploadStatus coverUploadStatus,
+                               String localCoverImagePath);
 
     @Query("SELECT COUNT(*) FROM trip_plans WHERE groupId = :groupId "
             + "AND deleted = 0")

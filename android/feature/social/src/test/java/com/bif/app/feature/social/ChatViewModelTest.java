@@ -23,6 +23,7 @@ import com.bif.app.domain.model.AiTripDraftStop;
 import com.bif.app.domain.model.ChatMessage;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
+import com.bif.app.domain.model.TripPlan;
 import com.bif.app.domain.model.TripStop;
 import com.bif.app.domain.repository.IChatRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
@@ -36,8 +37,9 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.Arrays;
 
 public class ChatViewModelTest {
 
@@ -57,6 +59,7 @@ public class ChatViewModelTest {
     private NetworkMonitor networkMonitor;
 
     private MutableLiveData<Boolean> connectivityLiveData;
+    private MutableLiveData<List<TripPlan>> tripsLiveData;
 
     private ChatViewModel viewModel;
 
@@ -64,9 +67,10 @@ public class ChatViewModelTest {
     public void setup() {
         MockitoAnnotations.initMocks(this);
         connectivityLiveData = new MutableLiveData<>(true);
+        tripsLiveData = new MutableLiveData<>(Collections.emptyList());
         
         when(mockChatRepository.getMessagesByGroup(any())).thenReturn(new MutableLiveData<>());
-        when(mockTripRepository.getTripsByGroup(any())).thenReturn(new MutableLiveData<>());
+        when(mockTripRepository.getTripsByGroup(any())).thenReturn(tripsLiveData);
         when(networkMonitor.isOnline()).thenReturn(true);
         when(networkMonitor.observeConnectivity()).thenReturn(connectivityLiveData);
         
@@ -149,7 +153,7 @@ public class ChatViewModelTest {
     }
 
     @Test
-    public void sendMessage_AiModeFailureCode_ShowsSnackbarAndDoesNotInsertCard() {
+    public void sendMessage_AiModeFailureCode_InsertsAiErrorMessageAndDoesNotInsertCard() {
         viewModel.init("group1", "Group 1", "u1");
         AiTripDraft placeholderDraft = new AiTripDraft("", "", Collections.emptyList());
         MutableLiveData<AiTripDraftResult> aiResult = new MutableLiveData<>(
@@ -157,24 +161,30 @@ public class ChatViewModelTest {
         );
         when(mockChatRepository.draftTripFromQuery("draft me a weekend trip")).thenReturn(aiResult);
 
-        AtomicReference<String> snackbar = new AtomicReference<>();
-        viewModel.getSnackbarMessage().observeForever(snackbar::set);
-
         viewModel.enterAiDraftMode();
         viewModel.sendMessage("draft me a weekend trip");
 
         verify(mockChatRepository).draftTripFromQuery("draft me a weekend trip");
-        verify(mockChatRepository, org.mockito.Mockito.never()).insertLocalMessage(any());
-        String snackbarMessage = snackbar.get();
-        assertTrue(snackbarMessage != null && snackbarMessage.contains("AI_FAILURE"));
+
+        ArgumentCaptor<ChatMessage> captor = ArgumentCaptor.forClass(ChatMessage.class);
+        verify(mockChatRepository, org.mockito.Mockito.times(2)).insertLocalMessage(captor.capture());
+        List<ChatMessage> inserted = captor.getAllValues();
+
+        assertEquals("Drafting a trip...", inserted.get(0).getContent());
+        assertTrue(inserted.get(1).getContent().contains("Errors drafting trip: AI_FAILURE"));
     }
 
     @Test
-    public void sendMessage_AiModeSuccess_InsertsTripCreatedCardLocally() {
+    public void sendMessage_AiModeSuccess_SendsTripCreatedCardToRepository() {
         viewModel.init("group1", "Group 1", "u1");
 
         Place place = new Place("place1", "Cafe", "Addr", 4.5, new Location(10.0, 20.0));
-        AiTripDraftStop stop = new AiTripDraftStop("place1", place, 90, "Morning coffee");
+        AiTripDraftStop stop = new AiTripDraftStop(
+            "place1",
+            place,
+            90,
+            "Morning coffee",
+            "2026-01-01T09:00:00Z");
         AiTripDraft draft = new AiTripDraft("Weekend plan", "Relaxed trip", Collections.singletonList(stop));
         MutableLiveData<AiTripDraftResult> aiResult = new MutableLiveData<>(
                 new AiTripDraftResult(draft, Collections.singletonList(place), Collections.emptyList(), null)
@@ -184,19 +194,27 @@ public class ChatViewModelTest {
         viewModel.enterAiDraftMode();
         viewModel.sendMessage("draft me a weekend trip");
 
-        ArgumentCaptor<ChatMessage> captor = ArgumentCaptor.forClass(ChatMessage.class);
-        verify(mockChatRepository).insertLocalMessage(captor.capture());
+        ArgumentCaptor<ChatMessage> localCaptor = ArgumentCaptor.forClass(ChatMessage.class);
+        verify(mockChatRepository, org.mockito.Mockito.times(2)).insertLocalMessage(localCaptor.capture());
+        List<ChatMessage> localInserted = localCaptor.getAllValues();
+        assertEquals("Drafting a trip...", localInserted.get(0).getContent());
+        assertEquals("Drafted trip", localInserted.get(1).getContent());
 
-        ChatMessage message = captor.getValue();
+        ArgumentCaptor<ChatMessage> sendCaptor = ArgumentCaptor.forClass(ChatMessage.class);
+        verify(mockChatRepository).sendMessage(sendCaptor.capture());
+        ChatMessage message = sendCaptor.getValue();
         assertEquals("TRIP_CREATED_CARD", message.getType());
         assertTrue(message.getContent().contains("\"isSaved\":false"));
+        assertTrue(message.getContent().contains("\"currentTripId\""));
         assertTrue(message.getContent().contains("candidatePlaces"));
         assertTrue(message.getContent().contains("\"latitude\":10.0"));
         assertTrue(message.getContent().contains("\"longitude\":20.0"));
+        assertTrue(message.getContent().contains("\"plannedDateTime\":\"2026-01-01T09:00:00Z\""));
+        assertEquals("u1", message.getSenderUserId());
     }
 
     @Test
-    public void sendMessage_AiSuggestModeSuccess_InsertsSuggestedPlacesCardLocally() {
+    public void sendMessage_AiSuggestModeSuccess_SendsSuggestedPlacesCardToRepository() {
         viewModel.init("group1", "Group 1", "u1");
 
         Place place = new Place("place1", "Cafe", "Addr", 4.5, new Location(10.0, 20.0));
@@ -211,18 +229,24 @@ public class ChatViewModelTest {
         viewModel.enterAiSuggestPlacesMode();
         viewModel.sendMessage("best cafes");
 
-        ArgumentCaptor<ChatMessage> captor = ArgumentCaptor.forClass(ChatMessage.class);
-        verify(mockChatRepository).insertLocalMessage(captor.capture());
+        ArgumentCaptor<ChatMessage> localCaptor = ArgumentCaptor.forClass(ChatMessage.class);
+        verify(mockChatRepository, org.mockito.Mockito.times(2)).insertLocalMessage(localCaptor.capture());
+        List<ChatMessage> inserted = localCaptor.getAllValues();
+        assertEquals("Suggesting places...", inserted.get(0).getContent());
+        assertEquals("Suggested places", inserted.get(1).getContent());
 
-        ChatMessage message = captor.getValue();
+        ArgumentCaptor<ChatMessage> sendCaptor = ArgumentCaptor.forClass(ChatMessage.class);
+        verify(mockChatRepository).sendMessage(sendCaptor.capture());
+        ChatMessage message = sendCaptor.getValue();
         assertEquals("AI_SUGGESTED_PLACES_CARD", message.getType());
         assertTrue(message.getContent().contains("\"places\""));
         assertTrue(message.getContent().contains("\"name\":\"Cafe\""));
         assertTrue(message.getContent().contains("\"latitude\":10.0"));
+        assertEquals("u1", message.getSenderUserId());
     }
 
     @Test
-    public void sendMessage_AiSuggestModeFailure_ShowsSnackbarAndDoesNotInsertCard() {
+    public void sendMessage_AiSuggestModeFailure_InsertsAiErrorMessageAndDoesNotInsertCard() {
         viewModel.init("group1", "Group 1", "u1");
 
         MutableLiveData<AiPlaceSuggestionResult> aiResult = new MutableLiveData<>(
@@ -232,64 +256,184 @@ public class ChatViewModelTest {
         when(mockPlaceRepository.suggestPlacesFromQuery("hidden gems"))
                 .thenReturn(aiResult);
 
-        AtomicReference<String> snackbar = new AtomicReference<>();
-        viewModel.getSnackbarMessage().observeForever(snackbar::set);
-
         viewModel.enterAiSuggestPlacesMode();
         viewModel.sendMessage("hidden gems");
 
         verify(mockPlaceRepository).suggestPlacesFromQuery("hidden gems");
-        String snackbarMessage = snackbar.get();
-        assertTrue(snackbarMessage != null && snackbarMessage.contains("OFFLINE"));
+
+        ArgumentCaptor<ChatMessage> captor = ArgumentCaptor.forClass(ChatMessage.class);
+        verify(mockChatRepository, org.mockito.Mockito.times(2)).insertLocalMessage(captor.capture());
+        List<ChatMessage> inserted = captor.getAllValues();
+
+        assertEquals("Suggesting places...", inserted.get(0).getContent());
+        assertTrue(inserted.get(1).getContent().contains("Errors suggesting places: OFFLINE"));
     }
 
-        @Test
-        public void onSaveTripCard_persistsDraftBeforeUpdatingSavedIds() {
-        viewModel.init("group1", "Group 1", "u1");
-
-        Place placeWithoutLocation = new Place("place1", "Cafe", "Addr", 4.5, null);
-        AiTripDraftStop stop = new AiTripDraftStop("place1", placeWithoutLocation, 90, "Morning coffee");
-        AiTripDraft draft = new AiTripDraft("Weekend plan", "Relaxed trip", Collections.singletonList(stop));
-        MutableLiveData<AiTripDraftResult> aiResult = new MutableLiveData<>(
-            new AiTripDraftResult(draft, Collections.singletonList(placeWithoutLocation), Collections.emptyList(), null)
+    @Test
+    public void onSaveTripCardAsNew_persistsDraftAndMarksSaved() {
+        TripPlan currentTrip = new TripPlan(
+                "trip-current",
+                "group1",
+                "Current",
+                "",
+                0L,
+                0L,
+                Collections.emptyList(),
+                Arrays.asList("u1", "u2")
         );
-        when(mockChatRepository.draftTripFromQuery("draft me a weekend trip")).thenReturn(aiResult);
+        viewModel.init("group1", "Group 1", "u1");
+        tripsLiveData.setValue(Collections.singletonList(currentTrip));
+        assertTrue(viewModel.isCurrentUserHostForCurrentTrip());
 
         doAnswer(invocation -> {
             ITripRepository.OperationCallback callback = invocation.getArgument(7);
             callback.onComplete(true);
             return null;
         }).when(mockTripRepository).saveDraftTrip(
-            anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyList(), any());
+                anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyList(), any());
 
-        viewModel.enterAiDraftMode();
-        viewModel.sendMessage("draft me a weekend trip");
+        String payload = "{"
+                + "\"tripId\":\"ai-draft-123\","
+                + "\"title\":\"Weekend plan\","
+                + "\"summary\":\"Relaxed trip\","
+                + "\"stops\":[{\"name\":\"Cafe\",\"address\":\"Addr\",\"note\":\"\",\"latitude\":10.0,\"longitude\":20.0}]"
+                + "}";
 
-        ArgumentCaptor<ChatMessage> messageCaptor = ArgumentCaptor.forClass(ChatMessage.class);
-        verify(mockChatRepository).insertLocalMessage(messageCaptor.capture());
-
-        String payload = messageCaptor.getValue().getContent();
-        String marker = "\"tripId\":\"";
-        int start = payload.indexOf(marker);
-        assertTrue(start >= 0);
-        int valueStart = start + marker.length();
-        int valueEnd = payload.indexOf('"', valueStart);
-        assertTrue(valueEnd > valueStart);
-        String draftTripId = payload.substring(valueStart, valueEnd);
-
-        viewModel.onSaveTripCard(draftTripId);
+        viewModel.onSaveTripCardAsNew("ai-draft-123", payload);
+        String saveMessage = viewModel.getSnackbarMessage().getValue();
+        assertTrue("save snackbar=" + saveMessage,
+                saveMessage == null || saveMessage.contains("saved"));
 
         verify(mockTripRepository).saveDraftTrip(
-            eq(draftTripId),
-            eq("group1"),
-            eq("Weekend plan"),
-            eq("Relaxed trip"),
-            anyLong(),
-            eq(0L),
-            anyList(),
-            any());
+                eq("ai-draft-123"),
+                eq("group1"),
+                eq("Weekend plan"),
+                eq("Relaxed trip"),
+                anyLong(),
+                anyLong(),
+                anyList(),
+                any());
 
         Set<String> saved = viewModel.getSavedTripCardIds().getValue();
-        assertTrue(saved != null && saved.contains(draftTripId));
+        assertTrue(saved != null && saved.contains("ai-draft-123"));
+    }
+
+    @Test
+    public void onOverrideTripCard_usesCurrentTripId() {
+        TripPlan currentTrip = new TripPlan(
+                "trip-current",
+                "group1",
+                "Current",
+                "",
+                0L,
+                0L,
+                Collections.emptyList(),
+                Arrays.asList("u1", "u2")
+        );
+        viewModel.init("group1", "Group 1", "u1");
+        tripsLiveData.setValue(Collections.singletonList(currentTrip));
+        assertTrue(viewModel.isCurrentUserHostForCurrentTrip());
+
+        doAnswer(invocation -> {
+            ITripRepository.OperationCallback callback = invocation.getArgument(7);
+            callback.onComplete(true);
+            return null;
+        }).when(mockTripRepository).saveDraftTrip(
+                anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyList(), any());
+
+        String payload = "{"
+                + "\"tripId\":\"ai-draft-321\","
+                + "\"currentTripId\":\"trip-current\","
+                + "\"title\":\"Updated plan\","
+                + "\"summary\":\"Updated summary\","
+                + "\"stops\":[{\"name\":\"Museum\",\"address\":\"Addr\",\"note\":\"\",\"latitude\":10.0,\"longitude\":20.0}]"
+                + "}";
+
+        viewModel.onOverrideTripCard("ai-draft-321", payload);
+        String overrideMessage = viewModel.getSnackbarMessage().getValue();
+        assertTrue("override snackbar=" + overrideMessage,
+                overrideMessage == null || overrideMessage.contains("updated"));
+
+        verify(mockTripRepository).saveDraftTrip(
+                eq("trip-current"),
+                eq("group1"),
+                eq("Updated plan"),
+                eq("Updated summary"),
+                anyLong(),
+                anyLong(),
+                anyList(),
+                any());
+    }
+
+    @Test
+    public void onSaveTripCardAsNew_memberCannotSave() {
+        TripPlan currentTrip = new TripPlan(
+                "trip-current",
+                "group1",
+                "Current",
+                "",
+                0L,
+                0L,
+                Collections.emptyList(),
+                Arrays.asList("host-user", "u2")
+        );
+        tripsLiveData.setValue(Collections.singletonList(currentTrip));
+        viewModel.init("group1", "Group 1", "u1");
+
+        String payload = "{"
+                + "\"tripId\":\"ai-draft-123\","
+                + "\"title\":\"Weekend plan\","
+                + "\"summary\":\"Relaxed trip\","
+                + "\"stops\":[{\"name\":\"Cafe\",\"address\":\"Addr\",\"note\":\"\",\"latitude\":10.0,\"longitude\":20.0}]"
+                + "}";
+
+        viewModel.onSaveTripCardAsNew("ai-draft-123", payload);
+
+        org.mockito.Mockito.verify(mockTripRepository, org.mockito.Mockito.never()).saveDraftTrip(
+                anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyList(), any());
+        assertTrue(viewModel.getSnackbarMessage().getValue().contains("host"));
+    }
+
+    @Test
+    public void onOverrideTripCard_stalePayloadTripId_fallsBackToCurrentTrip() {
+        TripPlan currentTrip = new TripPlan(
+                "trip-current",
+                "group1",
+                "Current",
+                "",
+                0L,
+                0L,
+                Collections.emptyList(),
+                Arrays.asList("u1", "u2")
+        );
+        viewModel.init("group1", "Group 1", "u1");
+        tripsLiveData.setValue(Collections.singletonList(currentTrip));
+
+        doAnswer(invocation -> {
+            ITripRepository.OperationCallback callback = invocation.getArgument(7);
+            callback.onComplete(true);
+            return null;
+        }).when(mockTripRepository).saveDraftTrip(
+                anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyList(), any());
+
+        String payload = "{"
+                + "\"tripId\":\"ai-draft-xyz\","
+                + "\"currentTripId\":\"stale-trip-id\","
+                + "\"title\":\"Updated plan\","
+                + "\"summary\":\"Updated summary\","
+                + "\"stops\":[{\"name\":\"Museum\",\"address\":\"Addr\",\"note\":\"\",\"latitude\":10.0,\"longitude\":20.0}]"
+                + "}";
+
+        viewModel.onOverrideTripCard("ai-draft-xyz", payload);
+
+        verify(mockTripRepository).saveDraftTrip(
+                eq("trip-current"),
+                eq("group1"),
+                eq("Updated plan"),
+                eq("Updated summary"),
+                anyLong(),
+                anyLong(),
+                anyList(),
+                any());
     }
 }

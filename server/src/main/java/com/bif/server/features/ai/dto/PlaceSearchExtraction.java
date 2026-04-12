@@ -4,11 +4,29 @@ import java.util.List;
 import java.util.Objects;
 
 public record PlaceSearchExtraction(
+        List<String> searchQueries,
         List<String> keywords,
         String category,
-        String vibe) {
+        String vibe,
+        String locationHint) {
 
-    public PlaceSearchExtraction {
+    public PlaceSearchExtraction(
+            List<String> searchQueries,
+            List<String> keywords,
+            String category,
+            String vibe) {
+        this(searchQueries, keywords, category, vibe, null);
+    }
+
+    public PlaceSearchExtraction     {
+        searchQueries = searchQueries == null
+                ? List.of()
+                : searchQueries.stream()
+                        .filter(Objects::nonNull)
+                        .map(String::trim)
+                        .filter(value -> !value.isBlank())
+                        .distinct()
+                        .toList();
         keywords = keywords == null
                 ? List.of()
                 : keywords.stream()
@@ -19,6 +37,7 @@ public record PlaceSearchExtraction(
                         .toList();
         category = normalize(category);
         vibe = normalize(vibe);
+        locationHint = normalize(locationHint);
     }
 
     private static String normalize(String value) {

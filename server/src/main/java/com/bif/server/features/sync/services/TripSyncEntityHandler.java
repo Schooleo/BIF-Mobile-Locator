@@ -60,6 +60,7 @@ public class TripSyncEntityHandler implements SyncEntityHandler {
             plan.setGroupId(payload.groupId);
             plan.setTitle(payload.title);
             plan.setDescription(payload.description);
+            plan.setCoverImageUrl(payload.coverImageUrl);
             plan.setStartAt(payload.startAt);
             plan.setEndAt(payload.endAt);
             plan.setParticipantIds(payload.participantIds);
@@ -81,6 +82,8 @@ public class TripSyncEntityHandler implements SyncEntityHandler {
             limitPayload.title = payload != null ? payload.title : null;
             limitPayload.description = payload != null
                 ? payload.description : null;
+            limitPayload.coverImageUrl = payload != null
+                ? payload.coverImageUrl : null;
             limitPayload.startAt = payload != null ? payload.startAt : null;
             limitPayload.endAt = payload != null ? payload.endAt : null;
             limitPayload.participantIds = payload != null
@@ -139,6 +142,7 @@ public class TripSyncEntityHandler implements SyncEntityHandler {
         payload.groupId = plan.getGroupId();
         payload.title = plan.getTitle();
         payload.description = plan.getDescription();
+        payload.coverImageUrl = plan.getCoverImageUrl();
         payload.startAt = plan.getStartAt();
         payload.endAt = plan.getEndAt();
         payload.participantIds = plan.getParticipantIds();
@@ -152,6 +156,7 @@ public class TripSyncEntityHandler implements SyncEntityHandler {
         public String groupId;
         public String title;
         public String description;
+        public String coverImageUrl;
         public Instant startAt;
         public Instant endAt;
         public List<String> participantIds;
