@@ -205,6 +205,8 @@
     <string name="trip_ai_toggle">Toggle AI search mode</string>
     <string name="trip_ai_loading">AI is finding the best green spots…</string>
     <string name="trip_ai_empty_state">We could not find any places matching your vibe.</string>
+    <string name="trip_previous_place">Previous place</string>
+    <string name="trip_next_place">Next place</string>
     <string name="trip_no_place_selected">Select a place</string>
     <string name="trip_select_place_first">Please select a place first.</string>
     <string name="trip_add_to_trip">Add to Trip</string>
@@ -236,4 +238,9 @@
     <string name="trip_no_date">No Date</string>
     <string name="trip_stop_rating_format">Rating %.1f</string>
     <string name="trip_stop_unscheduled">Unscheduled</string>
+    <string name="trip_stop_added_by_format">Added by %1$s</string>
+    <string name="trip_stop_added_by_unknown">Unknown</string>
+    <string name="trip_title_card_cover">Trip title card cover image</string>
+    <string name="trip_edit_title_card">Change title card image</string>
+    <string name="trip_title_card_update_failed">Unable to update trip title card image</string>
 </resources>

@@ -18,6 +18,10 @@ public class TripStop {
     private Instant arrivalTime;
     private Instant departureTime;
     private String photoUrl;
+    private String addedByUserId;
+    private String addedByName;
+    private String addedByAvatarLetter;
+    private Integer addedByAvatarColor;
     private int orderIndex;
     private long serverVersion;
     private boolean deleted;

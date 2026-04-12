@@ -50,7 +50,7 @@ import com.bif.app.data.source.local.entity.TripStopEntity;
         TripPlanEntity.class,
         TripMemberCrossRef.class,
         TripStopEntity.class
-}, version = 21, exportSchema = false)
+}, version = 22, exportSchema = false)
 @TypeConverters({ FriendshipStatusConverter.class, UploadStatusConverter.class })
 public abstract class AppDatabase extends RoomDatabase {
     public static final Migration MIGRATION_19_20 = new Migration(19, 20) {
@@ -99,10 +99,32 @@ public abstract class AppDatabase extends RoomDatabase {
     public static final Migration MIGRATION_18_19 = new Migration(18, 19) {
         @Override
         public void migrate(SupportSQLiteDatabase database) {
+            // v18 existed in two branches with different schema contents.
+            // Ensure reviews columns expected by current entity exist for both paths.
+            if (!hasColumn(database, "reviews", "externalSource")) {
+                database.execSQL("ALTER TABLE reviews ADD COLUMN externalSource TEXT");
+            }
+            if (!hasColumn(database, "reviews", "externalId")) {
+                database.execSQL("ALTER TABLE reviews ADD COLUMN externalId TEXT");
+            }
+            if (!hasColumn(database, "reviews", "lat")) {
+                database.execSQL("ALTER TABLE reviews ADD COLUMN lat REAL");
+            }
+            if (!hasColumn(database, "reviews", "lng")) {
+                database.execSQL("ALTER TABLE reviews ADD COLUMN lng REAL");
+            }
+            if (!hasColumn(database, "reviews", "placeName")) {
+                database.execSQL("ALTER TABLE reviews ADD COLUMN placeName TEXT");
+            }
+
             if (!hasColumn(database, "favorites", "pendingSync")) {
                 database.execSQL("ALTER TABLE favorites ADD COLUMN pendingSync INTEGER NOT NULL DEFAULT 0");
             } else {
                 database.execSQL("UPDATE favorites SET pendingSync = 0 WHERE pendingSync IS NULL");
+            }
+
+            if (!hasIndex(database, "index_reviews_createdAt")) {
+                database.execSQL("CREATE INDEX index_reviews_createdAt ON reviews(createdAt)");
             }
 
             if (!hasIndex(database, "index_favorites_userId_deleted")) {
@@ -315,7 +337,7 @@ public abstract class AppDatabase extends RoomDatabase {
                     + "status TEXT)");
 
             // Copy data from old table to new table
-                database.execSQL("INSERT INTO sync_queue_new SELECT "
+            database.execSQL("INSERT INTO sync_queue_new SELECT "
                     + "id, NULLIF(userId, ''), clientChangeId, entityType, entityId, operation, payload, "
                     + "retryCount, createdAt, status FROM sync_queue");
 
@@ -364,6 +386,53 @@ public abstract class AppDatabase extends RoomDatabase {
                     + "WHERE type='index' AND name=?", new Object[]{indexName});
             try {
                 return cursor.moveToFirst();
+            } finally {
+                cursor.close();
+            }
+        }
+    };
+
+    public static final Migration MIGRATION_21_22 = new Migration(21, 22) {
+        @Override
+        public void migrate(SupportSQLiteDatabase database) {
+            if (!hasColumn(database, "trip_stops", "addedByUserId")) {
+                database.execSQL("ALTER TABLE trip_stops ADD COLUMN addedByUserId TEXT");
+            }
+            if (!hasColumn(database, "trip_stops", "addedByName")) {
+                database.execSQL("ALTER TABLE trip_stops ADD COLUMN addedByName TEXT");
+            }
+            if (!hasColumn(database, "trip_stops", "addedByAvatarLetter")) {
+                database.execSQL("ALTER TABLE trip_stops ADD COLUMN addedByAvatarLetter TEXT");
+            }
+            if (!hasColumn(database, "trip_stops", "addedByAvatarColor")) {
+                database.execSQL("ALTER TABLE trip_stops ADD COLUMN addedByAvatarColor INTEGER NOT NULL DEFAULT 0");
+            }
+
+            if (!hasColumn(database, "trip_plans", "coverImageUrl")) {
+                database.execSQL("ALTER TABLE trip_plans ADD COLUMN coverImageUrl TEXT");
+            }
+            if (!hasColumn(database, "trip_plans", "localCoverImagePath")) {
+                database.execSQL("ALTER TABLE trip_plans ADD COLUMN localCoverImagePath TEXT");
+            }
+            if (!hasColumn(database, "trip_plans", "coverUploadStatus")) {
+                database.execSQL("ALTER TABLE trip_plans ADD COLUMN coverUploadStatus TEXT NOT NULL DEFAULT 'SYNCED'");
+            }
+        }
+
+        private boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
+            Cursor cursor = database.query("PRAGMA table_info(`" + tableName + "`)");
+            try {
+                int nameIndex = cursor.getColumnIndex("name");
+                if (nameIndex < 0) {
+                    nameIndex = 1;
+                }
+                while (cursor.moveToNext()) {
+                    String existing = cursor.getString(nameIndex);
+                    if (columnName.equals(existing)) {
+                        return true;
+                    }
+                }
+                return false;
             } finally {
                 cursor.close();
             }

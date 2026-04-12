@@ -7,6 +7,7 @@ public class TripPlanDto {
     public String groupId;
     public String title;
     public String description;
+    public String coverImageUrl;
     public String startAt;
     public String endAt;
     public long serverVersion;

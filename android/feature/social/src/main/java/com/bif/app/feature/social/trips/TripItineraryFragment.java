@@ -2,6 +2,7 @@ package com.bif.app.feature.social;
 
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
+import android.content.res.ColorStateList;
 import android.content.Context;
 import android.os.Bundle;
 import android.text.TextUtils;
@@ -421,6 +422,40 @@ public class TripItineraryFragment extends Fragment {
                 noteText = stopHolder.itemView.getContext().getString(R.string.trip_stop_no_note);
             }
 
+            String unknownAddedBy = stopHolder.itemView.getContext()
+                    .getString(R.string.trip_stop_added_by_unknown);
+            String addedByName = stop.getAddedByName();
+            if (TextUtils.isEmpty(addedByName == null ? null : addedByName.trim())) {
+                addedByName = unknownAddedBy;
+            }
+
+            String normalizedAddedBy = addedByName == null ? null : addedByName.trim();
+            boolean hasGenuineAddedBy = !TextUtils.isEmpty(normalizedAddedBy)
+                    && !unknownAddedBy.equals(normalizedAddedBy);
+
+            if (hasGenuineAddedBy) {
+                String avatarLetter = stop.getAddedByAvatarLetter();
+                if (TextUtils.isEmpty(avatarLetter == null ? null : avatarLetter.trim())) {
+                    avatarLetter = normalizedAddedBy.substring(0, 1).toUpperCase();
+                }
+                stopHolder.addedByContainer.setVisibility(View.VISIBLE);
+                stopHolder.addedByAvatar.setText(avatarLetter);
+                if (stop.getAddedByAvatarColor() != 0) {
+                    stopHolder.addedByAvatar.setBackgroundTintList(
+                            ColorStateList.valueOf(stop.getAddedByAvatarColor()));
+                } else {
+                    stopHolder.addedByAvatar.setBackgroundTintList(null);
+                }
+                stopHolder.addedByText.setText(stopHolder.itemView.getContext().getString(
+                        R.string.trip_stop_added_by_format,
+                        normalizedAddedBy));
+            } else {
+                stopHolder.addedByContainer.setVisibility(View.GONE);
+                stopHolder.addedByAvatar.setText("");
+                stopHolder.addedByAvatar.setBackgroundTintList(null);
+                stopHolder.addedByText.setText("");
+            }
+
             String stopKey = getStopKey(stop);
             boolean expanded = expandedStopIds.contains(stopKey);
             stopHolder.detailsContainer.setVisibility(expanded ? View.VISIBLE : View.GONE);
@@ -553,6 +588,9 @@ public class TripItineraryFragment extends Fragment {
             final TextView address;
             final TextView notes;
             final TextView rating;
+            final View addedByContainer;
+            final TextView addedByAvatar;
+            final TextView addedByText;
             final MaterialButton btnEdit;
             final MaterialButton btnDelete;
 
@@ -567,6 +605,9 @@ public class TripItineraryFragment extends Fragment {
                 address = itemView.findViewById(R.id.tv_stop_address);
                 notes = itemView.findViewById(R.id.tv_stop_notes);
                 rating = itemView.findViewById(R.id.tv_stop_rating);
+                addedByContainer = itemView.findViewById(R.id.layout_stop_added_by);
+                addedByAvatar = itemView.findViewById(R.id.tv_stop_added_by_avatar);
+                addedByText = itemView.findViewById(R.id.tv_stop_added_by);
                 btnEdit = itemView.findViewById(R.id.btn_edit_stop);
                 btnDelete = itemView.findViewById(R.id.btn_delete_stop);
             }

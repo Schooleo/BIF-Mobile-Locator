@@ -171,7 +171,7 @@ public class SocialFragment extends Fragment {
 
             @Override
             public void onFriendClick(Friend friend) {
-                navigateToChatFromFriend(friend);
+                navigateToFriendSettingsTrips(friend);
             }
 
             @Override
@@ -889,16 +889,41 @@ public class SocialFragment extends Fragment {
         return new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(new Date(millis));
     }
 
-    private void navigateToChatFromFriend(Friend friend) {
-        Uri destUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL_CHAT).buildUpon()
-                .appendQueryParameter("chatType", "friend")
-                .appendQueryParameter("chatId", String.valueOf(friend.getId()))
-                .appendQueryParameter("chatName", friend.getName())
-                .appendQueryParameter("avatarLetter", friend.getAvatarLetter())
-                .appendQueryParameter("avatarColor", String.valueOf(friend.getAvatarColor()))
-                .appendQueryParameter("memberCount", "0")
-                .appendQueryParameter("friendshipCreatedAt", String.valueOf(friend.getFriendshipCreatedAt()))
-                .build();
+    private void navigateToFriendSettingsTrips(Friend friend) {
+        if (friend == null) {
+            return;
+        }
+
+        int friendId = friend.getId();
+        if (friendId <= 0) {
+            return;
+        }
+
+        Uri.Builder builder = UriUtils.buildUri(UriUtils.PathTo.FRIEND_SETTINGS_TRIPS)
+                .buildUpon()
+                .appendQueryParameter("friendId", String.valueOf(friendId));
+
+        String friendName = friend.getName();
+        if (friendName != null && !friendName.trim().isEmpty()) {
+            builder.appendQueryParameter("friendName", friendName);
+        }
+
+        String avatarLetter = friend.getAvatarLetter();
+        if (avatarLetter != null && !avatarLetter.trim().isEmpty()) {
+            builder.appendQueryParameter("avatarLetter", avatarLetter);
+        }
+
+        int avatarColor = friend.getAvatarColor();
+        if (avatarColor != 0) {
+            builder.appendQueryParameter("avatarColor", String.valueOf(avatarColor));
+        }
+
+        long friendshipCreatedAt = friend.getFriendshipCreatedAt();
+        if (friendshipCreatedAt > 0L) {
+            builder.appendQueryParameter("friendshipCreatedAt", String.valueOf(friendshipCreatedAt));
+        }
+
+        Uri destUri = builder.build();
         Navigation.findNavController(requireView()).navigate(destUri);
     }
 
