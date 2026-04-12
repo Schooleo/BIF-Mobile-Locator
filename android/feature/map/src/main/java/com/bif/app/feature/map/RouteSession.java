@@ -68,7 +68,7 @@ public final class RouteSession {
                 null,
                 false,
                 null,
-                0f);
+                Float.NaN);
     }
 
     @NonNull
@@ -83,7 +83,7 @@ public final class RouteSession {
                 null,
                 false,
                 null,
-                0f);
+                Float.NaN);
     }
 
     @NonNull
@@ -102,7 +102,7 @@ public final class RouteSession {
                 null,
                 false,
                 null,
-                0f);
+                Float.NaN);
     }
 
     @NonNull
@@ -118,7 +118,7 @@ public final class RouteSession {
                 errorText,
                 false,
                 null,
-                0f);
+                Float.NaN);
     }
 
     public boolean isVisible() {

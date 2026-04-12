@@ -1,5 +1,31 @@
 package com.bif.server.features.ai.services;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.util.List;
+
+import org.junit.jupiter.api.AfterEach;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
+import org.mockito.Mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+
 import com.bif.server.features.ai.agents.PlaceSuggestionAgent;
 import com.bif.server.features.ai.agents.TripDraftingAgent;
 import com.bif.server.features.ai.config.OllamaProperties;
@@ -11,31 +37,6 @@ import com.bif.server.features.ai.dto.graphql.AiPlaceSuggestionResult;
 import com.bif.server.features.ai.dto.graphql.AiTripDraftResult;
 import com.bif.server.features.ai.exceptions.AiParseException;
 import com.bif.server.features.place.models.Place;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.TestingAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-
-import java.time.Clock;
-import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.time.ZoneId;
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.contains;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AiOrchestratorServiceTest {
@@ -127,6 +128,60 @@ class AiOrchestratorServiceTest {
         assertTrue(result.warnings().stream().anyMatch(
                 warning -> warning.contains("Retried place suggestion")));
         verify(placeSuggestionAgent).retry("museum", "bad json");
+    }
+
+    @Test
+    void suggestPlacesFromQuery_UsesCoordinateCityWhenHintNotBackedByTerms() {
+        PlaceSearchExtraction extraction = new PlaceSearchExtraction(
+                List.of("seafood restaurant", "Vietnamese food"),
+                List.of("seafood"),
+                "food",
+                null,
+                "Hanoi"
+        );
+        when(placeSuggestionAgent.extract("seafood restaurant")).thenReturn(extraction);
+        when(aiSearchOrchestratorService.resolveCandidates(any(), eq(10.780000d), eq(106.700000d)))
+                .thenReturn(List.of());
+
+        aiOrchestratorService.suggestPlacesFromQuery("seafood restaurant", 10.780000d, 106.700000d, null);
+
+        ArgumentCaptor<PlaceSearchExtraction> extractionCaptor = ArgumentCaptor.forClass(PlaceSearchExtraction.class);
+        verify(aiSearchOrchestratorService)
+                .resolveCandidates(extractionCaptor.capture(), eq(10.780000d), eq(106.700000d));
+
+        PlaceSearchExtraction sent = extractionCaptor.getValue();
+        assertEquals("ho chi minh city", sent.locationHint());
+        assertTrue(sent.searchQueries().contains("ho chi minh city"));
+        assertTrue(sent.searchQueries().stream().anyMatch(
+                query -> query.startsWith("near 10.780000, 106.700000")));
+    }
+
+    @Test
+    void suggestPlacesFromQuery_KeepsHintWhenBackedByTerms() {
+        PlaceSearchExtraction extraction = new PlaceSearchExtraction(
+                List.of("hanoi seafood"),
+                List.of("hanoi", "seafood"),
+                "food",
+                null,
+                "Hanoi"
+        );
+        when(placeSuggestionAgent.extract("hanoi seafood")).thenReturn(extraction);
+        when(aiSearchOrchestratorService.resolveCandidates(any(), eq(10.780000d), eq(106.700000d)))
+                .thenReturn(List.of());
+
+        aiOrchestratorService.suggestPlacesFromQuery(
+                "hanoi seafood",
+                10.780000d,
+                106.700000d,
+                null);
+
+        ArgumentCaptor<PlaceSearchExtraction> extractionCaptor = ArgumentCaptor.forClass(PlaceSearchExtraction.class);
+        verify(aiSearchOrchestratorService)
+                .resolveCandidates(extractionCaptor.capture(), eq(10.780000d), eq(106.700000d));
+
+        PlaceSearchExtraction sent = extractionCaptor.getValue();
+        assertEquals("Hanoi", sent.locationHint());
+        assertTrue(sent.searchQueries().stream().noneMatch("ho chi minh city"::equalsIgnoreCase));
     }
 
     @Test
@@ -474,6 +529,33 @@ class AiOrchestratorServiceTest {
 
         assertNull(result.failureCode());
         assertEquals("AI Trip Draft", result.draft().title());
+    }
+
+    @Test
+    void draftTripFromQuery_FallsBackToGeneratedSummaryWhenBlank() {
+        String query = "plan a short trip";
+        PlaceSearchExtraction extraction = new PlaceSearchExtraction(
+                List.of("short park trip"),
+                List.of("park"),
+                null,
+                null
+        );
+        List<Place> candidates = List.of(place("p1", "Park"));
+        GeneratedItinerary itinerary = new GeneratedItinerary(
+                "Parks",
+                "   ",
+                List.of(new GeneratedStop("p1", 60, null, null))
+        );
+        when(placeSuggestionAgent.extract(query)).thenReturn(extraction);
+        when(aiSearchOrchestratorService.resolveCandidates(extraction)).thenReturn(candidates);
+        when(tripDraftingAgent.draft(eq(query), eq(candidates), any())).thenReturn(itinerary);
+
+        AiTripDraftResult result = aiOrchestratorService.draftTripFromQuery(query);
+
+        assertNull(result.failureCode());
+        assertEquals(
+                "A curated itinerary with 1 planned stop featuring Park.",
+                result.draft().summary());
     }
 
     @Test

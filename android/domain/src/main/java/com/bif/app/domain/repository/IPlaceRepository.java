@@ -10,6 +10,11 @@ import java.util.List;
 public interface IPlaceRepository {
     LiveData<Location> searchLocation(String query);
     LiveData<List<Place>> searchPlaces(String query, Location userLocation);
+    default LiveData<List<Place>> searchPlaces(String query,
+            Location userLocation,
+            boolean saveToHistory) {
+        return searchPlaces(query, userLocation);
+    }
     LiveData<List<Place>> searchPlacesFromHistory(String query);
     LiveData<AiPlaceSuggestionResult> suggestPlacesFromQuery(String query);
     default LiveData<AiPlaceSuggestionResult> suggestPlacesFromQuery(

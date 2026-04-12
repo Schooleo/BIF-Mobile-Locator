@@ -453,6 +453,64 @@ public class PlaceRepositoryTest {
         verify(mockPlaceDao, timeout(1500)).evictOldest(eq(5), anyString());
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    public void searchPlaces_online_reordersFarFirstBackendResultsByProximity()
+            throws IOException, InterruptedException {
+        when(mockNetworkMonitor.isOnline()).thenReturn(true);
+        when(mockPlaceDao.searchByName(anyString(), anyString()))
+                .thenReturn(new ArrayList<>());
+
+        PlaceDto farDto = new PlaceDto();
+        farDto.id = "server_far";
+        farDto.name = "Far Place";
+        farDto.address = "Far Address";
+        farDto.latitude = 21.0278;   // Hanoi
+        farDto.longitude = 105.8342;
+
+        PlaceDto nearDto = new PlaceDto();
+        nearDto.id = "server_near";
+        nearDto.name = "Near Place";
+        nearDto.address = "Near Address";
+        nearDto.latitude = 10.7750;  // Ho Chi Minh City center-ish
+        nearDto.longitude = 106.7000;
+
+        // Simulate backend returning farther place first.
+        List<PlaceDto> backendOrder = new ArrayList<>();
+        backendOrder.add(farDto);
+        backendOrder.add(nearDto);
+
+        Call<List<PlaceDto>> mockCall = mock(Call.class);
+        when(mockCall.execute()).thenReturn(Response.success(backendOrder));
+        when(mockRestApiService.searchServerPlaces(any(PlaceSearchRequestDTO.class)))
+                .thenReturn(mockCall);
+        when(mockGeocodingDataSource.geocodeLocation("coffee"))
+                .thenReturn(new ArrayList<>());
+        when(mockPlaceDao.count(anyString())).thenReturn(2);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<List<Place>> resultValue = new AtomicReference<>();
+
+        LiveData<List<Place>> result = placeRepository.searchPlaces(
+                "coffee",
+                new Location(10.7769, 106.7009));
+
+        Observer<List<Place>> observer = places -> {
+            resultValue.set(places);
+            latch.countDown();
+        };
+        result.observeForever(observer);
+
+        boolean completed = latch.await(5, TimeUnit.SECONDS);
+        result.removeObserver(observer);
+
+        assertTrue("Search did not complete within timeout", completed);
+        assertNotNull("result value should not be null", resultValue.get());
+        assertEquals(2, resultValue.get().size());
+        assertEquals("server_near", resultValue.get().get(0).id);
+        assertEquals("server_far", resultValue.get().get(1).id);
+    }
+
     // --- persistPlace Tests ---
 
     @Test

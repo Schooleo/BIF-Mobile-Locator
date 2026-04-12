@@ -3,7 +3,9 @@ package com.bif.app.feature.map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
@@ -157,6 +159,16 @@ public class MapViewModelTest {
     }
 
     @Test
+    public void clearPendingStatusText_clearsLiveDataValue() {
+        viewModel.setStatusText("Old message");
+        assertNotNull(viewModel.statusText.getValue());
+
+        viewModel.clearPendingStatusText();
+
+        assertNull(viewModel.statusText.getValue());
+    }
+
+    @Test
     public void saveMapState_validInput_callsRepository() {
         // Arrange
         double lat = 10.0;
@@ -276,14 +288,16 @@ public class MapViewModelTest {
     public void searchForPlaces_validQuery_callsPlaceRepository() {
         // Arrange
         String query = "university";
-        Mockito.when(placeRepository.searchPlaces(query, null)).thenReturn(new MutableLiveData<>());
+        Mockito.when(placeRepository.searchPlaces(query, null, true))
+            .thenReturn(new MutableLiveData<>());
         viewModel.searchResults.observeForever(list -> { });
 
         // Act
         viewModel.searchForPlaces(query);
 
         // Assert
-        Mockito.verify(placeRepository, timeout(1200)).searchPlaces(eq(query), isNull());
+        Mockito.verify(placeRepository, timeout(1200))
+            .searchPlaces(eq(query), isNull(), eq(true));
     }
 
     @Test
@@ -303,7 +317,7 @@ public class MapViewModelTest {
                 400L);
 
         MutableLiveData<List<Place>> finalResults = new MutableLiveData<>(Collections.emptyList());
-        when(placeRepository.searchPlaces("coffee near me", null)).thenReturn(finalResults);
+        when(placeRepository.searchPlaces("coffee near me", null, true)).thenReturn(finalResults);
         vm.searchResults.observeForever(list -> {
         });
 
@@ -321,11 +335,67 @@ public class MapViewModelTest {
 
         firstRunnable.run();
 
-        verify(placeRepository, never()).searchPlaces(eq("coffee"), isNull());
+        verify(placeRepository, never()).searchPlaces(eq("coffee"), isNull(), eq(true));
 
         latestRunnable.run();
 
-        verify(placeRepository).searchPlaces(eq("coffee near me"), isNull());
+        verify(placeRepository).searchPlaces(eq("coffee near me"), isNull(), eq(true));
+    }
+
+    @Test
+    public void searchForPlacesLive_validQuery_doesNotSaveToHistory() {
+        String query = "coffee";
+        Mockito.when(placeRepository.searchPlaces(query, null, false))
+            .thenReturn(new MutableLiveData<>());
+        viewModel.searchResults.observeForever(list -> {
+        });
+
+        viewModel.searchForPlacesLive(query);
+
+        Mockito.verify(placeRepository, timeout(1200))
+            .searchPlaces(eq(query), isNull(), eq(false));
+    }
+
+    @Test
+    public void searchForPlaces_submitAfterLiveSearch_sameQueryStillSavesHistory() {
+        android.os.Handler handler = Mockito.mock(android.os.Handler.class);
+        ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+
+        MapViewModel vm = new MapViewModel(
+                mapRepository,
+                placeRepository,
+                favoriteRepository,
+                groupRepository,
+                routeRepository,
+                reviewRepository,
+                directExecutor,
+                handler,
+                400L);
+
+        String query = "coffee";
+        when(placeRepository.searchPlaces(query, null, false))
+            .thenReturn(new MutableLiveData<>(Collections.emptyList()));
+        when(placeRepository.searchPlaces(query, null, true))
+            .thenReturn(new MutableLiveData<>(Collections.emptyList()));
+        vm.searchResults.observeForever(list -> {
+        });
+
+        vm.searchForPlacesLive(query);
+        verify(handler, Mockito.atLeastOnce()).postDelayed(runnableCaptor.capture(), eq(400L));
+        Runnable liveRunnable = runnableCaptor.getValue();
+        assertNotNull(liveRunnable);
+        liveRunnable.run();
+
+        verify(placeRepository).searchPlaces(eq(query), isNull(), eq(false));
+
+        vm.searchForPlaces(query);
+        verify(handler, Mockito.atLeast(2)).postDelayed(runnableCaptor.capture(), eq(400L));
+        List<Runnable> allRunnables = runnableCaptor.getAllValues();
+        Runnable submitRunnable = allRunnables.get(allRunnables.size() - 1);
+        assertNotNull(submitRunnable);
+        submitRunnable.run();
+
+        verify(placeRepository).searchPlaces(eq(query), isNull(), eq(true));
     }
 
     @Test
@@ -351,7 +421,7 @@ public class MapViewModelTest {
         List<Place> results = vm.searchResults.getValue();
         assertNotNull(results);
         assertTrue(results.isEmpty());
-        verify(placeRepository, never()).searchPlaces(anyString(), any());
+        verify(placeRepository, never()).searchPlaces(anyString(), any(), Mockito.anyBoolean());
         verify(handler, never()).postDelayed(any(Runnable.class), anyLong());
     }
 
@@ -507,6 +577,29 @@ public class MapViewModelTest {
         assertEquals(10.05, session.lastKnownLocation.latitude, 0.0001);
         assertEquals(106.06, session.lastKnownLocation.longitude, 0.0001);
         assertEquals(180f, session.lastBearingDegrees, 0.0001f);
+    }
+
+    @Test
+    public void updateFollowingLocation_whenLocationAndBearingAreEffectivelyUnchanged_keepsSessionInstance() {
+        MutableLiveData<Route> routeLiveData = new MutableLiveData<>();
+        Mockito.when(routeRepository.getRoute(ArgumentMatchers.anyList())).thenReturn(routeLiveData);
+
+        viewModel.estimateRoute(new Location(10.0, 106.0), new Location(10.1, 106.1));
+        routeLiveData.setValue(new Route(2500.0, 600.0, "{}", "driving", Route.SOURCE_ONLINE));
+        viewModel.startFollowingRoute();
+
+        viewModel.updateFollowingLocation(new Location(10.02, 106.03), 90f);
+        RouteSession firstSession = viewModel.getCurrentRouteSession();
+
+        viewModel.updateFollowingLocation(new Location(10.0200001, 106.0300001), 91f);
+        RouteSession dedupedSession = viewModel.getCurrentRouteSession();
+
+        assertSame(firstSession, dedupedSession);
+
+        viewModel.updateFollowingLocation(new Location(10.022, 106.032), 91f);
+        RouteSession updatedSession = viewModel.getCurrentRouteSession();
+
+        assertNotSame(dedupedSession, updatedSession);
     }
 
     @Test

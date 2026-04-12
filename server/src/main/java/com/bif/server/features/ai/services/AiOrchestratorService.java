@@ -1,5 +1,20 @@
 package com.bif.server.features.ai.services;
 
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
 import com.bif.server.features.ai.AiGenerationConstraints;
 import com.bif.server.features.ai.agents.PlaceSuggestionAgent;
 import com.bif.server.features.ai.agents.TripDraftingAgent;
@@ -17,20 +32,6 @@ import com.bif.server.features.ai.exceptions.AiParseException;
 import com.bif.server.features.ai.exceptions.AiUpstreamException;
 import com.bif.server.features.ai.exceptions.AiValidationException;
 import com.bif.server.features.place.models.Place;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-
-import java.time.OffsetDateTime;
-import java.time.format.DateTimeParseException;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
 
 @Service
 public class AiOrchestratorService {
@@ -45,6 +46,18 @@ public class AiOrchestratorService {
     private final TripScheduleHintExtractor tripScheduleHintExtractor;
 
     private static final int TRAVEL_BUFFER_MINUTES = 30;
+    private static final double HCM_MIN_LAT = 10.30d;
+    private static final double HCM_MAX_LAT = 11.20d;
+    private static final double HCM_MIN_LNG = 106.35d;
+    private static final double HCM_MAX_LNG = 107.05d;
+    private static final double HANOI_MIN_LAT = 20.80d;
+    private static final double HANOI_MAX_LAT = 21.30d;
+    private static final double HANOI_MIN_LNG = 105.60d;
+    private static final double HANOI_MAX_LNG = 106.10d;
+    private static final double DA_NANG_MIN_LAT = 15.95d;
+    private static final double DA_NANG_MAX_LAT = 16.25d;
+    private static final double DA_NANG_MIN_LNG = 107.95d;
+    private static final double DA_NANG_MAX_LNG = 108.40d;
 
     public AiOrchestratorService(
             PlaceSuggestionAgent placeSuggestionAgent,
@@ -335,17 +348,29 @@ public class AiOrchestratorService {
         }
 
         String normalizedCityBias = normalizeBias(cityBias);
+        String coordinateCityBias = inferCityBiasFromCoordinates(latitude, longitude);
         String locationHint = extraction.locationHint();
-        if (locationHint == null && normalizedCityBias != null) {
-            locationHint = normalizedCityBias;
+        boolean locationHintBackedByTerms = isLocationHintBackedByTerms(extraction, locationHint);
+
+        String effectiveCityBias = normalizedCityBias;
+        if (effectiveCityBias == null
+                && coordinateCityBias != null
+                && (locationHint == null || !locationHintBackedByTerms)) {
+            effectiveCityBias = coordinateCityBias;
+        }
+
+        if (effectiveCityBias != null
+                && (locationHint == null || !locationHintBackedByTerms)) {
+            locationHint = effectiveCityBias;
         }
 
         List<String> searchQueries = new ArrayList<>(extraction.searchQueries());
         if (searchQueries.isEmpty()) {
             searchQueries.addAll(extraction.keywords());
         }
-        if (normalizedCityBias != null && searchQueries.stream().noneMatch(normalizedCityBias::equalsIgnoreCase)) {
-            searchQueries.add(0, normalizedCityBias);
+        if (effectiveCityBias != null
+                && searchQueries.stream().noneMatch(effectiveCityBias::equalsIgnoreCase)) {
+            searchQueries.add(0, effectiveCityBias);
         }
         if (isValidCoordinates(latitude, longitude)) {
             searchQueries.add(0, String.format("near %.6f, %.6f", latitude, longitude));
@@ -365,6 +390,74 @@ public class AiOrchestratorService {
         }
         String trimmed = value.trim();
         return trimmed.isBlank() ? null : trimmed;
+    }
+
+    private boolean isLocationHintBackedByTerms(
+            PlaceSearchExtraction extraction,
+            String locationHint) {
+        if (locationHint == null || locationHint.isBlank() || extraction == null) {
+            return false;
+        }
+
+        String normalizedHint = normalizeForComparison(locationHint);
+        if (normalizedHint.isBlank()) {
+            return false;
+        }
+
+        for (String query : extraction.searchQueries()) {
+            if (normalizeForComparison(query).contains(normalizedHint)) {
+                return true;
+            }
+        }
+        for (String keyword : extraction.keywords()) {
+            if (normalizeForComparison(keyword).contains(normalizedHint)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String normalizeForComparison(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.toLowerCase(Locale.ROOT)
+                .replaceAll("[^\\p{L}\\p{N}\\s]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    private String inferCityBiasFromCoordinates(Double latitude, Double longitude) {
+        if (!isValidCoordinates(latitude, longitude)) {
+            return null;
+        }
+
+        if (isWithinBounds(latitude, longitude, HCM_MIN_LAT, HCM_MAX_LAT, HCM_MIN_LNG, HCM_MAX_LNG)) {
+            return "ho chi minh city";
+        }
+        if (isWithinBounds(latitude, longitude, HANOI_MIN_LAT, HANOI_MAX_LAT, HANOI_MIN_LNG, HANOI_MAX_LNG)) {
+            return "hanoi";
+        }
+        if (isWithinBounds(latitude, longitude, DA_NANG_MIN_LAT, DA_NANG_MAX_LAT, DA_NANG_MIN_LNG, DA_NANG_MAX_LNG)) {
+            return "da nang";
+        }
+
+        return null;
+    }
+
+    private boolean isWithinBounds(
+            Double latitude,
+            Double longitude,
+            double minLat,
+            double maxLat,
+            double minLng,
+            double maxLng) {
+        return latitude != null
+                && longitude != null
+                && latitude >= minLat
+                && latitude <= maxLat
+                && longitude >= minLng
+                && longitude <= maxLng;
     }
 
     private boolean isValidCoordinates(Double latitude, Double longitude) {
@@ -853,7 +946,7 @@ public class AiOrchestratorService {
 
         return new AiTripDraft(
                 safeDraftTitle(itinerary.title()),
-                itinerary.summary(),
+                safeDraftSummary(itinerary.summary(), stops),
                 stops);
     }
 
@@ -862,6 +955,40 @@ public class AiOrchestratorService {
             return "AI Trip Draft";
         }
         return title;
+    }
+
+    private String safeDraftSummary(String summary, List<AiTripDraftStop> stops) {
+        if (summary != null && !summary.isBlank()) {
+            return summary;
+        }
+
+        int stopCount = stops == null ? 0 : stops.size();
+        if (stopCount <= 0) {
+            return "A personalized AI itinerary with curated stops.";
+        }
+
+        String stopPhrase = stopCount == 1
+                ? "1 planned stop"
+                : String.format(Locale.ROOT, "%d planned stops", stopCount);
+
+        List<String> featuredPlaces = stops.stream()
+                .map(AiTripDraftStop::place)
+                .filter(place -> place != null && place.getName() != null && !place.getName().isBlank())
+                .map(place -> place.getName().trim())
+                .distinct()
+                .limit(2)
+                .toList();
+
+        if (featuredPlaces.isEmpty()) {
+            return "A curated itinerary with " + stopPhrase + ".";
+        }
+        if (featuredPlaces.size() == 1) {
+            return "A curated itinerary with " + stopPhrase
+                    + " featuring " + featuredPlaces.get(0) + ".";
+        }
+        return "A curated itinerary with " + stopPhrase
+                + " featuring " + featuredPlaces.get(0)
+                + " and " + featuredPlaces.get(1) + ".";
     }
 
     private Map<String, Place> indexPlaces(List<Place> candidatePlaces) {

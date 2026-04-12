@@ -171,6 +171,13 @@ public class PlaceRepository implements IPlaceRepository {
     }
 
     @Override
+    public LiveData<List<Place>> searchPlaces(String query,
+            Location userLocation,
+            boolean saveToHistory) {
+        return doSearch(query, saveToHistory, userLocation);
+    }
+
+    @Override
     public LiveData<List<Place>> searchPlacesFromHistory(String query) {
         return doSearch(query, false, null);
     }
@@ -307,33 +314,15 @@ public class PlaceRepository implements IPlaceRepository {
         }
 
         executorService.execute(() -> {
+            Location searchOrigin = resolveSearchOrigin(userLocation);
             List<Place> combinedResults = new ArrayList<>();
             Set<String> seenIds = new HashSet<>();
             Set<String> seenKeys = new HashSet<>();
 
             if (networkMonitor.isOnline()) {
                 try {
-                    Location validLocation = null;
-                    if (userLocation != null 
-                            && userLocation.latitude >= -90 && userLocation.latitude <= 90
-                            && userLocation.longitude >= -180 && userLocation.longitude <= 180) {
-                        validLocation = userLocation;
-                    }
-                    Double lat = validLocation != null ? validLocation.latitude : null;
-                    Double lng = validLocation != null ? validLocation.longitude : null;
-                    boolean hasInvalidCoordinates = lat == null
-                            || lng == null
-                            || (Double.compare(lat, 0.0d) == 0 && Double.compare(lng, 0.0d) == 0);
-                    if (hasInvalidCoordinates) {
-                        Location fallbackLocation = resolveDefaultSearchLocation();
-                        if (fallbackLocation == null) {
-                            // No valid default location configured, skip remote search
-                            Log.d(TAG, "No valid default search location configured");
-                        } else {
-                            lat = fallbackLocation.latitude;
-                            lng = fallbackLocation.longitude;
-                        }
-                    }
+                    Double lat = searchOrigin != null ? searchOrigin.latitude : null;
+                    Double lng = searchOrigin != null ? searchOrigin.longitude : null;
                     if (lat != null && lng != null) {
                         PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
                         request.query = query;
@@ -362,6 +351,8 @@ public class PlaceRepository implements IPlaceRepository {
                                         activeUserId));
                             }
                         }
+                    } else {
+                        Log.d(TAG, "No valid search origin configured; skipping remote search");
                     }
                 } catch (IOException e) {
                     Log.e(TAG, "Server search failed", e);
@@ -425,6 +416,10 @@ public class PlaceRepository implements IPlaceRepository {
                         seenKeys.add(dedupKey);
                     }
                 }
+            }
+
+            if (searchOrigin != null) {
+                sortByProximity(combinedResults, searchOrigin);
             }
 
             if (saveToHistory) {
@@ -639,6 +634,57 @@ public class PlaceRepository implements IPlaceRepository {
             return false;
         }
         return isValidCoordinate(latitude, longitude);
+    }
+
+    private boolean isValidLocation(Location location) {
+        return location != null
+                && isValidCoordinate(location.latitude, location.longitude);
+    }
+
+    private Location resolveSearchOrigin(Location userLocation) {
+        if (isValidLocation(userLocation)) {
+            return userLocation;
+        }
+        Location fallback = resolveDefaultSearchLocation();
+        return isValidLocation(fallback) ? fallback : null;
+    }
+
+    private void sortByProximity(List<Place> places, Location origin) {
+        if (places == null || places.size() < 2 || origin == null) {
+            return;
+        }
+
+        places.sort((left, right) -> {
+            double leftDistance = distanceKm(origin, left != null ? left.location : null);
+            double rightDistance = distanceKm(origin, right != null ? right.location : null);
+            int byDistance = Double.compare(leftDistance, rightDistance);
+            if (byDistance != 0) {
+                return byDistance;
+            }
+
+            double leftRating = left != null ? left.rating : 0.0d;
+            double rightRating = right != null ? right.rating : 0.0d;
+            return Double.compare(rightRating, leftRating);
+        });
+    }
+
+    private double distanceKm(Location from, Location to) {
+        if (!isValidLocation(from) || !isValidLocation(to)) {
+            return Double.MAX_VALUE;
+        }
+
+        double earthRadiusKm = 6371.0d;
+        double dLat = Math.toRadians(to.latitude - from.latitude);
+        double dLon = Math.toRadians(to.longitude - from.longitude);
+        double lat1 = Math.toRadians(from.latitude);
+        double lat2 = Math.toRadians(to.latitude);
+
+        double sinLat = Math.sin(dLat / 2.0d);
+        double sinLon = Math.sin(dLon / 2.0d);
+        double a = sinLat * sinLat
+                + Math.cos(lat1) * Math.cos(lat2) * sinLon * sinLon;
+        double c = 2.0d * Math.atan2(Math.sqrt(a), Math.sqrt(Math.max(0.0d, 1.0d - a)));
+        return earthRadiusKm * c;
     }
 
     private boolean isValidCoordinate(double latitude, double longitude) {
