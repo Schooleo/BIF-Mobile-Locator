@@ -20,8 +20,12 @@ public class TripScheduleHintExtractor {
     private static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final Pattern DAYS_PATTERN = Pattern.compile("(\\d+)\\s*ng\\u00e0y");
     private static final Pattern WEEKS_PATTERN = Pattern.compile("(\\d+)\\s*tu\\u1ea7n");
+    private static final Pattern DAYS_PATTERN_EN = Pattern.compile("(\\d+)\\s*day(?:s)?");
+    private static final Pattern WEEKS_PATTERN_EN = Pattern.compile("(\\d+)\\s*week(?:s)?");
     private static final Pattern AFTER_DAYS_PATTERN = Pattern.compile("sau\\s+(\\d+)\\s*ng\\u00e0y");
     private static final Pattern AFTER_WEEKS_PATTERN = Pattern.compile("sau\\s+(\\d+)\\s*tu\\u1ea7n");
+    private static final Pattern AFTER_DAYS_PATTERN_EN = Pattern.compile("(?:after|in)\\s+(\\d+)\\s*day(?:s)?");
+    private static final Pattern AFTER_WEEKS_PATTERN_EN = Pattern.compile("(?:after|in)\\s+(\\d+)\\s*week(?:s)?");
 
     private final Clock clock;
 
@@ -91,6 +95,28 @@ public class TripScheduleHintExtractor {
             }
         }
 
+        Matcher dayMatcherEn = DAYS_PATTERN_EN.matcher(normalized);
+        while (dayMatcherEn.find()) {
+            if (isOffsetExpression(normalized, dayMatcherEn.start())) {
+                continue;
+            }
+            int value = parseInt(dayMatcherEn.group(1));
+            if (value > daySpan) {
+                daySpan = value;
+            }
+        }
+
+        Matcher weekMatcherEn = WEEKS_PATTERN_EN.matcher(normalized);
+        while (weekMatcherEn.find()) {
+            if (isOffsetExpression(normalized, weekMatcherEn.start())) {
+                continue;
+            }
+            int value = parseInt(weekMatcherEn.group(1)) * 7;
+            if (value > daySpan) {
+                daySpan = value;
+            }
+        }
+
         if (normalized.contains("m\u1ed9t ng\u00e0y") || normalized.contains("1 ng\u00e0y")) {
             daySpan = Math.max(daySpan, 1);
         }
@@ -99,6 +125,18 @@ public class TripScheduleHintExtractor {
         }
         if (normalized.contains("ba ng\u00e0y") || normalized.contains("3 ng\u00e0y")) {
             daySpan = Math.max(daySpan, 3);
+        }
+        if (normalized.contains("one day") || normalized.contains("1 day")) {
+            daySpan = Math.max(daySpan, 1);
+        }
+        if (normalized.contains("two days") || normalized.contains("2 days")) {
+            daySpan = Math.max(daySpan, 2);
+        }
+        if (normalized.contains("three days") || normalized.contains("3 days")) {
+            daySpan = Math.max(daySpan, 3);
+        }
+        if (normalized.contains("weekend")) {
+            daySpan = Math.max(daySpan, 2);
         }
 
         if (daySpan > 0) {
@@ -120,6 +158,16 @@ public class TripScheduleHintExtractor {
             offset = Math.max(offset, parseInt(afterWeeks.group(1)) * 7);
         }
 
+        Matcher afterDaysEn = AFTER_DAYS_PATTERN_EN.matcher(normalized);
+        while (afterDaysEn.find()) {
+            offset = Math.max(offset, parseInt(afterDaysEn.group(1)));
+        }
+
+        Matcher afterWeeksEn = AFTER_WEEKS_PATTERN_EN.matcher(normalized);
+        while (afterWeeksEn.find()) {
+            offset = Math.max(offset, parseInt(afterWeeksEn.group(1)) * 7);
+        }
+
         if (normalized.contains("sau m\u1ed9t tu\u1ea7n")) {
             offset = Math.max(offset, 7);
         }
@@ -129,7 +177,16 @@ public class TripScheduleHintExtractor {
         if (normalized.contains("ng\u00e0y mai")) {
             offset = Math.max(offset, 1);
         }
+        if (normalized.contains("tomorrow")) {
+            offset = Math.max(offset, 1);
+        }
+        if (normalized.contains("next week")) {
+            offset = Math.max(offset, 7);
+        }
         if (normalized.contains("h\u00f4m nay")) {
+            signals.add("start=today");
+        }
+        if (normalized.contains("today")) {
             signals.add("start=today");
         }
 
@@ -144,7 +201,15 @@ public class TripScheduleHintExtractor {
             signals.add("time=evening");
             return LocalTime.of(18, 30);
         }
+        if (normalized.contains("evening") || normalized.contains("night")) {
+            signals.add("time=evening");
+            return LocalTime.of(18, 30);
+        }
         if (normalized.contains("bu\u1ed5i chi\u1ec1u") || normalized.contains("chi\u1ec1u")) {
+            signals.add("time=afternoon");
+            return LocalTime.of(14, 0);
+        }
+        if (normalized.contains("afternoon")) {
             signals.add("time=afternoon");
             return LocalTime.of(14, 0);
         }
@@ -152,7 +217,15 @@ public class TripScheduleHintExtractor {
             signals.add("time=noon");
             return LocalTime.of(11, 30);
         }
+        if (normalized.contains("noon") || normalized.contains("midday")) {
+            signals.add("time=noon");
+            return LocalTime.of(11, 30);
+        }
         if (normalized.contains("bu\u1ed5i s\u00e1ng") || normalized.contains("s\u00e1ng")) {
+            signals.add("time=morning");
+            return LocalTime.of(8, 30);
+        }
+        if (normalized.contains("morning")) {
             signals.add("time=morning");
             return LocalTime.of(8, 30);
         }
@@ -168,9 +241,11 @@ public class TripScheduleHintExtractor {
     }
 
     private boolean isOffsetExpression(String normalized, int tokenStartIndex) {
-        int prefixStart = Math.max(0, tokenStartIndex - 6);
+        int prefixStart = Math.max(0, tokenStartIndex - 10);
         String prefix = normalized.substring(prefixStart, tokenStartIndex);
-        return prefix.contains("sau ");
+        return prefix.contains("sau ")
+                || prefix.contains("after ")
+                || prefix.contains("in ");
     }
 
     public record TripScheduleHints(

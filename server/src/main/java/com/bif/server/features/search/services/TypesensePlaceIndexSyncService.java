@@ -16,8 +16,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.StringJoiner;
 
 @Component
@@ -66,7 +69,7 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
         }
 
         try {
-            String body = objectMapper.writeValueAsString(place);
+            String body = objectMapper.writeValueAsString(toDocument(place));
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(buildUpsertUri())
                     .timeout(Duration.ofMillis(
@@ -104,7 +107,7 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
             StringJoiner joiner = new StringJoiner("\n");
             for (Place place : places) {
                 if (place != null && place.getId() != null && !place.getId().isBlank()) {
-                    joiner.add(objectMapper.writeValueAsString(place));
+                    joiner.add(objectMapper.writeValueAsString(toDocument(place)));
                 }
             }
             String jsonlBody = joiner.toString();
@@ -247,13 +250,23 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
                       "name": "%s",
                       "fields": [
                         {"name": "name",              "type": "string"},
+                        {"name": "nameNormalized",    "type": "string",   "optional": true},
                         {"name": "address",           "type": "string",   "optional": true},
+                        {"name": "addressNormalized", "type": "string",   "optional": true},
+                        {"name": "country",           "type": "string",   "optional": true},
+                        {"name": "region",            "type": "string",   "optional": true},
+                        {"name": "locality",          "type": "string",   "optional": true},
+                        {"name": "city",              "type": "string",   "optional": true},
+                        {"name": "district",          "type": "string",   "optional": true},
                         {"name": "rating",            "type": "float",    "optional": true},
                         {"name": "tags",              "type": "string[]", "optional": true},
+                        {"name": "categoryMain",      "type": "string",   "optional": true},
+                        {"name": "categoryAlternates","type": "string[]", "optional": true},
                         {"name": "placeSource",       "type": "string",   "optional": true},
                         {"name": "persistedByAction", "type": "string",   "optional": true},
                         {"name": "persistedByUserId", "type": "string",   "optional": true},
-                        {"name": "reviewCount",       "type": "int32",    "optional": true}
+                        {"name": "reviewCount",       "type": "int32",    "optional": true},
+                        {"name": "location",          "type": "geopoint", "optional": true}
                       ]
                     }
                     """.formatted(collection);
@@ -369,5 +382,36 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
 
     private String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private Map<String, Object> toDocument(Place place) {
+        Map<String, Object> document = new LinkedHashMap<>();
+        document.put("id", place.getId());
+        document.put("name", place.getName());
+        document.put("nameNormalized", place.getNameNormalized());
+        document.put("address", place.getAddress());
+        document.put("addressNormalized", place.getAddressNormalized());
+        document.put("country", place.getCountry());
+        document.put("region", place.getRegion());
+        document.put("locality", place.getLocality());
+        document.put("city", place.getCity());
+        document.put("district", place.getDistrict());
+        document.put("rating", place.getRating());
+        document.put("tags", place.getTags());
+        document.put("categoryMain", place.getCategoryMain());
+        document.put("categoryAlternates", place.getCategoryAlternates());
+        document.put("placeSource", place.getPlaceSource());
+        document.put("persistedByAction", place.getPersistedByAction());
+        document.put("persistedByUserId", place.getPersistedByUserId());
+        document.put("reviewCount", place.getReviewCount());
+        if (place.getLocation() != null
+                && Double.isFinite(place.getLocation().getLatitude())
+                && Double.isFinite(place.getLocation().getLongitude())) {
+            List<Double> geoPoint = new ArrayList<>(2);
+            geoPoint.add(place.getLocation().getLatitude());
+            geoPoint.add(place.getLocation().getLongitude());
+            document.put("location", geoPoint);
+        }
+        return document;
     }
 }

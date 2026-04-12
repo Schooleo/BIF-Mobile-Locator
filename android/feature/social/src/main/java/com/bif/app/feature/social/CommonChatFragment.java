@@ -38,6 +38,8 @@ import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.domain.model.ChatMessage;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
+import com.bif.app.domain.model.TripPlan;
+import com.bif.app.domain.model.TripStop;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.snackbar.Snackbar;
@@ -47,9 +49,12 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import dagger.hilt.android.AndroidEntryPoint;
 
@@ -120,23 +125,36 @@ public class CommonChatFragment extends Fragment {
             }
 
             @Override
-            public void onSaveTripClick(String tripId) {
-                if (tripId == null || tripId.trim().isEmpty()) {
+            public void onSaveDraftAsNewTripClick(ChatMessageAdapter.TripCreatedCard card) {
+                if (card == null || card.getTripId() == null || card.getTripId().trim().isEmpty()) {
                     return;
                 }
-                viewModel.onSaveTripCard(tripId);
+                viewModel.onSaveTripCardAsNew(card.getTripId(), card.getPayloadJson());
+            }
+
+            @Override
+            public void onOverrideCurrentTripClick(ChatMessageAdapter.TripCreatedCard card) {
+                if (card == null || card.getTripId() == null || card.getTripId().trim().isEmpty()) {
+                    return;
+                }
+                viewModel.onOverrideTripCard(card.getTripId(), card.getPayloadJson());
             }
 
             @Override
             public void onAddPlaceToTripClick(String tripId, ChatMessageAdapter.PlaceCard place) {
-                if (tripId == null || tripId.trim().isEmpty()) {
+                String targetTripId = tripId == null ? "" : tripId.trim();
+                if (targetTripId.isEmpty()) {
+                    targetTripId = viewModel.getCurrentTripId();
+                }
+                if (targetTripId == null || targetTripId.trim().isEmpty()) {
+                    Snackbar.make(view, R.string.chat_add_stop_no_trip, Snackbar.LENGTH_SHORT).show();
                     return;
                 }
                 Place domainPlace = toDomainPlace(place);
                 if (domainPlace == null) {
                     return;
                 }
-                viewModel.addSuggestedPlaceToTrip(tripId, domainPlace);
+                viewModel.addSuggestedPlaceToTrip(targetTripId, domainPlace);
             }
 
             @Override
@@ -169,6 +187,11 @@ public class CommonChatFragment extends Fragment {
 
         viewModel.getMessages().observe(getViewLifecycleOwner(), this::onMessagesUpdated);
         viewModel.getSavedTripCardIds().observe(getViewLifecycleOwner(), savedIds -> {
+            if (!latestMessages.isEmpty()) {
+                updateSavedStateForMessages();
+            }
+        });
+        viewModel.getTrips().observe(getViewLifecycleOwner(), trips -> {
             if (!latestMessages.isEmpty()) {
                 updateSavedStateForMessages();
             }
@@ -388,54 +411,77 @@ public class CommonChatFragment extends Fragment {
     private ChatMessageAdapter.TripCreatedCard parseTripCreatedCard(ChatMessage msg) {
         ChatMessage.TripCreatedCardData data = msg.getTripCreatedCardData();
         String tripId = "";
+        String tripTitle = "";
+        String tripDescription = "";
         int stopCount = 0;
-        long startTimeMs = msg.getSentAt();
         double totalDistance = 0d;
         boolean isSaved = false;
+        JSONArray parsedStops = null;
+        List<SocialViewModel.AiDraftStopPreview> stopPreviews = Collections.emptyList();
+        String payloadJson = msg.getContent() != null ? msg.getContent() : "";
 
         if (data != null) {
             tripId = data.getTripId() != null ? data.getTripId() : "";
             stopCount = Math.max(0, data.getStopCount());
-            startTimeMs = data.getStartTime() > 0 ? data.getStartTime() : startTimeMs;
             totalDistance = Math.max(0d, data.getTotalDistance());
             isSaved = data.isSaved();
         }
 
-        String content = msg.getContent();
-        if (content != null && content.trim().startsWith("{")) {
+        if (payloadJson.trim().startsWith("{")) {
             try {
-                JSONObject json = new JSONObject(content);
+                JSONObject json = new JSONObject(payloadJson);
                 tripId = json.optString("tripId", tripId);
                 stopCount = json.optInt("stopCount", stopCount);
-                startTimeMs = json.optLong("startTime", startTimeMs);
-                if (startTimeMs <= 0L) {
-                    startTimeMs = msg.getSentAt();
-                }
                 isSaved = json.optBoolean("isSaved", isSaved);
+                tripTitle = json.optString("title", tripTitle);
+                tripDescription = json.optString("summary", tripDescription);
+                if (tripDescription == null || tripDescription.trim().isEmpty()) {
+                    tripDescription = json.optString("description", tripDescription);
+                }
+                parsedStops = json.optJSONArray("stops");
+                stopPreviews = mapStopPreviews(parsedStops);
+                if (stopCount <= 0) {
+                    stopCount = stopPreviews.size();
+                }
 
                 double distanceFromPayload = json.optDouble("totalDistance", -1d);
                 if (distanceFromPayload >= 0d) {
                     totalDistance = distanceFromPayload;
                 }
 
-                if (totalDistance <= 0d && json.has("stops")) {
-                    totalDistance = computeManhattanDistance(json.optJSONArray("stops"));
+                if (totalDistance <= 0d && parsedStops != null) {
+                    totalDistance = computeManhattanDistance(parsedStops);
                 }
             } catch (JSONException ignored) {
                 // Fallback to defaults for malformed payloads.
             }
         }
 
-        String startTimeLabel = DateFormat.format("HH:mm", new Date(startTimeMs)).toString();
+        if (tripTitle == null || tripTitle.trim().isEmpty()) {
+            tripTitle = getString(R.string.trip_ai_title_fallback);
+        }
+        if (tripDescription == null || tripDescription.trim().isEmpty()) {
+            tripDescription = getString(R.string.trip_overview_no_description);
+        }
         String totalDistanceLabel = formatDistanceLabel(totalDistance);
-        boolean shouldHideSaveButton = isSaved || viewModel.isTripCardSaved(tripId);
+        boolean alreadyHandled = isSaved || viewModel.isTripCardSaved(tripId);
+        boolean hasTripId = tripId != null && !tripId.trim().isEmpty();
+        boolean isHost = viewModel.isCurrentUserHostForCurrentTrip();
+        boolean canSaveAsNew = hasTripId && isHost && !alreadyHandled;
+        boolean canOverrideCurrent = canSaveAsNew && viewModel.hasCurrentTripForOverride();
+        boolean showHostOnlyHint = hasTripId && !isHost && !alreadyHandled;
 
         return new ChatMessageAdapter.TripCreatedCard(
                 tripId,
+                tripTitle,
+                tripDescription,
                 Math.max(stopCount, 0),
-                startTimeLabel,
                 totalDistanceLabel,
-                shouldHideSaveButton
+                stopPreviews,
+                payloadJson,
+                canSaveAsNew,
+                canOverrideCurrent,
+                showHostOnlyHint
         );
     }
 
@@ -492,7 +538,92 @@ public class CommonChatFragment extends Fragment {
             }
         }
 
-        return new ChatMessageAdapter.SuggestedPlacesCard(tripId, places);
+        String targetTripId = resolveSuggestedPlacesTargetTripId(tripId);
+        Set<String> existingStopKeys = buildExistingStopKeys(targetTripId);
+        List<ChatMessageAdapter.PlaceCard> resolvedPlaces = new ArrayList<>(places.size());
+        for (ChatMessageAdapter.PlaceCard place : places) {
+            if (place == null) {
+                continue;
+            }
+            boolean isAdded = isPlaceAlreadyInTrip(place, existingStopKeys);
+            resolvedPlaces.add(new ChatMessageAdapter.PlaceCard(
+                    place.getId(),
+                    place.getName(),
+                    place.getAddress(),
+                    place.getRating(),
+                    place.getLatitude(),
+                    place.getLongitude(),
+                    isAdded
+            ));
+        }
+
+        return new ChatMessageAdapter.SuggestedPlacesCard(targetTripId, resolvedPlaces);
+    }
+
+    private String resolveSuggestedPlacesTargetTripId(@Nullable String payloadTripId) {
+        String resolved = payloadTripId == null ? "" : payloadTripId.trim();
+        if (!resolved.isEmpty()) {
+            return resolved;
+        }
+        String currentTripId = viewModel != null ? viewModel.getCurrentTripId() : "";
+        return currentTripId == null ? "" : currentTripId.trim();
+    }
+
+    private Set<String> buildExistingStopKeys(@Nullable String tripId) {
+        Set<String> keys = new HashSet<>();
+        if (tripId == null || tripId.trim().isEmpty() || viewModel == null) {
+            return keys;
+        }
+
+        List<TripPlan> trips = viewModel.getTrips().getValue();
+        if (trips == null || trips.isEmpty()) {
+            return keys;
+        }
+
+        for (TripPlan trip : trips) {
+            if (trip == null || trip.getId() == null || !tripId.equals(trip.getId())) {
+                continue;
+            }
+
+            List<TripStop> stops = trip.getStops();
+            if (stops == null || stops.isEmpty()) {
+                break;
+            }
+
+            for (TripStop stop : stops) {
+                if (stop == null) {
+                    continue;
+                }
+                if (Double.isFinite(stop.getLatitude()) && Double.isFinite(stop.getLongitude())) {
+                    keys.add(buildCoordinateKey(stop.getLatitude(), stop.getLongitude()));
+                }
+                keys.add(buildIdentityKey(stop.getTitle(), stop.getAddress()));
+            }
+            break;
+        }
+        return keys;
+    }
+
+    private boolean isPlaceAlreadyInTrip(@NonNull ChatMessageAdapter.PlaceCard place,
+                                         @NonNull Set<String> existingStopKeys) {
+        if (existingStopKeys.isEmpty()) {
+            return false;
+        }
+        if (place.hasCoordinates()
+                && existingStopKeys.contains(buildCoordinateKey(place.getLatitude(), place.getLongitude()))) {
+            return true;
+        }
+        return existingStopKeys.contains(buildIdentityKey(place.getName(), place.getAddress()));
+    }
+
+    private String buildCoordinateKey(double latitude, double longitude) {
+        return String.format(Locale.US, "%.6f,%.6f", latitude, longitude);
+    }
+
+    private String buildIdentityKey(@Nullable String name, @Nullable String address) {
+        String normalizedName = name == null ? "" : name.trim().toLowerCase(Locale.US);
+        String normalizedAddress = address == null ? "" : address.trim().toLowerCase(Locale.US);
+        return normalizedName + "|" + normalizedAddress;
     }
 
     private double computeManhattanDistance(@Nullable JSONArray stops) {
@@ -538,6 +669,60 @@ public class CommonChatFragment extends Fragment {
             return "0.0";
         }
         return String.format(Locale.US, "%.1f", distance);
+    }
+
+    private List<SocialViewModel.AiDraftStopPreview> mapStopPreviews(@Nullable JSONArray stops) {
+        if (stops == null || stops.length() == 0) {
+            return Collections.emptyList();
+        }
+
+        List<SocialViewModel.AiDraftStopPreview> previews = new ArrayList<>();
+        for (int i = 0; i < stops.length(); i++) {
+            JSONObject stop = stops.optJSONObject(i);
+            if (stop == null) {
+                continue;
+            }
+
+            String placeId = stop.optString("placeId", stop.optString("id", ""));
+
+            String name = stop.optString("name", "").trim();
+            if (name.isEmpty()) {
+                name = getString(R.string.trip_stop_untitled);
+            }
+
+            String address = stop.optString("address", "").trim();
+            if (address.isEmpty()) {
+                address = getString(R.string.trip_stop_no_address);
+            }
+
+            String note = stop.optString("note", "").trim();
+            String plannedDateTime = stop.optString("plannedDateTime", "").trim();
+            int durationMinutes = Math.max(0, stop.optInt("durationMinutes", 0));
+            Double latitude = optNullableDouble(stop, "latitude");
+            Double longitude = optNullableDouble(stop, "longitude");
+
+            previews.add(new SocialViewModel.AiDraftStopPreview(
+                    placeId,
+                    name,
+                    address,
+                    note,
+                    plannedDateTime,
+                    durationMinutes,
+                    latitude,
+                    longitude
+            ));
+        }
+
+        return previews;
+    }
+
+    @Nullable
+    private Double optNullableDouble(@NonNull JSONObject json, @NonNull String key) {
+        if (!json.has(key) || json.isNull(key)) {
+            return null;
+        }
+        double value = json.optDouble(key, Double.NaN);
+        return Double.isFinite(value) ? value : null;
     }
 
     private String buildMessageStatusLabel(ChatMessage msg) {
@@ -749,10 +934,15 @@ public class CommonChatFragment extends Fragment {
                     : place.getName();
         }
 
-        android.net.Uri mapUri = UriUtils.buildUri("/map")
+        android.net.Uri.Builder mapUriBuilder = UriUtils.buildUri("/map")
                 .buildUpon()
                 .appendQueryParameter("location", location)
-                .build();
+                .appendQueryParameter("focusName", place.getName() != null ? place.getName() : "")
+                .appendQueryParameter("focusAddress", place.getAddress() != null ? place.getAddress() : "")
+                .appendQueryParameter("focusPlaceId", place.getId() != null ? place.getId() : "")
+                .appendQueryParameter("focusRating", String.valueOf(place.getRating()));
+
+        android.net.Uri mapUri = mapUriBuilder.build();
         Navigation.findNavController(requireView()).navigate(mapUri);
     }
 

@@ -417,7 +417,11 @@ public class PlaceRepositoryTest {
 
         CompletableFuture<AiPlaceSuggestionPayload> failedFuture = new CompletableFuture<>();
         failedFuture.completeExceptionally(new TimeoutException("suggestPlacesFromQuery timed out"));
-        when(mockAiGraphQlClient.suggestPlacesFromQuery("best coffee"))
+        when(mockAiGraphQlClient.suggestPlacesFromQuery(
+                org.mockito.Mockito.eq("best coffee"),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn(failedFuture);
 
         LiveData<AiPlaceSuggestionResult> result =
@@ -432,10 +436,44 @@ public class PlaceRepositoryTest {
     }
 
     @Test
+    public void suggestPlacesFromQuery_withBiasForwardsContextToGraphQlClient()
+            throws Exception {
+        when(mockNetworkMonitor.isOnline()).thenReturn(true);
+        when(mockAiGraphQlClient.suggestPlacesFromQuery(
+                org.mockito.Mockito.eq("coffee near center"),
+                org.mockito.Mockito.eq(10.7769),
+                org.mockito.Mockito.eq(106.7009),
+                org.mockito.Mockito.eq("District 1, Ho Chi Minh City")))
+                .thenReturn(CompletableFuture.completedFuture(
+                        new AiPlaceSuggestionPayload(
+                                Collections.emptyList(),
+                                Collections.emptyList(),
+                                null)));
+
+        LiveData<AiPlaceSuggestionResult> result = placeRepository.suggestPlacesFromQuery(
+                "coffee near center",
+                10.7769,
+                106.7009,
+                "District 1, Ho Chi Minh City");
+        Thread.sleep(250);
+
+        assertNotNull(result.getValue());
+        verify(mockAiGraphQlClient).suggestPlacesFromQuery(
+                "coffee near center",
+                10.7769,
+                106.7009,
+                "District 1, Ho Chi Minh City");
+    }
+
+    @Test
     public void suggestPlacesFromQuery_failureCode_doesNotReturnPlaces()
             throws Exception {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
-        when(mockAiGraphQlClient.suggestPlacesFromQuery("late night food"))
+        when(mockAiGraphQlClient.suggestPlacesFromQuery(
+                org.mockito.Mockito.eq("late night food"),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn(CompletableFuture.completedFuture(
                         new AiPlaceSuggestionPayload(
                                 Collections.emptyList(),
@@ -455,7 +493,11 @@ public class PlaceRepositoryTest {
     public void suggestPlacesFromQuery_success_mapsPlaces()
             throws Exception {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
-        when(mockAiGraphQlClient.suggestPlacesFromQuery("best coffee"))
+        when(mockAiGraphQlClient.suggestPlacesFromQuery(
+                org.mockito.Mockito.eq("best coffee"),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn(CompletableFuture.completedFuture(
                         new AiPlaceSuggestionPayload(
                                 Collections.singletonList(
@@ -487,7 +529,11 @@ public class PlaceRepositoryTest {
     public void suggestPlacesFromQuery_incompletePlace_isFilteredOut()
             throws Exception {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
-        when(mockAiGraphQlClient.suggestPlacesFromQuery("missing fields"))
+        when(mockAiGraphQlClient.suggestPlacesFromQuery(
+                org.mockito.Mockito.eq("missing fields"),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn(CompletableFuture.completedFuture(
                         new AiPlaceSuggestionPayload(
                                 Collections.singletonList(
@@ -565,5 +611,3 @@ public class PlaceRepositoryTest {
                 anyString(), anyString(), any());
     }
 }
-
-

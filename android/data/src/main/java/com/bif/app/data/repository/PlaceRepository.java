@@ -129,6 +129,15 @@ public class PlaceRepository implements IPlaceRepository {
 
     @Override
     public LiveData<AiPlaceSuggestionResult> suggestPlacesFromQuery(String query) {
+        return suggestPlacesFromQuery(query, null, null, null);
+    }
+
+    @Override
+    public LiveData<AiPlaceSuggestionResult> suggestPlacesFromQuery(
+            String query,
+            Double latitude,
+            Double longitude,
+            String cityBias) {
         MutableLiveData<AiPlaceSuggestionResult> result = new MutableLiveData<>();
 
         if (query == null || query.trim().isEmpty()) {
@@ -151,7 +160,7 @@ public class PlaceRepository implements IPlaceRepository {
             return result;
         }
 
-        aiGraphQlClient.suggestPlacesFromQuery(query)
+        aiGraphQlClient.suggestPlacesFromQuery(query, latitude, longitude, cityBias)
                 .whenComplete((payload, throwable) -> {
             if (throwable != null || payload == null) {
                 Log.e(TAG, "AI suggest query failed", throwable);
@@ -529,4 +538,3 @@ public class PlaceRepository implements IPlaceRepository {
                 && longitude >= -180d && longitude <= 180d;
     }
 }
-

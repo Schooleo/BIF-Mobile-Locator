@@ -49,4 +49,21 @@ class TripScheduleHintExtractorTest {
         assertNull(hints.suggestedStartDateTime());
         assertNull(hints.promptDirective());
     }
+
+    @Test
+    void extract_ParsesEnglishTimingSignals() {
+        TripScheduleHintExtractor extractor = new TripScheduleHintExtractor(
+                Clock.fixed(
+                        Instant.parse("2026-04-11T00:00:00Z"),
+                        ZoneId.of("Asia/Ho_Chi_Minh")));
+
+        TripScheduleHintExtractor.TripScheduleHints hints = extractor.extract(
+                "Plan a 2 day food trip in Hanoi starting next week in the evening");
+
+        assertTrue(hints.shouldArrangeDateTime());
+        assertEquals(2, hints.daySpan());
+        assertEquals(7, hints.startOffsetDays());
+        assertNotNull(hints.suggestedStartDateTime());
+        assertEquals(18, hints.suggestedStartDateTime().getHour());
+    }
 }

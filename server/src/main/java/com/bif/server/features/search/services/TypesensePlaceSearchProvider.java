@@ -191,7 +191,17 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
             place.setId(textOrNull(doc, "id"));
             place.setName(textOrDefault(doc, "name", "Unknown Place"));
             place.setAddress(textOrDefault(doc, "address", ""));
+            place.setCountry(textOrNull(doc, "country"));
+            place.setRegion(textOrNull(doc, "region"));
+            place.setLocality(textOrNull(doc, "locality"));
+            place.setCity(textOrNull(doc, "city"));
+            place.setDistrict(textOrNull(doc, "district"));
             place.setRating(doubleOrDefault(doc, "rating", 0.0));
+            place.setTags(textListOrEmpty(doc, "tags"));
+            place.setCategoryMain(textOrNull(doc, "categoryMain"));
+            place.setCategoryAlternates(textListOrEmpty(doc, "categoryAlternates"));
+            place.setNameNormalized(textOrNull(doc, "nameNormalized"));
+            place.setAddressNormalized(textOrNull(doc, "addressNormalized"));
             place.setReviewCount(intOrDefault(doc, "reviewCount", 0));
             place.setPlaceSource(textOrDefault(doc, "placeSource", "typesense"));
             place.setPersistedByAction(textOrNull(doc, "persistedByAction"));
@@ -277,6 +287,25 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
     private int intOrDefault(JsonNode node, String key, int fallback) {
         JsonNode value = node.path(key);
         return value.isInt() || value.isLong() ? value.asInt() : fallback;
+    }
+
+    private List<String> textListOrEmpty(JsonNode node, String key) {
+        JsonNode value = node.path(key);
+        if (!value.isArray()) {
+            return List.of();
+        }
+        List<String> values = new ArrayList<>();
+        for (JsonNode element : value) {
+            if (element == null || element.isNull()) {
+                continue;
+            }
+            String text = element.asText(null);
+            if (text == null || text.isBlank()) {
+                continue;
+            }
+            values.add(text);
+        }
+        return values;
     }
 
     private String safe(String value, String fallback) {

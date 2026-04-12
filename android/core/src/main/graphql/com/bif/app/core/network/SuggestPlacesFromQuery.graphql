@@ -1,5 +1,15 @@
-mutation SuggestPlacesFromQuery($query: String!) {
-  suggestPlacesFromQuery(query: $query) {
+mutation SuggestPlacesFromQuery(
+  $query: String!
+  $latitude: Float
+  $longitude: Float
+  $cityBias: String
+) {
+  suggestPlacesFromQuery(
+    query: $query
+    latitude: $latitude
+    longitude: $longitude
+    cityBias: $cityBias
+  ) {
     extractedKeywords
     category
     vibe

@@ -132,6 +132,8 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private static final String ARG_LOCATION = "location";
     private static final String ARG_FOCUS_NAME = "focusName";
     private static final String ARG_FOCUS_ADDRESS = "focusAddress";
+    private static final String ARG_FOCUS_PLACE_ID = "focusPlaceId";
+    private static final String ARG_FOCUS_RATING = "focusRating";
     private static final double VIETNAM_MIN_LAT = 8.56;
     private static final double VIETNAM_MAX_LAT = 23.39;
     private static final double VIETNAM_MIN_LON = 102.14;
@@ -572,22 +574,28 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         String locationQuery = args.getString(ARG_LOCATION, "").trim();
         String focusName = args.getString(ARG_FOCUS_NAME, "").trim();
         String focusAddress = args.getString(ARG_FOCUS_ADDRESS, "").trim();
+        String focusPlaceId = args.getString(ARG_FOCUS_PLACE_ID, "").trim();
+        String focusRatingRaw = args.getString(ARG_FOCUS_RATING, "").trim();
 
         Point coordinatePoint = parseCoordinateQuery(locationQuery);
         if (coordinatePoint != null) {
             double lat = coordinatePoint.latitude();
             double lng = coordinatePoint.longitude();
+            double resolvedRating = parseFocusRating(focusRatingRaw);
             String resolvedName = !focusName.isEmpty()
                     ? focusName
                     : getString(R.string.default_place_name);
             String resolvedAddress = !focusAddress.isEmpty()
                     ? focusAddress
                     : String.format(Locale.getDefault(), "%.5f, %.5f", lat, lng);
+            String resolvedPlaceId = !focusPlaceId.isEmpty()
+                ? focusPlaceId
+                : buildStablePlaceId(lat, lng);
             pendingNavigationPlace = new Place(
-                    buildStablePlaceId(lat, lng),
+                resolvedPlaceId,
                     resolvedName,
                     resolvedAddress,
-                    0.0,
+                resolvedRating,
                     new Location(lat, lng));
             pendingNavigationQuery = null;
             return;
@@ -595,6 +603,18 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
         if (!locationQuery.isEmpty()) {
             pendingNavigationQuery = locationQuery;
+        }
+    }
+
+    private double parseFocusRating(@Nullable String rawValue) {
+        if (rawValue == null || rawValue.trim().isEmpty()) {
+            return 0.0;
+        }
+        try {
+            double parsed = Double.parseDouble(rawValue.trim());
+            return Double.isFinite(parsed) ? parsed : 0.0;
+        } catch (NumberFormatException ignored) {
+            return 0.0;
         }
     }
 

@@ -3,6 +3,7 @@ package com.bif.app.core.network;
 import android.util.Log;
 
 import com.apollographql.apollo.api.ApolloResponse;
+import com.apollographql.apollo.api.Optional;
 import com.apollographql.java.client.ApolloClient;
 import com.bif.app.core.network.dto.ai.AiPlaceSuggestionPayload;
 import com.bif.app.core.network.dto.ai.AiSuggestedPlacePayload;
@@ -29,11 +30,23 @@ public class AiGraphQlClient {
     }
 
     public CompletableFuture<AiPlaceSuggestionPayload> suggestPlacesFromQuery(String query) {
+        return suggestPlacesFromQuery(query, null, null, null);
+    }
+
+    public CompletableFuture<AiPlaceSuggestionPayload> suggestPlacesFromQuery(
+            String query,
+            Double latitude,
+            Double longitude,
+            String cityBias) {
         CompletableFuture<AiPlaceSuggestionPayload> future = new CompletableFuture<>();
 
         try {
             apolloClient
-                    .mutation(new SuggestPlacesFromQueryMutation(query))
+                    .mutation(new SuggestPlacesFromQueryMutation(
+                            query,
+                            Optional.presentIfNotNull(latitude),
+                            Optional.presentIfNotNull(longitude),
+                            Optional.presentIfNotNull(cityBias)))
                     .enqueue(response -> {
                         if (future.isDone()) {
                             return;

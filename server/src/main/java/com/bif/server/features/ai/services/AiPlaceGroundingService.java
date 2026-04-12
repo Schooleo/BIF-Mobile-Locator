@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class AiPlaceGroundingService {
@@ -27,6 +29,8 @@ public class AiPlaceGroundingService {
     private static final int MAX_QUERY_VARIANTS = 10;
     private static final int MAX_CANDIDATE_POOL = 32;
     private static final int TYPESENSE_BATCH_SIZE = 16;
+    private static final Pattern DISTRICT_NUMBER_PATTERN = Pattern.compile(
+            "\\b(?:district|quan|q)\\s*([0-9]{1,2})\\b");
     private static final Set<String> GENERIC_LOCATION_TERMS = Set.of(
             "trip", "tour", "fun", "major", "attraction", "attractions", "best",
             "popular", "famous", "visit", "visiting", "places", "place", "spot",
@@ -345,6 +349,10 @@ public class AiPlaceGroundingService {
                 score += 0.2;
             } else if (containsNormalized(place.getAddress(), term)) {
                 score += 0.15;
+            } else if (containsNormalized(place.getDistrict(), term)
+                    || containsNormalized(place.getCity(), term)
+                    || containsNormalized(place.getLocality(), term)) {
+                score += 0.12;
             }
             evaluatedTerms++;
             if (evaluatedTerms >= 6 || score >= 0.8) {
@@ -368,6 +376,9 @@ public class AiPlaceGroundingService {
         }
         return containsAnyNormalized(place.getName(), lookups)
                 || containsAnyNormalized(place.getAddress(), lookups)
+                || containsAnyNormalized(place.getDistrict(), lookups)
+                || containsAnyNormalized(place.getCity(), lookups)
+                || containsAnyNormalized(place.getLocality(), lookups)
                 || (place.getTags() != null
                 && place.getTags().stream().anyMatch(tag -> containsAnyNormalized(tag, lookups)));
     }
@@ -444,6 +455,22 @@ public class AiPlaceGroundingService {
             cityAliases.add("saigon");
         }
 
+        if (containsAlias(normalized, "ha noi", "hanoi", "hn")) {
+            cityAliases.add("ha noi");
+            cityAliases.add("hanoi");
+            cityAliases.add("hn");
+        }
+
+        if (containsAlias(normalized, "da nang", "danang")) {
+            cityAliases.add("da nang");
+            cityAliases.add("danang");
+        }
+
+        if (containsAlias(normalized, "hue", "thua thien hue")) {
+            cityAliases.add("hue");
+            cityAliases.add("thua thien hue");
+        }
+
         if (containsAlias(normalized, "district 1", "district one", "quan 1", "quận 1", "q1", "d1")) {
             areaAliases.add("district 1");
             areaAliases.add("district one");
@@ -452,6 +479,13 @@ public class AiPlaceGroundingService {
             areaAliases.add("q1");
             areaAliases.add("ben nghe");
             areaAliases.add("bến nghé");
+        }
+
+        String districtNumber = extractDistrictNumber(normalized);
+        if (districtNumber != null) {
+            areaAliases.add("district " + districtNumber);
+            areaAliases.add("quan " + districtNumber);
+            areaAliases.add("q" + districtNumber);
         }
     }
 
@@ -462,6 +496,17 @@ public class AiPlaceGroundingService {
             }
         }
         return false;
+    }
+
+    private String extractDistrictNumber(String normalized) {
+        if (normalized == null || normalized.isBlank()) {
+            return null;
+        }
+        Matcher matcher = DISTRICT_NUMBER_PATTERN.matcher(normalized);
+        if (!matcher.find()) {
+            return null;
+        }
+        return matcher.group(1);
     }
 
     private boolean matchesLocationFocus(Place place, LocationFocus locationFocus) {

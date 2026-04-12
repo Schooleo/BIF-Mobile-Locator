@@ -199,7 +199,8 @@ public class AiOrchestratorService {
                                             scheduleHints.promptDirective()),
                                     resolvedCandidatePlaces,
                                     extraction,
-                                    scheduleHints),
+                                    scheduleHints,
+                                    query),
                             resolvedCandidatePlaces,
                             extraction,
                             scheduleHints),
@@ -212,7 +213,8 @@ public class AiOrchestratorService {
                                             scheduleHints.promptDirective()),
                                     resolvedCandidatePlaces,
                                     extraction,
-                                    scheduleHints),
+                                    scheduleHints,
+                                    query),
                             resolvedCandidatePlaces,
                             extraction,
                             scheduleHints),
@@ -508,7 +510,8 @@ public class AiOrchestratorService {
             GeneratedItinerary itinerary,
             List<Place> candidatePlaces,
             PlaceSearchExtraction extraction,
-            TripScheduleHintExtractor.TripScheduleHints scheduleHints) {
+            TripScheduleHintExtractor.TripScheduleHints scheduleHints,
+            String userQuery) {
         if (itinerary == null || itinerary.stops().isEmpty()) {
             return itinerary;
         }
@@ -524,7 +527,8 @@ public class AiOrchestratorService {
                 placeById,
                 extraction,
                 scheduleHints,
-                shouldArrangeDateTime);
+                shouldArrangeDateTime,
+                userQuery);
         return new GeneratedItinerary(itinerary.title(), itinerary.summary(), stops);
     }
 
@@ -583,7 +587,8 @@ public class AiOrchestratorService {
             Map<String, Place> placeById,
             PlaceSearchExtraction extraction,
             TripScheduleHintExtractor.TripScheduleHints scheduleHints,
-            boolean shouldArrangeDateTime) {
+            boolean shouldArrangeDateTime,
+            String userQuery) {
         if (stops == null || stops.isEmpty()) {
             return List.of();
         }
@@ -592,6 +597,7 @@ public class AiOrchestratorService {
         int daySpan = Math.max(1, scheduleHints.daySpan());
         int stopsPerDay = Math.max(1, (int) Math.ceil((double) stops.size() / daySpan));
         OffsetDateTime[] dayCursor = initializeDayCursor(initialStart, daySpan);
+        NoteLanguage noteLanguage = resolveNoteLanguage(userQuery, extraction);
 
         List<GeneratedStop> enriched = new ArrayList<>(stops.size());
         for (int i = 0; i < stops.size(); i++) {
@@ -617,7 +623,8 @@ public class AiOrchestratorService {
                     stop.note(),
                     place,
                     extraction,
-                    plannedDateTime);
+                    plannedDateTime,
+                    noteLanguage);
 
             enriched.add(new GeneratedStop(
                     stop.placeId(),
@@ -674,18 +681,21 @@ public class AiOrchestratorService {
             String currentNote,
             Place place,
             PlaceSearchExtraction extraction,
-            OffsetDateTime plannedDateTime) {
+            OffsetDateTime plannedDateTime,
+            NoteLanguage noteLanguage) {
         if (currentNote != null && !currentNote.isBlank() && currentNote.trim().length() >= 10) {
             return currentNote;
         }
 
         String placeName = place != null && place.getName() != null && !place.getName().isBlank()
                 ? place.getName().trim()
-                : "\u0111i\u1ec3m d\u1eebng";
+                : noteLanguage == NoteLanguage.VI ? "\u0111i\u1ec3m d\u1eebng" : "this stop";
 
-        String prefix = timeWindowPrefix(plannedDateTime);
-        String activity = suggestActivity(place, extraction);
-        String note = (prefix + " gh\u00e9 " + placeName + " \u0111\u1ec3 " + activity + ".").trim();
+        String prefix = timeWindowPrefix(plannedDateTime, noteLanguage);
+        String activity = suggestActivity(place, extraction, noteLanguage);
+        String note = noteLanguage == NoteLanguage.VI
+                ? (prefix + " gh\u00e9 " + placeName + " \u0111\u1ec3 " + activity + ".").trim()
+                : (prefix + " stop at " + placeName + " to " + activity + ".").trim();
 
         if (note.length() > 140) {
             note = note.substring(0, 139).trim() + "\u2026";
@@ -693,52 +703,104 @@ public class AiOrchestratorService {
         return note;
     }
 
-    private String timeWindowPrefix(OffsetDateTime plannedDateTime) {
+    private String timeWindowPrefix(OffsetDateTime plannedDateTime, NoteLanguage noteLanguage) {
         if (plannedDateTime == null) {
             return "";
         }
         int hour = plannedDateTime.getHour();
         if (hour < 11) {
-            return "Bu\u1ed5i s\u00e1ng,";
+            return noteLanguage == NoteLanguage.VI ? "Bu\u1ed5i s\u00e1ng," : "In the morning,";
         }
         if (hour < 14) {
-            return "Bu\u1ed5i tr\u01b0a,";
+            return noteLanguage == NoteLanguage.VI ? "Bu\u1ed5i tr\u01b0a," : "Around noon,";
         }
         if (hour < 18) {
-            return "Bu\u1ed5i chi\u1ec1u,";
+            return noteLanguage == NoteLanguage.VI ? "Bu\u1ed5i chi\u1ec1u," : "In the afternoon,";
         }
-        return "Bu\u1ed5i t\u1ed1i,";
+        return noteLanguage == NoteLanguage.VI ? "Bu\u1ed5i t\u1ed1i," : "In the evening,";
     }
 
-    private String suggestActivity(Place place, PlaceSearchExtraction extraction) {
+    private String suggestActivity(
+            Place place,
+            PlaceSearchExtraction extraction,
+            NoteLanguage noteLanguage) {
         List<String> tags = place == null || place.getTags() == null
                 ? List.of()
                 : place.getTags();
 
         String loweredTags = String.join(" ", tags).toLowerCase(Locale.ROOT);
         if (loweredTags.contains("cafe") || loweredTags.contains("coffee")) {
-            return "th\u01b0 gi\u00e3n v\u00e0 th\u01b0\u1edfng th\u1ee9c c\u00e0 ph\u00ea";
+            return noteLanguage == NoteLanguage.VI
+                    ? "th\u01b0 gi\u00e3n v\u00e0 th\u01b0\u1edfng th\u1ee9c c\u00e0 ph\u00ea"
+                    : "relax and enjoy coffee";
         }
         if (loweredTags.contains("restaurant") || loweredTags.contains("food") || loweredTags.contains("eat")) {
-            return "th\u01b0\u1edfng th\u1ee9c \u1ea9m th\u1ef1c \u0111\u1ecba ph\u01b0\u01a1ng";
+            return noteLanguage == NoteLanguage.VI
+                    ? "th\u01b0\u1edfng th\u1ee9c \u1ea9m th\u1ef1c \u0111\u1ecba ph\u01b0\u01a1ng"
+                    : "taste local food";
         }
         if (loweredTags.contains("museum") || loweredTags.contains("history") || loweredTags.contains("historic")) {
-            return "tham quan v\u00e0 t\u00ecm hi\u1ec3u v\u0103n h\u00f3a";
+            return noteLanguage == NoteLanguage.VI
+                    ? "tham quan v\u00e0 t\u00ecm hi\u1ec3u v\u0103n h\u00f3a"
+                    : "explore local history and culture";
         }
         if (loweredTags.contains("park") || loweredTags.contains("beach") || loweredTags.contains("nature")) {
-            return "th\u01b0 gi\u00e3n v\u00e0 ng\u1eafm c\u1ea3nh";
+            return noteLanguage == NoteLanguage.VI
+                    ? "th\u01b0 gi\u00e3n v\u00e0 ng\u1eafm c\u1ea3nh"
+                    : "unwind and enjoy the scenery";
         }
 
         String vibe = extraction == null || extraction.vibe() == null
                 ? ""
                 : extraction.vibe().toLowerCase(Locale.ROOT);
         if (vibe.contains("romantic") || vibe.contains("l\u00e3ng m\u1ea1n")) {
-            return "t\u1eadn h\u01b0\u1edfng kh\u00f4ng gian l\u00e3ng m\u1ea1n";
+            return noteLanguage == NoteLanguage.VI
+                    ? "t\u1eadn h\u01b0\u1edfng kh\u00f4ng gian l\u00e3ng m\u1ea1n"
+                    : "enjoy a romantic atmosphere";
         }
         if (vibe.contains("quiet") || vibe.contains("y\u00ean t\u0129nh") || vibe.contains("relax")) {
-            return "th\u01b0 gi\u00e3n v\u00e0 n\u1ea1p l\u1ea1i n\u0103ng l\u01b0\u1ee3ng";
+            return noteLanguage == NoteLanguage.VI
+                    ? "th\u01b0 gi\u00e3n v\u00e0 n\u1ea1p l\u1ea1i n\u0103ng l\u01b0\u1ee3ng"
+                    : "relax and recharge";
         }
-        return "kh\u00e1m ph\u00e1 \u0111i\u1ec3m \u0111\u1ebfn n\u1ed5i b\u1eadt";
+        return noteLanguage == NoteLanguage.VI
+                ? "kh\u00e1m ph\u00e1 \u0111i\u1ec3m \u0111\u1ebfn n\u1ed5i b\u1eadt"
+                : "discover a standout local spot";
+    }
+
+    private NoteLanguage resolveNoteLanguage(String userQuery, PlaceSearchExtraction extraction) {
+        if (containsVietnameseSignals(userQuery)) {
+            return NoteLanguage.VI;
+        }
+        if (extraction != null) {
+            if (containsVietnameseSignals(extraction.vibe())
+                    || containsVietnameseSignals(extraction.locationHint())) {
+                return NoteLanguage.VI;
+            }
+            for (String query : extraction.searchQueries()) {
+                if (containsVietnameseSignals(query)) {
+                    return NoteLanguage.VI;
+                }
+            }
+            for (String keyword : extraction.keywords()) {
+                if (containsVietnameseSignals(keyword)) {
+                    return NoteLanguage.VI;
+                }
+            }
+        }
+        return NoteLanguage.EN;
+    }
+
+    private boolean containsVietnameseSignals(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        return value.matches(".*[đĐăĂâÂêÊôÔơƠưƯ].*");
+    }
+
+    private enum NoteLanguage {
+        VI,
+        EN
     }
 
     private void validateLocationFocus(

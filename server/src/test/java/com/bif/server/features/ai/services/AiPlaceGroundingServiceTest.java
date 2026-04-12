@@ -396,6 +396,43 @@ class AiPlaceGroundingServiceTest {
         assertFalse(hasFocus);
     }
 
+    @Test
+    void matchesLocationFocus_SupportsAdditionalCityAndDistrictAliases() {
+        AiPlaceGroundingService service = new AiPlaceGroundingService(
+                "mongo",
+                mongoPlaceSearchProvider,
+                typesensePlaceSearchProvider,
+                placeRepository,
+                new VibeHintNormalizer()
+        );
+
+        Place hanoiDistrictMatch = place("p10", "Coffee Spot");
+        hanoiDistrictMatch.setAddress("Quan 3, Ha Noi");
+        boolean hanoiMatch = service.matchesLocationFocus(
+                new PlaceSearchExtraction(
+                        List.of("coffee district 3 hanoi"),
+                        List.of("coffee"),
+                        null,
+                        null,
+                        "District 3, Hanoi"),
+                hanoiDistrictMatch
+        );
+
+        Place daNangMatch = place("p11", "Beach Cafe");
+        daNangMatch.setAddress("Son Tra, Da Nang");
+        boolean daNangFocus = service.hasLocationFocus(
+                new PlaceSearchExtraction(
+                        List.of("sunset cafe danang"),
+                        List.of("cafe"),
+                        null,
+                        null,
+                        "Da Nang")
+        );
+
+        assertTrue(hanoiMatch);
+        assertTrue(daNangFocus);
+    }
+
     private Place place(String id, String name) {
         Place place = new Place();
         place.setId(id);

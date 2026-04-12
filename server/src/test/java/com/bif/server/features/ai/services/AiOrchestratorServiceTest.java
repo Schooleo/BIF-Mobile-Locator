@@ -593,6 +593,40 @@ class AiOrchestratorServiceTest {
         assertTrue(secondStop.isAfter(firstStop));
     }
 
+    @Test
+    void draftTripFromQuery_UsesEnglishFallbackNotesForEnglishQuery() {
+        String query = "Plan a coffee trip in Hanoi tomorrow morning";
+        PlaceSearchExtraction extraction = new PlaceSearchExtraction(
+                List.of("hanoi coffee route"),
+                List.of("coffee", "hanoi"),
+                null,
+                "relax"
+        );
+
+        Place place = place("p1", "Lake Cafe");
+        place.setTags(List.of("cafe", "coffee"));
+        List<Place> candidates = List.of(place);
+
+        GeneratedItinerary rawDraft = new GeneratedItinerary(
+                "Coffee Day",
+                null,
+                List.of(new GeneratedStop("p1", 90, null, null))
+        );
+
+        when(placeSuggestionAgent.extract(query)).thenReturn(extraction);
+        when(aiSearchOrchestratorService.resolveCandidates(extraction)).thenReturn(candidates);
+        when(aiSearchOrchestratorService.hasLocationFocus(extraction)).thenReturn(false);
+        when(tripDraftingAgent.draft(eq(query), eq(candidates), any())).thenReturn(rawDraft);
+
+        AiTripDraftResult result = aiOrchestratorService.draftTripFromQuery(query);
+
+        assertNull(result.failureCode());
+        assertEquals(1, result.draft().stops().size());
+        String note = result.draft().stops().getFirst().note();
+        assertTrue(note != null && note.toLowerCase().contains("stop at"));
+        assertTrue(note == null || !note.contains("Bu\u1ed5i"));
+    }
+
     private Place place(String id, String name) {
         Place place = new Place();
         place.setId(id);
