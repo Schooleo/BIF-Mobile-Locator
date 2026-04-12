@@ -9,9 +9,9 @@ class PlaceSearchRequestDTOTest {
 
     @ParameterizedTest
     @CsvSource(value = {
-            "null, 5",
-            "0, 5",
-            "-10, 5",
+            "null, 15",
+            "0, 15",
+            "-10, 15",
             "1, 1",
             "25, 25",
             "50, 50",

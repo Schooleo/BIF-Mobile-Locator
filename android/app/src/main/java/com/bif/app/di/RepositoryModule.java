@@ -14,6 +14,7 @@ import com.bif.app.data.repository.RouteRepository;
 import com.bif.app.data.repository.TripRepository;
 import com.bif.app.data.routing.EmbeddedBRouterEngine;
 import com.bif.app.data.routing.OfflineRoutingEngine;
+import com.bif.app.data.sync.core.SyncManager;
 import com.bif.app.domain.repository.IChatRepository;
 import com.bif.app.domain.repository.IFavoriteRepository;
 import com.bif.app.domain.repository.IFriendRepository;
@@ -26,6 +27,7 @@ import com.bif.app.domain.repository.IProfileRepository;
 import com.bif.app.domain.repository.IReviewRepository;
 import com.bif.app.domain.repository.IRouteRepository;
 import com.bif.app.domain.repository.ITripRepository;
+import com.bif.app.domain.sync.ISyncInitializable;
 
 import javax.inject.Singleton;
 
@@ -85,6 +87,10 @@ public abstract class RepositoryModule {
     @Binds
     @Singleton
     public abstract IRouteRepository bindRouteRepository(RouteRepository repository);
+
+    @Binds
+    @Singleton
+    public abstract ISyncInitializable bindSyncInitializable(SyncManager syncManager);
 
     @Binds
     @Singleton

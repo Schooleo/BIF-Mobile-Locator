@@ -10,9 +10,9 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import com.bif.app.core.utils.AppSnackbar;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
@@ -150,14 +150,14 @@ public class GroupDetailFragment extends Fragment {
         btnSave.setOnClickListener(v -> {
             String newName = etGroupName.getText().toString().trim();
             if (newName.isEmpty()) {
-                Toast.makeText(requireContext(), R.string.enter_group_name, Toast.LENGTH_SHORT).show();
+                AppSnackbar.show(requireContext(), R.string.enter_group_name);
                 return;
             }
             try {
                 viewModel.updateGroupName(newName);
-                Toast.makeText(requireContext(), R.string.group_updated, Toast.LENGTH_SHORT).show();
+                AppSnackbar.show(requireContext(), R.string.group_updated);
             } catch (IllegalStateException exception) {
-                Toast.makeText(requireContext(), mapPolicyErrorToMessage(exception.getMessage()), Toast.LENGTH_SHORT).show();
+                AppSnackbar.show(requireContext(), mapPolicyErrorToMessage(exception.getMessage()));
             }
             etGroupName.clearFocus();
         });
@@ -203,12 +203,10 @@ public class GroupDetailFragment extends Fragment {
                 () -> {
                     try {
                         viewModel.disbandGroup();
-                        Toast.makeText(requireContext(),
-                                getString(R.string.group_disbanded),
-                                Toast.LENGTH_SHORT).show();
+                        AppSnackbar.show(requireContext(), getString(R.string.group_disbanded));
                         navigateBackToGroups();
                     } catch (IllegalStateException exception) {
-                        Toast.makeText(requireContext(), mapPolicyErrorToMessage(exception.getMessage()), Toast.LENGTH_SHORT).show();
+                        AppSnackbar.show(requireContext(), mapPolicyErrorToMessage(exception.getMessage()));
                     }
                 });
     }
@@ -235,7 +233,7 @@ public class GroupDetailFragment extends Fragment {
                 .setPositiveButton(R.string.save, (dialog, which) -> {
                     String newName = input.getText().toString().trim();
                     if (newName.isEmpty()) {
-                        Toast.makeText(requireContext(), R.string.enter_group_name, Toast.LENGTH_SHORT).show();
+                        AppSnackbar.show(requireContext(), R.string.enter_group_name);
                         return;
                     }
                     if (newName.equals(group.getName())) {
@@ -243,9 +241,9 @@ public class GroupDetailFragment extends Fragment {
                     }
                     try {
                         viewModel.updateGroupName(newName);
-                        Toast.makeText(requireContext(), R.string.group_updated, Toast.LENGTH_SHORT).show();
+                        AppSnackbar.show(requireContext(), R.string.group_updated);
                     } catch (IllegalStateException exception) {
-                        Toast.makeText(requireContext(), mapPolicyErrorToMessage(exception.getMessage()), Toast.LENGTH_SHORT).show();
+                        AppSnackbar.show(requireContext(), mapPolicyErrorToMessage(exception.getMessage()));
                     }
                 })
                 .show();
@@ -268,13 +266,13 @@ public class GroupDetailFragment extends Fragment {
         if (!isAdded() || getContext() == null) {
             return;
         }
-        Toast.makeText(getContext(), messageResId, Toast.LENGTH_SHORT).show();
+        AppSnackbar.show(getContext(), messageResId);
     }
 
     private void showToast(String message) {
         if (!isAdded() || getContext() == null || message == null) {
             return;
         }
-        Toast.makeText(getContext(), message, Toast.LENGTH_SHORT).show();
+        AppSnackbar.show(getContext(), message);
     }
 }

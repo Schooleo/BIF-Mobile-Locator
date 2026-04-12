@@ -1,5 +1,6 @@
 package com.bif.server.features.place.services;
 
+import com.bif.server.common.models.Location;
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.place.services.PlaceAddressEnrichmentService;
@@ -75,6 +76,7 @@ class PlaceServiceTest {
     void save_StampsVersionAndPersists() {
         Place place = new Place();
         place.setPersistedByUserId("user1");
+        place.setLocation(new Location(10.7758, 106.7010));
         when(placeAddressEnrichmentService.enrichAddress(any(), any(), any()))
             .thenReturn("123 Main St");
         when(syncVersionService.nextVersion()).thenReturn(10L);
@@ -93,6 +95,8 @@ class PlaceServiceTest {
     void saveFromSearch_WhenPlaceDoesNotExist_Persists() {
         Place place = new Place();
         place.setId("new1");
+        place.setName("Cho Ben Thanh");
+        place.setLocation(new Location(10.7720, 106.6980));
         when(placeAddressEnrichmentService.enrichAddress(any(), any(), any()))
             .thenReturn("456 Search Rd");
         when(placeRepository.findById("new1")).thenReturn(Optional.empty());
@@ -116,6 +120,7 @@ class PlaceServiceTest {
         existing.setName("Already saved");
         Place input = new Place();
         input.setId("existing1");
+        input.setLocation(new Location(10.78, 106.69));
         when(placeRepository.findById("existing1")).thenReturn(Optional.of(existing));
 
         Place result = placeService.saveFromSearch(input);
@@ -140,6 +145,40 @@ class PlaceServiceTest {
         assertEquals(11L, place.getServerVersion());
         verify(placeRepository).save(place);
         verify(placeSearchIndexSyncService).deleteById("p1");
+    }
+
+    @Test
+    void saveFromSearch_WhenGeocodeDuplicateNearby_ReturnsExistingWithoutSaving() {
+        Place existing = new Place();
+        existing.setId("mongo_1");
+        existing.setName("Ben Thanh Market");
+        existing.setLocation(new Location(10.77200, 106.69800));
+
+        Place input = new Place();
+        input.setId("geocode_10.7722_106.6982");
+        input.setName("ben thanh market");
+        input.setLocation(new Location(10.77220, 106.69820));
+
+        when(placeRepository.findByNameContainingIgnoreCaseOrAddressContainingIgnoreCase(
+                "ben thanh market", "ben thanh market"))
+                .thenReturn(List.of(existing));
+
+        Place result = placeService.saveFromSearch(input);
+
+        assertSame(existing, result);
+        verify(placeRepository, never()).save(any());
+        verifyNoInteractions(placeSearchIndexSyncService);
+    }
+
+    @Test
+    void save_WhenCoordinatesInvalid_ThrowsAndSkipsPersistence() {
+        Place place = new Place();
+        place.setId("p_bad");
+        place.setLocation(new Location(0.0, 0.0));
+
+        assertThrows(IllegalArgumentException.class, () -> placeService.save(place));
+        verify(placeRepository, never()).save(any());
+        verifyNoInteractions(placeSearchIndexSyncService);
     }
 
     @Test

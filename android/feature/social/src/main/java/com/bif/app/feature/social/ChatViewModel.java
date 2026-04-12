@@ -143,6 +143,11 @@ public class ChatViewModel extends ViewModel {
         return aiBadgesEnabledLiveData;
     }
 
+    public boolean isAiAvailable() {
+        Boolean available = aiBadgesEnabledLiveData.getValue();
+        return available != null ? available : networkMonitor.isOnline();
+    }
+
     public LiveData<String> getSnackbarMessage() {
         return snackbarMessageLiveData;
     }

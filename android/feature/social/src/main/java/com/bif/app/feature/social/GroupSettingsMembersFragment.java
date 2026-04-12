@@ -8,9 +8,9 @@ import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import com.bif.app.core.utils.AppSnackbar;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
@@ -106,7 +106,7 @@ public class GroupSettingsMembersFragment extends Fragment {
         }
 
         if (position == 0) {
-            Toast.makeText(requireContext(), R.string.group_role_owner_fixed, Toast.LENGTH_SHORT).show();
+            AppSnackbar.show(requireContext(), R.string.group_role_owner_fixed);
             return;
         }
 
@@ -137,24 +137,20 @@ public class GroupSettingsMembersFragment extends Fragment {
                         currentGroup.getMemberRoles().put(member.getId(), newRole);
                     }
 
-                    Toast.makeText(
-                            requireContext(),
-                            getString(R.string.group_role_updated, member.getName(), roleItems[selectedItem[0]]),
-                            Toast.LENGTH_SHORT
-                    ).show();
+                    AppSnackbar.show(requireContext(), getString(R.string.group_role_updated, member.getName(), roleItems[selectedItem[0]]));
                 })
                 .show();
     }
 
     private void showAddMembersDialog() {
         if (currentGroup == null) {
-            Toast.makeText(requireContext(), R.string.group_members_error, Toast.LENGTH_SHORT).show();
+            AppSnackbar.show(requireContext(), R.string.group_members_error);
             return;
         }
 
         List<Friend> allFriends = viewModel.getFriends().getValue();
         if (allFriends == null || allFriends.isEmpty()) {
-            Toast.makeText(requireContext(), R.string.group_add_member_no_friends, Toast.LENGTH_SHORT).show();
+            AppSnackbar.show(requireContext(), R.string.group_add_member_no_friends);
             return;
         }
 
@@ -176,7 +172,7 @@ public class GroupSettingsMembersFragment extends Fragment {
         }
 
         if (availableFriends.isEmpty()) {
-            Toast.makeText(requireContext(), R.string.group_add_member_none_available, Toast.LENGTH_SHORT).show();
+            AppSnackbar.show(requireContext(), R.string.group_add_member_none_available);
             return;
         }
 
@@ -203,22 +199,18 @@ public class GroupSettingsMembersFragment extends Fragment {
                 .setNegativeButton(R.string.cancel, (dialog, which) -> dialog.dismiss())
                 .setPositiveButton(R.string.group_add_member_confirm, (dialog, which) -> {
                     if (selectedFriends.isEmpty()) {
-                        Toast.makeText(requireContext(), R.string.group_add_member_pick_one, Toast.LENGTH_SHORT).show();
+                        AppSnackbar.show(requireContext(), R.string.group_add_member_pick_one);
                         return;
                     }
                     viewModel.addMembers(selectedFriends);
-                    Toast.makeText(
-                            requireContext(),
-                            getString(R.string.group_add_member_success_count, selectedFriends.size()),
-                            Toast.LENGTH_SHORT
-                    ).show();
+                    AppSnackbar.show(requireContext(), getString(R.string.group_add_member_success_count, selectedFriends.size()));
                 })
                 .show();
     }
 
     private void confirmRemoveMember(Friend member) {
         if (member == null) {
-            Toast.makeText(requireContext(), R.string.group_update_failed, Toast.LENGTH_SHORT).show();
+            AppSnackbar.show(requireContext(), R.string.group_update_failed);
             return;
         }
 
@@ -230,13 +222,11 @@ public class GroupSettingsMembersFragment extends Fragment {
                 () -> {
                     try {
                         viewModel.removeMember(member);
-                        Toast.makeText(requireContext(),
-                                getString(R.string.member_removed, member.getName()),
-                                Toast.LENGTH_SHORT).show();
+                        AppSnackbar.show(requireContext(), getString(R.string.member_removed, member.getName()));
                     } catch (IllegalStateException exception) {
-                        Toast.makeText(requireContext(), mapPolicyErrorToMessage(exception.getMessage()), Toast.LENGTH_SHORT).show();
+                        AppSnackbar.show(requireContext(), mapPolicyErrorToMessage(exception.getMessage()));
                     } catch (Exception exception) {
-                        Toast.makeText(requireContext(), R.string.group_update_failed, Toast.LENGTH_SHORT).show();
+                        AppSnackbar.show(requireContext(), R.string.group_update_failed);
                     }
                 });
     }

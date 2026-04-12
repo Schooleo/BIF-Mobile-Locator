@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
+import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.search.config.TypesenseProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -37,6 +38,7 @@ public class TypesensePlaceIndexSyncServiceEnsureCollectionTest {
 
         ObjectMapper mapper = new ObjectMapper();
         HttpClient mockClient = Mockito.mock(HttpClient.class);
+        PlaceRepository placeRepository = Mockito.mock(PlaceRepository.class);
 
         @SuppressWarnings("unchecked")
         HttpResponse<String> respHealth = Mockito.mock(HttpResponse.class);
@@ -54,7 +56,8 @@ public class TypesensePlaceIndexSyncServiceEnsureCollectionTest {
                 .thenReturn(respGet)
                 .thenReturn(respPost);
 
-        TypesensePlaceIndexSyncService svc = new TypesensePlaceIndexSyncService(props, mapper, mockClient);
+        TypesensePlaceIndexSyncService svc = new TypesensePlaceIndexSyncService(
+            props, mapper, mockClient, placeRepository);
 
         svc.ensureCollectionExists();
 

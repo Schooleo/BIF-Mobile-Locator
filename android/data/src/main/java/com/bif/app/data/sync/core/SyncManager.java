@@ -22,6 +22,7 @@ import com.bif.app.data.source.local.dao.ProfileDao;
 import com.bif.app.data.source.local.dao.ReviewDao;
 import com.bif.app.data.source.local.dao.SyncQueueDao;
 import com.bif.app.data.source.local.dao.TripDao;
+import com.bif.app.data.source.local.database.AppDatabase;
 import com.bif.app.data.source.local.entity.ChatMessageEntity;
 import com.bif.app.data.source.local.entity.GroupEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
@@ -34,6 +35,7 @@ import com.bif.app.data.sync.handler.ReviewSyncEntityHandler;
 import com.bif.app.data.sync.handler.SyncEntityHandler;
 import com.bif.app.data.sync.handler.TripStopSyncEntityHandler;
 import com.bif.app.data.sync.handler.TripSyncEntityHandler;
+import com.bif.app.domain.sync.ISyncInitializable;
 import com.google.gson.Gson;
 
 import java.io.IOException;
@@ -58,7 +60,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext;
 import retrofit2.Response;
 
 @Singleton
-public class SyncManager {
+public class SyncManager implements ISyncInitializable {
 
     private static final String TAG = "SyncManager";
     private static final int MAX_RETRY_COUNT = 5;
@@ -78,6 +80,7 @@ public class SyncManager {
 
     private final RestApiService restApiService;
     private final SyncQueueDao syncQueueDao;
+    private final FavoriteDao favoriteDao;
     private final ChatMessageDao chatMessageDao;
     private final GroupDao groupDao;
     private final NetworkMonitor networkMonitor;
@@ -93,6 +96,20 @@ public class SyncManager {
     private long lastPulledVersion;
     private boolean lastObservedOnline;
 
+    /**
+     * Redacts a userId by returning either a masked version or a static placeholder.
+     * Protects PII from appearing in logs.
+     */
+    private String redactUserId(String id) {
+        if (id == null || id.isEmpty()) {
+            return "<null>";
+        }
+        if (id.length() <= 4) {
+            return "****";
+        }
+        return "****" + id.substring(id.length() - 4);
+    }
+
     @Inject
     public SyncManager(RestApiService restApiService,
             SyncQueueDao syncQueueDao,
@@ -105,10 +122,12 @@ public class SyncManager {
             FavoriteDao favoriteDao,
             ProfileDao profileDao,
             ReviewDao reviewDao,
+            AppDatabase appDatabase,
             NetworkMonitor networkMonitor,
             @ApplicationContext Context appContext) {
         this.restApiService = restApiService;
         this.syncQueueDao = syncQueueDao;
+        this.favoriteDao = favoriteDao;
         this.chatMessageDao = chatMessageDao;
         this.groupDao = groupDao;
         this.networkMonitor = networkMonitor;
@@ -128,7 +147,12 @@ public class SyncManager {
         registerHandler(new GroupSyncEntityHandler(groupDao, gson));
         registerHandler(new FavoriteSyncEntityHandler(favoriteDao, gson));
         registerHandler(new ProfileSyncEntityHandler(profileDao, gson, appContext));
-        registerHandler(new ReviewSyncEntityHandler(reviewDao, gson));
+        registerHandler(new ReviewSyncEntityHandler(
+                reviewDao,
+                placeDao,
+                syncQueueDao,
+                appDatabase,
+                gson));
 
         loadPersistedSyncState();
         registerReconnectAutoSync();
@@ -139,6 +163,7 @@ public class SyncManager {
             NetworkMonitor networkMonitor) {
         this.restApiService = restApiService;
         this.syncQueueDao = syncQueueDao;
+        this.favoriteDao = null;
         this.chatMessageDao = null;
         this.groupDao = null;
         this.networkMonitor = networkMonitor;
@@ -153,6 +178,7 @@ public class SyncManager {
         registerReconnectAutoSync();
     }
 
+    @Override
     public void setUserContext(String userId, String deviceId) {
         String normalizedUserId = userId != null ? userId.trim() : null;
         boolean hasCurrentUser = this.userId != null
@@ -161,6 +187,9 @@ public class SyncManager {
                 && !normalizedUserId.isEmpty();
         if (hasCurrentUser && hasIncomingUser
                 && !this.userId.equals(normalizedUserId)) {
+            Log.w(TAG, "Sync user context changed. oldUserId=" + redactUserId(this.userId)
+                + " newUserId=" + redactUserId(normalizedUserId)
+                + " -> reset lastPulledVersion");
             setLastPulledVersion(0L);
         }
 
@@ -175,6 +204,7 @@ public class SyncManager {
         }
     }
 
+    @Override
     public void setLastPulledVersion(long version) {
         this.lastPulledVersion = version;
         if (syncPrefs != null) {
@@ -186,6 +216,24 @@ public class SyncManager {
 
     public long getLastPulledVersion() {
         return lastPulledVersion;
+    }
+
+    @Override
+    public void resetSyncContext() {
+        userId = null;
+        lastPulledVersion = 0L;
+
+        if (syncPrefs == null) {
+            return;
+        }
+
+        boolean committed = syncPrefs.edit()
+                .remove(KEY_USER_ID)
+                .remove(KEY_LAST_PULLED_VERSION)
+                .commit();
+        if (!committed) {
+            Log.w(TAG, "Failed to commit sync context reset");
+        }
     }
 
     public SyncResponseDto sync() {
@@ -208,9 +256,18 @@ public class SyncManager {
         request.deviceId = deviceId;
         request.lastPulledVersion = lastPulledVersion;
 
-        List<SyncQueueEntity> pending = syncQueueDao.getPending();
+        List<SyncQueueEntity> pending = syncQueueDao.getPendingForUser(userId);
         List<SyncChangeDto> pushedChanges = new ArrayList<>();
+        List<SyncQueueEntity> pushedEntries = new ArrayList<>();
         for (SyncQueueEntity entry : pending) {
+            if (!isOwnedByActiveUser(entry, userId)) {
+                entry.status = QUEUE_STATUS_BLOCKED;
+                syncQueueDao.update(entry);
+                Log.w(TAG, "Blocked sync entry due to user ownership mismatch. entryId="
+                        + entry.id + " activeUserId=" + redactUserId(userId));
+                continue;
+            }
+
             entry.status = "IN_FLIGHT";
             syncQueueDao.update(entry);
 
@@ -222,6 +279,7 @@ public class SyncManager {
             change.clientChangeId = entry.clientChangeId;
             change.payload = entry.payload;
             pushedChanges.add(change);
+            pushedEntries.add(entry);
         }
         request.pushedChanges = pushedChanges.isEmpty()
                 ? null
@@ -233,7 +291,7 @@ public class SyncManager {
 
             if (response.isSuccessful() && response.body() != null) {
                 SyncResponseDto syncResponse = response.body();
-                settlePendingEntries(pending, syncResponse);
+                settlePendingEntries(pushedEntries, syncResponse);
 
                 applyPulledChanges(syncResponse.pulledChanges);
                 hydrateChatCachesForAllGroups();
@@ -247,14 +305,14 @@ public class SyncManager {
 
                 return syncResponse;
             } else {
-                Log.e(TAG, "Sync failed with status: "
-                        + response.code());
-                handleFailedPush(pending);
+                Log.e(TAG, "Sync failed with status=" + response.code()
+                        + " message=" + response.message());
+                handleFailedPush(pushedEntries);
                 return null;
             }
         } catch (IOException e) {
             Log.e(TAG, "Sync network error", e);
-            handleFailedPush(pending);
+            handleFailedPush(pushedEntries);
             return null;
         }
     }
@@ -269,7 +327,13 @@ public class SyncManager {
             String operation, String clientChangeId,
             Object payload) {
         enqueueExecutor.execute(() -> {
+            if (this.userId == null || this.userId.isEmpty()) {
+                Log.w(TAG, "Cannot enqueue change: user context is null or empty");
+                return;
+            }
+            
             SyncQueueEntity entry = new SyncQueueEntity();
+            entry.userId = userId;
             entry.entityType = entityType;
             entry.entityId = entityId;
             entry.operation = operation;
@@ -282,6 +346,7 @@ public class SyncManager {
         });
     }
 
+    @Override
     public void syncIfOnline() {
         reconnectSyncExecutor.execute(() -> {
             if (networkMonitor.isOnline()) {
@@ -343,6 +408,7 @@ public class SyncManager {
             switch (normalizedStatus) {
                 case PUSH_STATUS_APPLIED:
                 case PUSH_STATUS_ALREADY_APPLIED:
+                    clearPendingSyncIfFavorite(entry);
                     syncQueueDao.remove(entry.id);
                     removedIds.add(entry.id);
                     break;
@@ -639,5 +705,44 @@ public class SyncManager {
             return (String) payload;
         }
         return gson.toJson(payload);
+    }
+
+    private boolean isOwnedByActiveUser(SyncQueueEntity entry,
+                                        String activeUserId) {
+        if (entry == null || activeUserId == null || activeUserId.trim().isEmpty()) {
+            return false;
+        }
+        if (entry.userId == null || entry.userId.trim().isEmpty()) {
+            return false;
+        }
+        return activeUserId.equals(entry.userId.trim());
+    }
+
+    private void clearPendingSyncIfFavorite(SyncQueueEntity queueEntry) {
+        if (favoriteDao == null || queueEntry == null) {
+            return;
+        }
+
+        if (queueEntry.entityType == null
+                || !"favorite".equalsIgnoreCase(queueEntry.entityType)
+                || queueEntry.entityId == null
+                || queueEntry.entityId.trim().isEmpty()
+                || queueEntry.userId == null
+                || queueEntry.userId.trim().isEmpty()) {
+            return;
+        }
+
+        try {
+            com.bif.app.data.source.local.entity.FavoriteEntity localFavorite =
+                    favoriteDao.findById(queueEntry.entityId.trim(), queueEntry.userId.trim());
+            if (localFavorite == null || !localFavorite.pendingSync) {
+                return;
+            }
+            localFavorite.pendingSync = false;
+            favoriteDao.update(localFavorite);
+        } catch (Exception exception) {
+            Log.w(TAG, "Failed to clear pendingSync for favorite entityId="
+                    + queueEntry.entityId, exception);
+        }
     }
 }

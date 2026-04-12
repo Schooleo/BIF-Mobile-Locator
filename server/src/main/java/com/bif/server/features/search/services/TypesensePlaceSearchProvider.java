@@ -29,6 +29,7 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(
             TypesensePlaceSearchProvider.class);
+    private static final int DEFAULT_GEO_RADIUS_KM = 25;
 
     private final TypesenseProperties typesenseProperties;
     private final ObjectMapper objectMapper;
@@ -150,27 +151,46 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
                 encodedQueryBy,
                 resolvedPerPage
         ));
-        uriBuilder.append("&prioritize_exact_match=true");
+        if ("name,address".equals(queryBy)) {
+            uriBuilder.append("&query_by_weights=3,1");
+        }
+        uriBuilder.append("&drop_tokens_threshold=0");
+        uriBuilder.append("&num_typos=1");
+
+        String sortBy = "_text_match:desc,rating:desc";
+        String filterBy = null;
 
         if (hasCoordinates(request)) {
-            String sortBy = String.format(
+            sortBy = String.format(
                     Locale.US,
-                    "_geo_distance(%s,%s):asc,rating:desc",
+                "location(%s,%s):asc,_text_match:desc,rating:desc",
                     request.getLatitude(),
                     request.getLongitude());
-            uriBuilder.append("&sort_by=").append(encode(sortBy));
 
             if (shouldApplyGeoRadiusFilter(request)) {
-                String filterBy = String.format(
+                filterBy = String.format(
                         Locale.US,
-                        "location:(%s,%s,50km)",
+                        "location:(%s,%s,%skm)",
                         request.getLatitude(),
-                        request.getLongitude());
-                uriBuilder.append("&filter_by=").append(encode(filterBy));
+                        request.getLongitude(),
+                        resolveGeoRadiusKm());
             }
         }
 
+        uriBuilder.append("&sort_by=").append(encode(sortBy));
+        if (filterBy != null && !filterBy.isBlank()) {
+            uriBuilder.append("&filter_by=").append(encode(filterBy));
+        }
+
         return URI.create(uriBuilder.toString());
+    }
+
+    private int resolveGeoRadiusKm() {
+        Integer configuredRadius = typesenseProperties.getGeoRadiusKm();
+        if (configuredRadius == null || configuredRadius <= 0) {
+            return DEFAULT_GEO_RADIUS_KM;
+        }
+        return configuredRadius;
     }
 
     private List<Place> parsePlaces(String payload) throws IOException {
@@ -322,10 +342,14 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
 
         Double latitude = request.getLatitude();
         Double longitude = request.getLongitude();
+        // Invalid only if BOTH axes are exactly 0.0 (placeholder coordinates)
+        if (latitude != null && longitude != null && latitude == 0.0d && longitude == 0.0d) {
+            return false;
+        }
         return latitude != null
                 && longitude != null
                 && Double.isFinite(latitude)
-                && Double.isFinite(longitude);
+            && Double.isFinite(longitude);
     }
 
     private boolean shouldApplyGeoRadiusFilter(PlaceSearchRequestDTO request) {

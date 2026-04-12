@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.timeout;
@@ -24,6 +25,7 @@ import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
 import com.bif.app.domain.model.Place;
+import com.bif.app.domain.model.PlaceIdentityContext;
 import com.bif.app.domain.model.Route;
 import com.bif.app.domain.model.Review;
 import com.bif.app.domain.repository.IFavoriteRepository;
@@ -35,6 +37,7 @@ import com.bif.app.domain.repository.IRouteRepository;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.concurrent.Executor;
 
 import org.junit.Before;
@@ -283,6 +286,75 @@ public class MapViewModelTest {
         Mockito.verify(placeRepository, timeout(1200)).searchPlaces(eq(query), isNull());
     }
 
+    @Test
+    public void searchForPlaces_rapidInput_dispatchesOnlyLatestDebouncedQuery() {
+        android.os.Handler handler = Mockito.mock(android.os.Handler.class);
+        ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+
+        MapViewModel vm = new MapViewModel(
+                mapRepository,
+                placeRepository,
+                favoriteRepository,
+                groupRepository,
+                routeRepository,
+                reviewRepository,
+                directExecutor,
+                handler,
+                400L);
+
+        MutableLiveData<List<Place>> finalResults = new MutableLiveData<>(Collections.emptyList());
+        when(placeRepository.searchPlaces("coffee near me", null)).thenReturn(finalResults);
+        vm.searchResults.observeForever(list -> {
+        });
+
+        vm.searchForPlaces("coffee");
+        vm.searchForPlaces("coffee near me");
+
+        verify(handler, Mockito.atLeastOnce()).postDelayed(runnableCaptor.capture(), eq(400L));
+        List<Runnable> postedRunnables = new ArrayList<>(runnableCaptor.getAllValues());
+        assertTrue(postedRunnables.size() >= 2);
+
+        Runnable firstRunnable = postedRunnables.get(0);
+        Runnable latestRunnable = postedRunnables.get(postedRunnables.size() - 1);
+        assertNotNull(firstRunnable);
+        assertNotNull(latestRunnable);
+
+        firstRunnable.run();
+
+        verify(placeRepository, never()).searchPlaces(eq("coffee"), isNull());
+
+        latestRunnable.run();
+
+        verify(placeRepository).searchPlaces(eq("coffee near me"), isNull());
+    }
+
+    @Test
+    public void searchForPlaces_emptyQuery_emitsEmptyImmediatelyWithoutRepositoryCall() {
+        android.os.Handler handler = Mockito.mock(android.os.Handler.class);
+
+        MapViewModel vm = new MapViewModel(
+                mapRepository,
+                placeRepository,
+                favoriteRepository,
+                groupRepository,
+                routeRepository,
+                reviewRepository,
+                directExecutor,
+                handler,
+                400L);
+
+        vm.searchResults.observeForever(list -> {
+        });
+
+        vm.searchForPlaces("   ");
+
+        List<Place> results = vm.searchResults.getValue();
+        assertNotNull(results);
+        assertTrue(results.isEmpty());
+        verify(placeRepository, never()).searchPlaces(anyString(), any());
+        verify(handler, never()).postDelayed(any(Runnable.class), anyLong());
+    }
+
     // allFavorites
 
     @Test
@@ -492,13 +564,23 @@ public class MapViewModelTest {
         // Arrange - set current place
         when(reviewRepository.resolveInternalPlaceId(any(), any(), anyDouble(), anyDouble(), any()))
             .thenReturn("internal-123");
-        viewModel.loadReviews(new Place("ext-1", "Park", "Loc", 4.0, new Location(0,0)));
+        Place place = new Place("ext-1", "Park", "Loc", 4.0, new Location(0,0));
+        place.placeSource = "OSM";
+        viewModel.loadReviews(place);
         
         // Act
         viewModel.submitReview(5, "Excellent!");
 
         // Assert
-        verify(reviewRepository).submitReview("internal-123", 5, "Excellent!");
+        ArgumentCaptor<PlaceIdentityContext> contextCaptor = ArgumentCaptor.forClass(PlaceIdentityContext.class);
+        verify(reviewRepository).submitReview(eq("internal-123"), eq(5), eq("Excellent!"), contextCaptor.capture());
+        PlaceIdentityContext context = contextCaptor.getValue();
+        assertNotNull(context);
+        assertEquals("OSM", context.externalSource);
+        assertEquals("ext-1", context.externalId);
+        assertEquals(Double.valueOf(0.0), context.lat);
+        assertEquals(Double.valueOf(0.0), context.lng);
+        assertEquals("Park", context.placeName);
     }
 
     @Test
@@ -518,14 +600,16 @@ public class MapViewModelTest {
 
         queuedViewModel.submitReview(5, "Should be ignored");
 
-        verify(reviewRepository, never()).submitReview(anyString(), anyInt(), anyString());
+        verify(reviewRepository, never()).submitReview(anyString(), anyInt(), anyString(), any(PlaceIdentityContext.class));
     }
 
     @Test
     public void updateReview_WhenCalled_TriggersRepositoryUpdate() {
         when(reviewRepository.resolveInternalPlaceId(any(), any(), anyDouble(), anyDouble(), any()))
                 .thenReturn("internal-123");
-        viewModel.loadReviews(new Place("ext-1", "Park", "Loc", 4.0, new Location(0,0)));
+        Place place = new Place("ext-1", "Park", "Loc", 4.0, new Location(0,0));
+        place.placeSource = "OSM";
+        viewModel.loadReviews(place);
 
         Review existing = new Review();
         existing.placeId = "internal-123";
@@ -533,7 +617,15 @@ public class MapViewModelTest {
 
         viewModel.updateReview(existing, 4, "Updated");
 
-        verify(reviewRepository).updateReview("internal-123", 4, "Updated");
+        ArgumentCaptor<PlaceIdentityContext> contextCaptor = ArgumentCaptor.forClass(PlaceIdentityContext.class);
+        verify(reviewRepository).updateReview(eq("internal-123"), eq(4), eq("Updated"), contextCaptor.capture());
+        PlaceIdentityContext context = contextCaptor.getValue();
+        assertNotNull(context);
+        assertEquals("OSM", context.externalSource);
+        assertEquals("ext-1", context.externalId);
+        assertEquals(Double.valueOf(0.0), context.lat);
+        assertEquals(Double.valueOf(0.0), context.lng);
+        assertEquals("Park", context.placeName);
     }
 
     @Test

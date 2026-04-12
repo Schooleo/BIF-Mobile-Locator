@@ -1,7 +1,10 @@
 package com.bif.server.features.search.services;
 
 import com.bif.server.features.place.models.Place;
+import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.search.config.TypesenseProperties;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
@@ -17,11 +20,14 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.StringJoiner;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
 public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncService {
@@ -33,16 +39,20 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
     private static final long INITIAL_BACKOFF_MS = 500;
     private static final String DEFAULT_PROTOCOL = "http";
     private static final String DEFAULT_HOST = "localhost";
+    private static final AtomicBoolean MISSING_GEOPOINT_WARNING_LOGGED = new AtomicBoolean(false);
 
     private final TypesenseProperties typesenseProperties;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
+    private final PlaceRepository placeRepository;
 
         @Autowired
         public TypesensePlaceIndexSyncService(TypesenseProperties typesenseProperties,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            PlaceRepository placeRepository) {
         this.typesenseProperties = typesenseProperties;
         this.objectMapper = objectMapper;
+        this.placeRepository = placeRepository;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(
                         typesenseProperties.getConnectTimeoutMs()))
@@ -52,14 +62,171 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
         // Constructor overload for tests to inject a custom HttpClient
         TypesensePlaceIndexSyncService(TypesenseProperties typesenseProperties,
                        ObjectMapper objectMapper,
-                       HttpClient httpClient) {
+                       HttpClient httpClient,
+                       PlaceRepository placeRepository) {
         this.typesenseProperties = typesenseProperties;
         this.objectMapper = objectMapper;
+        this.placeRepository = placeRepository;
         this.httpClient = httpClient != null ? httpClient : HttpClient.newBuilder()
             .connectTimeout(Duration.ofMillis(
                 typesenseProperties.getConnectTimeoutMs()))
             .build();
         }
+
+    @Override
+    public void updateRatingOnly(String placeId, double newRating, int reviewCount) {
+        if (!isReady() || placeId == null || placeId.isBlank()) {
+            return;
+        }
+
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("rating", newRating);
+            payload.put("reviewCount", reviewCount);
+
+            String body = objectMapper.writeValueAsString(payload);
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(buildDocumentUri(placeId))
+                    .timeout(Duration.ofMillis(
+                            typesenseProperties.getReadTimeoutMs()))
+                    .header("X-TYPESENSE-API-KEY", typesenseProperties.getApiKey())
+                    .header("Content-Type", "application/json")
+                    .method("PATCH", HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+
+                HttpResponse<String> response = sendWithRetry(request, "patch rating for place " + placeId);
+                if (response == null) {
+                return;
+                }
+
+            if (response.statusCode() == 404) {
+                    if (!mergeExistingDocumentAndUpsert(placeId, newRating, reviewCount)) {
+                        fallbackUpsertForMissingDocument(placeId, newRating, reviewCount);
+                    }
+                return;
+            }
+
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                LOGGER.warn("Typesense rating patch failed for place {} with status {}",
+                        placeId, response.statusCode());
+            }
+        } catch (IOException e) {
+            LOGGER.error("Typesense rating patch I/O failure for place {}", placeId, e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            LOGGER.error("Typesense rating patch interrupted for place {}", placeId, e);
+        }
+    }
+
+    private boolean mergeExistingDocumentAndUpsert(String placeId, double newRating, int reviewCount) {
+        try {
+            HttpRequest getRequest = HttpRequest.newBuilder()
+                    .uri(buildDocumentUri(placeId))
+                    .timeout(Duration.ofMillis(typesenseProperties.getReadTimeoutMs()))
+                    .header("X-TYPESENSE-API-KEY", typesenseProperties.getApiKey())
+                    .GET()
+                    .build();
+
+            HttpResponse<String> getResponse = sendWithRetry(getRequest, "fetch place " + placeId + " before rating merge");
+            if (getResponse == null) {
+                return false;
+            }
+
+            if (getResponse.statusCode() == 404) {
+                return false;
+            }
+
+            if (getResponse.statusCode() < 200 || getResponse.statusCode() >= 300) {
+                LOGGER.warn("Typesense pre-merge fetch failed for place {} with status {}",
+                        placeId, getResponse.statusCode());
+                return false;
+            }
+
+            if (getResponse.body() == null || getResponse.body().isBlank()) {
+                LOGGER.warn("Typesense pre-merge fetch returned empty body for place {}", placeId);
+                return false;
+            }
+
+            Map<String, Object> existingDocument = objectMapper.readValue(
+                    getResponse.body(),
+                    new TypeReference<Map<String, Object>>() {
+                    });
+            existingDocument.put("rating", newRating);
+            existingDocument.put("reviewCount", reviewCount);
+            existingDocument.putIfAbsent("id", placeId);
+
+            String upsertBody = objectMapper.writeValueAsString(existingDocument);
+            HttpRequest upsertRequest = HttpRequest.newBuilder()
+                    .uri(buildUpsertUri())
+                    .timeout(Duration.ofMillis(typesenseProperties.getReadTimeoutMs()))
+                    .header("X-TYPESENSE-API-KEY", typesenseProperties.getApiKey())
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(upsertBody))
+                    .build();
+
+            HttpResponse<String> upsertResponse = sendWithRetry(upsertRequest,
+                    "merged upsert for place " + placeId + " after rating patch miss");
+            return upsertResponse != null && upsertResponse.statusCode() >= 200 && upsertResponse.statusCode() < 300;
+        } catch (IOException e) {
+            LOGGER.error("Typesense merge+upsert I/O failure for place {}", placeId, e);
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            LOGGER.error("Typesense merge+upsert interrupted for place {}", placeId, e);
+            return false;
+        }
+    }
+
+    private void fallbackUpsertForMissingDocument(String placeId, double newRating, int reviewCount) {
+        if (placeRepository == null) {
+            LOGGER.warn("Cannot fallback upsert for place {} because repository is unavailable", placeId);
+            return;
+        }
+
+        placeRepository.findById(placeId).ifPresentOrElse(
+            place -> upsertWithRating(place, newRating, reviewCount),
+            () -> LOGGER.warn("Typesense PATCH fallback skipped: place {} not found in Mongo", placeId));
+    }
+
+    private void upsertWithRating(Place place, double newRating, int reviewCount) {
+        if (!isReady() || place == null || place.getId() == null
+                || place.getId().isBlank()) {
+            return;
+        }
+
+        try {
+            Map<String, Object> document = objectMapper.convertValue(
+                place, new TypeReference<Map<String, Object>>() {
+                });
+            document.put("rating", newRating);
+            document.put("reviewCount", reviewCount);
+            if (place.getLocation() != null) {
+                double latitude = place.getLocation().getLatitude();
+                double longitude = place.getLocation().getLongitude();
+                document.put("location", Arrays.asList(latitude, longitude));
+            } else {
+                // Do not send location: null
+                document.remove("location");
+            }
+
+            String body = objectMapper.writeValueAsString(document);
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(buildUpsertUri())
+                    .timeout(Duration.ofMillis(
+                            typesenseProperties.getReadTimeoutMs()))
+                    .header("X-TYPESENSE-API-KEY", typesenseProperties.getApiKey())
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+
+            sendWithRetry(request, "upsert place " + place.getId() + " with rating fallback");
+        } catch (IOException e) {
+            LOGGER.error("Typesense upsert I/O failure for place {}", place.getId(), e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            LOGGER.error("Typesense upsert interrupted for place {}", place.getId(), e);
+        }
+    }
 
     @Override
     public void upsert(Place place) {
@@ -127,10 +294,16 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
             if (response != null && response.statusCode() >= 200 && response.statusCode() < 300) {
                 // Count successful lines (each line is a JSON result)
                 int successCount = 0;
+                int failedCount = 0;
                 for (String line : response.body().split("\n")) {
                     if (line.contains("\"success\":true")) {
                         successCount++;
+                    } else if (!line.isBlank()) {
+                        failedCount++;
                     }
+                }
+                if (failedCount > 0) {
+                    LOGGER.warn("Typesense batch import had {} failed document(s)", failedCount);
                 }
                 return successCount;
             }
@@ -176,7 +349,7 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(buildDeleteUri(placeId))
+                    .uri(buildDocumentUri(placeId))
                     .timeout(Duration.ofMillis(
                             typesenseProperties.getReadTimeoutMs()))
                     .header("X-TYPESENSE-API-KEY", typesenseProperties.getApiKey())
@@ -240,6 +413,7 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
 
             HttpResponse<String> getResp = httpClient.send(getReq, HttpResponse.BodyHandlers.ofString());
             if (getResp.statusCode() == 200) {
+                maybeLogMissingGeopointWarning(collection, getResp.body());
                 LOGGER.info("Typesense collection '{}' already exists.", collection);
                 return;
             }
@@ -296,6 +470,55 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
         }
     }
 
+    private void maybeLogMissingGeopointWarning(String collection, String schemaPayload) {
+        if (!isLocationGeopointMissing(schemaPayload)) {
+            return;
+        }
+        if (MISSING_GEOPOINT_WARNING_LOGGED.compareAndSet(false, true)) {
+            LOGGER.warn(
+                    "Typesense collection '{}' schema is missing geopoint field 'location'. "
+                            + "Collection may need reindex/migration to support geo search.",
+                    collection);
+        }
+        throw new IllegalStateException(
+                "Typesense collection '" + collection + "' schema is missing geopoint field 'location'. "
+                + "Cannot proceed with search indexing. Please recreate the collection.");
+    }
+
+    private boolean isLocationGeopointMissing(String schemaPayload) {
+        if (schemaPayload == null || schemaPayload.isBlank()) {
+            return true;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(schemaPayload);
+            JsonNode fields = root.path("fields");
+            if (!fields.isArray()) {
+                return true;
+            }
+            for (JsonNode field : fields) {
+                String name = field.path("name").asText("");
+                String type = field.path("type").asText("");
+                if ("location".equals(name)) {
+                    if ("geopoint".equals(type)) {
+                        boolean isOptional = field.path("optional").asBoolean(false);
+                        if (!isOptional) {
+                            LOGGER.warn("Typesense collection schema has non-optional location field. "
+                                    + "This may cause indexing issues when location is null.");
+                            return true;
+                        }
+                        return false;
+                    } else {
+                        return true;
+                    }
+                }
+            }
+            return true;
+        } catch (IOException e) {
+            LOGGER.debug("Unable to parse Typesense schema payload", e);
+            return true;
+        }
+    }
+
     /**
      * Polls Typesense /health endpoint until it responds 200 or max attempts are
      * exhausted.
@@ -346,7 +569,7 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
         return URI.create(uri);
     }
 
-    private URI buildDeleteUri(String placeId) {
+    private URI buildDocumentUri(String placeId) {
         String collection = encode(safe(typesenseProperties.getPlacesCollection(), "places"));
         String encodedPlaceId = encode(placeId);
         String uri = String.format("%s/collections/%s/documents/%s",

@@ -26,9 +26,9 @@ import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.RatingBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import com.bif.app.core.utils.AppSnackbar;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresPermission;
 import androidx.appcompat.content.res.AppCompatResources;
@@ -55,6 +55,7 @@ import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.progressindicator.CircularProgressIndicator;
+import com.google.android.material.progressindicator.LinearProgressIndicator;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -144,6 +145,10 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private static final double LOCAL_MIN_ZOOM = 13.0;
     private static final double REMOTE_RESULT_ZOOM = 15.0;
     private static final long REMOTE_TOAST_COOLDOWN_MS = 2500L;
+    private static final double SEARCH_MIN_LAT = 8.0;
+    private static final double SEARCH_MAX_LAT = 24.0;
+    private static final double SEARCH_MIN_LNG = 102.0;
+    private static final double SEARCH_MAX_LNG = 110.0;
 
     private MapView mapView;
     private MapLibreMap mapLibreMap;
@@ -187,6 +192,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private View downloadCityMapLayout;
     private ImageButton btnDownloadCityMap;
     private CircularProgressIndicator progressDownloadCityMap;
+    private LinearProgressIndicator progressSearchPlaces;
     private boolean isOnlineNow;
     @Nullable
     private OfflineMapDownloadState.Status lastOfflineMapDownloadStatus;
@@ -196,6 +202,8 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     @Nullable
     private String lastRemoteToastArea;
     private long lastRemoteToastAtMs;
+    @Nullable
+    private String lastSearchCameraSignature;
     private Runnable hideHistory = () -> {
     };
     private boolean suppressQueryTextChange;
@@ -369,13 +377,23 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             }
             String text = event.getContentIfNotHandled();
             if (text != null && !text.isEmpty()) {
-                Toast.makeText(requireContext(), text, Toast.LENGTH_SHORT).show();
+                AppSnackbar.show(requireContext(), text);
             }
         });
 
         viewModel.routeSession.observe(getViewLifecycleOwner(), this::renderRouteSession);
 
         setupSearchUi(view);
+        progressSearchPlaces = view.findViewById(R.id.progress_search_places);
+
+        viewModel.isSearchingPlaces.observe(getViewLifecycleOwner(), searching -> {
+            if (progressSearchPlaces == null) {
+                return;
+            }
+            progressSearchPlaces.setVisibility(Boolean.TRUE.equals(searching)
+                    ? View.VISIBLE
+                    : View.GONE);
+        });
 
         ImageButton btnMyLocation = view.findViewById(R.id.btn_my_location);
         if (btnMyLocation != null) {
@@ -517,6 +535,11 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             Timber.tag(TAG).d("Emulator render mode optimization applied");
         } else {
             Timber.tag(TAG).d("Emulator render mode optimization not available on this MapView");
+        }
+
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
+            mapView.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+            Timber.tag(TAG).d("Applied software layer for emulator API 29 or lower");
         }
     }
 
@@ -689,7 +712,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     }
 
     private void resetMapBearingNorth() {
-        if (mapLibreMap == null) {
+        if (!isMapStyleReady()) {
             return;
         }
         CameraPosition current = mapLibreMap.getCameraPosition();
@@ -712,7 +735,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     }
 
     private void animateCameraToSelection(@NonNull LatLng target) {
-        if (mapLibreMap == null) {
+        if (!isMapStyleReady()) {
             return;
         }
         CameraPosition current = mapLibreMap.getCameraPosition();
@@ -874,7 +897,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
         if (effectiveState.status == OfflineMapDownloadState.Status.COMPLETED
                 && lastOfflineMapDownloadStatus != OfflineMapDownloadState.Status.COMPLETED) {
-            Toast.makeText(requireContext(), R.string.download_map_success, Toast.LENGTH_SHORT).show();
+            AppSnackbar.show(requireContext(), R.string.download_map_success);
         }
 
         if (effectiveState.status == OfflineMapDownloadState.Status.FAILED
@@ -919,7 +942,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
         List<Place> locatedPlaces = new ArrayList<>();
         for (Place place : places) {
-            if (place != null && place.location != null) {
+            if (place != null && isValidLocation(place.location)) {
                 locatedPlaces.add(place);
             }
         }
@@ -943,17 +966,30 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
         updateSearchMarkersSource(searchFeatures);
 
-        boolean hasUserLocation = lastKnownUserLocation != null;
-        double topDistanceFromUserKm = distanceKm(lastKnownUserLocation,
-            topResult.location);
+        boolean hasUserLocation = lastKnownUserLocation != null
+            && isValidLocation(lastKnownUserLocation);
+        double topDistanceFromUserKm = hasUserLocation
+            ? distanceKm(lastKnownUserLocation, topResult.location)
+            : Double.MAX_VALUE;
         boolean isLocalSearch = hasUserLocation
             && topDistanceFromUserKm <= LOCAL_SEARCH_RADIUS_KM;
+
+        String cameraSignature = buildSearchCameraSignature(
+            topResult,
+            isLocalSearch,
+            lastKnownUserLocation);
+        if (cameraSignature != null && cameraSignature.equals(lastSearchCameraSignature)) {
+            viewModel.notifySearchDone(places.size());
+            return;
+        }
 
         if (isLocalSearch) {
             focusCameraForLocalSearch(lastKnownUserLocation, primaryCluster);
         } else {
             focusCameraForRemoteSearch(topResult, hasUserLocation);
         }
+
+        lastSearchCameraSignature = cameraSignature;
 
         viewModel.notifySearchDone(places.size());
     }
@@ -984,16 +1020,19 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
     private void focusCameraForLocalSearch(@Nullable Location userLocation,
             @NonNull List<Place> primaryCluster) {
-        if (mapLibreMap == null || userLocation == null || primaryCluster.isEmpty()) {
+        if (!isMapStyleReady() || userLocation == null || primaryCluster.isEmpty()) {
             return;
         }
 
         LatLngBounds.Builder boundsBuilder = new LatLngBounds.Builder();
+        if (!isValidLocation(userLocation)) {
+            return;
+        }
         boundsBuilder.include(new LatLng(userLocation.latitude, userLocation.longitude));
 
         int includedResults = 0;
         for (Place place : primaryCluster) {
-            if (place.location == null) {
+            if (place.location == null || !isValidLocation(place.location)) {
                 continue;
             }
             boundsBuilder.include(new LatLng(
@@ -1009,14 +1048,22 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             return;
         }
 
-        mapLibreMap.animateCamera(
-                CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 150),
-                550);
+        try {
+            mapLibreMap.animateCamera(
+                    CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 150),
+                    550);
+        } catch (Exception e) {
+            Timber.tag(TAG).w(e, "Skip local search camera animation due to invalid bounds");
+            return;
+        }
 
         View root = getView();
         if (root != null) {
             root.postDelayed(() -> {
                 if (mapLibreMap == null) {
+                    return;
+                }
+                if (!isMapStyleReady()) {
                     return;
                 }
                 CameraPosition current = mapLibreMap.getCameraPosition();
@@ -1032,7 +1079,8 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
     private void focusCameraForRemoteSearch(@NonNull Place topResult,
             boolean showHint) {
-        if (mapLibreMap == null || topResult.location == null) {
+        if (!isMapStyleReady() || topResult.location == null
+                || !isValidLocation(topResult.location)) {
             return;
         }
 
@@ -1057,8 +1105,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
         lastRemoteToastArea = area;
         lastRemoteToastAtMs = now;
-        Toast.makeText(requireContext(), "Showing results in " + area,
-                Toast.LENGTH_SHORT).show();
+        AppSnackbar.show(requireContext(), getString(R.string.search_results_in_area, area));
     }
 
     @NonNull
@@ -1111,11 +1158,12 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     }
 
     private void clearSearchResultMarkers() {
-        updateSearchMarkersSource(Collections.emptyList());
+        updateSearchMarkersSource(new ArrayList<>());
+        lastSearchCameraSignature = null;
     }
 
     private void updateSearchMarkersSource(@NonNull List<Feature> features) {
-        if (mapLibreMap == null) {
+        if (!isMapStyleReady()) {
             return;
         }
 
@@ -1379,7 +1427,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
     private void setFeatures(@NonNull String sourceId,
             @NonNull List<Feature> features) {
-        if (mapLibreMap == null) {
+        if (!isMapStyleReady()) {
             return;
         }
 
@@ -1808,7 +1856,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
     private void fitCameraToUserAndRemainingRoute(@NonNull Location userLocation,
             @NonNull List<Point> remainingPoints) {
-        if (mapLibreMap == null || remainingPoints.isEmpty()) {
+        if (!isMapStyleReady() || remainingPoints.isEmpty()) {
             return;
         }
 
@@ -1828,6 +1876,51 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         } catch (Exception ignored) {
             // Ignore degenerate bounds.
         }
+    }
+
+    private boolean isValidLocation(@Nullable Location location) {
+        if (location == null) {
+            return false;
+        }
+
+        double lat = location.latitude;
+        double lng = location.longitude;
+        return Double.isFinite(lat)
+                && Double.isFinite(lng)
+                && Double.compare(lat, 0.0d) != 0
+                && Double.compare(lng, 0.0d) != 0
+                && lat >= SEARCH_MIN_LAT
+                && lat <= SEARCH_MAX_LAT
+                && lng >= SEARCH_MIN_LNG
+                && lng <= SEARCH_MAX_LNG;
+    }
+
+    private boolean isMapStyleReady() {
+        return mapLibreMap != null && mapLibreMap.getStyle() != null;
+    }
+
+    @Nullable
+    private String buildSearchCameraSignature(@NonNull Place topResult,
+            boolean isLocalSearch,
+            @Nullable Location userLocation) {
+        if (topResult.location == null) {
+            return null;
+        }
+
+        long latBucket = Math.round(topResult.location.latitude * 100000d);
+        long lngBucket = Math.round(topResult.location.longitude * 100000d);
+        StringBuilder signature = new StringBuilder((isLocalSearch ? "local" : "remote")
+                + "|" + latBucket + "|" + lngBucket);
+        if (isLocalSearch) {
+            String userBucket = "none";
+            if (isValidLocation(userLocation)) {
+                long userLatBucket = Math.round(userLocation.latitude * 10000d);
+                long userLngBucket = Math.round(userLocation.longitude * 10000d);
+                userBucket = userLatBucket + "|" + userLngBucket;
+            }
+            signature.append("|u|").append(userBucket);
+        }
+        return signature.toString();
     }
 
     @Nullable
@@ -2856,7 +2949,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                             viewModel.submitReview(stars, comment);
                         }
                     } else {
-                        Toast.makeText(getContext(), R.string.provide_rating_error, Toast.LENGTH_SHORT).show();
+                        AppSnackbar.show(getContext(), R.string.provide_rating_error);
                     }
                 })
                 .setNegativeButton(android.R.string.cancel, null)
@@ -3276,6 +3369,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         btnDownloadCityMap = null;
         progressDownloadCityMap = null;
         lastOfflineMapDownloadStatus = null;
+        progressSearchPlaces = null;
         super.onDestroyView();
     }
 }

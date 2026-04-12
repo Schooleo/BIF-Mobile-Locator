@@ -3,6 +3,7 @@ package com.bif.app.data.repository;
 import android.content.Context;
 import android.util.Log;
 
+import androidx.annotation.Nullable;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.Transformations;
 
@@ -20,6 +21,7 @@ import com.bif.app.data.source.local.entity.PlaceEntity;
 import com.bif.app.data.source.local.entity.ReviewEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 import com.bif.app.data.sync.core.SyncManager;
+import com.bif.app.domain.model.PlaceIdentityContext;
 import com.bif.app.domain.model.Review;
 import com.bif.app.domain.repository.IReviewRepository;
 import com.google.gson.Gson;
@@ -105,15 +107,35 @@ public class ReviewRepository implements IReviewRepository {
     }
 
     @Override
-    public void submitReview(String placeId, int stars, String comment) {
+    public void submitReview(String placeId,
+                             int stars,
+                             String comment,
+                     @Nullable PlaceIdentityContext identityContext) {
         String captureUserId = getActiveUserId();
-        executeReviewAction(placeId, stars, comment, "CREATE", captureUserId, getActiveUsername());
+        executeReviewAction(
+                placeId,
+                stars,
+                comment,
+                "CREATE",
+                captureUserId,
+                getActiveUsername(),
+                identityContext);
     }
 
     @Override
-    public void updateReview(String placeId, int stars, String comment) {
+    public void updateReview(String placeId,
+                             int stars,
+                             String comment,
+                     @Nullable PlaceIdentityContext identityContext) {
         String captureUserId = getActiveUserId();
-        executeReviewAction(placeId, stars, comment, "UPDATE", captureUserId, getActiveUsername());
+        executeReviewAction(
+                placeId,
+                stars,
+                comment,
+                "UPDATE",
+                captureUserId,
+                getActiveUsername(),
+                identityContext);
     }
 
     private void executeReviewAction(String placeId,
@@ -121,7 +143,8 @@ public class ReviewRepository implements IReviewRepository {
                                      String comment,
                                      String operation,
                                      String userId,
-                                     String userName) {
+                                     String userName,
+                                     @Nullable PlaceIdentityContext identityContext) {
         executorService.execute(() -> {
             Review review = new Review();
             review.placeId = placeId;
@@ -129,30 +152,58 @@ public class ReviewRepository implements IReviewRepository {
             review.userName = userName;
             review.stars = stars;
             review.comment = comment;
+            if (identityContext != null) {
+                review.externalSource = identityContext.externalSource;
+                review.externalId = identityContext.externalId;
+                review.lat = identityContext.lat;
+                review.lng = identityContext.lng;
+                review.placeName = identityContext.placeName;
+            }
             review.pendingSync = true;
             review.deleted = false;
 
-            ReviewEntity existing = reviewDao.getReviewSync(placeId, userId);
+            if (identityContext != null
+                    && ((identityContext.lat != null && identityContext.lat == 0.0d)
+                    || (identityContext.lng != null && identityContext.lng == 0.0d))) {
+                Log.w(TAG, "Review metadata has suspicious coordinates (0.0). placeId=" + placeId);
+            }
 
-            appDatabase.runInTransaction(() -> {
-                long timestamp = System.currentTimeMillis();
-                if (existing != null) {
-                    timestamp = existing.createdAt;
+            ReviewEntity existing = reviewDao.getReviewSync(placeId, userId);
+            final long createdAt = existing != null
+                    ? existing.createdAt
+                    : System.currentTimeMillis();
+            if (existing != null) {
+                if (review.externalSource == null || review.externalSource.trim().isEmpty()) {
+                    review.externalSource = existing.externalSource;
                 }
-                review.createdAt = timestamp;
-                ReviewEntity entity = ReviewMapper.toEntity(review);
-                reviewDao.upsert(entity);
-                updateCachedPlaceRating(placeId);
-            });
+                if (review.externalId == null || review.externalId.trim().isEmpty()) {
+                    review.externalId = existing.externalId;
+                }
+                if (review.placeName == null || review.placeName.trim().isEmpty()) {
+                    review.placeName = existing.placeName;
+                }
+                if ((review.lat == null || review.lat == 0.0d) && existing.lat != null) {
+                    review.lat = existing.lat;
+                }
+                if ((review.lng == null || review.lng == 0.0d) && existing.lng != null) {
+                    review.lng = existing.lng;
+                }
+            }
 
             boolean syncedOnline = syncReviewOnline(placeId, review, operation);
             if (!syncedOnline) {
                 appDatabase.runInTransaction(() -> {
+                    review.createdAt = createdAt;
+                    ReviewEntity entity = ReviewMapper.toEntity(review);
+                    reviewDao.upsert(entity);
+                    updateCachedPlaceRating(placeId);
+
                     SyncQueueEntity syncEntry = createSyncEntry(
                             "review",
                             placeId + ":" + userId,
                             operation,
-                            ReviewMapper.toDto(review)
+                            ReviewMapper.toDto(review),
+                            userId
                     );
                     syncQueueDao.enqueue(syncEntry);
                 });
@@ -182,7 +233,8 @@ public class ReviewRepository implements IReviewRepository {
                             "review",
                             placeId + ":" + userId,
                             "DELETE",
-                            null
+                            null,
+                            userId
                     );
                     syncQueueDao.enqueue(syncEntry);
                 });
@@ -205,6 +257,8 @@ public class ReviewRepository implements IReviewRepository {
                     List<PlaceReviewDto> serverReviews = response.body();
                     appDatabase.runInTransaction(() -> {
                         Set<String> serverUserIds = new HashSet<>();
+                        Set<String> affectedPlaceIds = new HashSet<>();
+                        affectedPlaceIds.add(placeId);
 
                         for (PlaceReviewDto dto : serverReviews) {
                             if (dto == null || dto.userId == null || dto.userId.trim().isEmpty()) {
@@ -213,10 +267,17 @@ public class ReviewRepository implements IReviewRepository {
 
                             String serverUserId = dto.userId.trim();
                             serverUserIds.add(serverUserId);
+                            String resolvedPlaceId = normalizeServerPlaceId(dto.placeId, placeId);
+                            boolean identityCorrected = !resolvedPlaceId.equals(placeId);
+                            affectedPlaceIds.add(resolvedPlaceId);
 
-                            ReviewEntity entity = ReviewMapper.fromDto(dto, placeId);
+                            ReviewEntity entity = ReviewMapper.fromDto(dto, resolvedPlaceId);
                             // Avoid overwriting a locally modified pending item
-                            ReviewEntity local = reviewDao.getReviewSync(placeId, serverUserId);
+                            ReviewEntity local = reviewDao.getReviewSync(resolvedPlaceId, serverUserId);
+                            if (identityCorrected) {
+                                reviewDao.deleteByPlaceAndUserId(placeId, serverUserId);
+                                syncQueueDao.removeByEntity("review", placeId + ":" + serverUserId);
+                            }
                             if (local == null || !local.pendingSync) {
                                 reviewDao.upsert(entity);
                             }
@@ -241,7 +302,9 @@ public class ReviewRepository implements IReviewRepository {
                             }
                         }
 
-                        updateCachedPlaceRating(placeId);
+                        for (String affectedPlaceId : affectedPlaceIds) {
+                            updateCachedPlaceRating(affectedPlaceId);
+                        }
                     });
                 }
             } catch (IOException e) {
@@ -331,14 +394,15 @@ public class ReviewRepository implements IReviewRepository {
             }
 
             PlaceReviewDto dto = response.body();
-            appDatabase.runInTransaction(() -> {
-                ReviewEntity entity = ReviewMapper.fromDto(dto, placeId);
-                entity.pendingSync = false;
-                entity.deleted = false;
-                reviewDao.upsert(entity);
-                syncQueueDao.removeByEntity("review", placeId + ":" + review.userId);
-                updateCachedPlaceRating(placeId);
-            });
+            String localPlaceId = review.placeId;
+            if (isBlank(localPlaceId)) {
+                localPlaceId = placeId;
+            }
+            String reviewUserId = review.userId;
+            if (isBlank(reviewUserId)) {
+                reviewUserId = getActiveUserId();
+            }
+            persistServerReviewWithHealing(localPlaceId, reviewUserId, dto);
             return true;
         } catch (IOException e) {
             Log.e(TAG, "Review write-through failed for place " + placeId, e);
@@ -396,8 +460,68 @@ public class ReviewRepository implements IReviewRepository {
         placeDao.upsert(place);
     }
 
-    private SyncQueueEntity createSyncEntry(String entityType, String entityId, String operation, Object payload) {
+    private void persistServerReviewWithHealing(String localPlaceId,
+                                                String userId,
+                                                PlaceReviewDto dto) {
+        String normalizedLocalPlaceId = normalizeServerPlaceId(localPlaceId, localPlaceId);
+        String normalizedUserId = userId;
+        if (isBlank(normalizedUserId) && dto != null && !isBlank(dto.userId)) {
+            normalizedUserId = dto.userId.trim();
+        }
+        if (isBlank(normalizedUserId)) {
+            normalizedUserId = getActiveUserId();
+        }
+
+        String resolvedPlaceId = normalizeServerPlaceId(dto != null ? dto.placeId : null,
+                normalizedLocalPlaceId);
+        boolean identityCorrected = !resolvedPlaceId.equals(normalizedLocalPlaceId);
+        String finalNormalizedLocalPlaceId = normalizedLocalPlaceId;
+        String finalNormalizedUserId = normalizedUserId;
+        String finalResolvedPlaceId = resolvedPlaceId;
+        boolean finalIdentityCorrected = identityCorrected;
+
+        appDatabase.runInTransaction(() -> {
+            if (finalIdentityCorrected) {
+                reviewDao.deleteByPlaceAndUserId(finalNormalizedLocalPlaceId, finalNormalizedUserId);
+            }
+
+            ReviewEntity entity = ReviewMapper.fromDto(dto, finalResolvedPlaceId);
+            entity.pendingSync = false;
+            entity.deleted = false;
+            reviewDao.upsert(entity);
+
+            syncQueueDao.removeByEntity("review", finalNormalizedLocalPlaceId + ":" + finalNormalizedUserId);
+
+            if (finalIdentityCorrected) {
+                updateCachedPlaceRating(finalNormalizedLocalPlaceId);
+                Log.w(TAG, "Identity correction detected. oldPlaceId="
+                        + finalNormalizedLocalPlaceId + " newPlaceId=" + finalResolvedPlaceId);
+            }
+            updateCachedPlaceRating(finalResolvedPlaceId);
+        });
+    }
+
+    private String normalizeServerPlaceId(String serverPlaceId, String fallbackPlaceId) {
+        if (serverPlaceId != null && !serverPlaceId.trim().isEmpty()) {
+            return serverPlaceId.trim();
+        }
+        if (fallbackPlaceId != null && !fallbackPlaceId.trim().isEmpty()) {
+            return fallbackPlaceId.trim();
+        }
+        return "";
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    private SyncQueueEntity createSyncEntry(String entityType,
+            String entityId,
+            String operation,
+            Object payload,
+            String userId) {
         SyncQueueEntity entry = new SyncQueueEntity();
+        entry.userId = userId != null ? userId : "";
         entry.entityType = entityType;
         entry.entityId = entityId;
         entry.operation = operation;

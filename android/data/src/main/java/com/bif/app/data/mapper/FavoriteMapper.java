@@ -48,6 +48,7 @@ public class FavoriteMapper {
         entity.serverVersion = domain.serverVersion;
         entity.deleted = domain.deleted;
         entity.userId = domain.userId;
+        entity.pendingSync = false;
         return entity;
     }
 
@@ -72,6 +73,7 @@ public class FavoriteMapper {
         entity.rating = dto.rating;
         entity.serverVersion = dto.serverVersion;
         entity.deleted = dto.deleted;
+        entity.pendingSync = false;
         return entity;
     }
 

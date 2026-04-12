@@ -33,6 +33,8 @@ android {
 }
 
 dependencies {
+    implementation project(':domain')
+
     implementation libs.appcompat
     implementation libs.material
     implementation libs.bcrypt

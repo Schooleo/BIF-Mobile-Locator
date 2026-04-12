@@ -10,9 +10,9 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import com.bif.app.core.utils.AppSnackbar;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.NavController;
@@ -124,23 +124,23 @@ public class RegisterFragment extends Fragment {
                                 AuthResponse auth = response.body();
                                 authSessionManager.saveSessionFromAuth(auth, username, email);
 
-                                Toast.makeText(requireContext(), "Registration successful", Toast.LENGTH_SHORT).show();
+                                AppSnackbar.show(requireContext(), getString(R.string.registration_successful));
                                 navController.navigate(UriUtils.buildUri(UriUtils.PathTo.MAP));
                                 return;
                             }
 
                             if (response.code() == 409) {
-                                etEmail.setError("Email already used");
+                                etEmail.setError(getString(R.string.email_already_used));
                                 etEmail.requestFocus();
                                 return;
                             }
 
                             if (response.code() == 400) {
-                                Toast.makeText(requireContext(), "Invalid registration data", Toast.LENGTH_SHORT).show();
+                                AppSnackbar.show(requireContext(), getString(R.string.invalid_registration_data));
                                 return;
                             }
 
-                            Toast.makeText(requireContext(), "Registration failed", Toast.LENGTH_SHORT).show();
+                            AppSnackbar.show(requireContext(), getString(R.string.registration_failed));
                         }
 
                         @Override
@@ -150,7 +150,7 @@ public class RegisterFragment extends Fragment {
                                 return;
                             }
                             Log.e(TAG, "Register request failed", t);
-                            Toast.makeText(requireContext(), "Network error. Please try again.", Toast.LENGTH_SHORT).show();
+                            AppSnackbar.show(requireContext(), getString(R.string.network_error_try_again));
                         }
                     });
         });

@@ -1,10 +1,15 @@
 package com.bif.app.data.source.local.entity;
 
 import androidx.annotation.NonNull;
+import androidx.room.ColumnInfo;
 import androidx.room.Entity;
+import androidx.room.Index;
 import androidx.room.PrimaryKey;
 
-@Entity(tableName = "favorites")
+@Entity(
+    tableName = "favorites",
+    indices = {@Index(value = {"userId", "deleted"})}
+)
 public class FavoriteEntity {
     @NonNull
     @PrimaryKey
@@ -22,4 +27,6 @@ public class FavoriteEntity {
     public String userId;
     public long serverVersion;
     public boolean deleted;
+    @ColumnInfo(defaultValue = "0")
+    public boolean pendingSync;
 }

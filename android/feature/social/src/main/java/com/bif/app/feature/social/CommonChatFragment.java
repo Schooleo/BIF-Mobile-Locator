@@ -32,6 +32,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import com.bif.app.core.utils.AppSnackbar;
 import com.bif.app.core.utils.ChatReadStateStore;
 import com.bif.app.core.utils.UriUtils;
 import com.bif.app.core.utils.UserPreferences;
@@ -42,7 +43,6 @@ import com.bif.app.domain.model.TripPlan;
 import com.bif.app.domain.model.TripStop;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
-import com.google.android.material.snackbar.Snackbar;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -199,8 +199,8 @@ public class CommonChatFragment extends Fragment {
         viewModel.getAiBadgesEnabled().observe(getViewLifecycleOwner(), enabled -> {
             boolean isEnabled = supportsAiModes && Boolean.TRUE.equals(enabled);
             aiBadgesRow.setVisibility(isEnabled ? View.VISIBLE : View.GONE);
-            btnAiDraftTrip.setEnabled(isEnabled);
-            btnAiSuggestPlaces.setEnabled(isEnabled);
+            btnAiDraftTrip.setClickable(true);
+            btnAiSuggestPlaces.setClickable(true);
             float alpha = isEnabled ? 1f : 0.45f;
             btnAiDraftTrip.setAlpha(alpha);
             btnAiSuggestPlaces.setAlpha(alpha);
@@ -227,7 +227,7 @@ public class CommonChatFragment extends Fragment {
             if (message == null || message.trim().isEmpty()) {
                 return;
             }
-            Snackbar.make(view, message, Snackbar.LENGTH_LONG).show();
+            AppSnackbar.showLong(requireContext(), message);
             viewModel.clearSnackbarMessage();
         });
 
@@ -260,16 +260,16 @@ public class CommonChatFragment extends Fragment {
         });
 
         btnAiDraftTrip.setOnClickListener(v -> {
-            if (!btnAiDraftTrip.isEnabled()) {
-                Snackbar.make(view, R.string.chat_ai_offline, Snackbar.LENGTH_SHORT).show();
+            if (!viewModel.isAiAvailable()) {
+                AppSnackbar.show(requireContext(), R.string.chat_ai_offline);
                 return;
             }
             viewModel.enterAiDraftMode();
             focusInputAndShowKeyboard(etMessage);
         });
         btnAiSuggestPlaces.setOnClickListener(v -> {
-            if (!btnAiSuggestPlaces.isEnabled()) {
-                Snackbar.make(view, R.string.chat_ai_offline, Snackbar.LENGTH_SHORT).show();
+            if (!viewModel.isAiAvailable()) {
+                AppSnackbar.show(requireContext(), R.string.chat_ai_offline);
                 return;
             }
             viewModel.enterAiSuggestPlacesMode();
