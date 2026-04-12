@@ -63,6 +63,10 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
         return search(request, "name,address");
     }
 
+    public List<Place> search(PlaceSearchRequestDTO request, String queryBy) {
+        return searchInternal(request, queryBy);
+    }
+
     public List<Place> search(String query) {
         PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
         request.setQuery(query);
@@ -73,10 +77,10 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
         PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
         request.setQuery(query);
         request.setPerPage(perPage);
-        return search(request, queryBy);
+        return searchInternal(request, queryBy);
     }
 
-    private List<Place> search(PlaceSearchRequestDTO request, String queryBy) {
+    private List<Place> searchInternal(PlaceSearchRequestDTO request, String queryBy) {
         if (request == null || request.getQuery() == null || request.getQuery().isBlank()) {
             return Collections.emptyList();
         }
@@ -207,7 +211,18 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
             place.setId(textOrNull(doc, "id"));
             place.setName(textOrDefault(doc, "name", "Unknown Place"));
             place.setAddress(textOrDefault(doc, "address", ""));
+            place.setCountry(textOrNull(doc, "country"));
+            place.setRegion(textOrNull(doc, "region"));
+            place.setLocality(textOrNull(doc, "locality"));
+            place.setCity(textOrNull(doc, "city"));
+            place.setDistrict(textOrNull(doc, "district"));
             place.setRating(doubleOrDefault(doc, "rating", 0.0));
+            place.setTags(textListOrEmpty(doc, "tags"));
+            place.setCategoryMain(textOrNull(doc, "categoryMain"));
+            place.setCategoryAlternates(textListOrEmpty(doc, "categoryAlternates"));
+            place.setNameNormalized(textOrNull(doc, "nameNormalized"));
+            place.setAddressNormalized(textOrNull(doc, "addressNormalized"));
+            place.setReviewCount(intOrDefault(doc, "reviewCount", 0));
             place.setPlaceSource(textOrDefault(doc, "placeSource", "typesense"));
             place.setPersistedByAction(textOrNull(doc, "persistedByAction"));
             place.setPersistedByUserId(textOrNull(doc, "persistedByUserId"));
@@ -287,6 +302,30 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
     private double doubleOrDefault(JsonNode node, String key, double fallback) {
         JsonNode value = node.path(key);
         return value.isNumber() ? value.asDouble() : fallback;
+    }
+
+    private int intOrDefault(JsonNode node, String key, int fallback) {
+        JsonNode value = node.path(key);
+        return value.isInt() || value.isLong() ? value.asInt() : fallback;
+    }
+
+    private List<String> textListOrEmpty(JsonNode node, String key) {
+        JsonNode value = node.path(key);
+        if (!value.isArray()) {
+            return List.of();
+        }
+        List<String> values = new ArrayList<>();
+        for (JsonNode element : value) {
+            if (element == null || element.isNull()) {
+                continue;
+            }
+            String text = element.asText(null);
+            if (text == null || text.isBlank()) {
+                continue;
+            }
+            values.add(text);
+        }
+        return values;
     }
 
     private String safe(String value, String fallback) {

@@ -20,14 +20,19 @@ import com.bif.app.domain.repository.IChatRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.ITripRepository;
 
-import java.util.List;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Map;
 import java.util.HashSet;
-import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.inject.Inject;
 
@@ -35,6 +40,15 @@ import dagger.hilt.android.lifecycle.HiltViewModel;
 
 @HiltViewModel
 public class ChatViewModel extends ViewModel {
+
+    private static final String AI_SENDER_USER_ID = "ai-assistant";
+    private static final String AI_SENDER_NAME = "AI Trip Drafter";
+    private static final String AI_DRAFTING_MESSAGE = "Drafting a trip...";
+    private static final String AI_DRAFTED_MESSAGE = "Drafted trip";
+    private static final String AI_DRAFT_ERROR_PREFIX = "Errors drafting trip: ";
+    private static final String AI_SUGGESTING_MESSAGE = "Suggesting places...";
+    private static final String AI_SUGGESTED_MESSAGE = "Suggested places";
+    private static final String AI_SUGGEST_ERROR_PREFIX = "Errors suggesting places: ";
 
     private final IChatRepository chatRepository;
     private final IPlaceRepository placeRepository;
@@ -47,26 +61,24 @@ public class ChatViewModel extends ViewModel {
 
     private LiveData<List<ChatMessage>> messagesLiveData;
     private LiveData<List<TripPlan>> tripsLiveData;
-    private final MutableLiveData<List<ChatMessage>> emptyMessagesLiveData =
-            new MutableLiveData<>(Collections.emptyList());
-    private final MutableLiveData<List<TripPlan>> emptyTripsLiveData =
-            new MutableLiveData<>(Collections.emptyList());
-    private final MutableLiveData<Set<String>> savedTripCardIdsLiveData =
-            new MutableLiveData<>(new HashSet<>());
-    private final MutableLiveData<Boolean> aiDraftModeEnabledLiveData =
-            new MutableLiveData<>(false);
-    private final MutableLiveData<Boolean> aiSuggestPlacesModeEnabledLiveData =
-            new MutableLiveData<>(false);
-    private final MutableLiveData<Boolean> aiBadgesEnabledLiveData =
-            new MutableLiveData<>(false);
-    private final MutableLiveData<String> snackbarMessageLiveData =
-            new MutableLiveData<>(null);
-    private final Map<String, DraftTripCardSnapshot> pendingDraftTripSnapshots =
-            Collections.synchronizedMap(new HashMap<>());
-    private final Map<LiveData<?>, Set<Observer<?>>> observeOnceObservers =
-            Collections.synchronizedMap(new HashMap<>());
+    private final MutableLiveData<List<ChatMessage>> emptyMessagesLiveData
+            = new MutableLiveData<>(Collections.emptyList());
+    private final MutableLiveData<List<TripPlan>> emptyTripsLiveData
+            = new MutableLiveData<>(Collections.emptyList());
+    private final MutableLiveData<Set<String>> savedTripCardIdsLiveData
+            = new MutableLiveData<>(new HashSet<>());
+    private final MutableLiveData<Boolean> aiDraftModeEnabledLiveData
+            = new MutableLiveData<>(false);
+    private final MutableLiveData<Boolean> aiSuggestPlacesModeEnabledLiveData
+            = new MutableLiveData<>(false);
+    private final MutableLiveData<Boolean> aiBadgesEnabledLiveData
+            = new MutableLiveData<>(false);
+    private final MutableLiveData<String> snackbarMessageLiveData
+            = new MutableLiveData<>(null);
+    private final Map<LiveData<?>, Set<Observer<?>>> observeOnceObservers
+            = Collections.synchronizedMap(new java.util.HashMap<>());
 
-        private final Observer<Boolean> networkObserver = isOnline -> {
+    private final Observer<Boolean> networkObserver = isOnline -> {
         boolean online = Boolean.TRUE.equals(isOnline);
         aiBadgesEnabledLiveData.postValue(online);
         if (!online) {
@@ -77,9 +89,9 @@ public class ChatViewModel extends ViewModel {
 
     @Inject
     public ChatViewModel(IChatRepository chatRepository,
-                         IPlaceRepository placeRepository,
-                         ITripRepository tripRepository,
-                         NetworkMonitor networkMonitor) {
+            IPlaceRepository placeRepository,
+            ITripRepository tripRepository,
+            NetworkMonitor networkMonitor) {
         this.chatRepository = chatRepository;
         this.placeRepository = placeRepository;
         this.tripRepository = tripRepository;
@@ -111,12 +123,12 @@ public class ChatViewModel extends ViewModel {
         return messagesLiveData != null ? messagesLiveData : emptyMessagesLiveData;
     }
 
-    public LiveData<List<TripPlan>> getTrips() {
-        return tripsLiveData != null ? tripsLiveData : emptyTripsLiveData;
-    }
-
     public LiveData<Set<String>> getSavedTripCardIds() {
         return savedTripCardIdsLiveData;
+    }
+
+    public LiveData<List<TripPlan>> getTrips() {
+        return tripsLiveData != null ? tripsLiveData : emptyTripsLiveData;
     }
 
     public LiveData<Boolean> getAiDraftModeEnabled() {
@@ -149,8 +161,12 @@ public class ChatViewModel extends ViewModel {
     }
 
     public void sendMessage(String content) {
-        if (content == null || content.trim().isEmpty()) return;
-        if (groupId == null || groupId.trim().isEmpty()) return;
+        if (content == null || content.trim().isEmpty()) {
+            return;
+        }
+        if (groupId == null || groupId.trim().isEmpty()) {
+            return;
+        }
 
         if (Boolean.TRUE.equals(aiDraftModeEnabledLiveData.getValue())) {
             aiDraftModeEnabledLiveData.setValue(false);
@@ -211,17 +227,21 @@ public class ChatViewModel extends ViewModel {
     }
 
     public void shareLocation(double latitude, double longitude, String address) {
-        if (groupId == null || groupId.trim().isEmpty()) return;
+        if (groupId == null || groupId.trim().isEmpty()) {
+            return;
+        }
         chatRepository.sendLocationMessage(groupId, currentUserId, latitude, longitude, address);
     }
 
     public void addSharedLocationToTrip(String tripId, ChatMessage message) {
-        if (!message.isLocationMessage()) return;
+        if (!message.isLocationMessage()) {
+            return;
+        }
 
         TripStop stop = new TripStop(
                 UUID.randomUUID().toString(),
                 message.getContent() != null && !message.getContent().isEmpty()
-                        ? message.getContent() : message.getSharedAddress(),
+                ? message.getContent() : message.getSharedAddress(),
                 message.getSharedAddress(),
                 message.getSharedLatitude(),
                 message.getSharedLongitude(),
@@ -230,54 +250,133 @@ public class ChatViewModel extends ViewModel {
         tripRepository.addStopToTrip(tripId, stop);
     }
 
-    public void onSaveTripCard(String tripId) {
+    public boolean isCurrentUserHostForCurrentTrip() {
+        TripPlan trip = resolveCurrentGroupTrip();
+        if (trip == null || trip.getParticipantIds() == null || trip.getParticipantIds().isEmpty()) {
+            return false;
+        }
+
+        String ownerId = trim(trip.getParticipantIds().get(0));
+        if (ownerId.isEmpty()) {
+            return false;
+        }
+        return ownerId.equals(trim(currentUserId));
+    }
+
+    public boolean hasCurrentTripForOverride() {
+        String tripId = getCurrentTripId();
+        return !tripId.isEmpty();
+    }
+
+    public String getCurrentTripId() {
+        TripPlan trip = resolveCurrentGroupTrip();
+        if (trip == null) {
+            return "";
+        }
+        return trim(trip.getId());
+    }
+
+    public void onSaveTripCardAsNew(String draftTripId, String payloadJson) {
+        if (!isCurrentUserHostForCurrentTrip()) {
+            snackbarMessageLiveData.setValue("Only the trip host can save this AI draft.");
+            return;
+        }
+        applyDraftTripPayload(draftTripId, payloadJson, false);
+    }
+
+    public void onOverrideTripCard(String draftTripId, String payloadJson) {
+        if (!isCurrentUserHostForCurrentTrip()) {
+            snackbarMessageLiveData.setValue("Only the trip host can override the current trip.");
+            return;
+        }
+        applyDraftTripPayload(draftTripId, payloadJson, true);
+    }
+
+    public boolean isTripCardSaved(String tripId) {
         if (tripId == null || tripId.trim().isEmpty()) {
-            return;
+            return false;
         }
+        Set<String> savedIds = savedTripCardIdsLiveData.getValue();
+        return savedIds != null && savedIds.contains(tripId);
+    }
 
-        DraftTripCardSnapshot snapshot = pendingDraftTripSnapshots.get(tripId);
+    private void applyDraftTripPayload(String draftTripId,
+                                       String payloadJson,
+                                       boolean overrideCurrentTrip) {
+        DraftTripCardSnapshot snapshot = parseDraftTripPayload(payloadJson, draftTripId);
         if (snapshot == null) {
-            snackbarMessageLiveData.setValue("Unable to save this draft trip.");
+            snackbarMessageLiveData.setValue("Unable to parse this draft trip.");
+            return;
+        }
+        if (snapshot.stops.isEmpty()) {
+            snackbarMessageLiveData.setValue("This draft has no valid stops to save.");
             return;
         }
 
+        String targetTripId;
+        if (overrideCurrentTrip) {
+            targetTripId = resolveOverrideTargetTripId(snapshot.currentTripId);
+            if (targetTripId.isEmpty()) {
+                snackbarMessageLiveData.setValue("No current trip available to override.");
+                return;
+            }
+        } else {
+            targetTripId = !snapshot.draftTripId.isEmpty()
+                    ? snapshot.draftTripId
+                    : ("ai-draft-" + UUID.randomUUID());
+        }
+
+        long startAt = snapshot.startAt > 0L ? snapshot.startAt : resolveStartAt(snapshot.stops);
+        long endAt = snapshot.endAt > 0L ? snapshot.endAt : resolveEndAt(snapshot.stops, startAt);
         tripRepository.saveDraftTrip(
-                snapshot.tripId,
-                snapshot.groupId,
+                targetTripId,
+                trim(groupId),
                 snapshot.title,
                 snapshot.description,
-                snapshot.startAt,
-                snapshot.endAt,
+                startAt,
+                endAt,
                 snapshot.stops,
                 success -> {
                     if (!success) {
                         snackbarMessageLiveData.postValue("Failed to save trip. Please try again.");
                         return;
                     }
-
-                    Set<String> current = savedTripCardIdsLiveData.getValue();
-                    Set<String> updated = current == null
-                            ? new HashSet<>()
-                            : new HashSet<>(current);
-                    updated.add(snapshot.tripId);
-                    savedTripCardIdsLiveData.postValue(updated);
-                    pendingDraftTripSnapshots.remove(snapshot.tripId);
+                    markDraftCardSaved(snapshot.draftTripId);
+                    snackbarMessageLiveData.postValue(overrideCurrentTrip
+                            ? "Current trip updated from AI draft."
+                            : "AI draft saved as a new trip.");
+                    tripRepository.refreshTrips(trim(groupId));
                 }
         );
     }
 
-    public boolean isTripCardSaved(String tripId) {
-        if (tripId == null || tripId.trim().isEmpty()) return false;
-        Set<String> savedIds = savedTripCardIdsLiveData.getValue();
-        return savedIds != null && savedIds.contains(tripId);
+    private void markDraftCardSaved(String draftTripId) {
+        String normalized = trim(draftTripId);
+        if (normalized.isEmpty()) {
+            return;
+        }
+        Set<String> current = savedTripCardIdsLiveData.getValue();
+        Set<String> updated = current == null ? new HashSet<>() : new HashSet<>(current);
+        updated.add(normalized);
+        savedTripCardIdsLiveData.postValue(updated);
+    }
+
+    private String resolveOverrideTargetTripId(String payloadCurrentTripId) {
+        String payloadTripId = trim(payloadCurrentTripId);
+        if (!payloadTripId.isEmpty() && hasTripIdInCurrentTrips(payloadTripId)) {
+            return payloadTripId;
+        }
+        return getCurrentTripId();
     }
 
     public void addSuggestedPlaceToTrip(String tripId, Place place) {
-        if (tripId == null || tripId.trim().isEmpty() || place == null) return;
+        if (tripId == null || tripId.trim().isEmpty() || place == null) {
+            return;
+        }
 
         if (place.location == null
-            || !Double.isFinite(place.location.latitude)
-            || !Double.isFinite(place.location.longitude)) {
+                || !Double.isFinite(place.location.latitude)
+                || !Double.isFinite(place.location.longitude)) {
             return;
         }
 
@@ -285,8 +384,8 @@ public class ChatViewModel extends ViewModel {
                 UUID.randomUUID().toString(),
                 place.name,
                 place.address,
-            place.location.latitude,
-            place.location.longitude,
+                place.location.latitude,
+                place.location.longitude,
                 0L,
                 0L,
                 0
@@ -306,22 +405,33 @@ public class ChatViewModel extends ViewModel {
             return;
         }
 
+        String progressMessageId = UUID.randomUUID().toString();
+        long progressSentAt = System.currentTimeMillis();
+        upsertAiStatusMessage(progressMessageId, progressSentAt, AI_DRAFTING_MESSAGE);
+
         LiveData<AiTripDraftResult> source = chatRepository.draftTripFromQuery(query);
         observeOnce(source, result -> {
             String failureCode = result != null ? result.getFailureCode() : "AI_FAILURE";
             if (failureCode != null) {
                 aiDraftModeEnabledLiveData.postValue(false);
-                snackbarMessageLiveData.postValue("AI draft failed (" + failureCode + ")");
+                upsertAiStatusMessage(
+                        progressMessageId,
+                        progressSentAt,
+                        AI_DRAFT_ERROR_PREFIX + failureCode);
                 return;
             }
 
             ChatMessage draftCard = buildDraftCardMessage(result);
             if (draftCard == null) {
                 aiDraftModeEnabledLiveData.postValue(false);
-                snackbarMessageLiveData.postValue("Unable to build AI draft result.");
+                upsertAiStatusMessage(
+                        progressMessageId,
+                        progressSentAt,
+                        AI_DRAFT_ERROR_PREFIX + "INVALID_DRAFT");
                 return;
             }
-            chatRepository.insertLocalMessage(draftCard);
+            upsertAiStatusMessage(progressMessageId, progressSentAt, AI_DRAFTED_MESSAGE);
+            chatRepository.sendMessage(draftCard);
         });
     }
 
@@ -330,23 +440,52 @@ public class ChatViewModel extends ViewModel {
             return;
         }
 
+        String progressMessageId = UUID.randomUUID().toString();
+        long progressSentAt = System.currentTimeMillis();
+        upsertAiStatusMessage(progressMessageId, progressSentAt, AI_SUGGESTING_MESSAGE);
+
         LiveData<AiPlaceSuggestionResult> source = placeRepository.suggestPlacesFromQuery(query);
         observeOnce(source, result -> {
             String failureCode = result != null ? result.getFailureCode() : "AI_FAILURE";
             if (failureCode != null) {
                 aiSuggestPlacesModeEnabledLiveData.postValue(false);
-                snackbarMessageLiveData.postValue("AI suggestions failed (" + failureCode + ")");
+                upsertAiStatusMessage(
+                        progressMessageId,
+                        progressSentAt,
+                        AI_SUGGEST_ERROR_PREFIX + failureCode);
                 return;
             }
 
             ChatMessage suggestedPlacesCard = buildSuggestedPlacesCardMessage(result);
             if (suggestedPlacesCard == null) {
                 aiSuggestPlacesModeEnabledLiveData.postValue(false);
-                snackbarMessageLiveData.postValue("Unable to build AI place suggestions.");
+                upsertAiStatusMessage(
+                        progressMessageId,
+                        progressSentAt,
+                        AI_SUGGEST_ERROR_PREFIX + "INVALID_RESULT");
                 return;
             }
-            chatRepository.insertLocalMessage(suggestedPlacesCard);
+            upsertAiStatusMessage(progressMessageId, progressSentAt, AI_SUGGESTED_MESSAGE);
+            chatRepository.sendMessage(suggestedPlacesCard);
         });
+    }
+
+    private void upsertAiStatusMessage(String messageId, long sentAt, String content) {
+        chatRepository.insertLocalMessage(new ChatMessage(
+                messageId,
+                groupId,
+                AI_SENDER_USER_ID,
+                AI_SENDER_NAME,
+                content,
+                "TEXT",
+                sentAt,
+                UUID.randomUUID().toString(),
+                0,
+                0,
+                null,
+                true,
+                false
+        ));
     }
 
     private ChatMessage buildDraftCardMessage(AiTripDraftResult result) {
@@ -359,24 +498,21 @@ public class ChatViewModel extends ViewModel {
         int stopCount = stops != null ? stops.size() : 0;
 
         String draftTripId = "ai-draft-" + UUID.randomUUID();
-        List<TripStop> draftStops = toTripStops(stops);
-        pendingDraftTripSnapshots.put(draftTripId, new DraftTripCardSnapshot(
-            draftTripId,
-            groupId,
-            draft.getTitle() != null ? draft.getTitle() : "AI Draft Trip",
-            draft.getSummary() != null ? draft.getSummary() : "",
-            System.currentTimeMillis(),
-            0L,
-            draftStops
-        ));
-        String payload = buildDraftPayloadJson(draftTripId, draft, stops, result.getCandidatePlaces(), stopCount);
+        String payload = buildDraftPayloadJson(
+                draftTripId,
+                draft,
+                stops,
+                result.getCandidatePlaces(),
+                stopCount,
+                getCurrentTripId()
+        );
 
         return new ChatMessage(
                 UUID.randomUUID().toString(),
                 groupId,
-                currentUserId,
+                trim(currentUserId),
                 null,
-                payload.toString(),
+                payload,
                 "TRIP_CREATED_CARD",
                 System.currentTimeMillis(),
                 UUID.randomUUID().toString(),
@@ -414,7 +550,7 @@ public class ChatViewModel extends ViewModel {
         return new ChatMessage(
                 UUID.randomUUID().toString(),
                 groupId,
-                currentUserId,
+                trim(currentUserId),
                 null,
                 payload,
                 "AI_SUGGESTED_PLACES_CARD",
@@ -431,26 +567,30 @@ public class ChatViewModel extends ViewModel {
     }
 
     private String buildDraftPayloadJson(String draftTripId,
-                                         AiTripDraft draft,
-                                         List<AiTripDraftStop> stops,
-                                         List<Place> candidates,
-                                         int stopCount) {
-        long startTime = System.currentTimeMillis();
+            AiTripDraft draft,
+            List<AiTripDraftStop> stops,
+            List<Place> candidates,
+            int stopCount,
+            String currentTripId) {
         StringBuilder sb = new StringBuilder();
         sb.append("{");
         sb.append("\"tripId\":").append(jsonString(draftTripId)).append(",");
+        sb.append("\"currentTripId\":").append(jsonString(currentTripId)).append(",");
         sb.append("\"stopCount\":").append(stopCount).append(",");
-        sb.append("\"startTime\":").append(startTime).append(",");
         sb.append("\"isSaved\":false,");
         sb.append("\"totalDistance\":0.0,");
         sb.append("\"title\":").append(jsonString(draft.getTitle() != null ? draft.getTitle() : "AI Draft Trip")).append(",");
-        sb.append("\"summary\":").append(jsonString(draft.getSummary() != null ? draft.getSummary() : "")).append(",");
+        String summary = draft.getSummary() != null ? draft.getSummary() : "";
+        sb.append("\"summary\":").append(jsonString(summary)).append(",");
+        sb.append("\"description\":").append(jsonString(summary)).append(",");
         sb.append("\"stops\":[");
 
         if (stops != null) {
             boolean firstStop = true;
             for (AiTripDraftStop stop : stops) {
-                if (stop == null) continue;
+                if (stop == null) {
+                    continue;
+                }
                 if (!firstStop) {
                     sb.append(",");
                 }
@@ -463,6 +603,8 @@ public class ChatViewModel extends ViewModel {
                 sb.append("\"placeId\":").append(jsonString(stop.getPlaceId())).append(",");
                 sb.append("\"durationMinutes\":").append(Math.max(0, stop.getDurationMinutes())).append(",");
                 sb.append("\"note\":").append(jsonString(stop.getNote() != null ? stop.getNote() : "")).append(",");
+                sb.append("\"plannedDateTime\":").append(jsonString(
+                        stop.getPlannedDateTime() != null ? stop.getPlannedDateTime() : "")).append(",");
                 sb.append("\"name\":").append(jsonString(place != null ? place.name : "")).append(",");
                 sb.append("\"address\":").append(jsonString(place != null ? place.address : "")).append(",");
                 sb.append("\"latitude\":");
@@ -479,7 +621,9 @@ public class ChatViewModel extends ViewModel {
         if (candidates != null) {
             boolean firstCandidate = true;
             for (Place place : candidates) {
-                if (place == null) continue;
+                if (place == null) {
+                    continue;
+                }
                 if (!firstCandidate) {
                     sb.append(",");
                 }
@@ -576,50 +720,275 @@ public class ChatViewModel extends ViewModel {
         return escaped.toString();
     }
 
-    private List<TripStop> toTripStops(List<AiTripDraftStop> stops) {
+    private DraftTripCardSnapshot parseDraftTripPayload(String payloadJson, String fallbackDraftTripId) {
+        String payload = trim(payloadJson);
+        if (payload.isEmpty() || !payload.startsWith("{")) {
+            return null;
+        }
+        try {
+            JSONObject json = new JSONObject(payload);
+            String draftTripId = trim(json.optString("tripId", fallbackDraftTripId));
+            String currentTripId = trim(json.optString("currentTripId", ""));
+            String title = trim(json.optString("title", "AI Draft Trip"));
+            if (title.isEmpty()) {
+                title = "AI Draft Trip";
+            }
+
+            String description = trim(json.optString("summary", ""));
+            if (description.isEmpty()) {
+                description = trim(json.optString("description", ""));
+            }
+
+            List<TripStop> stops = toTripStops(json.optJSONArray("stops"));
+            long startAt = json.optLong("startTime", 0L);
+            long endAt = json.optLong("endTime", 0L);
+
+            return new DraftTripCardSnapshot(
+                    draftTripId,
+                    currentTripId,
+                    title,
+                    description,
+                    startAt,
+                    endAt,
+                    stops
+            );
+        } catch (Exception ignored) {
+            return parseDraftTripPayloadFallback(payload, fallbackDraftTripId);
+        }
+    }
+
+    private DraftTripCardSnapshot parseDraftTripPayloadFallback(String payload,
+                                                                String fallbackDraftTripId) {
+        String draftTripId = firstNonEmpty(
+                extractQuotedValue(payload, "tripId"),
+                trim(fallbackDraftTripId)
+        );
+        String currentTripId = extractQuotedValue(payload, "currentTripId");
+        String title = firstNonEmpty(extractQuotedValue(payload, "title"), "AI Draft Trip");
+        String description = firstNonEmpty(
+                extractQuotedValue(payload, "summary"),
+                extractQuotedValue(payload, "description")
+        );
+        long startAt = extractLongValue(payload, "startTime", 0L);
+        long endAt = extractLongValue(payload, "endTime", 0L);
+        List<TripStop> stops = parseStopsFromPayloadFallback(payload);
+
+        return new DraftTripCardSnapshot(
+                draftTripId,
+                currentTripId,
+                title,
+                description,
+                startAt,
+                endAt,
+                stops
+        );
+    }
+
+    private List<TripStop> toTripStops(JSONArray stops) {
         List<TripStop> mapped = new ArrayList<>();
         if (stops == null) {
             return mapped;
         }
 
         int orderIndex = 0;
-        for (AiTripDraftStop stop : stops) {
+        for (int i = 0; i < stops.length(); i++) {
+            JSONObject stop = stops.optJSONObject(i);
             if (stop == null) {
                 continue;
             }
 
-            Place place = stop.getPlace();
-            Location location = place != null ? place.location : null;
-                boolean hasValidCoordinates = location != null
-                    && Double.isFinite(location.latitude)
-                    && Double.isFinite(location.longitude);
-                if (!hasValidCoordinates) {
+            if (!stop.has("latitude") || !stop.has("longitude")) {
                 continue;
-                }
-                double latitude = location.latitude;
-                double longitude = location.longitude;
+            }
+            double latitude = stop.optDouble("latitude", Double.NaN);
+            double longitude = stop.optDouble("longitude", Double.NaN);
+            if (!Double.isFinite(latitude) || !Double.isFinite(longitude)) {
+                continue;
+            }
 
-            String stopTitle = place != null && place.name != null
-                    ? place.name
-                    : "";
-            String stopAddress = place != null && place.address != null
-                    ? place.address
-                    : "";
+            String stopTitle = trim(stop.optString("name", ""));
+            String stopAddress = trim(stop.optString("address", ""));
+            String note = trim(stop.optString("note", ""));
+            int durationMinutes = Math.max(0, stop.optInt("durationMinutes", 0));
+            long arrivalTime = parsePlannedDateTime(stop.optString("plannedDateTime", ""));
+            long departureTime = arrivalTime > 0
+                    ? arrivalTime + (durationMinutes * 60_000L)
+                    : 0L;
 
             mapped.add(new TripStop(
                     UUID.randomUUID().toString(),
                     stopTitle,
                     stopAddress,
-                    stop.getNote(),
+                    note,
                     latitude,
                     longitude,
-                    0L,
-                    0L,
+                    arrivalTime,
+                    departureTime,
                     orderIndex
             ));
             orderIndex++;
         }
         return mapped;
+    }
+
+    private List<TripStop> parseStopsFromPayloadFallback(String payload) {
+        List<TripStop> mapped = new ArrayList<>();
+        String stopsSegment = extractStopsSegment(payload);
+        if (stopsSegment.isEmpty()) {
+            return mapped;
+        }
+
+        Matcher matcher = Pattern.compile("\\{([^{}]*)\\}").matcher(stopsSegment);
+        int orderIndex = 0;
+        while (matcher.find()) {
+            String stopJson = matcher.group(1);
+            Double latitude = extractDoubleValue(stopJson, "latitude");
+            Double longitude = extractDoubleValue(stopJson, "longitude");
+            if (latitude == null || longitude == null
+                    || !Double.isFinite(latitude) || !Double.isFinite(longitude)) {
+                continue;
+            }
+
+            String name = extractQuotedValue(stopJson, "name");
+            String address = extractQuotedValue(stopJson, "address");
+            String note = extractQuotedValue(stopJson, "note");
+            String plannedDateTime = extractQuotedValue(stopJson, "plannedDateTime");
+            int durationMinutes = (int) extractLongValue(stopJson, "durationMinutes", 0L);
+            long arrivalTime = parsePlannedDateTime(plannedDateTime);
+            long departureTime = arrivalTime > 0L
+                    ? arrivalTime + (Math.max(0, durationMinutes) * 60_000L)
+                    : 0L;
+
+            mapped.add(new TripStop(
+                    UUID.randomUUID().toString(),
+                    trim(name),
+                    trim(address),
+                    trim(note),
+                    latitude,
+                    longitude,
+                    arrivalTime,
+                    departureTime,
+                    orderIndex
+            ));
+            orderIndex++;
+        }
+        return mapped;
+    }
+
+    private String extractStopsSegment(String payload) {
+        int stopsKeyIndex = payload.indexOf("\"stops\"");
+        if (stopsKeyIndex < 0) {
+            return "";
+        }
+        int arrayStart = payload.indexOf('[', stopsKeyIndex);
+        if (arrayStart < 0) {
+            return "";
+        }
+        int depth = 0;
+        for (int i = arrayStart; i < payload.length(); i++) {
+            char ch = payload.charAt(i);
+            if (ch == '[') {
+                depth++;
+            } else if (ch == ']') {
+                depth--;
+                if (depth == 0) {
+                    return payload.substring(arrayStart + 1, i);
+                }
+            }
+        }
+        return "";
+    }
+
+    private String extractQuotedValue(String payload, String key) {
+        Matcher matcher = Pattern.compile("\"" + Pattern.quote(key) + "\"\\s*:\\s*\"((?:\\\\.|[^\\\\\"])*)\"")
+                .matcher(payload);
+        if (!matcher.find()) {
+            return "";
+        }
+        return matcher.group(1).replace("\\\"", "\"").replace("\\\\", "\\");
+    }
+
+    private long extractLongValue(String payload, String key, long defaultValue) {
+        Matcher matcher = Pattern.compile("\"" + Pattern.quote(key) + "\"\\s*:\\s*(-?\\d+)")
+                .matcher(payload);
+        if (!matcher.find()) {
+            return defaultValue;
+        }
+        try {
+            return Long.parseLong(matcher.group(1));
+        } catch (Exception ignored) {
+            return defaultValue;
+        }
+    }
+
+    private Double extractDoubleValue(String payload, String key) {
+        Matcher matcher = Pattern.compile("\"" + Pattern.quote(key) + "\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)")
+                .matcher(payload);
+        if (!matcher.find()) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(matcher.group(1));
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String firstNonEmpty(String first, String fallback) {
+        String firstTrimmed = trim(first);
+        if (!firstTrimmed.isEmpty()) {
+            return firstTrimmed;
+        }
+        return trim(fallback);
+    }
+
+    private long resolveStartAt(List<TripStop> stops) {
+        long minArrival = Long.MAX_VALUE;
+        if (stops != null) {
+            for (TripStop stop : stops) {
+                if (stop == null) {
+                    continue;
+                }
+                long arrival = stop.getArrivalTime();
+                if (arrival > 0L && arrival < minArrival) {
+                    minArrival = arrival;
+                }
+            }
+        }
+        if (minArrival == Long.MAX_VALUE) {
+            return System.currentTimeMillis();
+        }
+        return minArrival;
+    }
+
+    private long resolveEndAt(List<TripStop> stops, long startAt) {
+        long maxDeparture = 0L;
+        if (stops != null) {
+            for (TripStop stop : stops) {
+                if (stop == null) {
+                    continue;
+                }
+                long departure = stop.getDepartureTime();
+                if (departure > maxDeparture) {
+                    maxDeparture = departure;
+                }
+            }
+        }
+        if (maxDeparture <= 0L) {
+            return startAt;
+        }
+        return Math.max(startAt, maxDeparture);
+    }
+
+    private long parsePlannedDateTime(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return 0L;
+        }
+        try {
+            return Instant.parse(value).toEpochMilli();
+        } catch (Exception ignored) {
+            return 0L;
+        }
     }
 
     private void appendNullableDouble(StringBuilder sb, Double value) {
@@ -630,24 +999,98 @@ public class ChatViewModel extends ViewModel {
         sb.append(value);
     }
 
+    private TripPlan resolveCurrentGroupTrip() {
+        List<TripPlan> trips = tripsLiveData != null ? tripsLiveData.getValue() : null;
+        if (trips == null || trips.isEmpty()) {
+            return null;
+        }
+
+        long now = System.currentTimeMillis();
+        TripPlan activeTrip = null;
+        TripPlan nearestUpcoming = null;
+        long nearestUpcomingDelta = Long.MAX_VALUE;
+        TripPlan latestPast = null;
+        long latestPastEnd = Long.MIN_VALUE;
+
+        for (TripPlan trip : trips) {
+            if (trip == null || trim(trip.getId()).isEmpty()) {
+                continue;
+            }
+            long startAt = trip.getStartAt();
+            long endAt = trip.getEndAt();
+
+            if (startAt > 0L && endAt > 0L && startAt <= now && endAt >= now) {
+                activeTrip = trip;
+                break;
+            }
+
+            if (startAt > now) {
+                long delta = startAt - now;
+                if (delta < nearestUpcomingDelta) {
+                    nearestUpcomingDelta = delta;
+                    nearestUpcoming = trip;
+                }
+            } else if (endAt > 0L && endAt <= now && endAt > latestPastEnd) {
+                latestPastEnd = endAt;
+                latestPast = trip;
+            }
+        }
+
+        if (activeTrip != null) {
+            return activeTrip;
+        }
+        if (nearestUpcoming != null) {
+            return nearestUpcoming;
+        }
+        if (latestPast != null) {
+            return latestPast;
+        }
+        return trips.get(0);
+    }
+
+    private boolean hasTripIdInCurrentTrips(String tripId) {
+        String normalized = trim(tripId);
+        if (normalized.isEmpty()) {
+            return false;
+        }
+        List<TripPlan> trips = tripsLiveData != null ? tripsLiveData.getValue() : null;
+        if (trips == null || trips.isEmpty()) {
+            return false;
+        }
+        for (TripPlan trip : trips) {
+            if (trip == null) {
+                continue;
+            }
+            if (normalized.equals(trim(trip.getId()))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String trim(String value) {
+        return value == null ? "" : value.trim();
+    }
+
     private static class DraftTripCardSnapshot {
-        final String tripId;
-        final String groupId;
+
+        final String draftTripId;
+        final String currentTripId;
         final String title;
         final String description;
         final long startAt;
         final long endAt;
         final List<TripStop> stops;
 
-        DraftTripCardSnapshot(String tripId,
-                              String groupId,
-                              String title,
-                              String description,
-                              long startAt,
-                              long endAt,
-                              List<TripStop> stops) {
-            this.tripId = tripId;
-            this.groupId = groupId;
+        DraftTripCardSnapshot(String draftTripId,
+                String currentTripId,
+                String title,
+                String description,
+                long startAt,
+                long endAt,
+                List<TripStop> stops) {
+            this.draftTripId = draftTripId;
+            this.currentTripId = currentTripId;
             this.title = title;
             this.description = description;
             this.startAt = startAt;
@@ -657,7 +1100,7 @@ public class ChatViewModel extends ViewModel {
     }
 
     private <T> void observeOnce(LiveData<T> source, Observer<T> observer) {
-        Observer<T> oneShotObserver = new Observer<T>() {
+        Observer<T> oneShotObserver = new Observer<>() {
             @Override
             public void onChanged(T value) {
                 source.removeObserver(this);
@@ -672,11 +1115,7 @@ public class ChatViewModel extends ViewModel {
 
     private void trackObserveOnceObserver(LiveData<?> source, Observer<?> observer) {
         synchronized (observeOnceObservers) {
-            Set<Observer<?>> observers = observeOnceObservers.get(source);
-            if (observers == null) {
-                observers = new HashSet<>();
-                observeOnceObservers.put(source, observers);
-            }
+            Set<Observer<?>> observers = observeOnceObservers.computeIfAbsent(source, k -> new HashSet<>());
             observers.add(observer);
         }
     }
@@ -700,7 +1139,7 @@ public class ChatViewModel extends ViewModel {
             for (Map.Entry<LiveData<?>, Set<Observer<?>>> entry : observeOnceObservers.entrySet()) {
                 LiveData source = entry.getKey();
                 for (Observer<?> observer : entry.getValue()) {
-                    source.removeObserver((Observer) observer);
+                    source.removeObserver(observer);
                 }
             }
             observeOnceObservers.clear();

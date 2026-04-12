@@ -39,6 +39,9 @@ public class AddTripStopViewModel extends ViewModel {
     private final MutableLiveData<String> searchHint = new MutableLiveData<>("Search places...");
     private final MutableLiveData<SearchState> searchState = new MutableLiveData<>(new SearchState.Idle());
     private final AtomicInteger currentSearchToken = new AtomicInteger(0);
+    private volatile Double aiBiasLatitude;
+    private volatile Double aiBiasLongitude;
+    private volatile String aiCityBias;
 
     private String currentTripId = "";
 
@@ -81,6 +84,12 @@ public class AddTripStopViewModel extends ViewModel {
 
     public void setTripId(@NonNull String tripId) {
         this.currentTripId = tripId;
+    }
+
+    public void setAiSearchBias(Double latitude, Double longitude, String cityBias) {
+        this.aiBiasLatitude = latitude;
+        this.aiBiasLongitude = longitude;
+        this.aiCityBias = cityBias;
     }
 
     public void toggleAiMode() {
@@ -177,7 +186,11 @@ public class AddTripStopViewModel extends ViewModel {
 
         searchState.setValue(new SearchState.Loading(true));
 
-        LiveData<AiPlaceSuggestionResult> source = placeRepository.suggestPlacesFromQuery(query);
+        LiveData<AiPlaceSuggestionResult> source = placeRepository.suggestPlacesFromQuery(
+                query,
+                aiBiasLatitude,
+                aiBiasLongitude,
+                aiCityBias);
         observeOnce(source, result -> {
             if (requestToken != currentSearchToken.get()) {
                 return;
