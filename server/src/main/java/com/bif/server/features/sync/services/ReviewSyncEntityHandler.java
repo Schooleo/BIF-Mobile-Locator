@@ -1,6 +1,7 @@
 package com.bif.server.features.sync.services;
 
 import com.bif.server.features.place.dto.rest.ReviewResponseDTO;
+import com.bif.server.features.place.services.PlaceIdentityService;
 import com.bif.server.features.place.services.RatingService;
 import com.bif.server.features.sync.models.SyncChange;
 import com.bif.server.features.sync.models.SyncChangeEntry;
@@ -16,12 +17,16 @@ import java.util.Optional;
 public class ReviewSyncEntityHandler implements SyncEntityHandler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ReviewSyncEntityHandler.class);
+
     private final RatingService ratingService;
+    private final PlaceIdentityService placeIdentityService;
     private final ObjectMapper objectMapper;
 
     public ReviewSyncEntityHandler(RatingService ratingService,
+                                   PlaceIdentityService placeIdentityService,
                                    ObjectMapper objectMapper) {
         this.ratingService = ratingService;
+        this.placeIdentityService = placeIdentityService;
         this.objectMapper = objectMapper;
     }
 
@@ -44,65 +49,75 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
             throw new IllegalArgumentException("Review sync: unsupported operation '" + operation + "'");
         }
 
-        // entityId format: "placeId:userId"
         String[] parts = pushed.getEntityId() != null
                 ? pushed.getEntityId().split(":")
                 : new String[0];
         if (parts.length < 2) {
             throw new IllegalArgumentException("Review sync: malformed entityId '" + pushed.getEntityId() + "'");
         }
-        String placeId = parts[0];
+
+        String originalPlaceId = parts[0];
         String entityUserId = parts[1];
 
-        if (placeId == null || placeId.isBlank()) {
+        if (originalPlaceId == null || originalPlaceId.isBlank()) {
             throw new IllegalArgumentException("Review sync: blank placeId in entityId");
         }
         if (entityUserId == null || entityUserId.isBlank()) {
             throw new IllegalArgumentException("Review sync: blank userId in entityId");
         }
-
         if (!userId.equals(entityUserId)) {
-            throw new IllegalArgumentException(
-                "Review sync: entity userId does not match authenticated userId");
+            throw new IllegalArgumentException("Review sync: entity userId does not match authenticated userId");
         }
+
         String reviewUserId = userId;
 
         if ("DELETE".equals(operation)) {
-            Optional<ReviewResponseDTO> existing = ratingService.getUserReviewWithUser(reviewUserId, placeId);
+            Optional<ReviewResponseDTO> existing = ratingService.getUserReviewWithUser(reviewUserId, originalPlaceId);
             if (existing.isPresent()) {
-                ratingService.deleteReview(reviewUserId, placeId);
-                LOGGER.debug("Review sync: deleted review for place={}", placeId);
+                ratingService.deleteReview(reviewUserId, originalPlaceId);
+                LOGGER.debug("Review sync: deleted review for place={}", originalPlaceId);
             }
+
             ReviewPayload response = new ReviewPayload();
-            response.placeId = placeId;
+            response.placeId = originalPlaceId;
             response.userId = reviewUserId;
             response.deleted = true;
             response.serverVersion = newVersion;
             return writePayload(response);
         }
 
-        // CREATE or UPDATE
         ReviewPayload payload = parsePayload(pushed.getPayload());
         if (payload == null) {
             throw new IllegalArgumentException("Review sync: invalid review payload");
         }
 
-        int stars = payload.rating > 0 ? payload.rating : payload.stars;
+        int stars = payload.stars;
         if (stars < 1 || stars > 5) {
-            throw new IllegalArgumentException("Review sync: stars/rating must be between 1 and 5");
+            throw new IllegalArgumentException("Review sync: stars must be between 1 and 5");
         }
-        String comment = payload.comment;
+
+        String resolvedPlaceId = resolvePlaceIdWithFallback(originalPlaceId, payload);
 
         ReviewResponseDTO savedReview = ratingService.saveOrUpdateReview(
                 stars,
-                comment,
+                payload.comment,
                 reviewUserId,
-                placeId,
-                newVersion);
+                originalPlaceId,
+                resolvedPlaceId,
+                newVersion,
+                payload.externalSource,
+                payload.externalId,
+                payload.lat,
+                payload.lng,
+                payload.placeName);
 
-        LOGGER.debug("Review sync: saved review for place={} stars={}", placeId, stars);
+        LOGGER.debug("Review sync: saved review for place={} resolvedPlace={} stars={}",
+                originalPlaceId,
+                resolvedPlaceId,
+                stars);
 
         ReviewPayload responsePayload = toPayload(savedReview);
+        responsePayload.placeId = resolvedPlaceId;
         responsePayload.serverVersion = newVersion;
         return writePayload(responsePayload);
     }
@@ -126,8 +141,7 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
             return null;
         }
 
-        Optional<ReviewResponseDTO> reviewOpt = ratingService
-            .getUserReviewWithUser(reviewUserId, placeId);
+        Optional<ReviewResponseDTO> reviewOpt = ratingService.getUserReviewWithUser(reviewUserId, placeId);
         if (reviewOpt.isEmpty()) {
             return null;
         }
@@ -135,6 +149,40 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
         ReviewPayload payload = toPayload(reviewOpt.get());
         payload.serverVersion = entry.getServerVersion();
         return writePayload(payload);
+    }
+
+    private String resolvePlaceIdWithFallback(String originalPlaceId, ReviewPayload payload) {
+        if (payload == null
+                || isBlank(payload.externalSource)
+                || payload.lat == null
+                || payload.lng == null
+                || isBlank(payload.placeName)) {
+            LOGGER.warn("Review sync: missing metadata for place resolution, fallback to placeId={}", originalPlaceId);
+            return originalPlaceId;
+        }
+
+        try {
+            String resolvedPlaceId = placeIdentityService.resolveInternalPlaceId(
+                    payload.externalSource,
+                    payload.externalId,
+                    payload.lat,
+                    payload.lng,
+                    payload.placeName);
+
+            if (isBlank(resolvedPlaceId)) {
+                LOGGER.warn("Review sync: place resolution returned blank, fallback to placeId={}", originalPlaceId);
+                return originalPlaceId;
+            }
+
+            return resolvedPlaceId;
+        } catch (Exception ex) {
+            LOGGER.warn("Review sync: place resolution failed, fallback to placeId={}", originalPlaceId, ex);
+            return originalPlaceId;
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private ReviewPayload parsePayload(String json) {
@@ -165,13 +213,14 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
         payload.userName = review.userName() != null && !review.userName().isBlank()
                 ? review.userName()
                 : "Anonymous";
-
         payload.stars = review.stars();
-        payload.rating = review.stars();
         payload.comment = review.comment();
-        payload.createdAt = review.createdAt() != null
-                ? review.createdAt().toString()
-                : null;
+        payload.externalSource = review.externalSource();
+        payload.externalId = review.externalId();
+        payload.lat = review.lat();
+        payload.lng = review.lng();
+        payload.placeName = review.placeName();
+        payload.createdAt = review.createdAt();
         return payload;
     }
 
@@ -180,9 +229,13 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
         public String userId;
         public String userName;
         public int stars;
-        public int rating;
         public String comment;
-        public String createdAt;
+        public String externalSource;
+        public String externalId;
+        public Double lat;
+        public Double lng;
+        public String placeName;
+        public long createdAt;
         public long serverVersion;
         public boolean deleted;
     }

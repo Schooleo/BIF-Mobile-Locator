@@ -81,7 +81,7 @@ public class SyncManagerTest {
     public void sync_whenOnlineNoPending_sendsEmptyPushAndPulls()
             throws IOException {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
-        when(mockSyncQueueDao.getPending())
+        when(mockSyncQueueDao.getPendingForUser("user1"))
                 .thenReturn(new ArrayList<>());
 
         SyncResponseDto serverResponse = new SyncResponseDto();
@@ -114,8 +114,9 @@ public class SyncManagerTest {
         entry.entityId = "p1";
         entry.operation = "CREATE";
         entry.clientChangeId = "client-uuid-1";
+        entry.userId = "user1";
         entry.status = "PENDING";
-        when(mockSyncQueueDao.getPending())
+        when(mockSyncQueueDao.getPendingForUser("user1"))
                 .thenReturn(Collections.singletonList(entry));
 
         SyncResponseDto serverResponse = new SyncResponseDto();
@@ -149,8 +150,9 @@ public class SyncManagerTest {
         SyncQueueEntity entry = new SyncQueueEntity();
         entry.id = 1;
         entry.retryCount = 0;
+        entry.userId = "user1";
         entry.status = "PENDING";
-        when(mockSyncQueueDao.getPending())
+        when(mockSyncQueueDao.getPendingForUser("user1"))
                 .thenReturn(Collections.singletonList(entry));
 
         Call<SyncResponseDto> mockCall =
@@ -178,8 +180,9 @@ public class SyncManagerTest {
         entry.id = 8;
         entry.clientChangeId = "retry-1";
         entry.retryCount = 0;
+        entry.userId = "user1";
         entry.status = "PENDING";
-        when(mockSyncQueueDao.getPending())
+        when(mockSyncQueueDao.getPendingForUser("user1"))
                 .thenReturn(Collections.singletonList(entry));
 
         SyncResponseDto serverResponse = new SyncResponseDto();
@@ -213,8 +216,9 @@ public class SyncManagerTest {
         SyncQueueEntity entry = new SyncQueueEntity();
         entry.id = 1;
         entry.retryCount = 5;
+        entry.userId = "user1";
         entry.status = "PENDING";
-        when(mockSyncQueueDao.getPending())
+        when(mockSyncQueueDao.getPendingForUser("user1"))
                 .thenReturn(Collections.singletonList(entry));
 
         Call<SyncResponseDto> mockCall =
@@ -234,7 +238,7 @@ public class SyncManagerTest {
     @SuppressWarnings("unchecked")
     public void sync_resetsInFlightOnStart() throws IOException {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
-        when(mockSyncQueueDao.getPending())
+        when(mockSyncQueueDao.getPendingForUser("user1"))
                 .thenReturn(new ArrayList<>());
 
         SyncResponseDto serverResponse = new SyncResponseDto();
@@ -331,8 +335,9 @@ public class SyncManagerTest {
         entry.operation = "UPDATE";
         entry.clientChangeId = "cid-10";
         entry.payload = "{\"id\":\"p10\",\"name\":\"Updated\"}";
+        entry.userId = "user1";
         entry.status = "PENDING";
-        when(mockSyncQueueDao.getPending())
+        when(mockSyncQueueDao.getPendingForUser("user1"))
                 .thenReturn(Collections.singletonList(entry));
 
         SyncResponseDto serverResponse = new SyncResponseDto();
@@ -365,7 +370,7 @@ public class SyncManagerTest {
     @Test
         public void syncIfOnline_whenOnline_triggersSync() throws InterruptedException {
         when(mockNetworkMonitor.isOnline()).thenReturn(true);
-        when(mockSyncQueueDao.getPending())
+        when(mockSyncQueueDao.getPendingForUser("user1"))
                 .thenReturn(new ArrayList<>());
         try {
             syncManager.syncIfOnline();
@@ -396,7 +401,7 @@ public class SyncManagerTest {
             storedEntries.add(invocation.getArgument(0));
             return null;
         }).when(mockSyncQueueDao).enqueue(any(SyncQueueEntity.class));
-        when(mockSyncQueueDao.getPending()).thenAnswer(invocation -> new ArrayList<>(storedEntries));
+        when(mockSyncQueueDao.getPendingForUser("user1")).thenAnswer(invocation -> new ArrayList<>(storedEntries));
 
         SyncResponseDto serverResponse = new SyncResponseDto();
         serverResponse.currentServerVersion = 3;
@@ -445,8 +450,9 @@ public class SyncManagerTest {
         entry.entityId = "s1";
         entry.operation = "UPDATE";
         entry.clientChangeId = "cid-block";
+        entry.userId = "user1";
         entry.status = SyncManager.QUEUE_STATUS_PENDING;
-        when(mockSyncQueueDao.getPending())
+        when(mockSyncQueueDao.getPendingForUser("user1"))
                 .thenReturn(Collections.singletonList(entry));
 
         SyncResponseDto serverResponse = new SyncResponseDto();
@@ -480,8 +486,9 @@ public class SyncManagerTest {
         entry.entityId = "s1";
         entry.operation = "UPDATE";
         entry.clientChangeId = "cid-dup";
+        entry.userId = "user1";
         entry.status = SyncManager.QUEUE_STATUS_PENDING;
-        when(mockSyncQueueDao.getPending())
+        when(mockSyncQueueDao.getPendingForUser("user1"))
                 .thenReturn(Collections.singletonList(entry));
 
         SyncResponseDto serverResponse = new SyncResponseDto();

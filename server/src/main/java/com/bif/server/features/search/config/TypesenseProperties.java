@@ -16,6 +16,7 @@ public class TypesenseProperties {
     private int connectTimeoutMs = 3000;
     private int readTimeoutMs = 5000;
     private boolean bootstrapReindexOnStartup = false;
+    private Integer geoRadiusKm = 25;
 
     public boolean isEnabled() {
         return enabled;
@@ -87,5 +88,13 @@ public class TypesenseProperties {
 
     public void setBootstrapReindexOnStartup(boolean bootstrapReindexOnStartup) {
         this.bootstrapReindexOnStartup = bootstrapReindexOnStartup;
+    }
+
+    public Integer getGeoRadiusKm() {
+        return geoRadiusKm;
+    }
+
+    public void setGeoRadiusKm(Integer geoRadiusKm) {
+        this.geoRadiusKm = geoRadiusKm;
     }
 }

@@ -17,6 +17,8 @@ import android.location.Address;
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.LiveData;
+import androidx.lifecycle.MutableLiveData;
+import androidx.lifecycle.Observer;
 
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.AiGraphQlClient;
@@ -44,9 +46,14 @@ import org.mockito.MockitoAnnotations;
 
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import retrofit2.Call;
 import retrofit2.Response;
@@ -78,6 +85,39 @@ public class PlaceRepositoryTest {
     @Before
     public void setUp() {
         closeable = MockitoAnnotations.openMocks(this);
+        
+        // Create a synchronous executor for testing
+        ExecutorService testExecutor = new ExecutorService() {
+            @Override
+            public void execute(Runnable command) {
+                command.run(); // Run synchronously on test thread
+            }
+            @Override
+            public void shutdown() {}
+            @Override
+            public List<Runnable> shutdownNow() { return Collections.emptyList(); }
+            @Override
+            public boolean isShutdown() { return false; }
+            @Override
+            public boolean isTerminated() { return false; }
+            @Override
+            public boolean awaitTermination(long timeout, TimeUnit unit) { return true; }
+            @Override
+            public <T> java.util.concurrent.Future<T> submit(java.util.concurrent.Callable<T> task) { return null; }
+            @Override
+            public <T> java.util.concurrent.Future<T> submit(Runnable task, T result) { return null; }
+            @Override
+            public java.util.concurrent.Future<?> submit(Runnable task) { return null; }
+            @Override
+            public <T> List<java.util.concurrent.Future<T>> invokeAll(java.util.Collection<? extends java.util.concurrent.Callable<T>> tasks) { return null; }
+            @Override
+            public <T> List<java.util.concurrent.Future<T>> invokeAll(java.util.Collection<? extends java.util.concurrent.Callable<T>> tasks, long timeout, TimeUnit unit) { return null; }
+            @Override
+            public <T> T invokeAny(java.util.Collection<? extends java.util.concurrent.Callable<T>> tasks) { return null; }
+            @Override
+            public <T> T invokeAny(java.util.Collection<? extends java.util.concurrent.Callable<T>> tasks, long timeout, TimeUnit unit) { return null; }
+        };
+        
         placeRepository = new PlaceRepository(
                 mockGeocodingDataSource,
                 mockRestApiService,
@@ -86,7 +126,8 @@ public class PlaceRepositoryTest {
                 mockSyncManager,
                 mockNetworkMonitor,
                 mockAiGraphQlClient,
-                null);
+                "anonymous",
+                testExecutor);
     }
 
     @After
@@ -233,13 +274,34 @@ public class PlaceRepositoryTest {
         // Mock placeDao.count() to avoid eviction
         when(mockPlaceDao.count(anyString())).thenReturn(2);
 
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<List<Place>> resultValue = new AtomicReference<>();
+        
+        // Create a valid user location to trigger server search
+        Location userLocation = new Location();
+        userLocation.latitude = 10.0;
+        userLocation.longitude = 20.0;
+        
         LiveData<List<Place>> result =
-                placeRepository.searchPlaces("test", null);
-        Thread.sleep(500);
-
-        assertNotNull(result.getValue());
-        assertEquals(2, result.getValue().size());
-        assertEquals("server1", result.getValue().get(0).id);
+                placeRepository.searchPlaces("test", userLocation);
+        
+        // Use Observer to wait for the result
+        Observer<List<Place>> observer = places -> {
+            resultValue.set(places);
+            latch.countDown();
+        };
+        result.observeForever(observer);
+        
+        // Wait for the async operation to complete (max 5 seconds)
+        boolean completed = latch.await(5, TimeUnit.SECONDS);
+        result.removeObserver(observer);
+        
+        assertTrue("Search did not complete within timeout", completed);
+        assertNotNull("result value should not be null", resultValue.get());
+        List<Place> places = resultValue.get();
+        assertEquals("Expected exactly 2 results but got " + places.size(), 
+            2, places.size());
+        assertEquals("server1", places.get(0).id);
     }
 
     @Test
@@ -287,14 +349,33 @@ public class PlaceRepositoryTest {
 
         when(mockPlaceDao.count(anyString())).thenReturn(3);
 
-        LiveData<List<Place>> result = placeRepository.searchPlaces("museum", null);
-        Thread.sleep(600);
-
-        assertNotNull(result.getValue());
-        assertEquals(3, result.getValue().size());
-        assertEquals("server1", result.getValue().get(0).id);
-        assertEquals("geocode_30.0_40.0", result.getValue().get(1).id);
-        assertEquals("local1", result.getValue().get(2).id);
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<List<Place>> resultValue = new AtomicReference<>();
+        
+        // Create a valid user location to trigger server search
+        Location userLocation = new Location();
+        userLocation.latitude = 10.0;
+        userLocation.longitude = 20.0;
+        
+        LiveData<List<Place>> result = placeRepository.searchPlaces("museum", userLocation);
+        
+        // Use Observer to wait for the result
+        Observer<List<Place>> observer = places -> {
+            resultValue.set(places);
+            latch.countDown();
+        };
+        result.observeForever(observer);
+        
+        // Wait for the async operation to complete (max 5 seconds)
+        boolean completed = latch.await(5, TimeUnit.SECONDS);
+        result.removeObserver(observer);
+        
+        assertTrue("Search did not complete within timeout", completed);
+        assertNotNull("result value should not be null", resultValue.get());
+        assertEquals("Expected exactly 3 results", 3, resultValue.get().size());
+        assertEquals("server1", resultValue.get().get(0).id);
+        assertEquals("geocode_30.0_40.0", resultValue.get().get(1).id);
+        assertEquals("local1", resultValue.get().get(2).id);
     }
 
     @Test

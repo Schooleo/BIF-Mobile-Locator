@@ -8,6 +8,13 @@ public class Review {
     public String comment;
     public long createdAt;
 
+    // Place identity metadata for review/place linkage.
+    public String externalSource;
+    public String externalId;
+    public Double lat;
+    public Double lng;
+    public String placeName;
+
     // Sync Metadata
     public long serverVersion;
     public boolean deleted;
@@ -28,11 +35,31 @@ public class Review {
                 java.util.Objects.equals(placeId, review.placeId) &&
                 java.util.Objects.equals(userId, review.userId) &&
                 java.util.Objects.equals(userName, review.userName) &&
-                java.util.Objects.equals(comment, review.comment);
+                java.util.Objects.equals(comment, review.comment) &&
+                java.util.Objects.equals(externalSource, review.externalSource) &&
+                java.util.Objects.equals(externalId, review.externalId) &&
+                java.util.Objects.equals(lat, review.lat) &&
+                java.util.Objects.equals(lng, review.lng) &&
+                java.util.Objects.equals(placeName, review.placeName);
     }
 
     @Override
     public int hashCode() {
-        return java.util.Objects.hash(placeId, userId, userName, stars, comment, createdAt, serverVersion, deleted, lastSyncedAt, pendingSync);
+        return java.util.Objects.hash(
+            placeId,
+            userId,
+            userName,
+            stars,
+            comment,
+            createdAt,
+            externalSource,
+            externalId,
+            lat,
+            lng,
+            placeName,
+            serverVersion,
+            deleted,
+            lastSyncedAt,
+            pendingSync);
     }
 }

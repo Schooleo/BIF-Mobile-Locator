@@ -14,11 +14,15 @@ import java.util.List;
 
 @Dao
 public interface FavoriteDao {
-    @Query("SELECT * FROM favorites WHERE deleted = 0 ORDER BY id DESC")
-    LiveData<List<FavoriteEntity>> getAll();
+    @Query("SELECT * FROM favorites WHERE userId = :userId AND deleted = 0 ORDER BY id DESC")
+    LiveData<List<FavoriteEntity>> getAll(String userId);
 
-    @Query("SELECT * FROM favorites WHERE deleted = 0 AND (name LIKE '%' || :query || '%' OR address LIKE '%' || :query || '%')")
-    LiveData<List<FavoriteEntity>> searchFavorites(String query);
+    @Query("SELECT * FROM favorites WHERE userId = :userId AND deleted = 0 "
+            + "AND (name LIKE '%' || :query || '%' OR address LIKE '%' || :query || '%')")
+    LiveData<List<FavoriteEntity>> searchFavorites(String userId, String query);
+
+    @Query("SELECT * FROM favorites WHERE userId = :userId")
+    List<FavoriteEntity> getAllSync(String userId);
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insert(FavoriteEntity favorite);
@@ -26,8 +30,8 @@ public interface FavoriteDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void upsert(FavoriteEntity favorite);
 
-    @Query("SELECT * FROM favorites WHERE id = :id LIMIT 1")
-    FavoriteEntity findById(String id);
+    @Query("SELECT * FROM favorites WHERE id = :id AND userId = :userId LIMIT 1")
+    FavoriteEntity findById(String id, String userId);
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insertAll(List<FavoriteEntity> favorites);
@@ -41,13 +45,21 @@ public interface FavoriteDao {
     @Update
     void updateAll(List<FavoriteEntity> favorites);
 
-    @Query("DELETE FROM favorites")
-    void deleteAll();
+    @Query("DELETE FROM favorites WHERE id = :id AND userId = :userId")
+    void deleteById(String id, String userId);
+
+    @Query("DELETE FROM favorites WHERE userId = :userId")
+    void deleteAll(String userId);
 
     @Transaction
-    default void replaceAll(List<FavoriteEntity> favorites) {
-        deleteAll();
+    default void replaceAll(String userId, List<FavoriteEntity> favorites) {
+        deleteAll(userId);
         if (favorites != null && !favorites.isEmpty()) {
+            for (FavoriteEntity favorite : favorites) {
+                if (favorite != null) {
+                    favorite.userId = userId;
+                }
+            }
             insertAll(favorites);
         }
     }

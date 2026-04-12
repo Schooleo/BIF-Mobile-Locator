@@ -44,7 +44,7 @@ class RatingServiceTest {
     private SyncVersionService syncVersionService;
 
     @Mock
-    private ApplicationEventPublisher eventPublisher;
+    private ApplicationEventPublisher applicationEventPublisher;
 
     @Mock
     private UserRepository userRepository;
@@ -55,7 +55,8 @@ class RatingServiceTest {
     @BeforeEach
     void setUp() {
         updater = new PlaceRatingCacheUpdater(mongoTemplate, syncVersionService);
-        ratingService = new RatingService(ratingRepository, updater, eventPublisher, userRepository);
+        ratingService = new RatingService(ratingRepository, updater,
+                                applicationEventPublisher, userRepository);
     }
 
     @Test
@@ -82,14 +83,13 @@ class RatingServiceTest {
         when(ratingRepository.save(any(PlaceReview.class))).thenAnswer(i -> i.getArguments()[0]);
 
         ratingService.saveReview(userId, placeId, dto);
-
-        ArgumentCaptor<PlaceRatingUpdatedEvent> eventCaptor = ArgumentCaptor.forClass(PlaceRatingUpdatedEvent.class);
-        verify(eventPublisher, times(1)).publishEvent(eventCaptor.capture());
         
+        ArgumentCaptor<PlaceRatingUpdatedEvent> eventCaptor = ArgumentCaptor.forClass(PlaceRatingUpdatedEvent.class);
+        verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
         PlaceRatingUpdatedEvent event = eventCaptor.getValue();
-        assertEquals(placeId, event.placeId());
-        assertEquals(4.09, event.rating(), 0.001);
-        assertEquals(11, event.reviewCount());
+                assertEquals(placeId, event.placeId());
+                assertEquals(4.09, event.rating());
+                assertEquals(11, event.reviewCount());
         
         verify(mongoTemplate).findAndModify(any(Query.class), any(), any(), eq(Place.class));
     }
@@ -123,10 +123,10 @@ class RatingServiceTest {
         verify(ratingRepository).deleteById("r1");
         
         ArgumentCaptor<PlaceRatingUpdatedEvent> eventCaptor = ArgumentCaptor.forClass(PlaceRatingUpdatedEvent.class);
-        verify(eventPublisher, times(1)).publishEvent(eventCaptor.capture());
-        
+        verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
         PlaceRatingUpdatedEvent event = eventCaptor.getValue();
-        assertEquals(4.0, event.rating(), 0.001);
+        assertEquals(placeId, event.placeId());
+        assertEquals(4.0, event.rating());
         assertEquals(10, event.reviewCount());
     }
 
@@ -188,7 +188,7 @@ class RatingServiceTest {
                 () -> ratingService.saveReview("u1", "p1", new ReviewDTO(5, "Excellent")));
 
         verify(mongoTemplate, never()).findAndModify(any(Query.class), any(), any(), eq(Place.class));
-        verify(eventPublisher, never()).publishEvent(any());
+        verify(applicationEventPublisher, never()).publishEvent(any());
     }
 
     @Test

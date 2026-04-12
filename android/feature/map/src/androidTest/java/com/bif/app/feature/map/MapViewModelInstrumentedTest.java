@@ -19,6 +19,7 @@ import com.bif.app.domain.model.AiPlaceSuggestionResult;
 import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
+import com.bif.app.domain.model.PlaceIdentityContext;
 import com.bif.app.domain.model.Group;
 import com.bif.app.domain.model.Review;
 import java.util.List;
@@ -190,11 +191,17 @@ public class MapViewModelInstrumentedTest {
         }
 
         @Override
-        public void submitReview(String placeId, int stars, String comment) {
+        public void submitReview(String placeId,
+                     int stars,
+                     String comment,
+                    PlaceIdentityContext identityContext) {
         }
 
         @Override
-        public void updateReview(String placeId, int stars, String comment) {
+        public void updateReview(String placeId,
+                     int stars,
+                     String comment,
+                    PlaceIdentityContext identityContext) {
         }
 
         @Override

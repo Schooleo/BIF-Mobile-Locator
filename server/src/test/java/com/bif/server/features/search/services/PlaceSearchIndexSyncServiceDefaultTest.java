@@ -25,6 +25,11 @@ public class PlaceSearchIndexSyncServiceDefaultTest {
             public void deleteById(String placeId) {
                 // not used
             }
+
+            @Override
+            public void updateRatingOnly(String placeId, double rating, int reviewCount) {
+                // not used
+            }
         };
 
         List<Place> items = List.of(new Place(), new Place(), new Place());
@@ -43,6 +48,10 @@ public class PlaceSearchIndexSyncServiceDefaultTest {
 
             @Override
             public void deleteById(String placeId) {
+            }
+
+            @Override
+            public void updateRatingOnly(String placeId, double rating, int reviewCount) {
             }
         };
 
