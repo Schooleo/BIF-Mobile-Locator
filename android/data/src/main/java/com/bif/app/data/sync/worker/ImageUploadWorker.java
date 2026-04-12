@@ -26,6 +26,7 @@ import com.bif.app.data.mapper.ProfileMapper;
 import com.bif.app.data.source.local.dao.ProfileDao;
 import com.bif.app.data.source.local.dao.TripDao;
 import com.bif.app.data.source.local.entity.ProfileEntity;
+import com.bif.app.data.source.local.entity.TripMemberCrossRef;
 import com.bif.app.data.source.local.entity.TripPlanEntity;
 import com.bif.app.data.source.local.entity.TripStopEntity;
 import com.bif.app.data.source.local.entity.UploadStatus;
@@ -36,7 +37,9 @@ import com.cloudinary.android.callback.UploadCallback;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -320,7 +323,8 @@ public class ImageUploadWorker extends Worker {
                     tripPlan.id,
                     "UPDATE",
                     UUID.randomUUID().toString(),
-                    toTripPlanDto(tripPlan));
+                    toTripPlanDto(tripPlan,
+                        mapParticipantIds(tripDao.getTripMembersSync(tripPlan.id))));
             syncManager.syncIfOnline();
 
             enqueue(getApplicationContext());
@@ -468,7 +472,8 @@ public class ImageUploadWorker extends Worker {
         return dto;
     }
 
-    private TripPlanDto toTripPlanDto(TripPlanEntity entity) {
+    private TripPlanDto toTripPlanDto(TripPlanEntity entity,
+            List<String> participantIds) {
         TripPlanDto dto = new TripPlanDto();
         dto.id = entity.id;
         dto.groupId = entity.groupId;
@@ -477,9 +482,24 @@ public class ImageUploadWorker extends Worker {
         dto.coverImageUrl = entity.coverImageUrl;
         dto.startAt = formatInstant(entity.startAt);
         dto.endAt = formatInstant(entity.endAt);
+        dto.participantIds = participantIds;
         dto.serverVersion = entity.serverVersion;
         dto.deleted = entity.deleted;
         return dto;
+    }
+
+    private List<String> mapParticipantIds(List<TripMemberCrossRef> members) {
+        List<String> participantIds = new ArrayList<>();
+        if (members == null || members.isEmpty()) {
+            return participantIds;
+        }
+        for (TripMemberCrossRef member : members) {
+            if (member != null && member.userId != null
+                    && !member.userId.trim().isEmpty()) {
+                participantIds.add(member.userId.trim());
+            }
+        }
+        return participantIds;
     }
 
     private String formatInstant(long value) {

@@ -913,25 +913,42 @@ public class TripRepository implements ITripRepository {
         entity.photoUrl = stop.getPhotoUrl();
         entity.localImagePath = stop.getLocalImagePath();
         entity.addedByUserId = normalize(stop.getAddedByUserId());
+        if (entity.addedByUserId.isEmpty() && existing != null) {
+            entity.addedByUserId = normalize(existing.addedByUserId);
+        }
         if (entity.addedByUserId.isEmpty()) {
             entity.addedByUserId = resolveCurrentUserId();
         }
+
         entity.addedByName = normalize(stop.getAddedByName());
+        if (entity.addedByName.isEmpty() && existing != null) {
+            entity.addedByName = normalize(existing.addedByName);
+        }
         if (entity.addedByName.isEmpty()) {
             entity.addedByName = resolveCurrentUserName();
         }
+
         entity.addedByAvatarLetter = normalize(stop.getAddedByAvatarLetter());
+        if (entity.addedByAvatarLetter.isEmpty() && existing != null) {
+            entity.addedByAvatarLetter = normalize(existing.addedByAvatarLetter);
+        }
         if (entity.addedByAvatarLetter.isEmpty()) {
             entity.addedByAvatarLetter = resolveCurrentUserAvatarLetter(entity.addedByName);
         }
-        entity.addedByAvatarColor = stop.getAddedByAvatarColor() != 0
-                ? stop.getAddedByAvatarColor()
-                : resolveCurrentUserAvatarColor();
+
+        entity.addedByAvatarColor = stop.getAddedByAvatarColor();
+        if (entity.addedByAvatarColor == 0 && existing != null) {
+            entity.addedByAvatarColor = existing.addedByAvatarColor;
+        }
+        if (entity.addedByAvatarColor == 0) {
+            entity.addedByAvatarColor = resolveCurrentUserAvatarColor();
+        }
         if (hasStagedLocalImage(stop.getLocalImagePath())) {
             entity.uploadStatus = UploadStatus.PENDING;
         } else if (entity.uploadStatus == null) {
             entity.uploadStatus = UploadStatus.SYNCED;
         }
+
         entity.latitude = stop.getLatitude();
         entity.longitude = stop.getLongitude();
         entity.arrivalTime = stop.getArrivalTime();

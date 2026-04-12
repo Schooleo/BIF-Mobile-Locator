@@ -171,8 +171,7 @@ public class SocialFragment extends Fragment {
 
             @Override
             public void onFriendClick(Friend friend) {
-                // TO-DO: Implement a friend profile screen
-                //navigateToFriendSettingsTrips(friend);
+                navigateToFriendSettingsTrips(friend);
             }
 
             @Override

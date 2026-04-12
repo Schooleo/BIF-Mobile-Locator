@@ -88,10 +88,18 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         if (payload.photoUrlProvided) {
             target.setPhotoUrl(normalizeNullable(payload.photoUrl));
         }
-        target.setAddedByUserId(payload.addedByUserId);
-        target.setAddedByName(payload.addedByName);
-        target.setAddedByAvatarLetter(payload.addedByAvatarLetter);
-        target.setAddedByAvatarColor(payload.addedByAvatarColor);
+        if (payload.addedByUserIdProvided) {
+            target.setAddedByUserId(normalizeNullable(payload.addedByUserId));
+        }
+        if (payload.addedByNameProvided) {
+            target.setAddedByName(normalizeNullable(payload.addedByName));
+        }
+        if (payload.addedByAvatarLetterProvided) {
+            target.setAddedByAvatarLetter(normalizeNullable(payload.addedByAvatarLetter));
+        }
+        if (payload.addedByAvatarColorProvided) {
+            target.setAddedByAvatarColor(payload.addedByAvatarColor);
+        }
         target.setOrderIndex(payload.orderIndex);
         target.setArrivalTime(payload.arrivalTime);
         target.setDepartureTime(payload.departureTime);
@@ -165,6 +173,10 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
             JsonNode node = objectMapper.readTree(json);
             TripStopPayload payload = objectMapper.treeToValue(node, TripStopPayload.class);
             payload.photoUrlProvided = node.has("photoUrl");
+            payload.addedByUserIdProvided = node.has("addedByUserId");
+            payload.addedByNameProvided = node.has("addedByName");
+            payload.addedByAvatarLetterProvided = node.has("addedByAvatarLetter");
+            payload.addedByAvatarColorProvided = node.has("addedByAvatarColor");
             JsonNode locationNode = node.get("location");
             if (locationNode != null && locationNode.isObject()) {
                 if (payload.latitude == null && locationNode.hasNonNull("latitude")) {
@@ -278,6 +290,10 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         public long serverVersion;
         public boolean deleted;
         public boolean photoUrlProvided;
+        public boolean addedByUserIdProvided;
+        public boolean addedByNameProvided;
+        public boolean addedByAvatarLetterProvided;
+        public boolean addedByAvatarColorProvided;
     }
 
     private static class LocationPayload {

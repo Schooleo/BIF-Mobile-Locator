@@ -111,6 +111,7 @@ public class AddTripStopFragment extends Fragment {
 
     private BottomSheetBehavior<View> bottomSheetBehavior;
     private final List<AddTripStopViewModel.StopSearchResultItem> currentResults = new ArrayList<>();
+    private final List<AddTripStopViewModel.StopSearchResultItem> currentMapResults = new ArrayList<>();
     private AddTripStopViewModel.StopSearchResultItem selectedItem;
     private int selectedResultIndex = -1;
     private final Calendar selectedDateTime = Calendar.getInstance();
@@ -134,6 +135,8 @@ public class AddTripStopFragment extends Fragment {
             if (value.isEmpty()) {
                 viewModel.search("");
                 currentResults.clear();
+                currentMapResults.clear();
+                selectedItem = null;
                 selectedResultIndex = -1;
                 adapter.submitItems(Collections.emptyList());
                 clearMapResults();
@@ -319,19 +322,25 @@ public class AddTripStopFragment extends Fragment {
                 List<AddTripStopViewModel.StopSearchResultItem> mapCandidates =
                         collectMapCandidates(success.items, MAX_MAP_CANDIDATES);
                 currentResults.clear();
-                currentResults.addAll(mapCandidates);
+                currentResults.addAll(success.items);
+                currentMapResults.clear();
+                currentMapResults.addAll(mapCandidates);
                 selectedResultIndex = -1;
-                adapter.submitItems(Collections.emptyList());
+                selectedItem = null;
+                adapter.submitItems(currentResults);
                 if (searchResultsContainer != null) {
-                    searchResultsContainer.setVisibility(View.GONE);
+                    searchResultsContainer.setVisibility(
+                            currentResults.isEmpty() ? View.GONE : View.VISIBLE);
                 }
                 renderSearchResultsOnMap(mapCandidates);
                 tvEmpty.setVisibility(View.GONE);
                 updateResultNavigationButtons();
 
-                if (!mapCandidates.isEmpty()) {
-                    selectResultAtIndex(0, false);
+                int firstSelectableIndex = findFirstSelectableResultIndex(currentResults);
+                if (firstSelectableIndex >= 0) {
+                    selectResultAtIndex(firstSelectableIndex, false);
                 } else {
+                    selectedItem = null;
                     bindSelectedPlace(null);
                     renderSelectedPlace(null);
                 }
@@ -339,6 +348,8 @@ public class AddTripStopFragment extends Fragment {
             }
 
             currentResults.clear();
+            currentMapResults.clear();
+            selectedItem = null;
             selectedResultIndex = -1;
             adapter.submitItems(Collections.emptyList());
             clearMapResults();
@@ -486,9 +497,13 @@ public class AddTripStopFragment extends Fragment {
         if (index < 0 || index >= currentResults.size()) {
             return;
         }
+        AddTripStopViewModel.StopSearchResultItem item = currentResults.get(index);
+        if (!isSelectableResult(item)) {
+            return;
+        }
         selectedResultIndex = index;
         updateResultNavigationButtons();
-        onResultItemSelected(currentResults.get(index), focusCamera);
+        onResultItemSelected(item, focusCamera);
     }
 
     private void updateResultNavigationButtons() {
@@ -780,25 +795,58 @@ public class AddTripStopFragment extends Fragment {
         Number resultIndex = features.get(0).getNumberProperty(PROP_RESULT_INDEX);
         if (resultIndex != null) {
             int index = resultIndex.intValue();
-            if (index >= 0 && index < currentResults.size()) {
-                selectedResultIndex = index;
-                updateResultNavigationButtons();
-                return currentResults.get(index);
+            if (index >= 0 && index < currentMapResults.size()) {
+                AddTripStopViewModel.StopSearchResultItem mapped = currentMapResults.get(index);
+                updateSelectedResultIndex(mapped);
+                return mapped;
             }
         }
 
-        AddTripStopViewModel.StopSearchResultItem byId = findCurrentResultById(currentResults, placeId);
+        AddTripStopViewModel.StopSearchResultItem byId = findCurrentResultById(currentMapResults, placeId);
         if (byId != null) {
+            updateSelectedResultIndex(byId);
             return byId;
         }
 
         Double latitude = getFeatureDouble(features.get(0), PROP_LATITUDE);
         Double longitude = getFeatureDouble(features.get(0), PROP_LONGITUDE);
         if (latitude != null && longitude != null) {
-            return findNearestCurrentResult(currentResults, latitude, longitude);
+            AddTripStopViewModel.StopSearchResultItem nearest =
+                    findNearestCurrentResult(currentMapResults, latitude, longitude);
+            updateSelectedResultIndex(nearest);
+            return nearest;
         }
 
-        return findNearestCurrentResult(currentResults, point.getLatitude(), point.getLongitude());
+        AddTripStopViewModel.StopSearchResultItem nearest =
+                findNearestCurrentResult(currentMapResults,
+                        point.getLatitude(),
+                        point.getLongitude());
+        updateSelectedResultIndex(nearest);
+        return nearest;
+    }
+
+    private void updateSelectedResultIndex(
+            @Nullable AddTripStopViewModel.StopSearchResultItem item) {
+        if (item == null) {
+            return;
+        }
+        selectedResultIndex = currentResults.indexOf(item);
+        updateResultNavigationButtons();
+    }
+
+    private int findFirstSelectableResultIndex(
+            @NonNull List<AddTripStopViewModel.StopSearchResultItem> items) {
+        for (int i = 0; i < items.size(); i++) {
+            if (isSelectableResult(items.get(i))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private boolean isSelectableResult(
+            @Nullable AddTripStopViewModel.StopSearchResultItem item) {
+        return item != null && item.place != null;
     }
 
     @Nullable

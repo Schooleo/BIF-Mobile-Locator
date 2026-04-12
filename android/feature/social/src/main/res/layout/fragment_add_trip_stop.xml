@@ -227,7 +227,6 @@
                         android:background="@drawable/ic_star_circle"
                         android:backgroundTint="@color/primary_green"
                         android:contentDescription="@string/add_stop"
-                        android:src="@null"
                         app:tint="@color/white" />
                 </LinearLayout>
 

@@ -422,27 +422,39 @@ public class TripItineraryFragment extends Fragment {
                 noteText = stopHolder.itemView.getContext().getString(R.string.trip_stop_no_note);
             }
 
+            String unknownAddedBy = stopHolder.itemView.getContext()
+                    .getString(R.string.trip_stop_added_by_unknown);
             String addedByName = stop.getAddedByName();
             if (TextUtils.isEmpty(addedByName == null ? null : addedByName.trim())) {
                 addedByName = stop.getAddedByUserId();
             }
-            if (TextUtils.isEmpty(addedByName == null ? null : addedByName.trim())) {
-                addedByName = stopHolder.itemView.getContext().getString(R.string.trip_stop_added_by_unknown);
-            }
-            String avatarLetter = stop.getAddedByAvatarLetter();
-            if (TextUtils.isEmpty(avatarLetter == null ? null : avatarLetter.trim())) {
-                avatarLetter = addedByName.substring(0, 1).toUpperCase();
-            }
-            stopHolder.addedByAvatar.setText(avatarLetter);
-            if (stop.getAddedByAvatarColor() != 0) {
-                stopHolder.addedByAvatar.setBackgroundTintList(
-                        ColorStateList.valueOf(stop.getAddedByAvatarColor()));
+
+            String normalizedAddedBy = addedByName == null ? null : addedByName.trim();
+            boolean hasGenuineAddedBy = !TextUtils.isEmpty(normalizedAddedBy)
+                    && !unknownAddedBy.equals(normalizedAddedBy);
+
+            if (hasGenuineAddedBy) {
+                String avatarLetter = stop.getAddedByAvatarLetter();
+                if (TextUtils.isEmpty(avatarLetter == null ? null : avatarLetter.trim())) {
+                    avatarLetter = normalizedAddedBy.substring(0, 1).toUpperCase();
+                }
+                stopHolder.addedByContainer.setVisibility(View.VISIBLE);
+                stopHolder.addedByAvatar.setText(avatarLetter);
+                if (stop.getAddedByAvatarColor() != 0) {
+                    stopHolder.addedByAvatar.setBackgroundTintList(
+                            ColorStateList.valueOf(stop.getAddedByAvatarColor()));
+                } else {
+                    stopHolder.addedByAvatar.setBackgroundTintList(null);
+                }
+                stopHolder.addedByText.setText(stopHolder.itemView.getContext().getString(
+                        R.string.trip_stop_added_by_format,
+                        normalizedAddedBy));
             } else {
+                stopHolder.addedByContainer.setVisibility(View.GONE);
+                stopHolder.addedByAvatar.setText("");
                 stopHolder.addedByAvatar.setBackgroundTintList(null);
+                stopHolder.addedByText.setText("");
             }
-            stopHolder.addedByText.setText(stopHolder.itemView.getContext().getString(
-                    R.string.trip_stop_added_by_format,
-                    addedByName));
 
             String stopKey = getStopKey(stop);
             boolean expanded = expandedStopIds.contains(stopKey);
@@ -576,6 +588,7 @@ public class TripItineraryFragment extends Fragment {
             final TextView address;
             final TextView notes;
             final TextView rating;
+            final View addedByContainer;
             final TextView addedByAvatar;
             final TextView addedByText;
             final MaterialButton btnEdit;
@@ -592,6 +605,7 @@ public class TripItineraryFragment extends Fragment {
                 address = itemView.findViewById(R.id.tv_stop_address);
                 notes = itemView.findViewById(R.id.tv_stop_notes);
                 rating = itemView.findViewById(R.id.tv_stop_rating);
+                addedByContainer = itemView.findViewById(R.id.layout_stop_added_by);
                 addedByAvatar = itemView.findViewById(R.id.tv_stop_added_by_avatar);
                 addedByText = itemView.findViewById(R.id.tv_stop_added_by);
                 btnEdit = itemView.findViewById(R.id.btn_edit_stop);
