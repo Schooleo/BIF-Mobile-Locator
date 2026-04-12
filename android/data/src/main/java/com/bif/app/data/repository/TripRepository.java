@@ -459,7 +459,10 @@ public class TripRepository implements ITripRepository {
             entity.coverUploadStatus = UploadStatus.PENDING;
             entity.deleted = false;
             tripDao.upsertTrip(entity);
-            enqueueTripPlanChange(safeTripId, "UPDATE");
+            entity.localCoverImagePath = safeLocalPath;
+            entity.coverUploadStatus = UploadStatus.PENDING;
+            entity.deleted = false;
+            tripDao.upsertTrip(entity);
             enqueueImageUploadIfPending(entity);
         });
     }
