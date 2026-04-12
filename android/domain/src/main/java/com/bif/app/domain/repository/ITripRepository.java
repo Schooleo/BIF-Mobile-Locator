@@ -51,6 +51,7 @@ public interface ITripRepository {
     void addStopToTrip(String tripId, TripStop stop);
     void updateStopInTrip(String tripId, TripStop stop);
     void stageStopImageUpload(String tripId, String stopId, String localImagePath);
+    void stageTripCoverImageUpload(String tripId, String localImagePath);
     void removeStopFromTrip(String tripId, String stopId);
     void addCollaborator(String tripId,
                          String userId,

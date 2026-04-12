@@ -105,6 +105,14 @@ public class TripDetailViewModel extends ViewModel {
         tripRepository.removeStopFromTrip(currentTripId, stopId);
     }
 
+    public void stageTripCoverImageUpload(String localImagePath) {
+        if (currentTripId == null || currentTripId.trim().isEmpty()
+                || localImagePath == null || localImagePath.trim().isEmpty()) {
+            return;
+        }
+        tripRepository.stageTripCoverImageUpload(currentTripId, localImagePath);
+    }
+
     public void updateStopSchedule(TripStop stop, long scheduledAtMillis) {
         if (currentTripId == null || currentTripId.trim().isEmpty() || stop == null) {
             return;
@@ -125,7 +133,11 @@ public class TripDetailViewModel extends ViewModel {
                 item.getLongitude(),
                 scheduledAtMillis,
                 scheduledAtMillis,
-                item.getOrderIndex()));
+            item.getOrderIndex(),
+            item.getAddedByUserId(),
+            item.getAddedByName(),
+            item.getAddedByAvatarLetter(),
+            item.getAddedByAvatarColor()));
         if (updatedStop == null) {
             return;
         }
@@ -154,7 +166,11 @@ public class TripDetailViewModel extends ViewModel {
                 item.getLongitude(),
                 scheduledAtMillis,
                 scheduledAtMillis,
-                item.getOrderIndex()));
+            item.getOrderIndex(),
+            item.getAddedByUserId(),
+            item.getAddedByName(),
+            item.getAddedByAvatarLetter(),
+            item.getAddedByAvatarColor()));
         if (updatedStop == null) {
             return;
         }

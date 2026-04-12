@@ -68,4 +68,5 @@ dependencies {
     implementation libs.lifecycle.viewmodel
     implementation libs.hilt.navigation.fragment
     implementation libs.maplibre.android.sdk
+    implementation libs.glide
 }

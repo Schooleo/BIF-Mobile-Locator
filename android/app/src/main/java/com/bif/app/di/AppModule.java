@@ -56,7 +56,10 @@ public class AppModule {
                 context,
                 AppDatabase.class,
                 "bif_database")
-            .addMigrations(AppDatabase.MIGRATION_15_16, AppDatabase.MIGRATION_16_17)
+                .addMigrations(
+                    AppDatabase.MIGRATION_15_16,
+                    AppDatabase.MIGRATION_16_17,
+                    AppDatabase.MIGRATION_17_18)
             // Legacy schemas (v13/v14) have no safe forward chain to v17 in code.
             // Recreate DB for those versions instead of crashing at startup.
             .fallbackToDestructiveMigrationFrom(true, 13, 14)
