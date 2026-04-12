@@ -13,14 +13,22 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     public interface ChatActionCallback {
+
         void onLocationLinkClick(ChatMessage message);
-        void onSaveTripClick(String tripId);
+
+        void onSaveDraftAsNewTripClick(TripCreatedCard card);
+
+        void onOverrideCurrentTripClick(TripCreatedCard card);
+
         void onAddPlaceToTripClick(String tripId, PlaceCard place);
+
         void onViewPlaceClick(PlaceCard place);
     }
 
@@ -33,6 +41,7 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     }
 
     public static class ChatMessage {
+
         private final String sender;
         private final String title;
         private final String subtitle;
@@ -49,26 +58,26 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         }
 
         public ChatMessage(String sender,
-                           String title,
-                           String subtitle,
-                           String linkText,
-                           String mapQuery,
-                           String time,
-                           boolean mine,
-                           MessageType type) {
+                String title,
+                String subtitle,
+                String linkText,
+                String mapQuery,
+                String time,
+                boolean mine,
+                MessageType type) {
             this(sender, title, subtitle, linkText, mapQuery, time, mine, type, null, null);
         }
 
         public ChatMessage(String sender,
-                           String title,
-                           String subtitle,
-                           String linkText,
-                           String mapQuery,
-                           String time,
-                           boolean mine,
-                           MessageType type,
-                           TripCreatedCard tripCreatedCard,
-                           SuggestedPlacesCard suggestedPlacesCard) {
+                String title,
+                String subtitle,
+                String linkText,
+                String mapQuery,
+                String time,
+                boolean mine,
+                MessageType type,
+                TripCreatedCard tripCreatedCard,
+                SuggestedPlacesCard suggestedPlacesCard) {
             this.sender = sender;
             this.title = title;
             this.subtitle = subtitle;
@@ -82,9 +91,9 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         }
 
         public static ChatMessage tripCreatedCard(String sender,
-                                                  String time,
-                                                  boolean mine,
-                                                  TripCreatedCard card) {
+                String time,
+                boolean mine,
+                TripCreatedCard card) {
             return new ChatMessage(
                     sender,
                     "",
@@ -100,9 +109,9 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         }
 
         public static ChatMessage suggestedPlacesCard(String sender,
-                                                      String time,
-                                                      boolean mine,
-                                                      SuggestedPlacesCard card) {
+                String time,
+                boolean mine,
+                SuggestedPlacesCard card) {
             return new ChatMessage(
                     sender,
                     "",
@@ -159,46 +168,85 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     }
 
     public static class TripCreatedCard {
+
         private final String tripId;
+        private final String title;
+        private final String description;
         private final int stopCount;
-        private final String startTime;
         private final String totalDistance;
-        private final boolean saved;
+        private final List<SocialViewModel.AiDraftStopPreview> stopPreviews;
+        private final String payloadJson;
+        private final boolean canSaveAsNew;
+        private final boolean canOverrideCurrent;
+        private final boolean showHostActionHint;
 
         public TripCreatedCard(String tripId,
-                               int stopCount,
-                               String startTime,
-                               String totalDistance,
-                               boolean saved) {
+                String title,
+                String description,
+                int stopCount,
+                String totalDistance,
+                List<SocialViewModel.AiDraftStopPreview> stopPreviews,
+                String payloadJson,
+                boolean canSaveAsNew,
+                boolean canOverrideCurrent,
+                boolean showHostActionHint) {
             this.tripId = tripId;
+            this.title = title;
+            this.description = description;
             this.stopCount = stopCount;
-            this.startTime = startTime;
             this.totalDistance = totalDistance;
-            this.saved = saved;
+            this.stopPreviews = stopPreviews == null
+                    ? Collections.emptyList()
+                    : new ArrayList<>(stopPreviews);
+            this.payloadJson = payloadJson;
+            this.canSaveAsNew = canSaveAsNew;
+            this.canOverrideCurrent = canOverrideCurrent;
+            this.showHostActionHint = showHostActionHint;
         }
 
         public String getTripId() {
             return tripId;
         }
 
-        public int getStopCount() {
-            return stopCount;
+        public String getTitle() {
+            return title;
         }
 
-        public String getStartTime() {
-            return startTime;
+        public String getDescription() {
+            return description;
+        }
+
+        public int getStopCount() {
+            return stopCount;
         }
 
         public String getTotalDistance() {
             return totalDistance;
         }
 
-        public boolean isSaved() {
-            return saved;
+        public List<SocialViewModel.AiDraftStopPreview> getStopPreviews() {
+            return new ArrayList<>(stopPreviews);
+        }
+
+        public String getPayloadJson() {
+            return payloadJson;
+        }
+
+        public boolean canSaveAsNew() {
+            return canSaveAsNew;
+        }
+
+        public boolean canOverrideCurrent() {
+            return canOverrideCurrent;
+        }
+
+        public boolean shouldShowHostActionHint() {
+            return showHostActionHint;
         }
     }
 
     public static class SuggestedPlacesCard {
+
         private final String tripId;
         private final List<PlaceCard> places;
 
@@ -217,25 +265,38 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     }
 
     public static class PlaceCard {
+
         private final String id;
         private final String name;
         private final String address;
         private final double rating;
         private final double latitude;
         private final double longitude;
+        private final boolean added;
 
         public PlaceCard(String id,
-                         String name,
-                         String address,
-                         double rating,
-                         double latitude,
-                         double longitude) {
+                String name,
+                String address,
+                double rating,
+                double latitude,
+                double longitude) {
+            this(id, name, address, rating, latitude, longitude, false);
+        }
+
+        public PlaceCard(String id,
+                String name,
+                String address,
+                double rating,
+                double latitude,
+                double longitude,
+                boolean added) {
             this.id = id;
             this.name = name;
             this.address = address;
             this.rating = rating;
             this.latitude = latitude;
             this.longitude = longitude;
+            this.added = added;
         }
 
         public String getId() {
@@ -264,6 +325,10 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
 
         public boolean hasCoordinates() {
             return Double.isFinite(latitude) && Double.isFinite(longitude);
+        }
+
+        public boolean isAdded() {
+            return added;
         }
     }
 
@@ -348,6 +413,7 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     }
 
     static class TextMessageViewHolder extends RecyclerView.ViewHolder {
+
         private final TextView tvSender;
         private final TextView tvTitle;
         private final TextView tvSubtitle;
@@ -357,7 +423,7 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         private final int defaultLinkColor;
 
         TextMessageViewHolder(@NonNull View itemView,
-                              ChatActionCallback actionCallback) {
+                ChatActionCallback actionCallback) {
             super(itemView);
             tvSender = itemView.findViewById(R.id.tv_sender);
             tvTitle = itemView.findViewById(R.id.tv_message_title);
@@ -405,24 +471,38 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     }
 
     static class TripCreatedMessageViewHolder extends RecyclerView.ViewHolder {
+
         private final TextView tvSender;
         private final TextView tvTitle;
+        private final TextView tvTripName;
+        private final TextView tvTripDescription;
         private final TextView tvStopCount;
-        private final TextView tvStartTime;
         private final TextView tvTotalDistance;
+        private final RecyclerView rvStopPreview;
+        private final AiTripDraftStopPreviewAdapter stopPreviewAdapter;
+        private final TextView tvHostActionHint;
         private final TextView tvTime;
-        private final Button btnSaveTrip;
+        private final Button btnSaveAsNewTrip;
+        private final Button btnOverrideTrip;
         private final ChatActionCallback actionCallback;
 
         TripCreatedMessageViewHolder(@NonNull View itemView, ChatActionCallback actionCallback) {
             super(itemView);
             tvSender = itemView.findViewById(R.id.tv_sender);
             tvTitle = itemView.findViewById(R.id.tv_trip_created_title);
+            tvTripName = itemView.findViewById(R.id.tv_trip_draft_name);
+            tvTripDescription = itemView.findViewById(R.id.tv_trip_draft_description);
             tvStopCount = itemView.findViewById(R.id.tv_trip_stop_count_value);
-            tvStartTime = itemView.findViewById(R.id.tv_trip_start_time_value);
             tvTotalDistance = itemView.findViewById(R.id.tv_trip_total_distance_value);
+            rvStopPreview = itemView.findViewById(R.id.rv_trip_stop_preview);
+            rvStopPreview.setLayoutManager(
+                    new LinearLayoutManager(itemView.getContext(), RecyclerView.HORIZONTAL, false));
+            stopPreviewAdapter = new AiTripDraftStopPreviewAdapter();
+            rvStopPreview.setAdapter(stopPreviewAdapter);
+            tvHostActionHint = itemView.findViewById(R.id.tv_host_action_hint);
             tvTime = itemView.findViewById(R.id.tv_message_time);
-            btnSaveTrip = itemView.findViewById(R.id.btn_save_trip);
+            btnSaveAsNewTrip = itemView.findViewById(R.id.btn_save_new_trip);
+            btnOverrideTrip = itemView.findViewById(R.id.btn_override_trip);
             this.actionCallback = actionCallback;
         }
 
@@ -440,33 +520,66 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             TripCreatedCard card = message.getTripCreatedCard();
             if (card == null) {
                 tvStopCount.setText("-");
-                tvStartTime.setText("-");
                 tvTotalDistance.setText("-");
-                btnSaveTrip.setVisibility(View.GONE);
-                btnSaveTrip.setOnClickListener(null);
+                tvTripName.setText("");
+                tvTripDescription.setText("");
+                stopPreviewAdapter.submit(Collections.emptyList());
+                btnSaveAsNewTrip.setVisibility(View.GONE);
+                btnSaveAsNewTrip.setOnClickListener(null);
+                btnOverrideTrip.setVisibility(View.GONE);
+                btnOverrideTrip.setOnClickListener(null);
+                tvHostActionHint.setVisibility(View.GONE);
+                resetStopPreviewScroll();
                 return;
             }
 
+            tvTripName.setText(card.getTitle());
+            tvTripDescription.setText(card.getDescription());
             tvStopCount.setText(String.valueOf(card.getStopCount()));
-            tvStartTime.setText(card.getStartTime());
             tvTotalDistance.setText(card.getTotalDistance());
+            stopPreviewAdapter.submit(card.getStopPreviews());
+            resetStopPreviewScroll();
 
             boolean hasTripId = card.getTripId() != null && !card.getTripId().trim().isEmpty();
-            if (card.isSaved() || !hasTripId) {
-                btnSaveTrip.setVisibility(View.GONE);
-                btnSaveTrip.setOnClickListener(null);
+            if (!hasTripId || !card.canSaveAsNew()) {
+                btnSaveAsNewTrip.setVisibility(View.GONE);
+                btnSaveAsNewTrip.setOnClickListener(null);
             } else {
-                btnSaveTrip.setVisibility(View.VISIBLE);
-                btnSaveTrip.setOnClickListener(v -> {
+                btnSaveAsNewTrip.setVisibility(View.VISIBLE);
+                btnSaveAsNewTrip.setOnClickListener(v -> {
                     if (actionCallback != null) {
-                        actionCallback.onSaveTripClick(card.getTripId());
+                        actionCallback.onSaveDraftAsNewTripClick(card);
                     }
                 });
+            }
+
+            if (!hasTripId || !card.canOverrideCurrent()) {
+                btnOverrideTrip.setVisibility(View.GONE);
+                btnOverrideTrip.setOnClickListener(null);
+            } else {
+                btnOverrideTrip.setVisibility(View.VISIBLE);
+                btnOverrideTrip.setOnClickListener(v -> {
+                    if (actionCallback != null) {
+                        actionCallback.onOverrideCurrentTripClick(card);
+                    }
+                });
+            }
+
+            tvHostActionHint.setVisibility(card.shouldShowHostActionHint() ? View.VISIBLE : View.GONE);
+        }
+
+        private void resetStopPreviewScroll() {
+            RecyclerView.LayoutManager layoutManager = rvStopPreview.getLayoutManager();
+            if (layoutManager instanceof LinearLayoutManager) {
+                ((LinearLayoutManager) layoutManager).scrollToPositionWithOffset(0, 0);
+            } else {
+                rvStopPreview.scrollToPosition(0);
             }
         }
     }
 
     static class SuggestedPlacesMessageViewHolder extends RecyclerView.ViewHolder {
+
         private final TextView tvSender;
         private final TextView tvTitle;
         private final TextView tvTime;
@@ -518,7 +631,9 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     }
 
     static class SuggestedPlaceCardAdapter extends RecyclerView.Adapter<SuggestedPlaceCardAdapter.PlaceCardViewHolder> {
+
         private final List<PlaceCard> places = new ArrayList<>();
+        private final Set<String> addedPlaceKeys = new HashSet<>();
         private final ChatActionCallback actionCallback;
         private String tripId = "";
 
@@ -530,6 +645,12 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             places.clear();
             if (newPlaces != null) {
                 places.addAll(newPlaces);
+            }
+            addedPlaceKeys.clear();
+            for (PlaceCard place : places) {
+                if (place != null && place.isAdded()) {
+                    addedPlaceKeys.add(buildPlaceKey(place));
+                }
             }
             this.tripId = tripId == null ? "" : tripId;
             notifyDataSetChanged();
@@ -545,7 +666,8 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
 
         @Override
         public void onBindViewHolder(@NonNull PlaceCardViewHolder holder, int position) {
-            holder.bind(places.get(position), tripId);
+            PlaceCard place = places.get(position);
+            holder.bind(place, tripId, place.isAdded() || addedPlaceKeys.contains(buildPlaceKey(place)));
         }
 
         @Override
@@ -553,7 +675,19 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             return places.size();
         }
 
-        static class PlaceCardViewHolder extends RecyclerView.ViewHolder {
+        @NonNull
+        private String buildPlaceKey(@NonNull PlaceCard place) {
+            String id = place.getId();
+            if (id != null && !id.trim().isEmpty()) {
+                return "id:" + id.trim();
+            }
+            String name = place.getName() == null ? "" : place.getName().trim();
+            String address = place.getAddress() == null ? "" : place.getAddress().trim();
+            return "na:" + name + "|" + address;
+        }
+
+        class PlaceCardViewHolder extends RecyclerView.ViewHolder {
+
             private final TextView tvName;
             private final TextView tvAddress;
             private final TextView tvRating;
@@ -571,7 +705,7 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                 this.actionCallback = actionCallback;
             }
 
-            void bind(PlaceCard place, String tripId) {
+            void bind(PlaceCard place, String tripId, boolean added) {
                 tvName.setText(place.getName());
                 tvAddress.setText(place.getAddress());
                 if (place.getRating() > 0d) {
@@ -583,12 +717,24 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                     tvRating.setVisibility(View.GONE);
                 }
 
-                boolean hasTripId = tripId != null && !tripId.trim().isEmpty();
-                if (hasTripId && place.hasCoordinates()) {
+                if (place.hasCoordinates()) {
                     btnAddToTrip.setVisibility(View.VISIBLE);
+                    btnAddToTrip.setText(added
+                            ? itemView.getContext().getString(R.string.chat_added)
+                            : itemView.getContext().getString(R.string.add_stop));
+                    btnAddToTrip.setEnabled(!added);
                     btnAddToTrip.setOnClickListener(v -> {
+                        if (added) {
+                            return;
+                        }
                         if (actionCallback != null) {
                             actionCallback.onAddPlaceToTripClick(tripId, place);
+                            int adapterPosition = getBindingAdapterPosition();
+                            if (adapterPosition != RecyclerView.NO_POSITION
+                                    && adapterPosition < places.size()) {
+                                addedPlaceKeys.add(buildPlaceKey(places.get(adapterPosition)));
+                                notifyItemChanged(adapterPosition);
+                            }
                         }
                     });
                 } else {

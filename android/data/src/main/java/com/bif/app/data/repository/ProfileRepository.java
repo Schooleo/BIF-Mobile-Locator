@@ -230,6 +230,7 @@ public class ProfileRepository implements IProfileRepository {
                     persistProfileToPreferences(entity);
 
                     SyncQueueEntity syncEntry = createSyncEntry(
+                            activeUserId,
                             "profile",
                             entity.userId,
                             "UPDATE",
@@ -249,11 +250,13 @@ public class ProfileRepository implements IProfileRepository {
         });
     }
 
-    private SyncQueueEntity createSyncEntry(String entityType,
+    private SyncQueueEntity createSyncEntry(String ownerUserId,
+            String entityType,
             String entityId,
             String operation,
             Object payload) {
         SyncQueueEntity entry = new SyncQueueEntity();
+        entry.userId = ownerUserId;
         entry.entityType = entityType;
         entry.entityId = entityId;
         entry.operation = operation;

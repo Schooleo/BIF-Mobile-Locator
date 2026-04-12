@@ -1,10 +1,12 @@
 package com.bif.app.data.repository;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,6 +16,8 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.MutableLiveData;
 
 import com.bif.app.core.utils.UserPreferences;
+import com.bif.app.core.network.RestApiService;
+import com.bif.app.core.network.dto.favorite.FavoriteResponseDto;
 import com.bif.app.data.LiveDataTestUtil;
 import com.bif.app.data.source.local.database.AppDatabase;
 import com.bif.app.data.source.local.dao.FavoriteDao;
@@ -36,6 +40,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 
+import retrofit2.Call;
+import retrofit2.Response;
+
 public class FavoriteRepositoryTest {
 
     @Rule
@@ -47,6 +54,8 @@ public class FavoriteRepositoryTest {
     private SyncQueueDao mockSyncQueueDao;
     @Mock
     private AppDatabase mockAppDatabase;
+    @Mock
+    private RestApiService mockRestApiService;
     @Mock
     private SyncManager mockSyncManager;
     @Mock
@@ -76,13 +85,15 @@ public class FavoriteRepositoryTest {
                 mockDao, 
                 mockSyncQueueDao, 
                 mockAppDatabase, 
+            mockRestApiService,
                 mockSyncManager, 
-                mockExecutorService
+            mockExecutorService,
+            null
         );
     }
 
     @Test
-    public void constructor_withApplicationContext_setsSyncContextFromUserId() {
+    public void constructor_withApplicationContext_doesNotSetSyncContextEagerly() {
         Context appContext = org.mockito.Mockito.mock(Context.class);
         try (MockedStatic<UserPreferences> userPrefs = org.mockito.Mockito
                 .mockStatic(UserPreferences.class)) {
@@ -93,12 +104,13 @@ public class FavoriteRepositoryTest {
                     mockDao,
                     mockSyncQueueDao,
                     mockAppDatabase,
+                    mockRestApiService,
                     mockSyncManager,
                     mockExecutorService,
                     appContext
             );
 
-            verify(mockSyncManager).setUserContext("user-123", null);
+            verify(mockSyncManager, never()).setUserContext(any(), any());
         }
     }
 
@@ -114,7 +126,7 @@ public class FavoriteRepositoryTest {
         MutableLiveData<List<FavoriteEntity>> fakeLiveData = new MutableLiveData<>();
         fakeLiveData.setValue(mockEntities);
 
-        when(mockDao.getAll()).thenReturn(fakeLiveData);
+        when(mockDao.getAll("anonymous")).thenReturn(fakeLiveData);
 
         // Act
         List<Favorite> result = LiveDataTestUtil.getOrAwaitValue(repository.getAllFavorites());
@@ -225,38 +237,82 @@ public class FavoriteRepositoryTest {
     }
 
     @Test
-    public void refreshFavorites_CallsSyncManagerSync() {
-        // Act
-        repository.refreshFavorites(null);
+    public void refreshFavorites_CallsRemoteBootstrapWithoutForcedSync() throws Exception {
+        Context appContext = org.mockito.Mockito.mock(Context.class);
+        try (MockedStatic<UserPreferences> userPrefs = org.mockito.Mockito
+                .mockStatic(UserPreferences.class)) {
+            userPrefs.when(() -> UserPreferences.getUserId(appContext))
+                    .thenReturn("user-123");
 
-        // Assert
-        verify(mockSyncManager).sync();
+            repository = new FavoriteRepository(
+                    mockDao,
+                    mockSyncQueueDao,
+                    mockAppDatabase,
+                    mockRestApiService,
+                    mockSyncManager,
+                    mockExecutorService,
+                    appContext
+            );
+
+            @SuppressWarnings("unchecked")
+            Call<List<FavoriteResponseDto>> call = org.mockito.Mockito.mock(Call.class);
+            when(mockRestApiService.getMyFavorites()).thenReturn(call);
+            when(call.execute()).thenReturn(Response.success(new ArrayList<>()));
+
+            // Act
+            repository.refreshFavorites(null);
+
+            // Assert
+                verify(mockSyncManager, org.mockito.Mockito.atLeastOnce())
+                    .setUserContext("user-123", null);
+            verify(mockRestApiService).getMyFavorites();
+        }
     }
 
     @Test
-    public void refreshFavorites_WhenOffline_DoesNotReportError() {
-        // Arrange
-        when(mockSyncManager.sync()).thenReturn(null);
-        when(mockSyncManager.isOnline()).thenReturn(false);
+    public void refreshFavorites_WhenBootstrapFails_ReportsOfflineError() throws Exception {
+        Context appContext = org.mockito.Mockito.mock(Context.class);
+        try (MockedStatic<UserPreferences> userPrefs = org.mockito.Mockito
+                .mockStatic(UserPreferences.class)) {
+            userPrefs.when(() -> UserPreferences.getUserId(appContext))
+                    .thenReturn("user-123");
 
-        final boolean[] success = {false};
-        final String[] errorMessage = {null};
+            repository = new FavoriteRepository(
+                    mockDao,
+                    mockSyncQueueDao,
+                    mockAppDatabase,
+                    mockRestApiService,
+                    mockSyncManager,
+                    mockExecutorService,
+                    appContext
+            );
 
-        // Act
-        repository.refreshFavorites(new IFavoriteRepository.SyncCallback() {
-            @Override
-            public void onSuccess() {
-                success[0] = true;
-            }
+            // Arrange
+            @SuppressWarnings("unchecked")
+            Call<List<FavoriteResponseDto>> call = org.mockito.Mockito.mock(Call.class);
+            when(mockRestApiService.getMyFavorites()).thenReturn(call);
+            when(call.execute()).thenThrow(new java.io.IOException("offline"));
 
-            @Override
-            public void onError(String message) {
-                errorMessage[0] = message;
-            }
-        });
+            final boolean[] success = {false};
+            final String[] errorMessage = {null};
 
-        // Assert
-        assertTrue(success[0]);
-        assertEquals(null, errorMessage[0]);
+            // Act
+            repository.refreshFavorites(new IFavoriteRepository.SyncCallback() {
+                @Override
+                public void onSuccess() {
+                    success[0] = true;
+                }
+
+                @Override
+                public void onError(String message) {
+                    errorMessage[0] = message;
+                }
+            });
+
+            // Assert - Bootstrap failure calls onError (offline-first approach: local data still available)
+            assertFalse(success[0]);
+            assertNotNull(errorMessage[0]);
+            assertTrue(errorMessage[0].contains("offline"));
+        }
     }
 }

@@ -6,5 +6,6 @@ public record AiTripDraftStop(
         String placeId,
         Place place,
         int durationMinutes,
-        String note) {
+        String note,
+        String plannedDateTime) {
 }

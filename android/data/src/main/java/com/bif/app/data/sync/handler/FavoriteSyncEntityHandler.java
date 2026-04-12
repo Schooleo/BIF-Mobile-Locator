@@ -6,6 +6,7 @@ import com.bif.app.core.network.dto.favorite.FavoriteDto;
 import com.bif.app.core.network.dto.sync.SyncChangeDto;
 import com.bif.app.data.mapper.FavoriteMapper;
 import com.bif.app.data.source.local.dao.FavoriteDao;
+import com.bif.app.data.source.local.entity.FavoriteEntity;
 import com.google.gson.Gson;
 
 public class FavoriteSyncEntityHandler implements SyncEntityHandler {
@@ -38,14 +39,27 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
 
     @Override
     public void applyPulledChange(SyncChangeDto change, String activeUserId) {
+        String resolvedUserId = activeUserId != null
+            ? activeUserId.trim()
+            : "";
+        if (resolvedUserId.isEmpty()) {
+            Log.w(TAG, "Missing active user context, deferring pulled favorite change");
+            return;
+        }
+
         if ("DELETE".equalsIgnoreCase(change.operation)
                 && (change.payload == null || change.payload.isEmpty())) {
+            FavoriteEntity local = favoriteDao.findById(change.entityId, resolvedUserId);
+            if (local != null && local.pendingSync) {
+                return;
+            }
+
             FavoriteDto tombstone = new FavoriteDto();
             tombstone.id = change.entityId;
             tombstone.serverVersion = change.serverVersion;
             tombstone.deleted = true;
-            tombstone.userId = activeUserId;
-            favoriteDao.upsert(FavoriteMapper.fromDto(tombstone, activeUserId));
+            tombstone.userId = resolvedUserId;
+            favoriteDao.upsert(FavoriteMapper.fromDto(tombstone, resolvedUserId));
             return;
         }
 
@@ -65,7 +79,14 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
                 payload.deleted = true;
             }
 
-            favoriteDao.upsert(FavoriteMapper.fromDto(payload, activeUserId));
+            FavoriteEntity local = favoriteDao.findById(payload.id, resolvedUserId);
+            if (local != null && local.pendingSync) {
+                return;
+            }
+
+            FavoriteEntity mapped = FavoriteMapper.fromDto(payload, resolvedUserId);
+            mapped.pendingSync = false;
+            favoriteDao.upsert(mapped);
         } catch (Exception e) {
             Log.e(TAG, "Failed applying pulled favorite change", e);
         }

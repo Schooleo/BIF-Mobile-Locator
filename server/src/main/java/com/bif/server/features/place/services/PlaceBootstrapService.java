@@ -1,10 +1,23 @@
 package com.bif.server.features.place.services;
 
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.IOException;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
@@ -37,7 +50,35 @@ public class PlaceBootstrapService implements ApplicationRunner {
     @Value("${app.maps-data.places-file:/map-data/places.geojson}")
     private String placesFilePath;
 
+    @Value("${app.bootstrap.filter.enabled:true}")
+    private boolean bootstrapFilterEnabled = true;
+
+    @Value("${app.bootstrap.filter.vietnam-bbox.enabled:true}")
+    private boolean vietnamBboxFilterEnabled = true;
+
+    @Value("${app.bootstrap.filter.tag-completeness.enabled:true}")
+    private boolean tagCompletenessFilterEnabled = true;
+
+    @Value("${app.bootstrap.filter.junk-name.enabled:true}")
+    private boolean junkNameFilterEnabled = true;
+
+    @Value("${app.bootstrap.filter.dry-run:false}")
+    private boolean bootstrapFilterDryRun = false;
+
+    @Value("${app.bootstrap.filter.reject-audit.enabled:true}")
+    private boolean rejectAuditEnabled = true;
+
+    @Value("${app.bootstrap.filter.reject-audit.file:/tmp/bif-bootstrap-reject-audit.log}")
+    private String rejectAuditFilePath;
+
+    @Value("${app.bootstrap.filter.reject-audit.max-lines:5000}")
+    private int rejectAuditMaxLines = 5000;
+
     private static final int BATCH_SIZE = 1000;
+    private static final Pattern DISTRICT_PATTERN = Pattern.compile(
+            "\\b(?:district|quan|quận|q)\\s*([0-9]{1,2})\\b",
+            Pattern.CASE_INSENSITIVE);
+    private BootstrapFilterPipeline bootstrapFilterPipeline;
 
     @Override
     public void run(ApplicationArguments args) {
@@ -56,7 +97,8 @@ public class PlaceBootstrapService implements ApplicationRunner {
         log.info("🚀 Starting Streaming Import of Overture Places to MongoDB...");
         long startTime = System.currentTimeMillis();
 
-        try (JsonParser parser = new JsonFactory().createParser(file)) {
+        try (JsonParser parser = new JsonFactory().createParser(file);
+             BufferedWriter rejectAuditWriter = openRejectAuditWriter()) {
             parser.setCodec(objectMapper);
 
             // Fast-forward to the "features" array in the GeoJSON
@@ -69,14 +111,42 @@ public class PlaceBootstrapService implements ApplicationRunner {
 
             List<Place> batch = new ArrayList<>();
             int totalImported = 0;
+            int totalRejected = 0;
+            Map<BootstrapFilterPipeline.RejectReason, Integer> rejectionCounts
+                    = new EnumMap<>(BootstrapFilterPipeline.RejectReason.class);
+            int parseErrorCount = 0;
+            int dryRunRecoveredCount = 0;
+            int rejectAuditWrittenCount = 0;
 
             // Read each feature one by one
             while (parser.nextToken() == JsonToken.START_OBJECT) {
                 JsonNode featureNode = parser.readValueAsTree();
-                Place place = parseOvertureFeature(featureNode);
+                ParseOutcome outcome = parseOvertureFeatureWithOutcome(featureNode);
 
-                if (place != null) {
-                    batch.add(place);
+                if (outcome.rejectionReason() == null && outcome.place() != null) {
+                    batch.add(outcome.place());
+                } else if (outcome.rejectionReason() != null) {
+                    totalRejected++;
+                    if ("PARSE_ERROR".equals(outcome.rejectionReason())) {
+                        parseErrorCount++;
+                    } else {
+                        BootstrapFilterPipeline.RejectReason reason
+                                = BootstrapFilterPipeline.RejectReason.valueOf(outcome.rejectionReason());
+                        rejectionCounts.merge(reason, 1, Integer::sum);
+                    }
+
+                    if (rejectAuditWriter != null
+                            && outcome.auditRecord() != null
+                            && rejectAuditWrittenCount < rejectAuditMaxLines) {
+                        rejectAuditWriter.write(outcome.auditRecord());
+                        rejectAuditWriter.newLine();
+                        rejectAuditWrittenCount++;
+                    }
+
+                    if (bootstrapFilterDryRun && outcome.place() != null) {
+                        batch.add(outcome.place());
+                        dryRunRecoveredCount++;
+                    }
                 }
 
                 if (batch.size() >= BATCH_SIZE) {
@@ -93,8 +163,23 @@ public class PlaceBootstrapService implements ApplicationRunner {
                 totalImported += batch.size();
             }
 
-            log.info("🎉 Successfully imported {} places into MongoDB in {} ms!",
-                    totalImported, (System.currentTimeMillis() - startTime));
+            log.info("🎉 Bootstrap import complete. imported={}, rejected={}, parseErrors={}, durationMs={}",
+                    totalImported,
+                    totalRejected,
+                    parseErrorCount,
+                    (System.currentTimeMillis() - startTime));
+            if (!rejectionCounts.isEmpty()) {
+                log.info("Bootstrap rejection breakdown: {}", rejectionCounts);
+            }
+            if (bootstrapFilterDryRun) {
+                log.warn("Bootstrap filter dry-run enabled: {} rejected places were retained for import.",
+                        dryRunRecoveredCount);
+            }
+            if (rejectAuditWriter != null) {
+                log.info("Bootstrap reject audit written to {} ({} lines).",
+                        rejectAuditFilePath,
+                        rejectAuditWrittenCount);
+            }
 
         } catch (Exception e) {
             log.error("❌ Failed to parse and bootstrap places.geojson", e);
@@ -102,21 +187,67 @@ public class PlaceBootstrapService implements ApplicationRunner {
     }
 
     private Place parseOvertureFeature(JsonNode featureNode) {
+        ParseOutcome outcome = parseOvertureFeatureWithOutcome(featureNode);
+        if (outcome.rejectionReason() != null) {
+            return null;
+        }
+        return outcome.place();
+    }
+
+    private ParseOutcome parseOvertureFeatureWithOutcome(JsonNode featureNode) {
         try {
             JsonNode properties = featureNode.path("properties");
             JsonNode geometry = featureNode.path("geometry");
             JsonNode coordinates = geometry.path("coordinates");
 
             if (properties.isMissingNode() || coordinates.isMissingNode()) {
-                return null;
+                return ParseOutcome.rejected(null, "PARSE_ERROR", null);
             }
 
             String name = properties.path("names").path("primary").asText("");
-            if (name.isBlank()) {
-                return null;
+
+            JsonNode categories = properties.path("categories");
+            String categoryMain = firstNonBlank(
+                    categories.path("main").asText(null),
+                    categories.path("primary").asText(null),
+                    properties.path("basic_category").asText(null),
+                    "unknown"
+            );
+            Set<String> categoryAlternates = new LinkedHashSet<>();
+            JsonNode alternateCategories = categories.path("alternate");
+            if (alternateCategories.isArray()) {
+                for (JsonNode alternate : alternateCategories) {
+                    String normalized = normalizeTag(alternate.asText(null));
+                    if (normalized != null) {
+                        categoryAlternates.add(normalized);
+                    }
+                }
             }
 
-            String category = properties.path("categories").path("main").asText("Unknown");
+            Set<String> tags = new LinkedHashSet<>();
+            String normalizedMainCategory = normalizeTag(categoryMain);
+            if (normalizedMainCategory != null) {
+                tags.add(normalizedMainCategory);
+            }
+            tags.addAll(categoryAlternates);
+            String normalizedBasicCategory = normalizeTag(properties.path("basic_category").asText(null));
+            if (normalizedBasicCategory != null) {
+                tags.add(normalizedBasicCategory);
+            }
+            JsonNode taxonomy = properties.path("taxonomy");
+            String taxonomyPrimary = normalizeTag(taxonomy.path("primary").asText(null));
+            if (taxonomyPrimary != null) {
+                tags.add(taxonomyPrimary);
+            }
+            JsonNode taxonomyHierarchy = taxonomy.path("hierarchy");
+            if (taxonomyHierarchy.isArray()) {
+                for (JsonNode hierarchyToken : taxonomyHierarchy) {
+                    String normalized = normalizeTag(hierarchyToken.asText(null));
+                    if (normalized != null) {
+                        tags.add(normalized);
+                    }
+                }
+            }
 
             // GeoJSON coordinates are ALWAYS [Longitude, Latitude]
             double lng = coordinates.get(0).asDouble();
@@ -126,25 +257,235 @@ public class PlaceBootstrapService implements ApplicationRunner {
             location.setLatitude(lat);
             location.setLongitude(lng);
 
+            JsonNode firstAddress = firstAddress(properties.path("addresses"));
+            String freeformAddress = firstAddress.path("freeform").asText(null);
+            String locality = firstAddress.path("locality").asText(null);
+            String region = firstAddress.path("region").asText(null);
+            String country = firstAddress.path("country").asText(null);
+            String resolvedAddress = firstNonBlank(
+                    freeformAddress,
+                    joinAddressParts(locality, region, country),
+                    ""
+            );
+
+            BootstrapFilterPipeline.FilterDecision filterDecision = filterPipeline().evaluate(
+                    new BootstrapFilterPipeline.Candidate(
+                            name,
+                            tags,
+                            country,
+                            lat,
+                            lng));
+
             Place place = new Place();
-            place.setId(UUID.randomUUID().toString()); // Set ID for Typesense sync tracking
+            place.setId(firstNonBlank(properties.path("id").asText(null), UUID.randomUUID().toString()));
             place.setName(name);
+            place.setAddress(resolvedAddress);
+            place.setCountry(normalizeNullable(country));
+            place.setRegion(normalizeNullable(region));
+            place.setLocality(normalizeNullable(locality));
+            place.setCity(inferCity(locality, resolvedAddress));
+            place.setDistrict(extractDistrict(locality, resolvedAddress));
             place.setLocation(location);
-            place.setTags(Collections.singletonList(category));
+            place.setTags(tags.isEmpty() ? Collections.emptyList() : new ArrayList<>(tags));
+            place.setCategoryMain(normalizedMainCategory);
+            place.setCategoryAlternates(categoryAlternates.isEmpty()
+                    ? Collections.emptyList()
+                    : new ArrayList<>(categoryAlternates));
+            place.setNameNormalized(normalizeForMatch(name));
+            place.setAddressNormalized(normalizeForMatch(resolvedAddress));
             place.setPlaceSource("OVERTURE_MAPS");
             place.setPersistedByAction("SYSTEM_BOOTSTRAP");
 
-            // Try to extract an address if Overture provided it
-            JsonNode addresses = properties.path("addresses");
-            if (addresses.isArray() && !addresses.isEmpty()) {
-                place.setAddress(addresses.get(0).path("freeform").asText(""));
+            if (!filterDecision.accepted()) {
+                return ParseOutcome.rejected(
+                        place,
+                        filterDecision.reason().name(),
+                        buildAuditRecord(place, filterDecision.reason().name()));
             }
 
-            return place;
+            return ParseOutcome.accepted(place);
 
         } catch (Exception e) {
             log.warn("Failed to parse a place feature: {}", e.getMessage());
+            return ParseOutcome.rejected(null, "PARSE_ERROR", null);
+        }
+    }
+
+    private BootstrapFilterPipeline filterPipeline() {
+        if (bootstrapFilterPipeline == null) {
+            bootstrapFilterPipeline = new BootstrapFilterPipeline(
+                    bootstrapFilterEnabled,
+                    vietnamBboxFilterEnabled,
+                    tagCompletenessFilterEnabled,
+                    junkNameFilterEnabled
+            );
+        }
+        return bootstrapFilterPipeline;
+    }
+
+    private BufferedWriter openRejectAuditWriter() {
+        if (!rejectAuditEnabled) {
             return null;
+        }
+        try {
+            Path path = Path.of(rejectAuditFilePath);
+            Path parent = path.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            return Files.newBufferedWriter(
+                    path,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.TRUNCATE_EXISTING,
+                    StandardOpenOption.WRITE);
+        } catch (IOException e) {
+            log.warn("Unable to open bootstrap reject audit file at {}: {}", rejectAuditFilePath, e.getMessage());
+            return null;
+        }
+    }
+
+    private String buildAuditRecord(Place place, String reason) {
+        if (place == null) {
+            return null;
+        }
+        double latitude = place.getLocation() == null ? Double.NaN : place.getLocation().getLatitude();
+        double longitude = place.getLocation() == null ? Double.NaN : place.getLocation().getLongitude();
+        return String.format(
+                Locale.ROOT,
+                "reason=%s\tid=%s\tname=%s\tcountry=%s\tlat=%.6f\tlng=%.6f\ttags=%s",
+                safeAuditValue(reason),
+                safeAuditValue(place.getId()),
+                safeAuditValue(place.getName()),
+                safeAuditValue(place.getCountry()),
+                latitude,
+                longitude,
+                safeAuditValue(place.getTags() == null ? null : String.join(",", place.getTags()))
+        );
+    }
+
+    private String safeAuditValue(String value) {
+        if (value == null) {
+            return "<null>";
+        }
+        return value.replace('\t', ' ')
+                .replace('\n', ' ')
+                .replace('\r', ' ')
+                .trim();
+    }
+
+    private JsonNode firstAddress(JsonNode addresses) {
+        if (addresses != null && addresses.isArray() && !addresses.isEmpty()) {
+            return addresses.get(0);
+        }
+        return objectMapper.createObjectNode();
+    }
+
+    private String joinAddressParts(String locality, String region, String country) {
+        List<String> parts = new ArrayList<>();
+        addIfPresent(parts, locality);
+        addIfPresent(parts, region);
+        addIfPresent(parts, country);
+        return String.join(", ", parts);
+    }
+
+    private void addIfPresent(List<String> target, String value) {
+        String normalized = normalizeNullable(value);
+        if (normalized != null) {
+            target.add(normalized);
+        }
+    }
+
+    private String inferCity(String locality, String address) {
+        String normalized = normalizeForMatch(firstNonBlank(locality, address, ""));
+        if (normalized.contains("ho chi minh")
+                || normalized.contains("hcmc")
+                || normalized.contains("sai gon")
+                || normalized.contains("saigon")) {
+            return "ho chi minh city";
+        }
+        if (normalized.contains("ha noi") || normalized.contains("hanoi")) {
+            return "ha noi";
+        }
+        if (normalized.contains("da nang") || normalized.contains("danang")) {
+            return "da nang";
+        }
+        if (normalized.contains("hue")) {
+            return "hue";
+        }
+        return normalizeNullable(locality);
+    }
+
+    private String extractDistrict(String... values) {
+        for (String value : values) {
+            String normalized = normalizeForMatch(value);
+            if (normalized.isBlank()) {
+                continue;
+            }
+            Matcher matcher = DISTRICT_PATTERN.matcher(normalized);
+            if (matcher.find()) {
+                return "district " + matcher.group(1);
+            }
+        }
+        return null;
+    }
+
+    private String normalizeTag(String value) {
+        String normalized = normalizeNullable(value);
+        if (normalized == null) {
+            return null;
+        }
+        return normalized
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[^\\p{L}\\p{N}\\s-]", " ")
+                .replaceAll("\\s+", "-")
+                .replaceAll("-{2,}", "-")
+                .trim();
+    }
+
+    private String normalizeForMatch(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        return Normalizer.normalize(value, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[^\\p{L}\\p{N}\\s-]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    private String normalizeNullable(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            String normalized = normalizeNullable(value);
+            if (normalized != null) {
+                return normalized;
+            }
+        }
+        return null;
+    }
+
+    private record ParseOutcome(
+            Place place,
+            String rejectionReason,
+            String auditRecord) {
+
+        static ParseOutcome accepted(Place place) {
+            return new ParseOutcome(place, null, null);
+        }
+
+        static ParseOutcome rejected(Place place, String reason, String auditRecord) {
+            return new ParseOutcome(place, reason, auditRecord);
         }
     }
 }

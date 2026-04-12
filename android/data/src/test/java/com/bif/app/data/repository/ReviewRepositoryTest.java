@@ -25,6 +25,7 @@ import com.bif.app.data.source.local.database.AppDatabase;
 import com.bif.app.data.source.local.entity.ReviewEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 import com.bif.app.data.sync.core.SyncManager;
+import com.bif.app.domain.model.PlaceIdentityContext;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -36,6 +37,7 @@ import android.content.SharedPreferences;
 
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atLeastOnce;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -139,14 +141,30 @@ public class ReviewRepositoryTest {
         String placeId = "p1";
         int stars = 5;
         String comment = "Epic!";
+        String extSource = "OSM";
+        String extId = "osm-123";
+        double lat = 10.123;
+        double lng = 106.456;
+        String placeName = "Coffee House";
+        PlaceIdentityContext identityContext = new PlaceIdentityContext();
+        identityContext.externalSource = extSource;
+        identityContext.externalId = extId;
+        identityContext.lat = lat;
+        identityContext.lng = lng;
+        identityContext.placeName = placeName;
 
-        repository.submitReview(placeId, stars, comment);
+        repository.submitReview(placeId, stars, comment, identityContext);
 
         ArgumentCaptor<ReviewEntity> entityCaptor = ArgumentCaptor.forClass(ReviewEntity.class);
         verify(mockReviewDao).upsert(entityCaptor.capture());
         ReviewEntity saved = entityCaptor.getValue();
         assertEquals(placeId, saved.placeId);
         assertEquals(stars, saved.stars);
+        assertEquals(extSource, saved.externalSource);
+        assertEquals(extId, saved.externalId);
+        assertEquals(lat, saved.lat, 0.0);
+        assertEquals(lng, saved.lng, 0.0);
+        assertEquals(placeName, saved.placeName);
         assertTrue(saved.pendingSync);
 
         ArgumentCaptor<SyncQueueEntity> syncCaptor = ArgumentCaptor.forClass(SyncQueueEntity.class);
@@ -154,7 +172,7 @@ public class ReviewRepositoryTest {
         SyncQueueEntity enqueued = syncCaptor.getValue();
         assertEquals("review", enqueued.entityType);
         assertEquals("CREATE", enqueued.operation);
-        assertTrue(enqueued.payload.contains("\"rating\":5"));
+        assertTrue(enqueued.payload.contains("\"stars\":5"));
         
         verify(mockSyncManager).syncIfOnline();
     }
@@ -164,6 +182,17 @@ public class ReviewRepositoryTest {
         String placeId = "p1";
         int stars = 5;
         String comment = "";
+        String extSource = "OSM";
+        String extId = "osm-123";
+        double lat = 10.123;
+        double lng = 106.456;
+        String placeName = "Coffee House";
+        PlaceIdentityContext identityContext = new PlaceIdentityContext();
+        identityContext.externalSource = extSource;
+        identityContext.externalId = extId;
+        identityContext.lat = lat;
+        identityContext.lng = lng;
+        identityContext.placeName = placeName;
 
         when(mockSyncManager.isOnline()).thenReturn(true);
 
@@ -173,13 +202,18 @@ public class ReviewRepositoryTest {
         responseDto.userName = "tester";
         responseDto.stars = stars;
         responseDto.comment = null;
-        responseDto.createdAt = "2026-04-10T00:00:00Z";
+        responseDto.externalSource = extSource;
+        responseDto.externalId = extId;
+        responseDto.lat = lat;
+        responseDto.lng = lng;
+        responseDto.placeName = placeName;
+        responseDto.createdAt = 1764547200000L;
 
         Call<PlaceReviewDto> mockCall = mock(Call.class);
         when(mockCall.execute()).thenReturn(Response.success(responseDto));
         when(mockApiService.addReview(anyString(), any(PlaceReviewDto.class))).thenReturn(mockCall);
 
-        repository.submitReview(placeId, stars, comment);
+        repository.submitReview(placeId, stars, comment, identityContext);
 
         verify(mockApiService).addReview(eq(placeId), any(PlaceReviewDto.class));
         verify(mockSyncQueueDao).removeByEntity("review", placeId + ":test-user");
@@ -191,7 +225,50 @@ public class ReviewRepositoryTest {
         assertEquals(placeId, saved.placeId);
         assertEquals("test-user", saved.userId);
         assertEquals(stars, saved.stars);
+        assertEquals(extId, saved.externalId);
+        assertEquals(lat, saved.lat, 0.0);
+        assertEquals(lng, saved.lng, 0.0);
         org.junit.Assert.assertFalse(saved.pendingSync);
+    }
+
+    @Test
+    public void submitReview_WhenServerCorrectsPlaceId_HealsIdentityAndCleansOldQueue() throws IOException {
+        String ghostPlaceId = "GHOST_ID";
+        String realPlaceId = "REAL_ID";
+
+        PlaceIdentityContext identityContext = new PlaceIdentityContext();
+        identityContext.externalSource = "GOOGLE_MAPS";
+        identityContext.externalId = "ext-1";
+        identityContext.lat = 10.5;
+        identityContext.lng = 106.5;
+        identityContext.placeName = "Cafe";
+
+        when(mockSyncManager.isOnline()).thenReturn(true);
+
+        PlaceReviewDto responseDto = new PlaceReviewDto();
+        responseDto.placeId = realPlaceId;
+        responseDto.userId = "test-user";
+        responseDto.userName = "tester";
+        responseDto.stars = 5;
+        responseDto.comment = "Great";
+        responseDto.createdAt = 1764547200000L;
+
+        Call<PlaceReviewDto> mockCall = mock(Call.class);
+        when(mockCall.execute()).thenReturn(Response.success(responseDto));
+        when(mockApiService.addReview(eq(ghostPlaceId), any(PlaceReviewDto.class))).thenReturn(mockCall);
+
+        repository.submitReview(ghostPlaceId, 5, "Great", identityContext);
+
+        verify(mockReviewDao).deleteByPlaceAndUserId(ghostPlaceId, "test-user");
+        verify(mockSyncQueueDao).removeByEntity("review", ghostPlaceId + ":test-user");
+        verify(mockReviewDao, atLeastOnce()).getByPlaceIdSync(realPlaceId);
+
+        ArgumentCaptor<ReviewEntity> entityCaptor = ArgumentCaptor.forClass(ReviewEntity.class);
+        verify(mockReviewDao, atLeastOnce()).upsert(entityCaptor.capture());
+        ReviewEntity lastSaved = entityCaptor.getAllValues().get(entityCaptor.getAllValues().size() - 1);
+        assertEquals(realPlaceId, lastSaved.placeId);
+        assertEquals("test-user", lastSaved.userId);
+        org.junit.Assert.assertFalse(lastSaved.pendingSync);
     }
 
     @Test
@@ -224,7 +301,7 @@ public class ReviewRepositoryTest {
         List<PlaceReviewDto> body = new ArrayList<>();
         PlaceReviewDto dto = new PlaceReviewDto();
         dto.userId = "u1";
-        dto.rating = 4;
+        dto.stars = 4;
         dto.comment = "Cool";
         body.add(dto);
 
@@ -245,7 +322,7 @@ public class ReviewRepositoryTest {
         List<PlaceReviewDto> serverBody = new ArrayList<>();
         PlaceReviewDto serverReview = new PlaceReviewDto();
         serverReview.userId = "u1";
-        serverReview.rating = 5;
+        serverReview.stars = 5;
         serverReview.comment = "Great";
         serverBody.add(serverReview);
 

@@ -226,6 +226,7 @@ public class AddTripStopFragment extends Fragment {
                     || actionId == EditorInfo.IME_ACTION_DONE
                     || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER);
             if (submit) {
+                updateAiSearchBiasFromMapCenter();
                 viewModel.search(v.getText() == null ? "" : v.getText().toString());
                 return true;
             }
@@ -355,6 +356,32 @@ public class AddTripStopFragment extends Fragment {
                 tvEmpty.setVisibility(View.GONE);
             }
         });
+    }
+
+    private void updateAiSearchBiasFromMapCenter() {
+        if (mapLibreMap == null || mapLibreMap.getCameraPosition() == null) {
+            viewModel.setAiSearchBias(null, null, null);
+            return;
+        }
+        LatLng center = mapLibreMap.getCameraPosition().target;
+        if (center == null
+                || !Double.isFinite(center.getLatitude())
+                || !Double.isFinite(center.getLongitude())) {
+            viewModel.setAiSearchBias(null, null, null);
+            return;
+        }
+
+        String cityBias = inferCityBiasFromSelection();
+        viewModel.setAiSearchBias(center.getLatitude(), center.getLongitude(), cityBias);
+    }
+
+    @Nullable
+    private String inferCityBiasFromSelection() {
+        if (selectedItem == null || selectedItem.place == null || selectedItem.place.address == null) {
+            return null;
+        }
+        String address = selectedItem.place.address.trim();
+        return address.isEmpty() ? null : address;
     }
 
     private void onTripLoaded(@Nullable TripPlan trip) {

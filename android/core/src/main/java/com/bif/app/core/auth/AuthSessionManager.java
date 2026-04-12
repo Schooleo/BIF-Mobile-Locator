@@ -1,6 +1,7 @@
 package com.bif.app.core.auth;
 
 import android.content.Context;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 
@@ -8,6 +9,7 @@ import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.auth.AuthResponse;
 import com.bif.app.core.network.dto.auth.RefreshTokenRequest;
 import com.bif.app.core.utils.UserPreferences;
+import com.bif.app.domain.sync.ISyncInitializable;
 
 import javax.inject.Inject;
 
@@ -18,7 +20,7 @@ import retrofit2.Response;
 
 public class AuthSessionManager {
 
-    private static final String SYNC_PREF_NAME = "SYNC_PREF";
+    private static final String TAG = "AuthSessionManager";
 
     public interface LogoutCallback {
         void onComplete(boolean remoteSuccess);
@@ -27,16 +29,19 @@ public class AuthSessionManager {
     private final Context context;
     private final RestApiService restApiService;
     private final LocalSessionDataCleaner localSessionDataCleaner;
+    private final ISyncInitializable syncInitializable;
 
     @Inject
     public AuthSessionManager(
             @ApplicationContext Context context,
             RestApiService restApiService,
-            LocalSessionDataCleaner localSessionDataCleaner
+            LocalSessionDataCleaner localSessionDataCleaner,
+            ISyncInitializable syncInitializable
     ) {
         this.context = context;
         this.restApiService = restApiService;
         this.localSessionDataCleaner = localSessionDataCleaner;
+        this.syncInitializable = syncInitializable;
     }
 
     public void saveSessionFromAuth(AuthResponse authResponse) {
@@ -70,6 +75,26 @@ public class AuthSessionManager {
 
         if (!userId.isBlank()) {
             UserPreferences.setUserId(context, userId);
+            try {
+                syncInitializable.setUserContext(userId, null);
+                syncInitializable.setLastPulledVersion(0L);
+                try {
+                    syncInitializable.syncIfOnline();
+                } catch (Exception syncException) {
+                    Log.e(TAG, "Initial sync trigger failed, retry will happen on next sync cycle",
+                            syncException);
+                    try {
+                        syncInitializable.syncIfOnline();
+                    } catch (Exception retryException) {
+                        Log.e(TAG, "Retrying initial sync trigger failed", retryException);
+                    }
+                }
+            } catch (Exception syncInitException) {
+                Log.e(TAG, "Failed to initialize sync context after authentication",
+                        syncInitException);
+                clearCorruptedSessionState();
+                return;
+            }
         }
 
         if (!username.isBlank() || !email.isBlank()) {
@@ -82,16 +107,9 @@ public class AuthSessionManager {
     }
 
     public void clearSession(Runnable onComplete) {
+        syncInitializable.resetSyncContext();
         UserPreferences.clearUser(context);
-        clearPersistedSyncState();
         localSessionDataCleaner.clearLocalUserData(onComplete);
-    }
-
-    private void clearPersistedSyncState() {
-        context.getSharedPreferences(SYNC_PREF_NAME, Context.MODE_PRIVATE)
-                .edit()
-                .clear()
-                .apply();
     }
 
     public void logout(@NonNull LogoutCallback callback) {
@@ -112,5 +130,37 @@ public class AuthSessionManager {
                 clearSession(() -> callback.onComplete(false));
             }
         });
+    }
+
+    private void clearCorruptedSessionState() {
+        try {
+            UserPreferences.saveAuthSession(context, "", "");
+        } catch (Exception tokenClearException) {
+            Log.e(TAG, "Failed to clear persisted auth tokens", tokenClearException);
+        }
+
+        try {
+            UserPreferences.clearUser(context);
+        } catch (Exception profileClearException) {
+            Log.e(TAG, "Failed to clear persisted user profile", profileClearException);
+        }
+
+        try {
+            UserPreferences.setUserId(context, "");
+        } catch (Exception userIdResetException) {
+            Log.e(TAG, "Failed to reset persisted user id", userIdResetException);
+        }
+
+        try {
+            syncInitializable.resetSyncContext();
+        } catch (Exception syncResetException) {
+            Log.e(TAG, "Failed to reset sync context", syncResetException);
+        }
+
+        try {
+            localSessionDataCleaner.clearLocalUserData(null);
+        } catch (Exception localDataClearException) {
+            Log.e(TAG, "Failed to clear local session data", localDataClearException);
+        }
     }
 }

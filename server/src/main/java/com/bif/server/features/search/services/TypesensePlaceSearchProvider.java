@@ -29,6 +29,7 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(
             TypesensePlaceSearchProvider.class);
+    private static final int DEFAULT_GEO_RADIUS_KM = 25;
 
     private final TypesenseProperties typesenseProperties;
     private final ObjectMapper objectMapper;
@@ -62,6 +63,10 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
         return search(request, "name,address");
     }
 
+    public List<Place> search(PlaceSearchRequestDTO request, String queryBy) {
+        return searchInternal(request, queryBy);
+    }
+
     public List<Place> search(String query) {
         PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
         request.setQuery(query);
@@ -72,10 +77,10 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
         PlaceSearchRequestDTO request = new PlaceSearchRequestDTO();
         request.setQuery(query);
         request.setPerPage(perPage);
-        return search(request, queryBy);
+        return searchInternal(request, queryBy);
     }
 
-    private List<Place> search(PlaceSearchRequestDTO request, String queryBy) {
+    private List<Place> searchInternal(PlaceSearchRequestDTO request, String queryBy) {
         if (request == null || request.getQuery() == null || request.getQuery().isBlank()) {
             return Collections.emptyList();
         }
@@ -146,27 +151,46 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
                 encodedQueryBy,
                 resolvedPerPage
         ));
-        uriBuilder.append("&prioritize_exact_match=true");
+        if ("name,address".equals(queryBy)) {
+            uriBuilder.append("&query_by_weights=3,1");
+        }
+        uriBuilder.append("&drop_tokens_threshold=0");
+        uriBuilder.append("&num_typos=1");
+
+        String sortBy = "_text_match:desc,rating:desc";
+        String filterBy = null;
 
         if (hasCoordinates(request)) {
-            String sortBy = String.format(
+            sortBy = String.format(
                     Locale.US,
-                    "_geo_distance(%s,%s):asc,rating:desc",
+                "location(%s,%s):asc,_text_match:desc,rating:desc",
                     request.getLatitude(),
                     request.getLongitude());
-            uriBuilder.append("&sort_by=").append(encode(sortBy));
 
             if (shouldApplyGeoRadiusFilter(request)) {
-                String filterBy = String.format(
+                filterBy = String.format(
                         Locale.US,
-                        "location:(%s,%s,50km)",
+                        "location:(%s,%s,%skm)",
                         request.getLatitude(),
-                        request.getLongitude());
-                uriBuilder.append("&filter_by=").append(encode(filterBy));
+                        request.getLongitude(),
+                        resolveGeoRadiusKm());
             }
         }
 
+        uriBuilder.append("&sort_by=").append(encode(sortBy));
+        if (filterBy != null && !filterBy.isBlank()) {
+            uriBuilder.append("&filter_by=").append(encode(filterBy));
+        }
+
         return URI.create(uriBuilder.toString());
+    }
+
+    private int resolveGeoRadiusKm() {
+        Integer configuredRadius = typesenseProperties.getGeoRadiusKm();
+        if (configuredRadius == null || configuredRadius <= 0) {
+            return DEFAULT_GEO_RADIUS_KM;
+        }
+        return configuredRadius;
     }
 
     private List<Place> parsePlaces(String payload) throws IOException {
@@ -187,7 +211,18 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
             place.setId(textOrNull(doc, "id"));
             place.setName(textOrDefault(doc, "name", "Unknown Place"));
             place.setAddress(textOrDefault(doc, "address", ""));
+            place.setCountry(textOrNull(doc, "country"));
+            place.setRegion(textOrNull(doc, "region"));
+            place.setLocality(textOrNull(doc, "locality"));
+            place.setCity(textOrNull(doc, "city"));
+            place.setDistrict(textOrNull(doc, "district"));
             place.setRating(doubleOrDefault(doc, "rating", 0.0));
+            place.setTags(textListOrEmpty(doc, "tags"));
+            place.setCategoryMain(textOrNull(doc, "categoryMain"));
+            place.setCategoryAlternates(textListOrEmpty(doc, "categoryAlternates"));
+            place.setNameNormalized(textOrNull(doc, "nameNormalized"));
+            place.setAddressNormalized(textOrNull(doc, "addressNormalized"));
+            place.setReviewCount(intOrDefault(doc, "reviewCount", 0));
             place.setPlaceSource(textOrDefault(doc, "placeSource", "typesense"));
             place.setPersistedByAction(textOrNull(doc, "persistedByAction"));
             place.setPersistedByUserId(textOrNull(doc, "persistedByUserId"));
@@ -269,6 +304,30 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
         return value.isNumber() ? value.asDouble() : fallback;
     }
 
+    private int intOrDefault(JsonNode node, String key, int fallback) {
+        JsonNode value = node.path(key);
+        return value.isInt() || value.isLong() ? value.asInt() : fallback;
+    }
+
+    private List<String> textListOrEmpty(JsonNode node, String key) {
+        JsonNode value = node.path(key);
+        if (!value.isArray()) {
+            return List.of();
+        }
+        List<String> values = new ArrayList<>();
+        for (JsonNode element : value) {
+            if (element == null || element.isNull()) {
+                continue;
+            }
+            String text = element.asText(null);
+            if (text == null || text.isBlank()) {
+                continue;
+            }
+            values.add(text);
+        }
+        return values;
+    }
+
     private String safe(String value, String fallback) {
         if (value == null || value.isBlank()) {
             return fallback;
@@ -283,10 +342,14 @@ public class TypesensePlaceSearchProvider implements PlaceSearchProvider {
 
         Double latitude = request.getLatitude();
         Double longitude = request.getLongitude();
+        // Invalid only if BOTH axes are exactly 0.0 (placeholder coordinates)
+        if (latitude != null && longitude != null && latitude == 0.0d && longitude == 0.0d) {
+            return false;
+        }
         return latitude != null
                 && longitude != null
                 && Double.isFinite(latitude)
-                && Double.isFinite(longitude);
+            && Double.isFinite(longitude);
     }
 
     private boolean shouldApplyGeoRadiusFilter(PlaceSearchRequestDTO request) {

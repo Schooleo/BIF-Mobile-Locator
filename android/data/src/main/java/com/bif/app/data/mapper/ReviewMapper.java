@@ -20,6 +20,11 @@ public class ReviewMapper {
         entity.stars = review.stars;
         entity.comment = review.comment;
         entity.createdAt = review.createdAt;
+        entity.externalSource = review.externalSource;
+        entity.externalId = review.externalId;
+        entity.lat = review.lat;
+        entity.lng = review.lng;
+        entity.placeName = review.placeName;
         entity.serverVersion = review.serverVersion;
         entity.deleted = review.deleted;
         entity.lastSyncedAt = review.lastSyncedAt;
@@ -36,6 +41,11 @@ public class ReviewMapper {
         review.stars = entity.stars;
         review.comment = entity.comment;
         review.createdAt = entity.createdAt;
+        review.externalSource = entity.externalSource;
+        review.externalId = entity.externalId;
+        review.lat = entity.lat;
+        review.lng = entity.lng;
+        review.placeName = entity.placeName;
         review.serverVersion = entity.serverVersion;
         review.deleted = entity.deleted;
         review.lastSyncedAt = entity.lastSyncedAt;
@@ -58,18 +68,14 @@ public class ReviewMapper {
         entity.placeId = placeId;
         entity.userId = dto.userId;
         entity.userName = dto.userName;
-        entity.stars = dto.getEffectiveStars(); 
+        entity.stars = dto.stars;
         entity.comment = dto.comment;
-        
-        if (dto.createdAt != null && !dto.createdAt.isEmpty()) {
-            try {
-                entity.createdAt = Instant.from(DateTimeFormatter.ISO_INSTANT.parse(dto.createdAt)).toEpochMilli();
-            } catch (Exception e) {
-                entity.createdAt = System.currentTimeMillis();
-            }
-        } else {
-            entity.createdAt = System.currentTimeMillis();
-        }
+        entity.externalSource = dto.externalSource;
+        entity.externalId = dto.externalId;
+        entity.lat = dto.lat;
+        entity.lng = dto.lng;
+        entity.placeName = dto.placeName;
+        entity.createdAt = dto.createdAt;
 
         entity.serverVersion = dto.serverVersion;
         if (dto.updatedAt != null && !dto.updatedAt.isEmpty()) {
@@ -90,10 +96,14 @@ public class ReviewMapper {
         dto.placeId = review.placeId;
         dto.userId = review.userId;
         dto.userName = review.userName;
-        dto.rating = review.stars;
         dto.stars = review.stars;
         dto.comment = review.comment;
-        dto.createdAt = Instant.ofEpochMilli(review.createdAt).toString();
+        dto.externalSource = review.externalSource;
+        dto.externalId = review.externalId;
+        dto.lat = review.lat;
+        dto.lng = review.lng;
+        dto.placeName = review.placeName;
+        dto.createdAt = review.createdAt;
         return dto;
     }
 }

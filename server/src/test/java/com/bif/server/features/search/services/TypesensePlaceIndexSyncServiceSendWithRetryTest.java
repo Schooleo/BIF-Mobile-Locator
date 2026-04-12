@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -15,6 +14,7 @@ import java.net.http.HttpResponse;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.search.config.TypesenseProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -26,8 +26,7 @@ public class TypesensePlaceIndexSyncServiceSendWithRetryTest {
         props.setEnabled(true);
         props.setApiKey("key");
         ObjectMapper mapper = new ObjectMapper();
-
-        TypesensePlaceIndexSyncService svc = new TypesensePlaceIndexSyncService(props, mapper);
+        PlaceRepository placeRepository = Mockito.mock(PlaceRepository.class);
 
         HttpClient mockClient = Mockito.mock(HttpClient.class);
         @SuppressWarnings("unchecked")
@@ -47,9 +46,8 @@ public class TypesensePlaceIndexSyncServiceSendWithRetryTest {
                 .thenReturn(r2)
                 .thenReturn(r3);
 
-        Field f = TypesensePlaceIndexSyncService.class.getDeclaredField("httpClient");
-        f.setAccessible(true);
-        f.set(svc, mockClient);
+        TypesensePlaceIndexSyncService svc = new TypesensePlaceIndexSyncService(
+            props, mapper, mockClient, placeRepository);
 
         Method m = TypesensePlaceIndexSyncService.class.getDeclaredMethod("sendWithRetry", HttpRequest.class, String.class);
         m.setAccessible(true);

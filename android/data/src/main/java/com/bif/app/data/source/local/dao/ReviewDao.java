@@ -30,7 +30,7 @@ public interface ReviewDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void upsertAll(List<ReviewEntity> reviews);
 
-    @Query("DELETE FROM reviews WHERE placeId = :placeId AND userId = :userId AND deleted = 0")
+    @Query("DELETE FROM reviews WHERE placeId = :placeId AND userId = :userId")
     void deleteByPlaceAndUserId(String placeId, String userId);
 
     @Query("SELECT * FROM reviews WHERE pendingSync = 1")

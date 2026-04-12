@@ -17,6 +17,13 @@ public class ReviewEntity {
     public String comment;
     public long createdAt;
 
+    // Place identity metadata for stable server-side place resolution.
+    public String externalSource;
+    public String externalId;
+    public Double lat;
+    public Double lng;
+    public String placeName;
+
     // Sync metadata
     public long serverVersion;
     public boolean deleted;
