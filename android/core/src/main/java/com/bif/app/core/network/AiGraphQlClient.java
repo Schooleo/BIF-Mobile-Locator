@@ -95,7 +95,7 @@ public class AiGraphQlClient {
         if (response.errors != null && !response.errors.isEmpty()) {
             ArrayList<String> warnings = new ArrayList<>();
             for (Object error : response.errors) {
-                warnings.add("GraphQL error: " + String.valueOf(error));
+                warnings.add("GraphQL error: " + error);
             }
             String failureCode = classifyGraphQlFailureCode(response.errors);
             Log.w(TAG,

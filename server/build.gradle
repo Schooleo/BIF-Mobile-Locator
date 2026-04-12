@@ -1,9 +1,13 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '4.0.4'
+    id 'org.springframework.boot' version '4.0.5'
     id 'io.spring.dependency-management' version '1.1.7'
     id 'jacoco'
     id 'checkstyle'
+}
+
+ext {
+    set('tomcat.version', '11.0.21')
 }
 
 group = 'com.bif'
@@ -36,13 +40,11 @@ dependencies {
     implementation 'org.typesense:typesense-java:2.1.0'
     implementation 'com.cloudinary:cloudinary-http45:1.39.0'
 
-    // CHỈ ép các bản Jackson 2.x mà Snyk báo lỗi
     implementation 'com.fasterxml.jackson.core:jackson-core:2.21.2'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.21.2'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.21.2'
     implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.21.2'
 
-    // CHỈ ép các bản Jackson 3.x mà Snyk báo lỗi
     implementation 'tools.jackson.core:jackson-core:3.1.1'
     implementation 'tools.jackson.core:jackson-databind:3.1.1'
 
