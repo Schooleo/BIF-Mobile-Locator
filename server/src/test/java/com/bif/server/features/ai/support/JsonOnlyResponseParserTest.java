@@ -16,10 +16,12 @@ class JsonOnlyResponseParserTest {
     @Test
     void parse_ParsesStrictJson() {
         PlaceSearchExtraction extraction = parser.parse(
-                "{\"keywords\":[\"coffee\"],\"category\":\"cafe\",\"vibe\":\"quiet\"}",
+                "{\"searchQueries\":[\"coffee near me\"],\"keywords\":[\"coffee\"],"
+                        + "\"category\":\"cafe\",\"vibe\":\"quiet\"}",
                 PlaceSearchExtraction.class
         );
 
+        assertEquals("coffee near me", extraction.searchQueries().getFirst());
         assertEquals(1, extraction.keywords().size());
         assertEquals("coffee", extraction.keywords().getFirst());
         assertEquals("cafe", extraction.category());
@@ -31,7 +33,7 @@ class JsonOnlyResponseParserTest {
         PlaceSearchExtraction extraction = parser.parse(
                 """
                 ```json
-                {"keywords":["museum"],"category":"history","vibe":null}
+                {"searchQueries":["museum in district 1"],"keywords":["museum"],"category":"history","vibe":null}
                 ```
                 """,
                 PlaceSearchExtraction.class
@@ -45,7 +47,8 @@ class JsonOnlyResponseParserTest {
     void parse_StripsLeadingFillerBeforeJson() {
         PlaceSearchExtraction extraction = parser.parse(
                 "Here is the JSON you asked for:\n"
-                        + "{\"keywords\":[\"brunch\"],\"category\":null,\"vibe\":\"casual\"}",
+                        + "{\"searchQueries\":[\"casual brunch\"],\"keywords\":[\"brunch\"],"
+                        + "\"category\":null,\"vibe\":\"casual\"}",
                 PlaceSearchExtraction.class
         );
 
@@ -58,7 +61,8 @@ class JsonOnlyResponseParserTest {
         assertThrows(
                 AiParseException.class,
                 () -> parser.parse(
-                        "{\"keywords\":[\"tea\"],\"category\":null,\"vibe\":null}"
+                        "{\"searchQueries\":[\"tea\"],\"keywords\":[\"tea\"],"
+                                + "\"category\":null,\"vibe\":null}"
                                 + "\nThat should help.",
                         PlaceSearchExtraction.class
                 )
@@ -70,7 +74,7 @@ class JsonOnlyResponseParserTest {
         assertThrows(
                 AiParseException.class,
                 () -> parser.parse(
-                        "{\"keywords\":[\"tea\"],\"category\":",
+                        "{\"searchQueries\":[\"tea\"],\"keywords\":[\"tea\"],\"category\":",
                         PlaceSearchExtraction.class
                 )
         );

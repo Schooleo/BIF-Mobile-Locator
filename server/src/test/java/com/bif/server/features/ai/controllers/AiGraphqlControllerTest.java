@@ -38,13 +38,13 @@ class AiGraphqlControllerTest {
                 List.of(),
                 null
         );
-        when(aiOrchestratorService.suggestPlacesFromQuery("coffee"))
+        when(aiOrchestratorService.suggestPlacesFromQuery("coffee", null, null, null))
                 .thenReturn(result);
 
         AiPlaceSuggestionResult actual = controller.suggestPlacesFromQuery("coffee");
 
         assertSame(result, actual);
-        verify(aiOrchestratorService).suggestPlacesFromQuery("coffee");
+        verify(aiOrchestratorService).suggestPlacesFromQuery("coffee", null, null, null);
     }
 
     @Test
@@ -52,6 +52,7 @@ class AiGraphqlControllerTest {
         AiTripDraftResult result = new AiTripDraftResult(
                 null,
                 List.of(),
+            List.of(),
                 List.of("warning"),
                 null
         );

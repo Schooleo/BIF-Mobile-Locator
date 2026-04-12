@@ -26,8 +26,8 @@ class TripDraftingAgentTest {
         OllamaJsonClient client = mock(OllamaJsonClient.class);
         when(client.generateJson(anyString(), anyString(), anyString())).thenReturn(
                 "{\"title\":\"Day Out\",\"summary\":\"A relaxed plan\","
-                        + "\"stops\":[{\"placeId\":\"p1\",\"durationMinutes\":90,"
-                        + "\"note\":\"Start here\"}]}"
+                + "\"stops\":[{\"placeId\":\"p1\",\"durationMinutes\":90,"
+                + "\"note\":\"Start here\",\"plannedDateTime\":\"2026-01-01T09:00:00Z\"}]}"
         );
 
         TripDraftingAgent agent = new TripDraftingAgent(
@@ -47,6 +47,7 @@ class TripDraftingAgentTest {
         assertEquals("Day Out", itinerary.title());
         assertEquals(1, itinerary.stops().size());
         assertEquals("p1", itinerary.stops().getFirst().placeId());
+        assertEquals("2026-01-01T09:00:00Z", itinerary.stops().getFirst().plannedDateTime());
 
         ArgumentCaptor<String> systemCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> userCaptor = ArgumentCaptor.forClass(String.class);
@@ -54,6 +55,7 @@ class TripDraftingAgentTest {
         verify(client).generateJson(systemCaptor.capture(), userCaptor.capture(), schemaCaptor.capture());
         JsonNode schema = readTree(schemaCaptor.getValue());
         assertTrue(systemCaptor.getValue().contains("exact placeId values"));
+        assertTrue(systemCaptor.getValue().contains("keep most stops within that focus"));
         assertTrue(userCaptor.getValue().contains("\"placeId\":\"p1\""));
         assertTrue(userCaptor.getValue().contains("plan a relaxing day"));
         assertEquals(1, schema.path("properties").path("stops").path("minItems").asInt());
@@ -62,6 +64,40 @@ class TripDraftingAgentTest {
                 .path("properties").path("durationMinutes").path("minimum").asInt());
         assertEquals(360, schema.path("properties").path("stops").path("items")
                 .path("properties").path("durationMinutes").path("maximum").asInt());
+        assertTrue(schema.path("properties").path("stops").path("items")
+                .path("properties").has("plannedDateTime"));
+        assertTrue(systemCaptor.getValue().contains("Every stop must include a fitting note"));
+    }
+
+    @Test
+    void draft_InjectsSchedulingHintsWhenProvided() {
+        OllamaJsonClient client = mock(OllamaJsonClient.class);
+        when(client.generateJson(anyString(), anyString(), anyString())).thenReturn(
+                "{\"title\":\"Day Out\",\"summary\":null,"
+                + "\"stops\":[{\"placeId\":\"p1\",\"durationMinutes\":60,"
+                + "\"note\":\"Start here\",\"plannedDateTime\":\"2026-04-18T09:00:00+07:00\"}]}"
+        );
+
+        TripDraftingAgent agent = new TripDraftingAgent(
+                client,
+                new JsonOnlyResponseParser(new ObjectMapper()),
+                new ObjectMapper()
+        );
+
+        Place place = new Place();
+        place.setId("p1");
+        place.setName("Cafe");
+
+        agent.draft(
+                "Chuy\u1ebfn \u0111i 1 ng\u00e0y sau 1 tu\u1ea7n",
+                List.of(place),
+                "Preferred trip length: 1 day. Suggested first stop datetime: 2026-04-18T09:00:00+07:00"
+        );
+
+        ArgumentCaptor<String> userCaptor = ArgumentCaptor.forClass(String.class);
+        verify(client).generateJson(anyString(), userCaptor.capture(), anyString());
+        assertTrue(userCaptor.getValue().contains("Scheduling hints:"));
+        assertTrue(userCaptor.getValue().contains("Suggested first stop datetime"));
     }
 
     @Test
@@ -69,8 +105,8 @@ class TripDraftingAgentTest {
         OllamaJsonClient client = mock(OllamaJsonClient.class);
         when(client.generateJson(anyString(), anyString(), anyString())).thenReturn(
                 "{\"title\":\"Retry\",\"summary\":null,"
-                        + "\"stops\":[{\"placeId\":\"p1\",\"durationMinutes\":60,"
-                        + "\"note\":null}]}"
+                + "\"stops\":[{\"placeId\":\"p1\",\"durationMinutes\":60,"
+                + "\"note\":null,\"plannedDateTime\":null}]}"
         );
 
         TripDraftingAgent agent = new TripDraftingAgent(
@@ -89,6 +125,31 @@ class TripDraftingAgentTest {
         verify(client).generateJson(anyString(), userCaptor.capture(), anyString());
         assertTrue(userCaptor.getValue().contains("Previous response was invalid"));
         assertTrue(userCaptor.getValue().contains("Unknown placeId values"));
+    }
+
+    @Test
+    void draft_AllowsMissingOptionalStopFields() {
+        OllamaJsonClient client = mock(OllamaJsonClient.class);
+        when(client.generateJson(anyString(), anyString(), anyString())).thenReturn(
+                "{\"title\":\"Basic Draft\",\"summary\":null,"
+                + "\"stops\":[{\"placeId\":\"p1\",\"durationMinutes\":60}]}"
+        );
+
+        TripDraftingAgent agent = new TripDraftingAgent(
+                client,
+                new JsonOnlyResponseParser(new ObjectMapper()),
+                new ObjectMapper()
+        );
+
+        Place place = new Place();
+        place.setId("p1");
+        place.setName("Cafe");
+
+        GeneratedItinerary itinerary = agent.draft("simple district request", List.of(place));
+
+        assertEquals("Basic Draft", itinerary.title());
+        assertEquals(1, itinerary.stops().size());
+        assertEquals("p1", itinerary.stops().getFirst().placeId());
     }
 
     private JsonNode readTree(String value) {

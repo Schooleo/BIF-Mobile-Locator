@@ -2,6 +2,7 @@ mutation DraftTripFromQuery($query: String!) {
   draftTripFromQuery(query: $query) {
     warnings
     failureCode
+    searchQueries
     candidatePlaces {
       id
       name
@@ -19,6 +20,7 @@ mutation DraftTripFromQuery($query: String!) {
         placeId
         durationMinutes
         note
+        plannedDateTime
         place {
           id
           name

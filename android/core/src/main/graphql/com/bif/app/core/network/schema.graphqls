@@ -44,7 +44,12 @@ type Mutation {
   removeTripStop(tripId: ID!, stopId: ID!): TripPlan
   rearrangeTripStops(tripId: ID!, stops: [RearrangeStopInput!]!): TripPlan
   deleteTripPlan(id: ID!): Boolean!
-  suggestPlacesFromQuery(query: String!): AiPlaceSuggestionResult!
+  suggestPlacesFromQuery(
+    query: String!
+    latitude: Float
+    longitude: Float
+    cityBias: String
+  ): AiPlaceSuggestionResult!
   draftTripFromQuery(query: String!): AiTripDraftResult!
   sync(input: SyncRequestInput!): SyncResponse!
 }
@@ -137,22 +142,20 @@ type TripStop {
 }
 
 type AiPlaceSuggestionResult {
-  places: [AiPlaceSuggestion!]!
+  places: [Place!]!
   extractedKeywords: [String!]!
   category: String
   vibe: String
+  searchQueries: [String!]!
+  locationHint: String
   warnings: [String!]!
   failureCode: AiFailureCode
-}
-
-type AiPlaceSuggestion {
-  place: Place
-  addedToTripCount: Int!
 }
 
 type AiTripDraftResult {
   draft: AiTripDraft
   candidatePlaces: [Place!]!
+  searchQueries: [String!]!
   warnings: [String!]!
   failureCode: AiFailureCode
 }
@@ -168,6 +171,7 @@ type AiTripDraftStop {
   place: Place
   durationMinutes: Int!
   note: String
+  plannedDateTime: String
 }
 
 enum AiFailureCode {

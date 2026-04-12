@@ -17,9 +17,18 @@ public class Place extends SyncDocument {
     private String id;
     private String name;
     private String address;
+    private String country;
+    private String region;
+    private String locality;
+    private String city;
+    private String district;
     private double rating;
     private Location location;
     private List<String> tags;
+    private String categoryMain;
+    private List<String> categoryAlternates;
+    private String nameNormalized;
+    private String addressNormalized;
     private String placeSource;
     private String persistedByAction;
     private String persistedByUserId;

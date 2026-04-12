@@ -1,7 +1,12 @@
 package com.bif.app.feature.social;
 
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.after;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -9,8 +14,14 @@ import static org.mockito.Mockito.when;
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.MutableLiveData;
 
+import com.bif.app.domain.model.AiTripDraft;
+import com.bif.app.domain.model.AiTripDraftResult;
+import com.bif.app.domain.model.AiTripDraftStop;
 import com.bif.app.domain.model.Friend;
 import com.bif.app.domain.model.Group;
+import com.bif.app.domain.model.Location;
+import com.bif.app.domain.model.Place;
+import com.bif.app.domain.repository.IChatRepository;
 import com.bif.app.domain.repository.IFriendshipRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.ITripRepository;
@@ -23,6 +34,7 @@ import org.mockito.MockitoAnnotations;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public class SocialViewModelTest {
@@ -38,6 +50,9 @@ public class SocialViewModelTest {
     @Mock
     private ITripRepository mockTripRepository;
 
+    @Mock
+    private IChatRepository mockChatRepository;
+
     private SocialViewModel viewModel;
 
     @Before
@@ -50,7 +65,8 @@ public class SocialViewModelTest {
         viewModel = new SocialViewModel(
             mockFriendshipRepository,
             mockGroupRepository,
-            mockTripRepository);
+            mockTripRepository,
+            mockChatRepository);
     }
 
     // ==================== Friend Tests ====================
@@ -189,5 +205,139 @@ public class SocialViewModelTest {
         // Assert
         verify(mockGroupRepository, timeout(1000)).leaveGroup(otherGroup);
         verify(mockGroupRepository, timeout(1000)).refreshGroups();
+    }
+
+    @Test
+    public void submitAiTripDraftQuery_success_PublishesSuccessState() {
+        Place place = new Place("place-1", "Museum", "District 1", 4.6, new Location(10.77, 106.70));
+        AiTripDraftStop stop = new AiTripDraftStop(
+                "place-1",
+                place,
+                90,
+                "Visit gallery",
+                "2026-05-01T09:00:00Z"
+        );
+        AiTripDraft draft = new AiTripDraft("Culture day", "City museums and cafés", Collections.singletonList(stop));
+        MutableLiveData<AiTripDraftResult> result = new MutableLiveData<>(
+                new AiTripDraftResult(draft, Collections.singletonList(place), Collections.emptyList(), null)
+        );
+        when(mockChatRepository.draftTripFromQuery("plan me a museum day")).thenReturn(result);
+
+        viewModel.submitAiTripDraftQuery("plan me a museum day");
+
+        verify(mockChatRepository).draftTripFromQuery("plan me a museum day");
+        SocialViewModel.AiTripDrafterUiState state = viewModel.getAiTripDrafterUiState().getValue();
+        org.junit.Assert.assertTrue(state instanceof SocialViewModel.AiTripDrafterUiState.Success);
+        SocialViewModel.AiTripDrafterUiState.Success success =
+                (SocialViewModel.AiTripDrafterUiState.Success) state;
+        org.junit.Assert.assertEquals("Culture day", success.getTitle());
+        org.junit.Assert.assertEquals("City museums and cafés", success.getDescription());
+        org.junit.Assert.assertEquals(1, success.getStops().size());
+    }
+
+    @Test
+    public void submitAiTripDraftQuery_failure_PublishesErrorState() {
+        MutableLiveData<AiTripDraftResult> result = new MutableLiveData<>(
+                new AiTripDraftResult(
+                        new AiTripDraft("", "", Collections.emptyList()),
+                        Collections.emptyList(),
+                        Collections.emptyList(),
+                        "AI_FAILURE"
+                )
+        );
+        when(mockChatRepository.draftTripFromQuery("bad")).thenReturn(result);
+
+        viewModel.submitAiTripDraftQuery("bad");
+
+        SocialViewModel.AiTripDrafterUiState state = viewModel.getAiTripDrafterUiState().getValue();
+        org.junit.Assert.assertTrue(state instanceof SocialViewModel.AiTripDrafterUiState.Error);
+        SocialViewModel.AiTripDrafterUiState.Error error =
+                (SocialViewModel.AiTripDrafterUiState.Error) state;
+        org.junit.Assert.assertEquals(SocialViewModel.AI_DRAFT_FAILED_MESSAGE, error.getErrorCode());
+        org.junit.Assert.assertEquals("AI_FAILURE", error.getFailureCode());
+    }
+
+    @Test
+    public void saveCurrentAiDraftTrip_withValidStop_CallsRepositorySaveDraftTrip() {
+        Place place = new Place("place-1", "Museum", "District 1", 4.6, new Location(10.77, 106.70));
+        AiTripDraftStop stop = new AiTripDraftStop(
+                "place-1",
+                place,
+                90,
+                "Visit gallery",
+                "2026-05-01T09:00:00Z"
+        );
+        AiTripDraft draft = new AiTripDraft("Culture day", "City museums and cafés", Collections.singletonList(stop));
+        MutableLiveData<AiTripDraftResult> result = new MutableLiveData<>(
+                new AiTripDraftResult(draft, Collections.singletonList(place), Collections.emptyList(), null)
+        );
+        when(mockChatRepository.draftTripFromQuery("plan me a museum day")).thenReturn(result);
+        doAnswer(invocation -> {
+            ITripRepository.OperationCallback callback = invocation.getArgument(7);
+            callback.onComplete(true);
+            return null;
+        }).when(mockTripRepository).saveDraftTrip(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyLong(),
+                anyLong(),
+                anyList(),
+                any()
+        );
+
+        viewModel.submitAiTripDraftQuery("plan me a museum day");
+        viewModel.saveCurrentAiDraftTrip(null);
+
+        verify(mockTripRepository, timeout(1000)).saveDraftTrip(
+                anyString(),
+                anyString(),
+                eq("Culture day"),
+                eq("City museums and cafés"),
+                anyLong(),
+                anyLong(),
+                anyList(),
+                any()
+        );
+        org.junit.Assert.assertEquals(
+                SocialViewModel.AI_DRAFT_SAVE_SUCCESS_MESSAGE,
+                viewModel.getTripActionMessage().getValue()
+        );
+    }
+
+    @Test
+    public void saveCurrentAiDraftTrip_whenAllStopsInvalid_PublishesSaveFailed() {
+        Place placeWithoutLocation = new Place("place-1", "Museum", "District 1", 4.6, null);
+        AiTripDraftStop stop = new AiTripDraftStop(
+                "place-1",
+                placeWithoutLocation,
+                90,
+                "Visit gallery",
+                "2026-05-01T09:00:00Z"
+        );
+        AiTripDraft draft = new AiTripDraft("Culture day", "City museums and cafés", Collections.singletonList(stop));
+        MutableLiveData<AiTripDraftResult> result = new MutableLiveData<>(
+                new AiTripDraftResult(draft, Collections.singletonList(placeWithoutLocation), Collections.emptyList(), null)
+        );
+        when(mockChatRepository.draftTripFromQuery("plan me a museum day")).thenReturn(result);
+
+        viewModel.submitAiTripDraftQuery("plan me a museum day");
+        viewModel.saveCurrentAiDraftTrip(null);
+
+        org.mockito.Mockito.verify(mockTripRepository, after(300).never()).saveDraftTrip(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyLong(),
+                anyLong(),
+                anyList(),
+                any()
+        );
+        org.junit.Assert.assertEquals(
+                SocialViewModel.AI_DRAFT_SAVE_FAILED_MESSAGE,
+                viewModel.getTripActionMessage().getValue()
+        );
     }
 }

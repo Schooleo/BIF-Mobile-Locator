@@ -9,7 +9,7 @@ public class OllamaProperties {
 
     private String baseUrl = "http://localhost:11434";
     private String model = "llama3.1";
-    private int timeoutMs = 30000;
+    private int timeoutMs = 65000;
     private int retryCount = 1;
     private double temperature = 0.1;
 

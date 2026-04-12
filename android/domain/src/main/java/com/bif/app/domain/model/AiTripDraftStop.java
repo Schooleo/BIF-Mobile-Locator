@@ -5,8 +5,13 @@ public class AiTripDraftStop {
     private final Place place;
     private final int durationMinutes;
     private final String note;
+    private final String plannedDateTime;
 
-    public AiTripDraftStop(String placeId, Place place, int durationMinutes, String note) {
+    public AiTripDraftStop(String placeId,
+                           Place place,
+                           int durationMinutes,
+                           String note,
+                           String plannedDateTime) {
         if (durationMinutes < 0) {
             throw new IllegalArgumentException("durationMinutes must be >= 0");
         }
@@ -14,6 +19,7 @@ public class AiTripDraftStop {
         this.place = place;
         this.durationMinutes = durationMinutes;
         this.note = note;
+        this.plannedDateTime = plannedDateTime;
     }
 
     public String getPlaceId() {
@@ -30,5 +36,9 @@ public class AiTripDraftStop {
 
     public String getNote() {
         return note;
+    }
+
+    public String getPlannedDateTime() {
+        return plannedDateTime;
     }
 }
