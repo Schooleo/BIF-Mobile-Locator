@@ -93,6 +93,7 @@ public class CommonChatFragment extends Fragment {
         TextView tvTitle = view.findViewById(R.id.tv_chat_title);
         TextView tvSubtitle = view.findViewById(R.id.tv_chat_subtitle);
         View btnBack = view.findViewById(R.id.btn_back);
+        View btnHome = view.findViewById(R.id.btn_home);
         swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_messages);
         rvMessages = view.findViewById(R.id.rv_messages);
         View composerBar = view.findViewById(R.id.layout_chat_composer);
@@ -109,8 +110,11 @@ public class CommonChatFragment extends Fragment {
         tvTitle.setText(chatName);
         tvSubtitle.setText(resolveChatSubtitle(memberCount, friendshipCreatedAt));
         aiBadgesRow.setVisibility(supportsAiModes ? View.VISIBLE : View.GONE);
+        btnHome.setVisibility(supportsAiModes ? View.VISIBLE : View.GONE);
 
         btnBack.setOnClickListener(v -> navigateBackFromChat(view));
+        btnHome.setOnClickListener(v -> Navigation.findNavController(view)
+            .navigate(UriUtils.buildUri(UriUtils.PathTo.SOCIAL)));
         view.setOnClickListener(v -> dismissKeyboardAndClearFocus());
 
         adapter = new ChatMessageAdapter(new ChatMessageAdapter.ChatActionCallback() {

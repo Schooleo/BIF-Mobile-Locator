@@ -180,6 +180,8 @@
     <string name="trip_ai_toggle">Toggle AI search mode</string>
     <string name="trip_ai_loading">AI is finding the best green spots…</string>
     <string name="trip_ai_empty_state">We could not find any places matching your vibe.</string>
+    <string name="trip_previous_place">Previous place</string>
+    <string name="trip_next_place">Next place</string>
     <string name="trip_no_place_selected">Select a place</string>
     <string name="trip_select_place_first">Please select a place first.</string>
     <string name="trip_add_to_trip">Add to Trip</string>

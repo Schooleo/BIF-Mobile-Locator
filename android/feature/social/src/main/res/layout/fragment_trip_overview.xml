@@ -35,11 +35,6 @@
                     android:contentDescription="@string/trip_title_card_cover"
                     android:scaleType="centerCrop" />
 
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:background="#40000000" />
-
                 <TextView
                     android:id="@+id/tv_overview_title"
                     android:layout_width="match_parent"
@@ -59,7 +54,7 @@
                     android:background="@drawable/bg_camera_badge"
                     android:contentDescription="@string/trip_edit_title_card"
                     android:padding="7dp"
-                    android:src="@android:drawable/ic_menu_camera"
+                    android:src="@drawable/ic_camera"
                     app:tint="@color/white" />
             </FrameLayout>
         </com.google.android.material.card.MaterialCardView>

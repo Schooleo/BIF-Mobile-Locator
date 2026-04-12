@@ -68,6 +68,12 @@ import dagger.hilt.android.AndroidEntryPoint;
 @AndroidEntryPoint
 public class AddTripStopFragment extends Fragment {
 
+    private static final int MAX_MAP_CANDIDATES = 5;
+    private static final double PLACE_FOCUS_ZOOM = 15.8;
+    private static final double PLACE_TRAVEL_ZOOM = 13.6;
+    private static final int CAMERA_TRANSITION_STAGE_DURATION_MS = 520;
+    private static final double CAMERA_COORD_THRESHOLD = 0.0002d;
+    private static final double CAMERA_ZOOM_THRESHOLD = 0.20d;
     private static final String DEFAULT_STYLE_URL = "https://demotiles.maplibre.org/style.json";
     private static final String SEARCH_SOURCE_ID = "trip-stop-search-source";
     private static final String SEARCH_LAYER_ID = "trip-stop-search-layer";
@@ -93,6 +99,8 @@ public class AddTripStopFragment extends Fragment {
     private TextView tvAiLoading;
     private TextView tvEmpty;
     private View searchResultsContainer;
+    private ImageButton btnPreviousPlace;
+    private ImageButton btnNextPlace;
 
     private TextView tvSelectedPlaceName;
     private TextView tvSelectedPlaceAddress;
@@ -104,6 +112,7 @@ public class AddTripStopFragment extends Fragment {
     private BottomSheetBehavior<View> bottomSheetBehavior;
     private final List<AddTripStopViewModel.StopSearchResultItem> currentResults = new ArrayList<>();
     private AddTripStopViewModel.StopSearchResultItem selectedItem;
+    private int selectedResultIndex = -1;
     private final Calendar selectedDateTime = Calendar.getInstance();
     private long tripStartAt = -1L;
     private long tripEndAt = -1L;
@@ -125,9 +134,11 @@ public class AddTripStopFragment extends Fragment {
             if (value.isEmpty()) {
                 viewModel.search("");
                 currentResults.clear();
+                selectedResultIndex = -1;
                 adapter.submitItems(Collections.emptyList());
                 clearMapResults();
                 bindSelectedPlace(null);
+                updateResultNavigationButtons();
             }
         }
 
@@ -179,6 +190,8 @@ public class AddTripStopFragment extends Fragment {
         tvAiLoading = view.findViewById(R.id.tv_ai_loading);
         tvEmpty = view.findViewById(R.id.tv_empty_state);
         searchResultsContainer = view.findViewById(R.id.layout_search_results_container);
+        btnPreviousPlace = view.findViewById(R.id.btn_previous_place);
+        btnNextPlace = view.findViewById(R.id.btn_next_place);
 
         tvSelectedPlaceName = view.findViewById(R.id.tv_selected_place_name);
         tvSelectedPlaceAddress = view.findViewById(R.id.tv_selected_place_address);
@@ -200,6 +213,8 @@ public class AddTripStopFragment extends Fragment {
         btnBack.setOnClickListener(v -> Navigation.findNavController(v).popBackStack());
         btnAiToggle.setOnClickListener(v -> viewModel.toggleAiMode());
         btnClearSearch.setOnClickListener(v -> etSearch.setText(""));
+        btnPreviousPlace.setOnClickListener(v -> selectRelativeResult(-1));
+        btnNextPlace.setOnClickListener(v -> selectRelativeResult(1));
 
         tvSelectedDate.setOnClickListener(v -> showDatePicker());
         tvSelectedTime.setOnClickListener(v -> showTimePicker());
@@ -220,6 +235,7 @@ public class AddTripStopFragment extends Fragment {
         observeUi();
         initializeDateTime();
         bindSelectedPlace(null);
+        updateResultNavigationButtons();
     }
 
     private void initializeDateTime() {
@@ -299,26 +315,34 @@ public class AddTripStopFragment extends Fragment {
             if (state instanceof AddTripStopViewModel.SearchState.Success) {
                 AddTripStopViewModel.SearchState.Success success =
                         (AddTripStopViewModel.SearchState.Success) state;
+                List<AddTripStopViewModel.StopSearchResultItem> mapCandidates =
+                        collectMapCandidates(success.items, MAX_MAP_CANDIDATES);
                 currentResults.clear();
-                currentResults.addAll(success.items);
-                adapter.submitItems(success.items);
+                currentResults.addAll(mapCandidates);
+                selectedResultIndex = -1;
+                adapter.submitItems(Collections.emptyList());
                 if (searchResultsContainer != null) {
-                    searchResultsContainer.setVisibility(
-                            success.items.isEmpty() ? View.GONE : View.VISIBLE);
+                    searchResultsContainer.setVisibility(View.GONE);
                 }
-                renderSearchResultsOnMap(success.items);
+                renderSearchResultsOnMap(mapCandidates);
                 tvEmpty.setVisibility(View.GONE);
+                updateResultNavigationButtons();
 
-                if (!success.items.isEmpty()) {
-                    onResultItemSelected(success.items.get(0));
+                if (!mapCandidates.isEmpty()) {
+                    selectResultAtIndex(0, false);
+                } else {
+                    bindSelectedPlace(null);
+                    renderSelectedPlace(null);
                 }
                 return;
             }
 
             currentResults.clear();
+            selectedResultIndex = -1;
             adapter.submitItems(Collections.emptyList());
             clearMapResults();
             bindSelectedPlace(null);
+            updateResultNavigationButtons();
             if (searchResultsContainer != null) {
                 searchResultsContainer.setVisibility(View.GONE);
             }
@@ -350,18 +374,112 @@ public class AddTripStopFragment extends Fragment {
     }
 
     private void onResultItemSelected(@NonNull AddTripStopViewModel.StopSearchResultItem item) {
+        onResultItemSelected(item, true);
+    }
+
+    private void onResultItemSelected(@NonNull AddTripStopViewModel.StopSearchResultItem item,
+                                      boolean focusCamera) {
         selectedItem = item;
         bindSelectedPlace(item);
         renderSelectedPlace(item);
-        if (mapLibreMap != null && item.place != null && item.place.location != null) {
-            mapLibreMap.animateCamera(CameraUpdateFactory.newLatLngZoom(
-                    new LatLng(item.place.location.latitude, item.place.location.longitude),
-                    15.8
-            ));
+        if (focusCamera && mapLibreMap != null && item.place != null && item.place.location != null) {
+            animateSelectedPlaceCamera(new LatLng(
+                    item.place.location.latitude,
+                    item.place.location.longitude));
         }
         if (bottomSheetBehavior != null) {
             bottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
         }
+    }
+
+    private void animateSelectedPlaceCamera(@NonNull LatLng target) {
+        if (mapLibreMap == null) {
+            return;
+        }
+        CameraPosition current = mapLibreMap.getCameraPosition();
+        if (current == null || current.target == null) {
+            mapLibreMap.animateCamera(CameraUpdateFactory.newLatLngZoom(target, PLACE_FOCUS_ZOOM));
+            return;
+        }
+
+        boolean nearTarget = Math.abs(current.target.getLatitude() - target.getLatitude()) < CAMERA_COORD_THRESHOLD
+                && Math.abs(current.target.getLongitude() - target.getLongitude()) < CAMERA_COORD_THRESHOLD;
+        boolean nearFocusZoom = Math.abs(current.zoom - PLACE_FOCUS_ZOOM) < CAMERA_ZOOM_THRESHOLD;
+        if (nearTarget && nearFocusZoom) {
+            return;
+        }
+
+        double firstStageZoom = Math.max(PLACE_TRAVEL_ZOOM, Math.min(current.zoom - 0.9d, PLACE_FOCUS_ZOOM - 0.8d));
+
+        mapLibreMap.animateCamera(
+                CameraUpdateFactory.zoomTo(firstStageZoom),
+                CAMERA_TRANSITION_STAGE_DURATION_MS,
+                new MapLibreMap.CancelableCallback() {
+                    @Override
+                    public void onFinish() {
+                        if (mapLibreMap == null) {
+                            return;
+                        }
+                        mapLibreMap.animateCamera(
+                                CameraUpdateFactory.newLatLngZoom(target, PLACE_TRAVEL_ZOOM),
+                                CAMERA_TRANSITION_STAGE_DURATION_MS,
+                                new MapLibreMap.CancelableCallback() {
+                                    @Override
+                                    public void onFinish() {
+                                        if (mapLibreMap == null) {
+                                            return;
+                                        }
+                                        mapLibreMap.animateCamera(
+                                                CameraUpdateFactory.newLatLngZoom(target, PLACE_FOCUS_ZOOM),
+                                                CAMERA_TRANSITION_STAGE_DURATION_MS);
+                                    }
+
+                                    @Override
+                                    public void onCancel() {
+                                    }
+                                });
+                    }
+
+                    @Override
+                    public void onCancel() {
+                    }
+                });
+    }
+
+    private void selectRelativeResult(int direction) {
+        if (currentResults.isEmpty()) {
+            return;
+        }
+        int baseIndex = selectedResultIndex < 0 ? 0 : selectedResultIndex;
+        int nextIndex = (baseIndex + direction + currentResults.size()) % currentResults.size();
+        selectResultAtIndex(nextIndex, true);
+    }
+
+    private void selectResultAtIndex(int index, boolean focusCamera) {
+        if (index < 0 || index >= currentResults.size()) {
+            return;
+        }
+        selectedResultIndex = index;
+        updateResultNavigationButtons();
+        onResultItemSelected(currentResults.get(index), focusCamera);
+    }
+
+    private void updateResultNavigationButtons() {
+        if (btnPreviousPlace == null || btnNextPlace == null) {
+            return;
+        }
+        boolean hasAny = !currentResults.isEmpty();
+        boolean canCycle = currentResults.size() > 1;
+
+        btnPreviousPlace.setVisibility(hasAny ? View.VISIBLE : View.GONE);
+        btnNextPlace.setVisibility(hasAny ? View.VISIBLE : View.GONE);
+
+        btnPreviousPlace.setEnabled(canCycle);
+        btnNextPlace.setEnabled(canCycle);
+
+        float buttonAlpha = canCycle ? 1f : 0.45f;
+        btnPreviousPlace.setAlpha(buttonAlpha);
+        btnNextPlace.setAlpha(buttonAlpha);
     }
 
     private void bindSelectedPlace(@Nullable AddTripStopViewModel.StopSearchResultItem item) {
@@ -571,6 +689,23 @@ public class AddTripStopFragment extends Fragment {
         }
     }
 
+    @NonNull
+    private List<AddTripStopViewModel.StopSearchResultItem> collectMapCandidates(
+            @NonNull List<AddTripStopViewModel.StopSearchResultItem> source,
+            int limit) {
+        List<AddTripStopViewModel.StopSearchResultItem> candidates = new ArrayList<>();
+        for (AddTripStopViewModel.StopSearchResultItem item : source) {
+            if (item == null || item.place == null || item.place.location == null) {
+                continue;
+            }
+            candidates.add(item);
+            if (candidates.size() >= limit) {
+                break;
+            }
+        }
+        return candidates;
+    }
+
     private void renderSelectedPlace(@Nullable AddTripStopViewModel.StopSearchResultItem item) {
         if (item == null || item.place == null || item.place.location == null) {
             setFeatures(SELECTED_SOURCE_ID, Collections.emptyList());
@@ -619,6 +754,8 @@ public class AddTripStopFragment extends Fragment {
         if (resultIndex != null) {
             int index = resultIndex.intValue();
             if (index >= 0 && index < currentResults.size()) {
+                selectedResultIndex = index;
+                updateResultNavigationButtons();
                 return currentResults.get(index);
             }
         }
@@ -725,6 +862,8 @@ public class AddTripStopFragment extends Fragment {
         if (etSearch != null) {
             etSearch.removeTextChangedListener(queryWatcher);
         }
+        btnPreviousPlace = null;
+        btnNextPlace = null;
         if (mapView != null) {
             mapView.onDestroy();
             mapView = null;
