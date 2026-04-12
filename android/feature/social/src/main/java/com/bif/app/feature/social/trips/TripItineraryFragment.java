@@ -426,7 +426,7 @@ public class TripItineraryFragment extends Fragment {
                     .getString(R.string.trip_stop_added_by_unknown);
             String addedByName = stop.getAddedByName();
             if (TextUtils.isEmpty(addedByName == null ? null : addedByName.trim())) {
-                addedByName = stop.getAddedByUserId();
+                addedByName = unknownAddedBy;
             }
 
             String normalizedAddedBy = addedByName == null ? null : addedByName.trim();
