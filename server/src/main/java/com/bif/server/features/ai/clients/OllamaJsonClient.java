@@ -48,6 +48,15 @@ public class OllamaJsonClient {
         }
     }
 
+    public <T> T generateJson(
+            String systemPrompt,
+            String userPrompt,
+            String jsonSchema,
+            Class<T> responseType) {
+        String rawStructuredPayload = generateJson(systemPrompt, userPrompt, jsonSchema);
+        return parseStructuredPayload(rawStructuredPayload, responseType);
+    }
+
     private String generate(String systemPrompt, String userPrompt, Object format) {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(resolveGenerateEndpoint()))
@@ -105,6 +114,20 @@ public class OllamaJsonClient {
             return "unknown upstream error";
         }
         return snippet(value);
+    }
+
+    private <T> T parseStructuredPayload(String rawPayload, Class<T> responseType) {
+        if (rawPayload == null || rawPayload.isBlank()) {
+            throw new AiParseException("Ollama structured output was blank");
+        }
+        try {
+            return objectMapper.readValue(rawPayload, responseType);
+        } catch (JsonProcessingException e) {
+            throw new AiParseException(
+                    "Failed to decode Ollama structured output: " + snippet(rawPayload),
+                    e
+            );
+        }
     }
 
     private String snippet(String value) {

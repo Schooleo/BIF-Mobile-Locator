@@ -1,10 +1,10 @@
 package com.bif.server.features.ai.agents;
 
+import org.springframework.stereotype.Component;
+
 import com.bif.server.features.ai.AiGenerationConstraints;
 import com.bif.server.features.ai.clients.OllamaJsonClient;
 import com.bif.server.features.ai.dto.PlaceSearchExtraction;
-import com.bif.server.features.ai.support.JsonOnlyResponseParser;
-import org.springframework.stereotype.Component;
 
 @Component
 public class PlaceSuggestionAgent {
@@ -52,13 +52,9 @@ public class PlaceSuggestionAgent {
     );
 
     private final OllamaJsonClient ollamaJsonClient;
-    private final JsonOnlyResponseParser jsonOnlyResponseParser;
 
-    public PlaceSuggestionAgent(
-            OllamaJsonClient ollamaJsonClient,
-            JsonOnlyResponseParser jsonOnlyResponseParser) {
+    public PlaceSuggestionAgent(OllamaJsonClient ollamaJsonClient) {
         this.ollamaJsonClient = ollamaJsonClient;
-        this.jsonOnlyResponseParser = jsonOnlyResponseParser;
     }
 
     public PlaceSearchExtraction extract(String userQuery) {
@@ -70,11 +66,11 @@ public class PlaceSuggestionAgent {
     }
 
     private PlaceSearchExtraction execute(String userQuery, String failureReason) {
-        String response = ollamaJsonClient.generateJson(
+        return ollamaJsonClient.generateJson(
                 buildSystemPrompt(),
                 buildUserPrompt(userQuery, failureReason),
-                EXTRACTION_SCHEMA);
-        return jsonOnlyResponseParser.parse(response, PlaceSearchExtraction.class);
+            EXTRACTION_SCHEMA,
+            PlaceSearchExtraction.class);
     }
 
     private String buildSystemPrompt() {
