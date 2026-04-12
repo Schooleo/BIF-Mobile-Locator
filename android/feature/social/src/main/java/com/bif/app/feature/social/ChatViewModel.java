@@ -572,13 +572,11 @@ public class ChatViewModel extends ViewModel {
             List<Place> candidates,
             int stopCount,
             String currentTripId) {
-        long startTime = System.currentTimeMillis();
         StringBuilder sb = new StringBuilder();
         sb.append("{");
         sb.append("\"tripId\":").append(jsonString(draftTripId)).append(",");
         sb.append("\"currentTripId\":").append(jsonString(currentTripId)).append(",");
         sb.append("\"stopCount\":").append(stopCount).append(",");
-        sb.append("\"startTime\":").append(startTime).append(",");
         sb.append("\"isSaved\":false,");
         sb.append("\"totalDistance\":0.0,");
         sb.append("\"title\":").append(jsonString(draft.getTitle() != null ? draft.getTitle() : "AI Draft Trip")).append(",");

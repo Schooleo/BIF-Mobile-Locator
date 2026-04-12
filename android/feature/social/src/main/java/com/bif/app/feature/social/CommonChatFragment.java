@@ -147,7 +147,7 @@ public class CommonChatFragment extends Fragment {
                     targetTripId = viewModel.getCurrentTripId();
                 }
                 if (targetTripId == null || targetTripId.trim().isEmpty()) {
-                    Snackbar.make(view, R.string.chat_add_stop_no_trip, Snackbar.LENGTH_SHORT).show();
+                    AppSnackbar.show(requireContext(), R.string.chat_add_stop_no_trip);
                     return;
                 }
                 Place domainPlace = toDomainPlace(place);
@@ -450,7 +450,10 @@ public class CommonChatFragment extends Fragment {
                 }
 
                 if (totalDistance <= 0d && parsedStops != null) {
-                    totalDistance = computeManhattanDistance(parsedStops);
+                    JSONArray stopsWithCoordinates = filterStopsWithValidCoordinates(parsedStops);
+                    if (stopsWithCoordinates.length() >= 2) {
+                        totalDistance = computeManhattanDistance(stopsWithCoordinates);
+                    }
                 }
             } catch (JSONException ignored) {
                 // Fallback to defaults for malformed payloads.
@@ -624,6 +627,37 @@ public class CommonChatFragment extends Fragment {
         String normalizedName = name == null ? "" : name.trim().toLowerCase(Locale.US);
         String normalizedAddress = address == null ? "" : address.trim().toLowerCase(Locale.US);
         return normalizedName + "|" + normalizedAddress;
+    }
+
+    @NonNull
+    private JSONArray filterStopsWithValidCoordinates(@Nullable JSONArray stops) {
+        JSONArray filtered = new JSONArray();
+        if (stops == null) {
+            return filtered;
+        }
+
+        for (int i = 0; i < stops.length(); i++) {
+            JSONObject stop = stops.optJSONObject(i);
+            if (stop == null) {
+                continue;
+            }
+
+            Double latitude = optNullableDouble(stop, "latitude");
+            Double longitude = optNullableDouble(stop, "longitude");
+            if (latitude == null || longitude == null) {
+                continue;
+            }
+            if (latitude < -90d || latitude > 90d || longitude < -180d || longitude > 180d) {
+                continue;
+            }
+            if (Double.compare(latitude, 0.0d) == 0 && Double.compare(longitude, 0.0d) == 0) {
+                continue;
+            }
+
+            filtered.put(stop);
+        }
+
+        return filtered;
     }
 
     private double computeManhattanDistance(@Nullable JSONArray stops) {

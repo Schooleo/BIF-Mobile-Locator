@@ -20,7 +20,6 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -195,19 +194,9 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
         }
 
         try {
-            Map<String, Object> document = objectMapper.convertValue(
-                place, new TypeReference<Map<String, Object>>() {
-                });
+            Map<String, Object> document = toDocument(place);
             document.put("rating", newRating);
             document.put("reviewCount", reviewCount);
-            if (place.getLocation() != null) {
-                double latitude = place.getLocation().getLatitude();
-                double longitude = place.getLocation().getLongitude();
-                document.put("location", Arrays.asList(latitude, longitude));
-            } else {
-                // Do not send location: null
-                document.remove("location");
-            }
 
             String body = objectMapper.writeValueAsString(document);
             HttpRequest request = HttpRequest.newBuilder()
@@ -587,11 +576,15 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
     }
 
     private String normalizedProtocol() {
-        String raw = safe(typesenseProperties.getProtocol(), DEFAULT_PROTOCOL);
-        String protocol = raw.trim().toLowerCase(Locale.ROOT);
-        if (!"http".equals(protocol) && !"https".equals(protocol)) {
-            LOGGER.warn("Invalid typesense.protocol '{}' configured. Falling back to '{}'.", raw, DEFAULT_PROTOCOL);
+        String configuredProtocol = typesenseProperties.getProtocol();
+        if (configuredProtocol == null || configuredProtocol.isBlank()) {
             return DEFAULT_PROTOCOL;
+        }
+
+        String protocol = configuredProtocol.trim().toLowerCase(Locale.ROOT);
+        if (!"http".equals(protocol) && !"https".equals(protocol)) {
+            throw new IllegalArgumentException(
+                    "Invalid typesense.protocol '" + configuredProtocol + "'. Expected 'http' or 'https'.");
         }
         return protocol;
     }
@@ -604,7 +597,7 @@ public class TypesensePlaceIndexSyncService implements PlaceSearchIndexSyncServi
     }
 
     private String encode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
     private Map<String, Object> toDocument(Place place) {

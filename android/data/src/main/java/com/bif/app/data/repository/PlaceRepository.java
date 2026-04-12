@@ -208,14 +208,23 @@ public class PlaceRepository implements IPlaceRepository {
             return result;
         }
 
-        aiGraphQlClient.suggestPlacesFromQuery(query, latitude, longitude, cityBias)
+        Double validatedLatitude = latitude;
+        Double validatedLongitude = longitude;
+        if (!isValidLatLon(latitude, longitude)) {
+            validatedLatitude = null;
+            validatedLongitude = null;
+        }
+
+        aiGraphQlClient.suggestPlacesFromQuery(query, validatedLatitude, validatedLongitude, cityBias)
                 .whenComplete((payload, throwable) -> {
             if (throwable != null || payload == null) {
-                Log.e(TAG, "AI suggest query failed", throwable);
-                ArrayList<String> warnings = new ArrayList<>();
-                if (throwable != null && throwable.getMessage() != null) {
-                    warnings.add("Transport error: " + throwable.getMessage());
+                if (throwable != null) {
+                    Log.e(TAG, "AI suggest query failed", throwable);
+                } else {
+                    Log.e(TAG, "AI suggest query failed: payload was null");
                 }
+                ArrayList<String> warnings = new ArrayList<>();
+                warnings.add("Transport error");
                 result.postValue(new AiPlaceSuggestionResult(new ArrayList<>(),
                         warnings, "AI_FAILURE"));
                 return;
@@ -623,6 +632,13 @@ public class PlaceRepository implements IPlaceRepository {
 
     private boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private boolean isValidLatLon(Double latitude, Double longitude) {
+        if (latitude == null || longitude == null) {
+            return false;
+        }
+        return isValidCoordinate(latitude, longitude);
     }
 
     private boolean isValidCoordinate(double latitude, double longitude) {

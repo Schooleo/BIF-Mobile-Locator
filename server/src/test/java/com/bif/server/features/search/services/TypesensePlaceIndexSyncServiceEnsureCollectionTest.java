@@ -1,7 +1,7 @@
 package com.bif.server.features.search.services;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
@@ -73,7 +73,7 @@ public class TypesensePlaceIndexSyncServiceEnsureCollectionTest {
     }
 
     @Test
-    void ensureCollectionExists_invalidProtocolFallsBackToHttp() throws Exception {
+    void ensureCollectionExists_invalidProtocolSkipsRequests() throws Exception {
         TypesenseProperties props = new TypesenseProperties();
         props.setEnabled(true);
         props.setApiKey("key");
@@ -83,25 +83,13 @@ public class TypesensePlaceIndexSyncServiceEnsureCollectionTest {
 
         ObjectMapper mapper = new ObjectMapper();
         HttpClient mockClient = Mockito.mock(HttpClient.class);
+        PlaceRepository placeRepository = Mockito.mock(PlaceRepository.class);
 
-        @SuppressWarnings("unchecked")
-        HttpResponse<String> respHealth = Mockito.mock(HttpResponse.class);
-        @SuppressWarnings("unchecked")
-        HttpResponse<String> respGet = Mockito.mock(HttpResponse.class);
+        TypesensePlaceIndexSyncService svc = new TypesensePlaceIndexSyncService(
+            props, mapper, mockClient, placeRepository);
 
-        when(respHealth.statusCode()).thenReturn(200);
-        when(respGet.statusCode()).thenReturn(200);
-        when(mockClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
-                .thenReturn(respHealth)
-                .thenReturn(respGet);
-
-        TypesensePlaceIndexSyncService svc = new TypesensePlaceIndexSyncService(props, mapper, mockClient);
-
-        assertDoesNotThrow(svc::ensureCollectionExists);
-
-        ArgumentCaptor<HttpRequest> requestCaptor = ArgumentCaptor.forClass(HttpRequest.class);
-        Mockito.verify(mockClient, times(2)).send(requestCaptor.capture(), any(HttpResponse.BodyHandler.class));
-        assertEquals("http", requestCaptor.getAllValues().get(0).uri().getScheme());
+        assertThrows(IllegalArgumentException.class, svc::ensureCollectionExists);
+        Mockito.verify(mockClient, times(0)).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
     }
 
     private String readBody(Optional<HttpRequest.BodyPublisher> bodyPublisherOptional) throws Exception {
