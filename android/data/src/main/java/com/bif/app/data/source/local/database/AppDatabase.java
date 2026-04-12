@@ -99,10 +99,32 @@ public abstract class AppDatabase extends RoomDatabase {
     public static final Migration MIGRATION_18_19 = new Migration(18, 19) {
         @Override
         public void migrate(SupportSQLiteDatabase database) {
+            // v18 existed in two branches with different schema contents.
+            // Ensure reviews columns expected by current entity exist for both paths.
+            if (!hasColumn(database, "reviews", "externalSource")) {
+                database.execSQL("ALTER TABLE reviews ADD COLUMN externalSource TEXT");
+            }
+            if (!hasColumn(database, "reviews", "externalId")) {
+                database.execSQL("ALTER TABLE reviews ADD COLUMN externalId TEXT");
+            }
+            if (!hasColumn(database, "reviews", "lat")) {
+                database.execSQL("ALTER TABLE reviews ADD COLUMN lat REAL");
+            }
+            if (!hasColumn(database, "reviews", "lng")) {
+                database.execSQL("ALTER TABLE reviews ADD COLUMN lng REAL");
+            }
+            if (!hasColumn(database, "reviews", "placeName")) {
+                database.execSQL("ALTER TABLE reviews ADD COLUMN placeName TEXT");
+            }
+
             if (!hasColumn(database, "favorites", "pendingSync")) {
                 database.execSQL("ALTER TABLE favorites ADD COLUMN pendingSync INTEGER NOT NULL DEFAULT 0");
             } else {
                 database.execSQL("UPDATE favorites SET pendingSync = 0 WHERE pendingSync IS NULL");
+            }
+
+            if (!hasIndex(database, "index_reviews_createdAt")) {
+                database.execSQL("CREATE INDEX index_reviews_createdAt ON reviews(createdAt)");
             }
 
             if (!hasIndex(database, "index_favorites_userId_deleted")) {
