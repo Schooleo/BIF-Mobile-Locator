@@ -18,8 +18,16 @@ public class AiGraphqlController {
     }
 
     @MutationMapping
-    public AiPlaceSuggestionResult suggestPlacesFromQuery(@Argument String query) {
-        return aiOrchestratorService.suggestPlacesFromQuery(query);
+    public AiPlaceSuggestionResult suggestPlacesFromQuery(
+            @Argument String query,
+            @Argument Double latitude,
+            @Argument Double longitude,
+            @Argument String cityBias) {
+        return aiOrchestratorService.suggestPlacesFromQuery(query, latitude, longitude, cityBias);
+    }
+
+    public AiPlaceSuggestionResult suggestPlacesFromQuery(String query) {
+        return suggestPlacesFromQuery(query, null, null, null);
     }
 
     @MutationMapping

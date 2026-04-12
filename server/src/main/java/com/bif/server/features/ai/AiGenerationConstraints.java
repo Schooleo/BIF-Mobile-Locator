@@ -4,6 +4,8 @@ public final class AiGenerationConstraints {
 
     public static final int MIN_KEYWORDS = 1;
     public static final int MAX_KEYWORDS = 6;
+    public static final int MIN_SEARCH_QUERIES = 1;
+    public static final int MAX_SEARCH_QUERIES = 6;
     public static final int MIN_STOPS = 1;
     public static final int MAX_STOPS = 8;
     public static final int MIN_STOP_DURATION_MINUTES = 15;

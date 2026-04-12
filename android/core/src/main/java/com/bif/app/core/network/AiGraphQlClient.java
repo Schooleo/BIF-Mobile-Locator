@@ -3,8 +3,8 @@ package com.bif.app.core.network;
 import android.util.Log;
 
 import com.apollographql.apollo.api.ApolloResponse;
+import com.apollographql.apollo.api.Optional;
 import com.apollographql.java.client.ApolloClient;
-import com.apollographql.java.client.ApolloDisposable;
 import com.bif.app.core.network.dto.ai.AiPlaceSuggestionPayload;
 import com.bif.app.core.network.dto.ai.AiSuggestedPlacePayload;
 import com.bif.app.core.network.dto.ai.AiTripDraftPayload;
@@ -14,11 +14,6 @@ import com.bif.app.core.network.dto.ai.AiTripDraftStopPayload;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -27,10 +22,7 @@ import javax.inject.Singleton;
 public class AiGraphQlClient {
 
     private static final String TAG = "AiGraphQlClient";
-    private static final long REQUEST_TIMEOUT_SECONDS = 15L;
-
     private final ApolloClient apolloClient;
-    private final ScheduledExecutorService timeoutScheduler = Executors.newSingleThreadScheduledExecutor();
 
     @Inject
     public AiGraphQlClient(ApolloClient apolloClient) {
@@ -38,12 +30,23 @@ public class AiGraphQlClient {
     }
 
     public CompletableFuture<AiPlaceSuggestionPayload> suggestPlacesFromQuery(String query) {
+        return suggestPlacesFromQuery(query, null, null, null);
+    }
+
+    public CompletableFuture<AiPlaceSuggestionPayload> suggestPlacesFromQuery(
+            String query,
+            Double latitude,
+            Double longitude,
+            String cityBias) {
         CompletableFuture<AiPlaceSuggestionPayload> future = new CompletableFuture<>();
-        final ApolloDisposable disposable;
 
         try {
-            disposable = apolloClient
-                    .mutation(new SuggestPlacesFromQueryMutation(query))
+            apolloClient
+                    .mutation(new SuggestPlacesFromQueryMutation(
+                            query,
+                            Optional.presentIfNotNull(latitude),
+                            Optional.presentIfNotNull(longitude),
+                            Optional.presentIfNotNull(cityBias)))
                     .enqueue(response -> {
                         if (future.isDone()) {
                             return;
@@ -54,23 +57,14 @@ public class AiGraphQlClient {
             future.completeExceptionally(e);
             return future;
         }
-
-        ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
-            if (future.completeExceptionally(new TimeoutException("suggestPlacesFromQuery timed out"))) {
-                disposable.dispose();
-            }
-        }, REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-
-        future.whenComplete((ignored, error) -> timeoutTask.cancel(false));
         return future;
     }
 
     public CompletableFuture<AiTripDraftResultPayload> draftTripFromQuery(String query) {
         CompletableFuture<AiTripDraftResultPayload> future = new CompletableFuture<>();
-        final ApolloDisposable disposable;
 
         try {
-            disposable = apolloClient
+            apolloClient
                     .mutation(new DraftTripFromQueryMutation(query))
                     .enqueue(response -> {
                         if (future.isDone()) {
@@ -82,14 +76,6 @@ public class AiGraphQlClient {
             future.completeExceptionally(e);
             return future;
         }
-
-        ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
-            if (future.completeExceptionally(new TimeoutException("draftTripFromQuery timed out"))) {
-                disposable.dispose();
-            }
-        }, REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-
-        future.whenComplete((ignored, error) -> timeoutTask.cancel(false));
         return future;
     }
 
@@ -109,10 +95,23 @@ public class AiGraphQlClient {
         if (response.errors != null && !response.errors.isEmpty()) {
             ArrayList<String> warnings = new ArrayList<>();
             for (Object error : response.errors) {
-                warnings.add(String.valueOf(error));
+                warnings.add("GraphQL error: " + error);
             }
-            Log.w(TAG, "AI suggest GraphQL errors=" + warnings);
-            return new AiPlaceSuggestionPayload(new ArrayList<>(), warnings, "AI_FAILURE");
+            String failureCode = classifyGraphQlFailureCode(response.errors);
+            Log.w(TAG,
+                    "AI suggest GraphQL errors. operation=SuggestPlacesFromQuery"
+                    + ", failureCode=" + failureCode
+                    + ", errorType=graphql"
+                    + ", warnings=" + warnings);
+            return new AiPlaceSuggestionPayload(
+                    new ArrayList<>(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    warnings,
+                    failureCode);
         }
 
         SuggestPlacesFromQueryMutation.Data data = response.data;
@@ -125,6 +124,12 @@ public class AiGraphQlClient {
         List<String> warnings = payload.warnings != null
                 ? new ArrayList<>(payload.warnings)
                 : new ArrayList<>();
+        List<String> extractedKeywords = payload.extractedKeywords != null
+                ? new ArrayList<>(payload.extractedKeywords)
+                : new ArrayList<>();
+        List<String> searchQueries = payload.searchQueries != null
+                ? new ArrayList<>(payload.searchQueries)
+                : new ArrayList<>();
         if (!warnings.isEmpty()) {
             Log.d(TAG, "AI suggest warnings=" + warnings);
         }
@@ -134,16 +139,23 @@ public class AiGraphQlClient {
                 : null;
 
         if (failureCode != null) {
-            return new AiPlaceSuggestionPayload(new ArrayList<>(), warnings, failureCode);
+            return new AiPlaceSuggestionPayload(
+                    new ArrayList<>(),
+                    extractedKeywords,
+                    payload.category,
+                    payload.vibe,
+                    searchQueries,
+                    payload.locationHint,
+                    warnings,
+                    failureCode);
         }
 
         List<AiSuggestedPlacePayload> mapped = new ArrayList<>();
         if (payload.places != null) {
-            for (SuggestPlacesFromQueryMutation.Place suggestion : payload.places) {
-                if (suggestion == null || suggestion.placeData == null) {
+            for (SuggestPlacesFromQueryMutation.Place place : payload.places) {
+                if (place == null) {
                     continue;
                 }
-                SuggestPlacesFromQueryMutation.PlaceData place = suggestion.placeData;
 
                 Double latitude = place.location != null
                         ? place.location.latitude
@@ -157,13 +169,52 @@ public class AiGraphQlClient {
                         place.name,
                         place.address,
                         place.rating != null ? place.rating : 0d,
-                    suggestion.addedToTripCount != null ? suggestion.addedToTripCount : 0,
+                        0,
                         latitude,
                         longitude
                 ));
             }
         }
-        return new AiPlaceSuggestionPayload(mapped, warnings, null);
+        return new AiPlaceSuggestionPayload(
+                mapped,
+                extractedKeywords,
+                payload.category,
+                payload.vibe,
+                searchQueries,
+                payload.locationHint,
+                warnings,
+                null);
+    }
+
+    private String classifyGraphQlFailureCode(List<?> errors) {
+        if (errors == null || errors.isEmpty()) {
+            return "AI_FAILURE";
+        }
+
+        StringBuilder message = new StringBuilder();
+        for (Object error : errors) {
+            if (error == null) {
+                continue;
+            }
+            if (message.length() > 0) {
+                message.append(' ');
+            }
+            message.append(error);
+        }
+
+        String joined = message.toString().toLowerCase();
+        if (joined.contains("unauthorized")
+                || joined.contains("authentication")
+                || joined.contains("forbidden")
+                || joined.contains("access denied")) {
+            return "UNAUTHORIZED";
+        }
+        if (joined.contains("rate limit")
+                || joined.contains("too many requests")
+                || joined.contains("throttl")) {
+            return "RATE_LIMITED";
+        }
+        return "AI_FAILURE";
     }
 
     private AiTripDraftResultPayload mapDraftTripResponse(
@@ -237,7 +288,8 @@ public class AiGraphQlClient {
                             stop.placeId,
                             stopPlace,
                             stop.durationMinutes != null ? stop.durationMinutes : 0,
-                            stop.note
+                            stop.note,
+                            stop.plannedDateTime
                     ));
                 }
             }
@@ -253,11 +305,11 @@ public class AiGraphQlClient {
     }
 
     private AiSuggestedPlacePayload mapPlace(String id,
-                                             String name,
-                                             String address,
-                                             Double rating,
-                                             Double latitude,
-                                             Double longitude) {
+            String name,
+            String address,
+            Double rating,
+            Double latitude,
+            Double longitude) {
         return new AiSuggestedPlacePayload(
                 id,
                 name,

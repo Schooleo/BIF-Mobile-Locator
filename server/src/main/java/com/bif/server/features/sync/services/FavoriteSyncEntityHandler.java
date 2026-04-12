@@ -9,7 +9,7 @@ import com.bif.server.features.sync.models.SyncChangeEntry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 
 import java.util.Locale;
@@ -186,7 +186,7 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
                     payload.latitude,
                     payload.longitude,
                     payload.name.trim());
-        } catch (DataIntegrityViolationException ex) {
+        } catch (DataAccessException ex) {
             LOGGER.error("Failed to resolve favorite placeId for payload id={}, name={}, lat={}, lng={}",
                     payload.id,
                     payload.name,

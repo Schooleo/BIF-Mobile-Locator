@@ -5,6 +5,7 @@ import com.bif.server.features.favorite.repositories.FavoriteRepository;
 import com.bif.server.features.place.services.PlaceIdentityService;
 import com.bif.server.features.sync.models.SyncChange;
 import com.bif.server.features.sync.models.SyncChangeEntry;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -98,6 +99,36 @@ class FavoriteSyncEntityHandlerTest {
         assertTrue(resultPayload.contains("\"serverVersion\":15"));
         assertTrue(resultPayload.contains("\"name\":\"New Name\""));
         verify(placeIdentityService).resolveInternalPlaceId("FAVORITE", "fav-2", 10.0, 20.0, "New Name");
+    }
+
+    @Test
+    void applyPushedChange_WhenPlaceResolutionDataAccessFails_StillSavesFavorite() {
+        SyncChange pushed = new SyncChange();
+        pushed.setEntityId("fav-3");
+        pushed.setOperation("UPDATE");
+        String json = "{\"id\":\"fav-3\",\"name\":\"Fallback Name\",\"latitude\":10.0,\"longitude\":20.0,\"rating\":4}";
+        pushed.setPayload(json);
+
+        Favorite existing = new Favorite();
+        existing.setId("fav-3");
+        existing.setUserId("user-1");
+
+        when(favoriteRepository.findByIdAndUserId("fav-3", "user-1")).thenReturn(Optional.of(existing));
+        when(placeIdentityService.resolveInternalPlaceId("FAVORITE", "fav-3", 10.0, 20.0, "Fallback Name"))
+                .thenThrow(new DataAccessResourceFailureException("mongo unavailable"));
+
+        String resultPayload = handler.applyPushedChange(pushed, "user-1", 25L);
+
+        ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
+        verify(favoriteRepository).save(captor.capture());
+        Favorite saved = captor.getValue();
+
+        assertEquals("fav-3", saved.getId());
+        assertEquals("Fallback Name", saved.getName());
+        assertEquals(25L, saved.getServerVersion());
+        assertNull(saved.getPlaceId());
+        assertTrue(resultPayload.contains("\"serverVersion\":25"));
+        verify(placeIdentityService).resolveInternalPlaceId("FAVORITE", "fav-3", 10.0, 20.0, "Fallback Name");
     }
 
     @Test

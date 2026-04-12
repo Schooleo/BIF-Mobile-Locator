@@ -109,6 +109,7 @@ public class TripRepository implements ITripRepository {
                 entity.groupId = entity.id;
                 entity.title = title;
                 entity.description = description;
+                entity.coverUploadStatus = UploadStatus.SYNCED;
                 entity.startAt = startAt;
                 entity.endAt = endAt;
                 entity.serverVersion = 0L;
@@ -441,6 +442,28 @@ public class TripRepository implements ITripRepository {
     }
 
     @Override
+    public void stageTripCoverImageUpload(String tripId, String localImagePath) {
+        executorService.execute(() -> {
+            String safeTripId = normalize(tripId);
+            String safeLocalPath = normalize(localImagePath);
+            if (safeTripId.isEmpty() || safeLocalPath.isEmpty()) {
+                return;
+            }
+
+            TripPlanEntity entity = tripDao.getTripByIdSync(safeTripId);
+            if (entity == null) {
+                return;
+            }
+
+            entity.localCoverImagePath = safeLocalPath;
+            entity.coverUploadStatus = UploadStatus.PENDING;
+            entity.deleted = false;
+            tripDao.upsertTrip(entity);
+            enqueueImageUploadIfPending(entity);
+        });
+    }
+
+    @Override
     public void removeStopFromTrip(String tripId, String stopId) {
         executorService.execute(() -> {
             TripStopEntity entity = tripDao.getStopByIdSync(stopId);
@@ -615,6 +638,11 @@ public class TripRepository implements ITripRepository {
         entity.groupId = normalize(dto.groupId);
         entity.title = dto.title;
         entity.description = dto.description;
+        entity.coverImageUrl = dto.coverImageUrl;
+        if (entity.coverUploadStatus == null || entity.coverUploadStatus == UploadStatus.SYNCED) {
+            entity.localCoverImagePath = null;
+            entity.coverUploadStatus = UploadStatus.SYNCED;
+        }
         entity.startAt = parseInstant(dto.startAt);
         entity.endAt = parseInstant(dto.endAt);
         entity.serverVersion = Math.max(entity.serverVersion, dto.serverVersion);
@@ -648,6 +676,12 @@ public class TripRepository implements ITripRepository {
                 stopEntity.address = incomingAddress;
                 stopEntity.note = stopDto.note;
                 stopEntity.photoUrl = stopDto.photoUrl;
+                stopEntity.addedByUserId = stopDto.addedByUserId;
+                stopEntity.addedByName = stopDto.addedByName;
+                stopEntity.addedByAvatarLetter = stopDto.addedByAvatarLetter;
+                stopEntity.addedByAvatarColor = stopDto.addedByAvatarColor != null
+                        ? stopDto.addedByAvatarColor
+                        : 0;
                 if (stopEntity.uploadStatus == null || stopEntity.uploadStatus == UploadStatus.SYNCED) {
                     stopEntity.localImagePath = null;
                     stopEntity.uploadStatus = UploadStatus.SYNCED;
@@ -703,7 +737,11 @@ public class TripRepository implements ITripRepository {
                             stop.longitude,
                             stop.arrivalTime,
                             stop.departureTime,
-                            stop.orderIndex
+                            stop.orderIndex,
+                            stop.addedByUserId,
+                            stop.addedByName,
+                            stop.addedByAvatarLetter,
+                            stop.addedByAvatarColor
                     ));
                 }
             }
@@ -713,6 +751,8 @@ public class TripRepository implements ITripRepository {
                     item.trip.groupId,
                     item.trip.title,
                     item.trip.description,
+                        item.trip.coverImageUrl,
+                        item.trip.localCoverImagePath,
                     item.trip.startAt,
                     item.trip.endAt,
                     stops,
@@ -871,11 +911,43 @@ public class TripRepository implements ITripRepository {
         entity.note = stop.getNote();
         entity.photoUrl = stop.getPhotoUrl();
         entity.localImagePath = stop.getLocalImagePath();
+        entity.addedByUserId = normalize(stop.getAddedByUserId());
+        if (entity.addedByUserId.isEmpty() && existing != null) {
+            entity.addedByUserId = normalize(existing.addedByUserId);
+        }
+        if (entity.addedByUserId.isEmpty()) {
+            entity.addedByUserId = resolveCurrentUserId();
+        }
+
+        entity.addedByName = normalize(stop.getAddedByName());
+        if (entity.addedByName.isEmpty() && existing != null) {
+            entity.addedByName = normalize(existing.addedByName);
+        }
+        if (entity.addedByName.isEmpty()) {
+            entity.addedByName = resolveCurrentUserName();
+        }
+
+        entity.addedByAvatarLetter = normalize(stop.getAddedByAvatarLetter());
+        if (entity.addedByAvatarLetter.isEmpty() && existing != null) {
+            entity.addedByAvatarLetter = normalize(existing.addedByAvatarLetter);
+        }
+        if (entity.addedByAvatarLetter.isEmpty()) {
+            entity.addedByAvatarLetter = resolveCurrentUserAvatarLetter(entity.addedByName);
+        }
+
+        entity.addedByAvatarColor = stop.getAddedByAvatarColor();
+        if (entity.addedByAvatarColor == 0 && existing != null) {
+            entity.addedByAvatarColor = existing.addedByAvatarColor;
+        }
+        if (entity.addedByAvatarColor == 0) {
+            entity.addedByAvatarColor = resolveCurrentUserAvatarColor();
+        }
         if (hasStagedLocalImage(stop.getLocalImagePath())) {
             entity.uploadStatus = UploadStatus.PENDING;
         } else if (entity.uploadStatus == null) {
             entity.uploadStatus = UploadStatus.SYNCED;
         }
+
         entity.latitude = stop.getLatitude();
         entity.longitude = stop.getLongitude();
         entity.arrivalTime = stop.getArrivalTime();
@@ -897,6 +969,29 @@ public class TripRepository implements ITripRepository {
             return id;
         }
         return normalize(UserPreferences.getUsername(appContext));
+    }
+
+    private String resolveCurrentUserName() {
+        if (appContext == null) {
+            return "";
+        }
+        String userName = normalize(UserPreferences.getUsername(appContext));
+        if (!userName.isEmpty()) {
+            return userName;
+        }
+        return resolveCurrentUserId();
+    }
+
+    private String resolveCurrentUserAvatarLetter(String displayName) {
+        String safeDisplayName = normalize(displayName);
+        if (!safeDisplayName.isEmpty()) {
+            return safeDisplayName.substring(0, 1).toUpperCase();
+        }
+        return "?";
+    }
+
+    private int resolveCurrentUserAvatarColor() {
+        return 0xFF4DABF7;
     }
 
     private String normalize(String value) {
@@ -963,6 +1058,10 @@ public class TripRepository implements ITripRepository {
         dto.address = entity.address;
         dto.note = entity.note;
         dto.photoUrl = entity.photoUrl;
+        dto.addedByUserId = entity.addedByUserId;
+        dto.addedByName = entity.addedByName;
+        dto.addedByAvatarLetter = entity.addedByAvatarLetter;
+        dto.addedByAvatarColor = entity.addedByAvatarColor;
         dto.orderIndex = entity.orderIndex;
         dto.arrivalTime = formatInstant(entity.arrivalTime);
         dto.departureTime = formatInstant(entity.departureTime);
@@ -983,6 +1082,7 @@ public class TripRepository implements ITripRepository {
         dto.groupId = data.trip.groupId;
         dto.title = data.trip.title;
         dto.description = data.trip.description;
+        dto.coverImageUrl = data.trip.coverImageUrl;
         dto.startAt = formatInstant(data.trip.startAt);
         dto.endAt = formatInstant(data.trip.endAt);
         dto.serverVersion = data.trip.serverVersion;
@@ -1010,6 +1110,16 @@ public class TripRepository implements ITripRepository {
         }
         if (entity.uploadStatus == UploadStatus.PENDING
                 && hasStagedLocalImage(entity.localImagePath)) {
+            ImageUploadWorker.enqueue(appContext);
+        }
+    }
+
+    private void enqueueImageUploadIfPending(TripPlanEntity entity) {
+        if (appContext == null || entity == null) {
+            return;
+        }
+        if (entity.coverUploadStatus == UploadStatus.PENDING
+                && hasStagedLocalImage(entity.localCoverImagePath)) {
             ImageUploadWorker.enqueue(appContext);
         }
     }

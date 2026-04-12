@@ -24,6 +24,7 @@ public class TripPlan extends SyncDocument {
     private String groupId;
     private String title;
     private String description;
+    private String coverImageUrl;
     private Instant startAt;
     private Instant endAt;
     private List<TripStop> stops;

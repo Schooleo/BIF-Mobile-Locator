@@ -2,6 +2,7 @@ package com.bif.app.data.repository;
 
 import android.content.Context;
 import android.location.Address;
+import android.util.Log;
 
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
@@ -49,6 +50,7 @@ public class PlaceRepository implements IPlaceRepository {
 
     private static final int MAX_LOCAL_PLACES = 500;
     private static final String ADDRESS_UNAVAILABLE = "Address unavailable";
+    private static final String TAG = PlaceRepository.class.getSimpleName();
 
     private final AndroidGeocodingDataSource geocodingDataSource;
     private final RestApiService restApiService;
@@ -215,6 +217,15 @@ public class PlaceRepository implements IPlaceRepository {
 
     @Override
     public LiveData<AiPlaceSuggestionResult> suggestPlacesFromQuery(String query) {
+        return suggestPlacesFromQuery(query, null, null, null);
+    }
+
+    @Override
+    public LiveData<AiPlaceSuggestionResult> suggestPlacesFromQuery(
+            String query,
+            Double latitude,
+            Double longitude,
+            String cityBias) {
         MutableLiveData<AiPlaceSuggestionResult> result = new MutableLiveData<>();
 
         if (query == null || query.trim().isEmpty()) {
@@ -230,16 +241,32 @@ public class PlaceRepository implements IPlaceRepository {
         }
 
         if (aiGraphQlClient == null) {
+            ArrayList<String> warnings = new ArrayList<>();
+            warnings.add("AI client is unavailable.");
             result.postValue(new AiPlaceSuggestionResult(new ArrayList<>(),
-                    new ArrayList<>(), "AI_FAILURE"));
+                warnings, "AI_FAILURE"));
             return result;
         }
 
-        aiGraphQlClient.suggestPlacesFromQuery(query)
+        Double validatedLatitude = latitude;
+        Double validatedLongitude = longitude;
+        if (!isValidLatLon(latitude, longitude)) {
+            validatedLatitude = null;
+            validatedLongitude = null;
+        }
+
+        aiGraphQlClient.suggestPlacesFromQuery(query, validatedLatitude, validatedLongitude, cityBias)
                 .whenComplete((payload, throwable) -> {
             if (throwable != null || payload == null) {
+                if (throwable != null) {
+                    Log.e(TAG, "AI suggest query failed", throwable);
+                } else {
+                    Log.e(TAG, "AI suggest query failed: payload was null");
+                }
+                ArrayList<String> warnings = new ArrayList<>();
+                warnings.add("Transport error");
                 result.postValue(new AiPlaceSuggestionResult(new ArrayList<>(),
-                        new ArrayList<>(), "AI_FAILURE"));
+                        warnings, "AI_FAILURE"));
                 return;
             }
 
@@ -250,8 +277,15 @@ public class PlaceRepository implements IPlaceRepository {
                 String failureCode = payload.failureCode;
 
                 if (failureCode != null) {
-                    result.postValue(new AiPlaceSuggestionResult(new ArrayList<>(),
-                            warnings, failureCode));
+                        result.postValue(new AiPlaceSuggestionResult(
+                            new ArrayList<>(),
+                            payload.extractedKeywords,
+                            payload.category,
+                            payload.vibe,
+                            payload.searchQueries,
+                            payload.locationHint,
+                            warnings,
+                            failureCode));
                     return;
                 }
 
@@ -285,8 +319,19 @@ public class PlaceRepository implements IPlaceRepository {
                     }
                 }
 
-                result.postValue(new AiPlaceSuggestionResult(mappedPlaces,
-                        warnings, null));
+                if (mappedPlaces.isEmpty() && payload.places != null && !payload.places.isEmpty()) {
+                    warnings.add("All suggested places were filtered out due to missing required fields.");
+                }
+
+                result.postValue(new AiPlaceSuggestionResult(
+                    mappedPlaces,
+                    payload.extractedKeywords,
+                    payload.category,
+                    payload.vibe,
+                    payload.searchQueries,
+                    payload.locationHint,
+                    warnings,
+                    null));
         });
 
         return result;
@@ -639,6 +684,13 @@ public class PlaceRepository implements IPlaceRepository {
         return value != null && !value.trim().isEmpty();
     }
 
+    private boolean isValidLatLon(Double latitude, Double longitude) {
+        if (latitude == null || longitude == null) {
+            return false;
+        }
+        return isValidCoordinate(latitude, longitude);
+    }
+
     private boolean isValidCoordinate(double latitude, double longitude) {
         // Invalid only if BOTH axes are exactly 0.0 (placeholder coordinates)
         if (latitude == 0.0d && longitude == 0.0d) {
@@ -675,4 +727,3 @@ public class PlaceRepository implements IPlaceRepository {
         return normalizedName + "|" + latBucket + "|" + lngBucket;
     }
 }
-

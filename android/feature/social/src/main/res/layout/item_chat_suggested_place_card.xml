@@ -1,16 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="250dp"
-    android:layout_height="wrap_content"
+    android:layout_height="160dp"
     android:layout_marginEnd="8dp"
-    android:background="@drawable/bg_add_trip_stop_result"
-    android:orientation="vertical"
-    android:padding="10dp">
+    app:cardBackgroundColor="?attr/colorListItemBackground"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="0dp"
+    app:strokeColor="?attr/colorPrimary"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="10dp">
 
     <TextView
         android:id="@+id/tv_place_name"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="2"
         android:textColor="?attr/colorTextPrimary"
         android:textSize="15sp"
         android:textStyle="bold" />
@@ -20,7 +31,9 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:textColor="?attr/colorTextPrimary"
+        android:ellipsize="end"
+        android:maxLines="2"
+        android:textColor="?attr/colorTextSecondary"
         android:textSize="12sp" />
 
     <TextView
@@ -28,13 +41,22 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="3dp"
-        android:textColor="?attr/colorTextPrimary"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="?attr/colorTextSecondary"
         android:textSize="12sp" />
 
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
     <LinearLayout
+        android:id="@+id/layout_place_actions"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
+        android:gravity="center_vertical"
         android:orientation="horizontal">
 
         <Button
@@ -43,24 +65,35 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:backgroundTint="?attr/colorPrimary"
+            android:ellipsize="end"
             android:minHeight="48dp"
-            android:text="@string/chat_add_to_trip"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:text="@string/add_stop"
             android:textAllCaps="false"
             android:textColor="?attr/colorOnPrimary"
-            android:textSize="12sp" />
+            android:textSize="11sp" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_view_place"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
             android:layout_weight="1"
             android:backgroundTint="?attr/colorListItemBackground"
+            android:ellipsize="end"
             android:minHeight="48dp"
+            android:maxLines="1"
+            android:singleLine="true"
             android:text="@string/chat_view_place"
             android:textAllCaps="false"
             android:textColor="?attr/colorPrimary"
-            android:textSize="12sp" />
+            android:textSize="11sp"
+            app:strokeColor="?attr/colorPrimary"
+            app:strokeWidth="1dp" />
     </LinearLayout>
 
-</LinearLayout>
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>
