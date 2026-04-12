@@ -2,11 +2,11 @@ package com.bif.app.data.repository;
 
 import android.content.Context;
 import android.location.Address;
-import android.util.Log;
 
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Transformations;
+import androidx.annotation.Nullable;
 
 import com.bif.app.core.network.AiGraphQlClient;
 import com.bif.app.core.network.RestApiService;
@@ -28,6 +28,7 @@ import com.bif.app.domain.model.AiPlaceSuggestionResult;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.repository.IPlaceRepository;
+import com.bif.app.domain.repository.IPlaceRepository.PersistenceCallback;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -46,7 +47,6 @@ import retrofit2.Response;
 
 public class PlaceRepository implements IPlaceRepository {
 
-    private static final String TAG = "PlaceRepository";
     private static final int MAX_LOCAL_PLACES = 500;
     private static final String ADDRESS_UNAVAILABLE = "Address unavailable";
 
@@ -147,8 +147,7 @@ public class PlaceRepository implements IPlaceRepository {
         MutableLiveData<Location> result = new MutableLiveData<>();
         executorService.execute(() -> {
             try {
-                List<Address> results =
-                    geocodingDataSource.geocodeLocation(query);
+                List<Address> results = geocodingDataSource.geocodeLocation(query);
                 if (results != null && !results.isEmpty()) {
                     Address address = results.get(0);
                     Location location = new Location();
@@ -183,45 +182,31 @@ public class PlaceRepository implements IPlaceRepository {
             return result;
         }
 
-        Log.d(TAG, "getPlaceById requested placeId=" + placeId);
-
         executorService.execute(() -> {
             try {
                 Response<PlaceDto> response = restApiService.getPlaceById(placeId).execute();
                 PlaceDto dto = response.body();
-                Log.d(TAG, "getPlaceById response placeId=" + placeId
-                        + ", code=" + response.code()
-                        + ", successful=" + response.isSuccessful()
-                        + ", bodyNull=" + (dto == null)
-                        + ", bodyId=" + (dto != null ? dto.id : "null")
-                        + ", bodyName=" + (dto != null ? dto.name : "null")
-                        + ", bodyRating=" + (dto != null ? dto.rating : Double.NaN)
-                        + ", bodyReviewCount=" + (dto != null ? dto.reviewCount : -1)
-                        + ", bodyLat=" + (dto != null ? dto.latitude : Double.NaN)
-                        + ", bodyLng=" + (dto != null ? dto.longitude : Double.NaN));
-
                 if (!response.isSuccessful() || dto == null) {
                     result.postValue(null);
                     return;
                 }
 
-                Place mappedPlace = PlaceMapper.fromDto(dto, true);
-                Log.d(TAG, "getPlaceById mapped placeId=" + placeId
-                        + ", mappedId=" + mappedPlace.id
-                        + ", mappedName=" + mappedPlace.name
-                        + ", mappedRating=" + mappedPlace.rating
-                        + ", mappedLat=" + dto.latitude
-                        + ", mappedLng=" + dto.longitude);
+                Place mappedPlace = null;
+                try {
+                    mappedPlace = PlaceMapper.fromDto(dto, true);
+                } catch (RuntimeException mappingException) {
+                }
 
-                if (isValidCoordinate(dto.latitude, dto.longitude)) {
-                    placeDao.upsert(PlaceMapper.fromDto(dto, activeUserId));
-                } else {
-                    Log.w(TAG, "getPlaceById skipping cache upsert because coordinates are invalid placeId="
-                            + placeId + ", lat=" + dto.latitude + ", lng=" + dto.longitude);
+                if (mappedPlace != null) {
+                    if (isValidCoordinate(dto.latitude, dto.longitude)) {
+                        try {
+                            placeDao.upsert(PlaceMapper.fromDto(dto, activeUserId));
+                        } catch (RuntimeException cacheException) {
+                        }
+                    }
                 }
                 result.postValue(mappedPlace);
             } catch (IOException e) {
-                Log.e(TAG, "Failed to fetch place by id: " + placeId, e);
                 result.postValue(null);
             }
         });
@@ -253,7 +238,6 @@ public class PlaceRepository implements IPlaceRepository {
         aiGraphQlClient.suggestPlacesFromQuery(query)
                 .whenComplete((payload, throwable) -> {
             if (throwable != null || payload == null) {
-                Log.e(TAG, "AI suggest query failed", throwable);
                 result.postValue(new AiPlaceSuggestionResult(new ArrayList<>(),
                         new ArrayList<>(), "AI_FAILURE"));
                 return;
@@ -337,10 +321,7 @@ public class PlaceRepository implements IPlaceRepository {
                             || (Double.compare(lat, 0.0d) == 0 && Double.compare(lng, 0.0d) == 0);
                     if (hasInvalidCoordinates) {
                         Location fallbackLocation = resolveDefaultSearchLocation();
-                        if (fallbackLocation == null) {
-                            // No valid default location configured, skip remote search
-                            Log.d(TAG, "No valid default search location configured");
-                        } else {
+                        if (fallbackLocation != null) {
                             lat = fallbackLocation.latitude;
                             lng = fallbackLocation.longitude;
                         }
@@ -350,7 +331,6 @@ public class PlaceRepository implements IPlaceRepository {
                         request.query = query;
                         request.latitude = lat;
                         request.longitude = lng;
-                        Log.d(TAG, "Search request coordinates: coordinates present");
                         Response<List<PlaceDto>> response = restApiService
                             .searchServerPlaces(request).execute();
                         if (response.isSuccessful() && response.body() != null) {
@@ -375,7 +355,6 @@ public class PlaceRepository implements IPlaceRepository {
                         }
                     }
                 } catch (IOException e) {
-                    Log.e(TAG, "Server search failed", e);
                 }
 
                 try {
@@ -409,12 +388,11 @@ public class PlaceRepository implements IPlaceRepository {
                                 combinedResults.add(place);
                                 seenIds.add(id);
                                 seenKeys.add(dedupKey);
-                                // TODO: auto-persist remains disabled to avoid caching transient geocoder hits.
+                                // Auto-persist remains disabled to avoid caching transient geocoder hits.
                             }
                         }
                     }
                 } catch (IOException e) {
-                    Log.e(TAG, "Geocoder search failed", e);
                 }
             }
 
@@ -451,57 +429,74 @@ public class PlaceRepository implements IPlaceRepository {
 
     @Override
     public void persistPlace(Place place, String action) {
+        persistPlace(place, action, null);
+    }
+
+    @Override
+    public void persistPlace(Place place, String action, @Nullable PersistenceCallback callback) {
         executorService.execute(() -> {
-            Place normalizedPlace = normalizePlaceForCache(place);
-            if (normalizedPlace == null) {
-                Log.w(TAG, "Cannot persist place with invalid/missing coordinates");
-                return;
-            }
-            
-            PlaceEntity existing = placeDao.getByIdSync(normalizedPlace.id,
-                    activeUserId);
+            try {
+                Place normalizedPlace = normalizePlaceForCache(place);
+                if (normalizedPlace == null) {
+                    if (callback != null) {
+                        callback.onSuccess();
+                    }
+                    return;
+                }
 
-            PlaceEntity entity = PlaceMapper.toEntity(normalizedPlace,
-                    activeUserId);
-            entity.persistedByAction = action;
-            if (existing != null) {
-                entity.serverVersion = existing.serverVersion;
-            }
+                PlaceEntity existing = placeDao.getByIdSync(normalizedPlace.id,
+                        activeUserId);
 
-            boolean isDelete = "DELETE".equalsIgnoreCase(action)
-                    || "REMOVE".equalsIgnoreCase(action);
-            if (isDelete) {
-                entity.deleted = true;
-            }
+                PlaceEntity entity = PlaceMapper.toEntity(normalizedPlace,
+                        activeUserId);
+                entity.persistedByAction = action;
+                if (existing != null) {
+                    entity.serverVersion = existing.serverVersion;
+                }
 
-            placeDao.upsert(entity);
+                boolean isDelete = "DELETE".equalsIgnoreCase(action)
+                        || "REMOVE".equalsIgnoreCase(action);
+                if (isDelete) {
+                    entity.deleted = true;
+                }
 
-            enforceLocalCacheLimit();
+                placeDao.upsert(entity);
 
-            String operation;
-            if (isDelete) {
-                operation = "DELETE";
-            } else if (existing == null || existing.deleted) {
-                operation = "CREATE";
-            } else {
-                operation = "UPDATE";
-            }
+                enforceLocalCacheLimit();
 
-            PlaceDto payload = PlaceMapper.toDto(normalizedPlace, activeUserId);
-            payload.placeSource = entity.placeSource;
-            payload.persistedByAction = action;
-            payload.persistedByUserId = activeUserId;
-            payload.serverVersion = entity.serverVersion;
-            payload.deleted = entity.deleted;
+                String operation;
+                if (isDelete) {
+                    operation = "DELETE";
+                } else if (existing == null || existing.deleted) {
+                    operation = "CREATE";
+                } else {
+                    operation = "UPDATE";
+                }
 
-            if (shouldEnqueueChange(existing, entity, operation)) {
-                syncManager.enqueueChange(
-                        "place",
-                        normalizedPlace.id,
-                        operation,
-                        UUID.randomUUID().toString(),
-                        payload);
-                syncManager.syncIfOnline();
+                PlaceDto payload = PlaceMapper.toDto(normalizedPlace, activeUserId);
+                payload.placeSource = entity.placeSource;
+                payload.persistedByAction = action;
+                payload.persistedByUserId = activeUserId;
+                payload.serverVersion = entity.serverVersion;
+                payload.deleted = entity.deleted;
+
+                if (shouldEnqueueChange(existing, entity, operation)) {
+                    syncManager.enqueueChange(
+                            "place",
+                            normalizedPlace.id,
+                            operation,
+                            UUID.randomUUID().toString(),
+                            payload);
+                    syncManager.syncIfOnline();
+                }
+
+                if (callback != null) {
+                    callback.onSuccess();
+                }
+            } catch (RuntimeException exception) {
+                if (callback != null) {
+                    callback.onError(exception);
+                }
             }
         });
     }
@@ -568,7 +563,6 @@ public class PlaceRepository implements IPlaceRepository {
                             activeUserId));
                 }
             } catch (IOException e) {
-                Log.e(TAG, "Auto-persist from search failed", e);
             }
         });
     }

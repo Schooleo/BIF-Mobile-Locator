@@ -2690,9 +2690,28 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 viewModel.setStatusText(place.name + " removed from Favorites!");
                 updateFavoriteButtonState(btnAddFavorite, false);
             } else {
-                viewModel.addToFavorites(place);
-                viewModel.setStatusText(place.name + " added to Favorites!");
-                updateFavoriteButtonState(btnAddFavorite, true);
+                viewModel.addToFavorites(place, new MapViewModel.AddFavoriteCallback() {
+                    @Override
+                    public void onSuccess() {
+                        locationHandler.post(() -> {
+                            if (!isAdded()) {
+                                return;
+                            }
+                            viewModel.setStatusText(place.name + " added to Favorites!");
+                            updateFavoriteButtonState(btnAddFavorite, true);
+                        });
+                    }
+
+                    @Override
+                    public void onError(@NonNull String message) {
+                        locationHandler.post(() -> {
+                            if (!isAdded()) {
+                                return;
+                            }
+                            AppSnackbar.show(requireContext(), message);
+                        });
+                    }
+                });
             }
         });
 

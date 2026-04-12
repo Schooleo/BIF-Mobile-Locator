@@ -23,6 +23,7 @@ import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.IRouteRepository;
 import com.bif.app.domain.repository.IReviewRepository;
+import com.bif.app.domain.repository.IPlaceRepository.PersistenceCallback;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -49,6 +50,12 @@ public class MapViewModel extends ViewModel {
     private final IRouteRepository routeRepository;
     private final IReviewRepository reviewRepository;
     private final Executor reviewExecutor;
+
+    public interface AddFavoriteCallback {
+        void onSuccess();
+
+        void onError(@NonNull String message);
+    }
 
     private final MutableLiveData<Event<String>> _statusText = new MutableLiveData<>();
     public final LiveData<Event<String>> statusText = _statusText;
@@ -272,25 +279,53 @@ public class MapViewModel extends ViewModel {
     }
 
     public void addToFavorites(Place place) {
+        addToFavorites(place, null);
+    }
+
+    public void addToFavorites(Place place, @Nullable AddFavoriteCallback callback) {
         if (place == null) {
             return;
         }
 
         reviewExecutor.execute(() -> {
-            Favorite favorite = new Favorite();
-            favorite.placeId = resolveCanonicalFavoritePlaceId(place);
-            favorite.name = place.name;
-            favorite.address = place.address;
-            favorite.rating = (int) place.rating;
-            favorite.description = "";
-            favorite.notes = "";
-            if (place.location != null) {
-                favorite.latitude = place.location.latitude;
-                favorite.longitude = place.location.longitude;
-            }
+            try {
+                Favorite favorite = new Favorite();
+                favorite.placeId = resolveCanonicalFavoritePlaceId(place);
+                favorite.name = place.name;
+                favorite.address = place.address;
+                favorite.rating = (int) place.rating;
+                favorite.description = "";
+                favorite.notes = "";
+                if (place.location != null) {
+                    favorite.latitude = place.location.latitude;
+                    favorite.longitude = place.location.longitude;
+                }
 
-            favoriteRepository.addFavorite(favorite);
-            placeRepository.persistPlace(place, "favorite");
+                favoriteRepository.addFavorite(favorite);
+                placeRepository.persistPlace(place, "favorite", new PersistenceCallback() {
+                    @Override
+                    public void onSuccess() {
+                        if (callback != null) {
+                            callback.onSuccess();
+                        }
+                    }
+
+                    @Override
+                    public void onError(Throwable error) {
+                        if (callback != null) {
+                            String message = error != null && error.getMessage() != null
+                                    ? error.getMessage()
+                                    : "Unable to add favorite";
+                            callback.onError(message);
+                        }
+                    }
+                });
+            } catch (RuntimeException ex) {
+                if (callback != null) {
+                    String message = ex.getMessage() != null ? ex.getMessage() : "Unable to add favorite";
+                    callback.onError(message);
+                }
+            }
         });
     }
 

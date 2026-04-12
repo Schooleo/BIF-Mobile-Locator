@@ -7,6 +7,9 @@ import com.bif.server.features.place.services.PlaceIdentityService;
 import com.bif.server.features.sync.models.SyncChange;
 import com.bif.server.features.sync.models.SyncChangeEntry;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
 import java.util.Locale;
@@ -14,6 +17,7 @@ import java.util.Optional;
 
 @Component
 public class FavoriteSyncEntityHandler implements SyncEntityHandler {
+    private static final Logger LOGGER = LoggerFactory.getLogger(FavoriteSyncEntityHandler.class);
 
     private final FavoriteRepository favoriteRepository;
     private final PlaceIdentityService placeIdentityService;
@@ -182,7 +186,13 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
                     payload.latitude,
                     payload.longitude,
                     payload.name.trim());
-        } catch (RuntimeException ex) {
+        } catch (DataIntegrityViolationException ex) {
+            LOGGER.error("Failed to resolve favorite placeId for payload id={}, name={}, lat={}, lng={}",
+                    payload.id,
+                    payload.name,
+                    payload.latitude,
+                    payload.longitude,
+                    ex);
             return null;
         }
     }

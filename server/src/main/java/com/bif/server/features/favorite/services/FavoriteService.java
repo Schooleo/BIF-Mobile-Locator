@@ -5,6 +5,8 @@ import com.bif.server.features.favorite.models.Favorite;
 import com.bif.server.features.favorite.repositories.FavoriteRepository;
 import com.bif.server.features.place.services.PlaceIdentityService;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -12,6 +14,8 @@ import java.util.Optional;
 
 @Service
 public class FavoriteService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(FavoriteService.class);
+
     private final FavoriteRepository favoriteRepository;
     private final PlaceIdentityService placeIdentityService;
 
@@ -38,8 +42,16 @@ public class FavoriteService {
             throw new IllegalArgumentException("favorite must not be null");
         }
 
-        Favorite saved = favoriteRepository.save(favorite);
-        return backfillPlaceIdIfMissing(saved);
+        try {
+            String resolvedPlaceId = resolvePlaceIdIfMissing(favorite);
+            if (!isBlank(resolvedPlaceId)) {
+                favorite.setPlaceId(resolvedPlaceId.trim());
+            }
+        } catch (FavoritePlaceResolutionException ex) {
+            // Fall back to saving the original favorite as-is.
+        }
+
+        return favoriteRepository.save(favorite);
     }
 
     public boolean deleteById(String id) {
@@ -77,8 +89,7 @@ public class FavoriteService {
         String favoriteId = input.getId();
         if (favoriteId == null || favoriteId.isBlank()) {
             input.setUserId(currentUserId);
-            Favorite created = favoriteRepository.save(input);
-            return backfillPlaceIdIfMissing(created);
+            return save(input);
         }
 
         Favorite existing = favoriteRepository.findById(favoriteId)
@@ -93,8 +104,7 @@ public class FavoriteService {
             input.setPlaceId(existing.getPlaceId());
         }
 
-        Favorite updated = favoriteRepository.save(input);
-        return backfillPlaceIdIfMissing(updated);
+        return save(input);
     }
 
     public DeleteMyFavoriteResult deleteMyFavorite(String currentUserId, String favoriteId) {
@@ -125,14 +135,14 @@ public class FavoriteService {
         }
     }
 
-    private Favorite backfillPlaceIdIfMissing(Favorite favorite) {
+    private String resolvePlaceIdIfMissing(Favorite favorite) {
         if (favorite == null || !isBlank(favorite.getPlaceId())) {
-            return favorite;
+            return null;
         }
 
         Location location = favorite.getLocation();
         if (location == null || !Double.isFinite(location.getLatitude()) || !Double.isFinite(location.getLongitude())) {
-            return favorite;
+            return null;
         }
 
         String placeName = normalizeText(favorite.getName());
@@ -140,31 +150,31 @@ public class FavoriteService {
             placeName = normalizeText(favorite.getAddress());
         }
         if (isBlank(placeName)) {
-            return favorite;
+            return null;
         }
 
         String externalId = favorite.getId();
         if (isBlank(externalId)) {
-            return favorite;
+            return null;
         }
 
-        String resolvedPlaceId;
         try {
-            resolvedPlaceId = placeIdentityService.resolveInternalPlaceId(
+            return placeIdentityService.resolveInternalPlaceId(
                     "FAVORITE",
                     externalId.trim(),
                     location.getLatitude(),
                     location.getLongitude(),
                     placeName);
         } catch (RuntimeException ex) {
-            return favorite;
+            LOGGER.error("Failed to resolve placeId for favorite id={}, userId={}, name={}, lat={}, lng={}",
+                    favorite.getId(),
+                    favorite.getUserId(),
+                    placeName,
+                    location.getLatitude(),
+                    location.getLongitude(),
+                    ex);
+            throw new FavoritePlaceResolutionException("Failed to resolve favorite placeId", ex);
         }
-        if (isBlank(resolvedPlaceId)) {
-            return favorite;
-        }
-
-        favorite.setPlaceId(resolvedPlaceId.trim());
-        return favoriteRepository.save(favorite);
     }
 
     private String normalizeText(String value) {
@@ -180,5 +190,11 @@ public class FavoriteService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private static final class FavoritePlaceResolutionException extends RuntimeException {
+        private FavoritePlaceResolutionException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 }

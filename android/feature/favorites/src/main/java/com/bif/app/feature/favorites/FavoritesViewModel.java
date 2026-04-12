@@ -1,5 +1,7 @@
 package com.bif.app.feature.favorites;
 
+import android.util.Log;
+
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MediatorLiveData;
 import androidx.lifecycle.MutableLiveData;
@@ -18,6 +20,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel;
 public class FavoritesViewModel extends ViewModel {
 
     private static final long AUTO_REFRESH_STALE_MS = 30_000L;
+    private static final String TAG = "FavoritesViewModel";
 
     private final IFavoriteRepository favoriteRepository;
     private final MutableLiveData<String> searchQuery = new MutableLiveData<>("");
@@ -66,22 +69,30 @@ public class FavoritesViewModel extends ViewModel {
 
         refreshInProgress = true;
         _isSyncing.setValue(true);
-        favoriteRepository.refreshFavorites(new IFavoriteRepository.SyncCallback() {
-            @Override
-            public void onSuccess() {
-                refreshInProgress = false;
-                lastSuccessfulRefreshAtMs = System.currentTimeMillis();
-                _isSyncing.postValue(false);
-                _syncMessage.postValue("");
-            }
+        try {
+            favoriteRepository.refreshFavorites(new IFavoriteRepository.SyncCallback() {
+                @Override
+                public void onSuccess() {
+                    refreshInProgress = false;
+                    lastSuccessfulRefreshAtMs = System.currentTimeMillis();
+                    _isSyncing.postValue(false);
+                    _syncMessage.postValue("");
+                }
 
-            @Override
-            public void onError(String message) {
-                refreshInProgress = false;
-                _isSyncing.postValue(false);
-                _syncMessage.postValue(message);
-            }
-        });
+                @Override
+                public void onError(String message) {
+                    refreshInProgress = false;
+                    _isSyncing.postValue(false);
+                    _syncMessage.postValue(message);
+                }
+            });
+        } catch (RuntimeException ex) {
+            refreshInProgress = false;
+            String message = ex.getMessage() != null ? ex.getMessage() : "Failed to refresh favorites";
+            Log.e(TAG, "Synchronous favorite refresh failure", ex);
+            _isSyncing.postValue(false);
+            _syncMessage.postValue(message);
+        }
     }
 
     public void refreshFavoritesIfStale() {

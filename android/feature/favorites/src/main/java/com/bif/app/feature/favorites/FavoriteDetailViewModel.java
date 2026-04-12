@@ -36,6 +36,7 @@ public class FavoriteDetailViewModel extends ViewModel {
     private final MediatorLiveData<Float> dynamicRating = new MediatorLiveData<>();
     private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private volatile boolean cleared;
     private LiveData<com.bif.app.domain.model.Place> placeRatingSource;
     private LiveData<List<Review>> reviewRatingSource;
 
@@ -123,12 +124,27 @@ public class FavoriteDetailViewModel extends ViewModel {
             }
 
             String normalizedPlaceId = resolvedPlaceId.trim();
+            if (cleared) {
+                return;
+            }
             mainHandler.post(() -> {
+                if (cleared) {
+                    return;
+                }
                 if (!safeEquals(normalizedPlaceId, favorite.placeId)) {
                     Favorite updatedFavorite = copyFavorite(favorite);
                     updatedFavorite.placeId = normalizedPlaceId;
+                    if (cleared) {
+                        return;
+                    }
                     currentFavorite.setValue(updatedFavorite);
+                    if (cleared) {
+                        return;
+                    }
                     favoriteRepository.updateFavorite(updatedFavorite);
+                }
+                if (cleared) {
+                    return;
                 }
                 observeResolvedPlaceRating(normalizedPlaceId);
             });
@@ -258,6 +274,8 @@ public class FavoriteDetailViewModel extends ViewModel {
         }
         clearReviewRatingSource();
         ioExecutor.shutdownNow();
+        cleared = true;
+        mainHandler.removeCallbacksAndMessages(null);
         super.onCleared();
     }
 }

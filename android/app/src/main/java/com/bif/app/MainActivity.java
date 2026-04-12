@@ -74,7 +74,11 @@ public class MainActivity extends AppCompatActivity {
         int targetId = item.getItemId();
 
         if (targetId == R.id.nav_favorites && isCurrentDestination(navController, R.id.nav_favorite_detail)) {
-            return navController.popBackStack(R.id.nav_favorites, false);
+            boolean popped = navController.popBackStack(R.id.nav_favorites, false);
+            if (!popped) {
+                navController.navigate(R.id.nav_favorites);
+            }
+            return true;
         }
 
         if (targetId != R.id.nav_favorites && isCurrentDestination(navController, R.id.nav_favorite_detail)) {

@@ -84,7 +84,7 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
                 return;
             }
 
-            if ((payload.placeId == null || payload.placeId.trim().isEmpty())
+                if (payload.placeId == null
                     && local != null
                     && local.placeId != null
                     && !local.placeId.trim().isEmpty()) {

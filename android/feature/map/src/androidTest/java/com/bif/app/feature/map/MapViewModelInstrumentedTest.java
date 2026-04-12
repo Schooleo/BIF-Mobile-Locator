@@ -10,6 +10,7 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.LiveData;
 import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
+import com.bif.app.domain.repository.IPlaceRepository.PersistenceCallback;
 import com.bif.app.domain.repository.IFavoriteRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.IRouteRepository;
@@ -99,6 +100,13 @@ public class MapViewModelInstrumentedTest {
 
         @Override
         public void persistPlace(Place place, String action) {
+        }
+
+        @Override
+        public void persistPlace(Place place, String action, PersistenceCallback callback) {
+            if (callback != null) {
+                callback.onSuccess();
+            }
         }
 
         @Override

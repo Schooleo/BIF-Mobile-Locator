@@ -63,6 +63,7 @@ class FavoriteSyncEntityHandlerTest {
         assertEquals("user-1", saved.getLastModifiedBy());
         assertTrue(resultPayload.contains("\"deleted\":true"));
         assertTrue(resultPayload.contains("\"serverVersion\":10"));
+        verifyNoInteractions(placeIdentityService);
     }
 
     @Test
@@ -76,7 +77,9 @@ class FavoriteSyncEntityHandlerTest {
         Favorite existing = new Favorite();
         existing.setId("fav-2");
         existing.setUserId("user-1");
-        
+
+        when(placeIdentityService.resolveInternalPlaceId("FAVORITE", "fav-2", 10.0, 20.0, "New Name"))
+            .thenReturn("place-2");
         when(favoriteRepository.findByIdAndUserId("fav-2", "user-1")).thenReturn(Optional.of(existing));
 
         String resultPayload = handler.applyPushedChange(pushed, "user-1", 15L);
@@ -91,8 +94,10 @@ class FavoriteSyncEntityHandlerTest {
         assertEquals(5, saved.getRating());
         assertEquals(15L, saved.getServerVersion());
         assertEquals("user-1", saved.getLastModifiedBy());
+        assertEquals("place-2", saved.getPlaceId());
         assertTrue(resultPayload.contains("\"serverVersion\":15"));
         assertTrue(resultPayload.contains("\"name\":\"New Name\""));
+        verify(placeIdentityService).resolveInternalPlaceId("FAVORITE", "fav-2", 10.0, 20.0, "New Name");
     }
 
     @Test
@@ -115,6 +120,7 @@ class FavoriteSyncEntityHandlerTest {
         assertEquals("Created", saved.getName());
         assertEquals("user-1", saved.getUserId());
         assertEquals(20L, saved.getServerVersion());
+        verifyNoInteractions(placeIdentityService);
     }
 
     @Test
