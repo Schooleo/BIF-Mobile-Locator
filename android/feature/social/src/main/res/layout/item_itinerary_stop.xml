@@ -71,6 +71,33 @@
         android:textSize="13sp" />
 
     <LinearLayout
+        android:id="@+id/layout_stop_added_by"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/tv_stop_added_by_avatar"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:background="@drawable/bg_avatar"
+            android:gravity="center"
+            android:textColor="@color/white"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tv_stop_added_by"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:textColor="?attr/colorTextSecondary"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
         android:id="@+id/layout_stop_details"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

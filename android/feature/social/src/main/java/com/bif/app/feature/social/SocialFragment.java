@@ -147,7 +147,8 @@ public class SocialFragment extends Fragment {
 
             @Override
             public void onFriendClick(Friend friend) {
-                navigateToChatFromFriend(friend);
+                // TO-DO: Implement a friend profile screen
+                //navigateToFriendSettingsTrips(friend);
             }
 
             @Override
@@ -646,14 +647,12 @@ public class SocialFragment extends Fragment {
         return new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(new Date(millis));
     }
 
-    private void navigateToChatFromFriend(Friend friend) {
-        Uri destUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL_CHAT).buildUpon()
-                .appendQueryParameter("chatType", "friend")
-                .appendQueryParameter("chatId", String.valueOf(friend.getId()))
-                .appendQueryParameter("chatName", friend.getName())
+    private void navigateToFriendSettingsTrips(Friend friend) {
+        Uri destUri = UriUtils.buildUri(UriUtils.PathTo.FRIEND_SETTINGS_TRIPS).buildUpon()
+                .appendQueryParameter("friendId", String.valueOf(friend.getId()))
+                .appendQueryParameter("friendName", friend.getName())
                 .appendQueryParameter("avatarLetter", friend.getAvatarLetter())
                 .appendQueryParameter("avatarColor", String.valueOf(friend.getAvatarColor()))
-                .appendQueryParameter("memberCount", "0")
                 .appendQueryParameter("friendshipCreatedAt", String.valueOf(friend.getFriendshipCreatedAt()))
                 .build();
         Navigation.findNavController(requireView()).navigate(destUri);

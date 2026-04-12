@@ -9,6 +9,10 @@ public class TripStopDto {
     public String address;
     public String note;
     public String photoUrl;
+    public String addedByUserId;
+    public String addedByName;
+    public String addedByAvatarLetter;
+    public Integer addedByAvatarColor;
     public ChatMessageDto.LocationDto location;
     public Double latitude;
     public Double longitude;

@@ -50,7 +50,7 @@ import com.bif.app.data.source.local.entity.TripStopEntity;
         TripPlanEntity.class,
         TripMemberCrossRef.class,
         TripStopEntity.class
-}, version = 17, exportSchema = false)
+}, version = 18, exportSchema = false)
 @TypeConverters({ FriendshipStatusConverter.class, UploadStatusConverter.class })
 public abstract class AppDatabase extends RoomDatabase {
     public static final Migration MIGRATION_15_16 = new Migration(15, 16) {
@@ -147,6 +147,53 @@ public abstract class AppDatabase extends RoomDatabase {
                 return cursor.moveToFirst();
             } finally {
                 cursor.close();
+            }
+        }
+
+        private boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
+            Cursor cursor = database.query("PRAGMA table_info(`" + tableName + "`)");
+            try {
+                int nameIndex = cursor.getColumnIndex("name");
+                if (nameIndex < 0) {
+                    nameIndex = 1;
+                }
+                while (cursor.moveToNext()) {
+                    String existing = cursor.getString(nameIndex);
+                    if (columnName.equals(existing)) {
+                        return true;
+                    }
+                }
+                return false;
+            } finally {
+                cursor.close();
+            }
+        }
+    };
+
+    public static final Migration MIGRATION_17_18 = new Migration(17, 18) {
+        @Override
+        public void migrate(SupportSQLiteDatabase database) {
+            if (!hasColumn(database, "trip_stops", "addedByUserId")) {
+                database.execSQL("ALTER TABLE trip_stops ADD COLUMN addedByUserId TEXT");
+            }
+            if (!hasColumn(database, "trip_stops", "addedByName")) {
+                database.execSQL("ALTER TABLE trip_stops ADD COLUMN addedByName TEXT");
+            }
+            if (!hasColumn(database, "trip_stops", "addedByAvatarLetter")) {
+                database.execSQL("ALTER TABLE trip_stops ADD COLUMN addedByAvatarLetter TEXT");
+            }
+            if (!hasColumn(database, "trip_stops", "addedByAvatarColor")) {
+                database.execSQL("ALTER TABLE trip_stops ADD COLUMN addedByAvatarColor INTEGER NOT NULL DEFAULT 0");
+            }
+
+            if (!hasColumn(database, "trip_plans", "coverImageUrl")) {
+                database.execSQL("ALTER TABLE trip_plans ADD COLUMN coverImageUrl TEXT");
+            }
+            if (!hasColumn(database, "trip_plans", "localCoverImagePath")) {
+                database.execSQL("ALTER TABLE trip_plans ADD COLUMN localCoverImagePath TEXT");
+            }
+            if (!hasColumn(database, "trip_plans", "coverUploadStatus")) {
+                database.execSQL("ALTER TABLE trip_plans ADD COLUMN coverUploadStatus TEXT NOT NULL DEFAULT 'SYNCED'");
             }
         }
 

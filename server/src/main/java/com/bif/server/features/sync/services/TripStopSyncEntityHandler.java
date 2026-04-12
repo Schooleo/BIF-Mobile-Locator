@@ -88,6 +88,10 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         if (payload.photoUrlProvided) {
             target.setPhotoUrl(normalizeNullable(payload.photoUrl));
         }
+        target.setAddedByUserId(payload.addedByUserId);
+        target.setAddedByName(payload.addedByName);
+        target.setAddedByAvatarLetter(payload.addedByAvatarLetter);
+        target.setAddedByAvatarColor(payload.addedByAvatarColor);
         target.setOrderIndex(payload.orderIndex);
         target.setArrivalTime(payload.arrivalTime);
         target.setDepartureTime(payload.departureTime);
@@ -186,6 +190,12 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
             putText(node, "address", payload.address);
             putText(node, "note", payload.note);
             putText(node, "photoUrl", payload.photoUrl);
+            putText(node, "addedByUserId", payload.addedByUserId);
+            putText(node, "addedByName", payload.addedByName);
+            putText(node, "addedByAvatarLetter", payload.addedByAvatarLetter);
+            if (payload.addedByAvatarColor != null) {
+                node.put("addedByAvatarColor", payload.addedByAvatarColor);
+            }
             if (payload.location != null && payload.location.latitude != null
                     && payload.location.longitude != null) {
                 ObjectNode locationNode = node.putObject("location");
@@ -216,6 +226,10 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         payload.address = stop.getAddress();
         payload.note = stop.getNote();
         payload.photoUrl = stop.getPhotoUrl();
+        payload.addedByUserId = stop.getAddedByUserId();
+        payload.addedByName = stop.getAddedByName();
+        payload.addedByAvatarLetter = stop.getAddedByAvatarLetter();
+        payload.addedByAvatarColor = stop.getAddedByAvatarColor();
         payload.arrivalTime = stop.getArrivalTime();
         payload.departureTime = stop.getDepartureTime();
         payload.orderIndex = stop.getOrderIndex();
@@ -251,6 +265,10 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         public String address;
         public String note;
         public String photoUrl;
+        public String addedByUserId;
+        public String addedByName;
+        public String addedByAvatarLetter;
+        public Integer addedByAvatarColor;
         public LocationPayload location;
         public Double latitude;
         public Double longitude;

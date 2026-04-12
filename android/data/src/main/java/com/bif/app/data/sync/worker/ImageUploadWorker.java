@@ -19,12 +19,14 @@ import androidx.work.WorkerParameters;
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.chat.ChatMessageDto;
 import com.bif.app.core.network.dto.media.UploadSignatureResponseDto;
+import com.bif.app.core.network.dto.trip.TripPlanDto;
 import com.bif.app.core.network.dto.trip.TripStopDto;
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.ProfileMapper;
 import com.bif.app.data.source.local.dao.ProfileDao;
 import com.bif.app.data.source.local.dao.TripDao;
 import com.bif.app.data.source.local.entity.ProfileEntity;
+import com.bif.app.data.source.local.entity.TripPlanEntity;
 import com.bif.app.data.source.local.entity.TripStopEntity;
 import com.bif.app.data.source.local.entity.UploadStatus;
 import com.bif.app.data.sync.core.SyncManager;
@@ -89,6 +91,13 @@ public class ImageUploadWorker extends Worker {
                 Log.d(TAG, "Processing pending trip stop upload, attempt="
                         + getRunAttemptCount());
                 return uploadTripStop(pendingTripStop);
+            }
+
+            TripPlanEntity pendingTripCover = tripDao.getFirstPendingUploadTripCover();
+            if (pendingTripCover != null) {
+                Log.d(TAG, "Processing pending trip cover upload, attempt="
+                        + getRunAttemptCount());
+                return uploadTripCover(pendingTripCover);
             }
             return Result.success();
         } catch (Exception ex) {
@@ -253,6 +262,80 @@ public class ImageUploadWorker extends Worker {
         }
     }
 
+    private Result uploadTripCover(TripPlanEntity tripPlan) {
+        if (!isValidLocalPath(tripPlan.localCoverImagePath)) {
+            tripPlan.coverUploadStatus = UploadStatus.ERROR;
+            tripDao.upsertTrip(tripPlan);
+            return Result.success();
+        }
+
+        tripPlan.coverUploadStatus = UploadStatus.UPLOADING;
+        tripDao.upsertTrip(tripPlan);
+
+        try {
+            Response<UploadSignatureResponseDto> response = restApiService
+                    .getUploadSignature("trip_plan", tripPlan.id)
+                    .execute();
+            if (!response.isSuccessful() || response.body() == null) {
+                Log.w(TAG, "Failed to fetch trip cover upload signature. code="
+                        + response.code());
+                tripPlan.coverUploadStatus = UploadStatus.ERROR;
+                tripDao.upsertTrip(tripPlan);
+                if (shouldStopRetrying()) {
+                    return Result.failure();
+                }
+                return Result.retry();
+            }
+
+            if (!hasSignedPublicId(response.body())) {
+                Log.e(TAG, "Trip cover signature missing server-signed publicId");
+                tripPlan.coverUploadStatus = UploadStatus.ERROR;
+                tripDao.upsertTrip(tripPlan);
+                return Result.failure();
+            }
+
+            UploadResult uploadResult = uploadFile(tripPlan.localCoverImagePath, response.body());
+            if (!uploadResult.success) {
+                Log.w(TAG, "Trip cover image upload failed: " + uploadResult.errorMessage);
+                tripPlan.coverUploadStatus = UploadStatus.ERROR;
+                tripDao.upsertTrip(tripPlan);
+                if (shouldStopRetrying()) {
+                    return Result.failure();
+                }
+                return Result.retry();
+            }
+
+            String originalPath = tripPlan.localCoverImagePath;
+            tripPlan.coverImageUrl = uploadResult.remoteUrl;
+            tripPlan.coverUploadStatus = UploadStatus.SYNCED;
+            if (deleteLocalFile(originalPath)) {
+                tripPlan.localCoverImagePath = null;
+            } else {
+                Log.w(TAG, "Trip cover local file could not be deleted: " + originalPath);
+            }
+            tripDao.upsertTrip(tripPlan);
+
+            syncManager.enqueueChange(
+                    "trip_plan",
+                    tripPlan.id,
+                    "UPDATE",
+                    UUID.randomUUID().toString(),
+                    toTripPlanDto(tripPlan));
+            syncManager.syncIfOnline();
+
+            enqueue(getApplicationContext());
+            return Result.success();
+        } catch (IOException ioEx) {
+            Log.e(TAG, "Trip cover upload I/O error", ioEx);
+            tripPlan.coverUploadStatus = UploadStatus.ERROR;
+            tripDao.upsertTrip(tripPlan);
+            if (shouldStopRetrying()) {
+                return Result.failure();
+            }
+            return Result.retry();
+        }
+    }
+
     private UploadResult uploadFile(String localPath,
             UploadSignatureResponseDto signature) {
         UploadResult result = new UploadResult();
@@ -382,6 +465,20 @@ public class ImageUploadWorker extends Worker {
         location.latitude = entity.latitude;
         location.longitude = entity.longitude;
         dto.location = location;
+        return dto;
+    }
+
+    private TripPlanDto toTripPlanDto(TripPlanEntity entity) {
+        TripPlanDto dto = new TripPlanDto();
+        dto.id = entity.id;
+        dto.groupId = entity.groupId;
+        dto.title = entity.title;
+        dto.description = entity.description;
+        dto.coverImageUrl = entity.coverImageUrl;
+        dto.startAt = formatInstant(entity.startAt);
+        dto.endAt = formatInstant(entity.endAt);
+        dto.serverVersion = entity.serverVersion;
+        dto.deleted = entity.deleted;
         return dto;
     }
 

@@ -1,6 +1,7 @@
 package com.bif.app.feature.social;
 
 import android.annotation.SuppressLint;
+import android.content.res.ColorStateList;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -8,6 +9,7 @@ import android.widget.ImageButton;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bif.app.domain.model.TripPlan;
@@ -105,6 +107,8 @@ public class TripListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         void bind() {
             tvActionText.setText(R.string.plan_new_trip);
             ivActionIcon.setImageResource(com.bif.app.core.R.drawable.ic_trip);
+            ivActionIcon.setImageTintList(ColorStateList.valueOf(
+                    ContextCompat.getColor(itemView.getContext(), com.bif.app.core.R.color.primary_green)));
         }
     }
 
