@@ -8,6 +8,8 @@ import java.util.Optional;
 
 public interface FavoriteRepository extends MongoRepository<Favorite, String> {
     List<Favorite> findByUserId(String userId);
+    List<Favorite> findByUserIdAndDeletedFalse(String userId);
     Optional<Favorite> findByIdAndUserId(String id, String userId);
+    Optional<Favorite> findByIdAndUserIdAndDeletedFalse(String id, String userId);
     boolean existsByIdAndUserId(String id, String userId);
 }

@@ -17,6 +17,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel;
 @HiltViewModel
 public class FavoritesViewModel extends ViewModel {
 
+    private static final long AUTO_REFRESH_STALE_MS = 30_000L;
+
     private final IFavoriteRepository favoriteRepository;
     private final MutableLiveData<String> searchQuery = new MutableLiveData<>("");
     private final MediatorLiveData<List<Favorite>> _favorites = new MediatorLiveData<>();
@@ -25,6 +27,8 @@ public class FavoritesViewModel extends ViewModel {
     public final LiveData<Boolean> isSyncing = _isSyncing;
     private final MutableLiveData<String> _syncMessage = new MutableLiveData<>();
     public final LiveData<String> syncMessage = _syncMessage;
+    private volatile boolean refreshInProgress;
+    private volatile long lastSuccessfulRefreshAtMs;
 
     @Inject
     public FavoritesViewModel(IFavoriteRepository favoriteRepository) {
@@ -56,20 +60,42 @@ public class FavoritesViewModel extends ViewModel {
     }
 
     public void refreshFavorites() {
+        if (refreshInProgress) {
+            return;
+        }
+
+        refreshInProgress = true;
         _isSyncing.setValue(true);
         favoriteRepository.refreshFavorites(new IFavoriteRepository.SyncCallback() {
             @Override
             public void onSuccess() {
+                refreshInProgress = false;
+                lastSuccessfulRefreshAtMs = System.currentTimeMillis();
                 _isSyncing.postValue(false);
                 _syncMessage.postValue("");
             }
 
             @Override
             public void onError(String message) {
+                refreshInProgress = false;
                 _isSyncing.postValue(false);
                 _syncMessage.postValue(message);
             }
         });
+    }
+
+    public void refreshFavoritesIfStale() {
+        if (refreshInProgress || Boolean.TRUE.equals(_isSyncing.getValue())) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (lastSuccessfulRefreshAtMs > 0L
+                && (now - lastSuccessfulRefreshAtMs) < AUTO_REFRESH_STALE_MS) {
+            return;
+        }
+
+        refreshFavorites();
     }
 
 }

@@ -85,6 +85,11 @@ public class MapViewModelInstrumentedTest {
         }
 
         @Override
+        public LiveData<Place> getPlaceById(String placeId) {
+            return new MutableLiveData<>(null);
+        }
+
+        @Override
         public LiveData<AiPlaceSuggestionResult> suggestPlacesFromQuery(String query) {
             return new MutableLiveData<>(new AiPlaceSuggestionResult(
                     Collections.emptyList(),

@@ -225,6 +225,7 @@ public class MapViewModelTest {
         ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
         Mockito.verify(favoriteRepository).addFavorite(captor.capture());
         Favorite saved = captor.getValue();
+        assertEquals("id1", saved.placeId);
         assertEquals("Cafe ABC", saved.name);
         assertEquals("123 Nguyen Hue", saved.address);
         assertEquals(10.762, saved.latitude, 0.001);

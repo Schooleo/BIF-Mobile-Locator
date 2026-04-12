@@ -18,6 +18,7 @@ public class FavoriteMapper {
         if (entity == null) return null;
         Favorite domain = new Favorite();
         domain.id = entity.id;
+        domain.placeId = entity.placeId;
         domain.name = entity.name;
         domain.latitude = entity.latitude;
         domain.longitude = entity.longitude;
@@ -38,6 +39,7 @@ public class FavoriteMapper {
         entity.id = (domain.id == null || domain.id.trim().isEmpty())
             ? UUID.randomUUID().toString()
             : domain.id;
+        entity.placeId = domain.placeId;
         entity.name = domain.name;
         entity.latitude = domain.latitude;
         entity.longitude = domain.longitude;
@@ -64,6 +66,7 @@ public class FavoriteMapper {
                 : fallbackUserId;
         entity.userId = owner != null ? owner : "anonymous";
         entity.id = dto.id;
+        entity.placeId = dto.placeId;
         entity.name = dto.name;
         entity.latitude = dto.latitude;
         entity.longitude = dto.longitude;
@@ -85,6 +88,7 @@ public class FavoriteMapper {
     public static FavoriteDto toDto(Favorite domain, String userId) {
         FavoriteDto dto = new FavoriteDto();
         dto.id = domain.id;
+        dto.placeId = domain.placeId;
         dto.name = domain.name;
         dto.latitude = domain.latitude;
         dto.longitude = domain.longitude;
@@ -122,6 +126,7 @@ public class FavoriteMapper {
         if (domain == null) return null;
         FavoriteRequestDto dto = new FavoriteRequestDto();
         dto.id = domain.id;
+        dto.placeId = domain.placeId;
         dto.name = domain.name;
         dto.location = new FavoriteLocationDto(domain.latitude, domain.longitude);
         dto.address = domain.address;
@@ -135,6 +140,7 @@ public class FavoriteMapper {
         if (dto == null) return null;
         Favorite favorite = new Favorite();
         favorite.id = dto.id;
+        favorite.placeId = dto.placeId;
         favorite.name = dto.name;
         favorite.latitude = dto.location != null ? dto.location.latitude : 0;
         favorite.longitude = dto.location != null ? dto.location.longitude : 0;

@@ -2,6 +2,7 @@ package com.bif.server.features.sync.services;
 
 import com.bif.server.features.favorite.models.Favorite;
 import com.bif.server.features.favorite.repositories.FavoriteRepository;
+import com.bif.server.features.place.services.PlaceIdentityService;
 import com.bif.server.features.sync.models.SyncChange;
 import com.bif.server.features.sync.models.SyncChangeEntry;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,11 +23,14 @@ class FavoriteSyncEntityHandlerTest {
     @Mock
     private FavoriteRepository favoriteRepository;
 
+    @Mock
+    private PlaceIdentityService placeIdentityService;
+
     private FavoriteSyncEntityHandler handler;
 
     @BeforeEach
     void setUp() {
-        handler = new FavoriteSyncEntityHandler(favoriteRepository);
+        handler = new FavoriteSyncEntityHandler(favoriteRepository, placeIdentityService);
     }
 
     @Test

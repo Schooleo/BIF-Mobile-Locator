@@ -141,7 +141,7 @@ class FavoriteRestControllerTest {
 
     @Test
     void upsertMyFavorite_WhenHeaderMissing_ReturnsUnauthorized() {
-        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest(null, "Coffee", null, null, null, null, 5, null);
+        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest(null, null, "Coffee", null, null, null, null, 5, null);
 
         ResponseEntity<FavoriteResponse> result = controller.upsertMyFavorite(null, request);
 
@@ -152,7 +152,7 @@ class FavoriteRestControllerTest {
     @Test
     void upsertMyFavorite_WhenNotOwner_ReturnsForbidden() {
         Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
-        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", "Coffee", null, null, null, null, 5, null);
+        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", null, "Coffee", null, null, null, null, 5, null);
 
         when(favoriteService.saveMyFavorite(eq("u1"), any(Favorite.class))).thenThrow(new SecurityException("forbidden"));
 
@@ -164,7 +164,7 @@ class FavoriteRestControllerTest {
     @Test
     void upsertMyFavorite_WhenTargetMissing_ReturnsNotFound() {
         Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
-        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", "Coffee", null, null, null, null, 5, null);
+        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", null, "Coffee", null, null, null, null, 5, null);
 
         when(favoriteService.saveMyFavorite(eq("u1"), any(Favorite.class)))
                 .thenThrow(new NoSuchElementException("missing"));

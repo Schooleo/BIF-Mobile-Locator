@@ -98,7 +98,7 @@ public class FavoritesFragment extends Fragment
     @Override
     public void onResume() {
         super.onResume();
-        viewModel.refreshFavorites();
+        viewModel.refreshFavoritesIfStale();
     }
 
     @Override
@@ -110,6 +110,7 @@ public class FavoritesFragment extends Fragment
         Uri detailUri = UriUtils.buildUri(UriUtils.PathTo.FAVORITES_DETAIL)
                 .buildUpon()
                 .appendQueryParameter("favId", safeString(favorite.id))
+            .appendQueryParameter("favPlaceId", safeString(favorite.placeId))
                 .appendQueryParameter("favName", safeString(favorite.name))
                 .appendQueryParameter("favAddress", safeString(favorite.address))
                 .appendQueryParameter("favDescription", safeString(favorite.description))

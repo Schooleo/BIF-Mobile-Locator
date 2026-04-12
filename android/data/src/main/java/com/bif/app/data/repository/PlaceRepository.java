@@ -176,6 +176,59 @@ public class PlaceRepository implements IPlaceRepository {
     }
 
     @Override
+    public LiveData<Place> getPlaceById(String placeId) {
+        MutableLiveData<Place> result = new MutableLiveData<>();
+        if (!hasText(placeId)) {
+            result.setValue(null);
+            return result;
+        }
+
+        Log.d(TAG, "getPlaceById requested placeId=" + placeId);
+
+        executorService.execute(() -> {
+            try {
+                Response<PlaceDto> response = restApiService.getPlaceById(placeId).execute();
+                PlaceDto dto = response.body();
+                Log.d(TAG, "getPlaceById response placeId=" + placeId
+                        + ", code=" + response.code()
+                        + ", successful=" + response.isSuccessful()
+                        + ", bodyNull=" + (dto == null)
+                        + ", bodyId=" + (dto != null ? dto.id : "null")
+                        + ", bodyName=" + (dto != null ? dto.name : "null")
+                        + ", bodyRating=" + (dto != null ? dto.rating : Double.NaN)
+                        + ", bodyReviewCount=" + (dto != null ? dto.reviewCount : -1)
+                        + ", bodyLat=" + (dto != null ? dto.latitude : Double.NaN)
+                        + ", bodyLng=" + (dto != null ? dto.longitude : Double.NaN));
+
+                if (!response.isSuccessful() || dto == null) {
+                    result.postValue(null);
+                    return;
+                }
+
+                Place mappedPlace = PlaceMapper.fromDto(dto, true);
+                Log.d(TAG, "getPlaceById mapped placeId=" + placeId
+                        + ", mappedId=" + mappedPlace.id
+                        + ", mappedName=" + mappedPlace.name
+                        + ", mappedRating=" + mappedPlace.rating
+                        + ", mappedLat=" + dto.latitude
+                        + ", mappedLng=" + dto.longitude);
+
+                if (isValidCoordinate(dto.latitude, dto.longitude)) {
+                    placeDao.upsert(PlaceMapper.fromDto(dto, activeUserId));
+                } else {
+                    Log.w(TAG, "getPlaceById skipping cache upsert because coordinates are invalid placeId="
+                            + placeId + ", lat=" + dto.latitude + ", lng=" + dto.longitude);
+                }
+                result.postValue(mappedPlace);
+            } catch (IOException e) {
+                Log.e(TAG, "Failed to fetch place by id: " + placeId, e);
+                result.postValue(null);
+            }
+        });
+        return result;
+    }
+
+    @Override
     public LiveData<AiPlaceSuggestionResult> suggestPlacesFromQuery(String query) {
         MutableLiveData<AiPlaceSuggestionResult> result = new MutableLiveData<>();
 

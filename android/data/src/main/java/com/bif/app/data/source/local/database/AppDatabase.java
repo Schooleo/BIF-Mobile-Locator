@@ -50,7 +50,7 @@ import com.bif.app.data.source.local.entity.TripStopEntity;
         TripPlanEntity.class,
         TripMemberCrossRef.class,
         TripStopEntity.class
-}, version = 21, exportSchema = false)
+}, version = 22, exportSchema = false)
 @TypeConverters({ FriendshipStatusConverter.class, UploadStatusConverter.class })
 public abstract class AppDatabase extends RoomDatabase {
     public static final Migration MIGRATION_19_20 = new Migration(19, 20) {
@@ -364,6 +364,34 @@ public abstract class AppDatabase extends RoomDatabase {
                     + "WHERE type='index' AND name=?", new Object[]{indexName});
             try {
                 return cursor.moveToFirst();
+            } finally {
+                cursor.close();
+            }
+        }
+    };
+
+    public static final Migration MIGRATION_21_22 = new Migration(21, 22) {
+        @Override
+        public void migrate(SupportSQLiteDatabase database) {
+            if (!hasColumn(database, "favorites", "placeId")) {
+                database.execSQL("ALTER TABLE favorites ADD COLUMN placeId TEXT");
+            }
+        }
+
+        private boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
+            Cursor cursor = database.query("PRAGMA table_info(`" + tableName + "`)");
+            try {
+                int nameIndex = cursor.getColumnIndex("name");
+                if (nameIndex < 0) {
+                    nameIndex = 1;
+                }
+                while (cursor.moveToNext()) {
+                    String existing = cursor.getString(nameIndex);
+                    if (columnName.equals(existing)) {
+                        return true;
+                    }
+                }
+                return false;
             } finally {
                 cursor.close();
             }

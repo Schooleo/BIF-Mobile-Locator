@@ -84,6 +84,13 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
                 return;
             }
 
+            if ((payload.placeId == null || payload.placeId.trim().isEmpty())
+                    && local != null
+                    && local.placeId != null
+                    && !local.placeId.trim().isEmpty()) {
+                payload.placeId = local.placeId;
+            }
+
             FavoriteEntity mapped = FavoriteMapper.fromDto(payload, resolvedUserId);
             mapped.pendingSync = false;
             favoriteDao.upsert(mapped);

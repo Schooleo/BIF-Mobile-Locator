@@ -2,6 +2,7 @@ package com.bif.app.core.network.dto.favorite;
 
 public class FavoriteResponseDto {
     public String id;
+    public String placeId;
     public String name;
     public FavoriteLocationDto location;
     public String address;

@@ -1,15 +1,18 @@
 package com.bif.app;
 
 import android.os.Bundle;
+import android.view.MenuItem;
 import android.view.View;
 
 import androidx.activity.EdgeToEdge;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
-import androidx.navigation.fragment.NavHostFragment;
 import androidx.navigation.NavController;
+import androidx.navigation.NavDestination;
+import androidx.navigation.fragment.NavHostFragment;
 import androidx.navigation.ui.NavigationUI;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
@@ -36,6 +39,12 @@ public class MainActivity extends AppCompatActivity {
 
         final NavController navController = navHostFragment.getNavController();
         NavigationUI.setupWithNavController(bottomNav, navController);
+        bottomNav.setOnItemSelectedListener(item -> onBottomNavItemSelected(item, navController));
+        bottomNav.setOnItemReselectedListener(item -> {
+            if (item.getItemId() == R.id.nav_favorites) {
+                navController.popBackStack(R.id.nav_favorites, false);
+            }
+        });
 
         navController.addOnDestinationChangedListener((controller, destination, arguments) -> {
             int destId = destination.getId();
@@ -46,7 +55,6 @@ public class MainActivity extends AppCompatActivity {
                     || destId == R.id.nav_add_trip_stop
                     || destId == R.id.nav_friend_settings_locations
                     || destId == R.id.nav_friend_settings_trips
-                    || destId == R.id.nav_favorite_detail
                     || destId == R.id.nav_personal_info) {
                 bottomNav.setVisibility(View.GONE);
             } else {
@@ -59,6 +67,26 @@ public class MainActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
+    }
+
+    private boolean onBottomNavItemSelected(@NonNull MenuItem item,
+                                            @NonNull NavController navController) {
+        int targetId = item.getItemId();
+
+        if (targetId == R.id.nav_favorites && isCurrentDestination(navController, R.id.nav_favorite_detail)) {
+            return navController.popBackStack(R.id.nav_favorites, false);
+        }
+
+        if (targetId != R.id.nav_favorites && isCurrentDestination(navController, R.id.nav_favorite_detail)) {
+            navController.popBackStack(R.id.nav_favorites, false);
+        }
+
+        return NavigationUI.onNavDestinationSelected(item, navController);
+    }
+
+    private boolean isCurrentDestination(@NonNull NavController navController, int destinationId) {
+        NavDestination current = navController.getCurrentDestination();
+        return current != null && current.getId() == destinationId;
     }
 
 

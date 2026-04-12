@@ -2,6 +2,7 @@ package com.bif.server.features.favorite.services;
 
 import com.bif.server.features.favorite.models.Favorite;
 import com.bif.server.features.favorite.repositories.FavoriteRepository;
+import com.bif.server.features.place.services.PlaceIdentityService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,11 +21,14 @@ class FavoriteServiceTest {
     @Mock
     private FavoriteRepository favoriteRepository;
 
+    @Mock
+    private PlaceIdentityService placeIdentityService;
+
     private FavoriteService favoriteService;
 
     @BeforeEach
     void setUp() {
-        favoriteService = new FavoriteService(favoriteRepository);
+        favoriteService = new FavoriteService(favoriteRepository, placeIdentityService);
     }
 
     @Test
@@ -94,7 +98,33 @@ class FavoriteServiceTest {
     @Test
     void getMyFavorites_WhenUserIdBlank_ThrowsIllegalArgumentException() {
         assertThrows(IllegalArgumentException.class, () -> favoriteService.getMyFavorites(" "));
-        verify(favoriteRepository, never()).findByUserId(anyString());
+        verify(favoriteRepository, never())
+            .findByUserIdAndDeletedFalse(anyString());
+        }
+
+        @Test
+        void getMyFavorites_FiltersOutDeletedFavorites() {
+        Favorite item = new Favorite();
+        when(favoriteRepository.findByUserIdAndDeletedFalse("u1"))
+            .thenReturn(List.of(item));
+
+        List<Favorite> result = favoriteService.getMyFavorites("u1");
+
+        assertEquals(1, result.size());
+        verify(favoriteRepository).findByUserIdAndDeletedFalse("u1");
+        }
+
+        @Test
+        void getMyFavoriteById_UsesNonDeletedLookup() {
+        Favorite item = new Favorite();
+        when(favoriteRepository.findByIdAndUserIdAndDeletedFalse("f1", "u1"))
+            .thenReturn(Optional.of(item));
+
+        Optional<Favorite> result = favoriteService.getMyFavoriteById("u1",
+            "f1");
+
+        assertTrue(result.isPresent());
+        verify(favoriteRepository).findByIdAndUserIdAndDeletedFalse("f1", "u1");
     }
 
     @Test

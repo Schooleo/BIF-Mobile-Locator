@@ -2937,9 +2937,27 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     }
 
     private Favorite findFavoriteForPlace(Place place) {
+        if (place == null) {
+            return null;
+        }
+
+        String placeId = place != null && place.id != null ? place.id.trim() : "";
         for (Favorite favorite : currentFavorites) {
+            String favoritePlaceId = favorite != null && favorite.placeId != null
+                    ? favorite.placeId.trim()
+                    : "";
+            if (!TextUtils.isEmpty(placeId) && placeId.equals(favoritePlaceId)) {
+                Timber.d("Matched favorite by placeId: placeId=%s favoriteId=%s",
+                        placeId,
+                        favorite.id);
+                return favorite;
+            }
+
             if (place.address != null && !place.address.isEmpty()
                     && place.address.equals(favorite.address)) {
+                Timber.d("Matched favorite by address fallback: placeId=%s favoriteId=%s",
+                        placeId,
+                        favorite.id);
                 return favorite;
             }
 
@@ -2947,6 +2965,9 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 double latDelta = favorite.latitude - place.location.latitude;
                 double lngDelta = favorite.longitude - place.location.longitude;
                 if (Math.sqrt(latDelta * latDelta + lngDelta * lngDelta) < 0.0001) {
+                    Timber.d("Matched favorite by coordinate fallback: placeId=%s favoriteId=%s",
+                            placeId,
+                            favorite.id);
                     return favorite;
                 }
             }

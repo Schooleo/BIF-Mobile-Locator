@@ -1,7 +1,9 @@
 package com.bif.server.features.favorite.services;
 
+import com.bif.server.common.models.Location;
 import com.bif.server.features.favorite.models.Favorite;
 import com.bif.server.features.favorite.repositories.FavoriteRepository;
+import com.bif.server.features.place.services.PlaceIdentityService;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -11,9 +13,12 @@ import java.util.Optional;
 @Service
 public class FavoriteService {
     private final FavoriteRepository favoriteRepository;
+    private final PlaceIdentityService placeIdentityService;
 
-    public FavoriteService(FavoriteRepository favoriteRepository) {
+    public FavoriteService(FavoriteRepository favoriteRepository,
+                           PlaceIdentityService placeIdentityService) {
         this.favoriteRepository = favoriteRepository;
+        this.placeIdentityService = placeIdentityService;
     }
 
     public List<Favorite> getAll() {
@@ -29,7 +34,12 @@ public class FavoriteService {
     }
 
     public Favorite save(Favorite favorite) {
-        return favoriteRepository.save(favorite);
+        if (favorite == null) {
+            throw new IllegalArgumentException("favorite must not be null");
+        }
+
+        Favorite saved = favoriteRepository.save(favorite);
+        return backfillPlaceIdIfMissing(saved);
     }
 
     public boolean deleteById(String id) {
@@ -48,13 +58,14 @@ public class FavoriteService {
 
     public List<Favorite> getMyFavorites(String currentUserId) {
         validateCurrentUserId(currentUserId);
-        return favoriteRepository.findByUserId(currentUserId);
+        return favoriteRepository.findByUserIdAndDeletedFalse(currentUserId);
     }
 
     public Optional<Favorite> getMyFavoriteById(String currentUserId, String favoriteId) {
         validateCurrentUserId(currentUserId);
         validateFavoriteId(favoriteId);
-        return favoriteRepository.findByIdAndUserId(favoriteId, currentUserId);
+        return favoriteRepository.findByIdAndUserIdAndDeletedFalse(favoriteId,
+                currentUserId);
     }
 
     public Favorite saveMyFavorite(String currentUserId, Favorite input) {
@@ -66,7 +77,8 @@ public class FavoriteService {
         String favoriteId = input.getId();
         if (favoriteId == null || favoriteId.isBlank()) {
             input.setUserId(currentUserId);
-            return favoriteRepository.save(input);
+            Favorite created = favoriteRepository.save(input);
+            return backfillPlaceIdIfMissing(created);
         }
 
         Favorite existing = favoriteRepository.findById(favoriteId)
@@ -77,7 +89,12 @@ public class FavoriteService {
         }
 
         input.setUserId(existing.getUserId());
-        return favoriteRepository.save(input);
+        if (isBlank(input.getPlaceId()) && !isBlank(existing.getPlaceId())) {
+            input.setPlaceId(existing.getPlaceId());
+        }
+
+        Favorite updated = favoriteRepository.save(input);
+        return backfillPlaceIdIfMissing(updated);
     }
 
     public DeleteMyFavoriteResult deleteMyFavorite(String currentUserId, String favoriteId) {
@@ -106,5 +123,62 @@ public class FavoriteService {
         if (favoriteId == null || favoriteId.isBlank()) {
             throw new IllegalArgumentException("favoriteId must not be blank");
         }
+    }
+
+    private Favorite backfillPlaceIdIfMissing(Favorite favorite) {
+        if (favorite == null || !isBlank(favorite.getPlaceId())) {
+            return favorite;
+        }
+
+        Location location = favorite.getLocation();
+        if (location == null || !Double.isFinite(location.getLatitude()) || !Double.isFinite(location.getLongitude())) {
+            return favorite;
+        }
+
+        String placeName = normalizeText(favorite.getName());
+        if (isBlank(placeName)) {
+            placeName = normalizeText(favorite.getAddress());
+        }
+        if (isBlank(placeName)) {
+            return favorite;
+        }
+
+        String externalId = favorite.getId();
+        if (isBlank(externalId)) {
+            return favorite;
+        }
+
+        String resolvedPlaceId;
+        try {
+            resolvedPlaceId = placeIdentityService.resolveInternalPlaceId(
+                    "FAVORITE",
+                    externalId.trim(),
+                    location.getLatitude(),
+                    location.getLongitude(),
+                    placeName);
+        } catch (RuntimeException ex) {
+            return favorite;
+        }
+        if (isBlank(resolvedPlaceId)) {
+            return favorite;
+        }
+
+        favorite.setPlaceId(resolvedPlaceId.trim());
+        return favoriteRepository.save(favorite);
+    }
+
+    private String normalizeText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        return normalized;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }
