@@ -62,6 +62,7 @@ public class FavoriteDetailFragment extends Fragment {
         viewModel.initializeFavorite(favorite);
         setupActions(view);
         observeFavorite();
+        observeDynamicRating();
     }
 
     private void bindViews(@NonNull View view) {
@@ -107,6 +108,15 @@ public class FavoriteDetailFragment extends Fragment {
         });
     }
 
+    private void observeDynamicRating() {
+        viewModel.getDynamicRating().observe(getViewLifecycleOwner(), rating -> {
+            if (rating == null) {
+                return;
+            }
+            ratingBar.setRating(Math.max(0f, rating));
+        });
+    }
+
     @Nullable
     private Favorite parseFavoriteArgs() {
         Bundle args = getArguments();
@@ -116,6 +126,7 @@ public class FavoriteDetailFragment extends Fragment {
 
         Favorite favorite = new Favorite();
         favorite.id = args.getString("favId", "");
+        favorite.placeId = args.getString("favPlaceId", "");
         favorite.name = args.getString("favName", "");
         favorite.address = args.getString("favAddress", "");
         favorite.description = args.getString("favDescription", "");

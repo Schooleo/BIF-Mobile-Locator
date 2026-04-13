@@ -6,6 +6,7 @@ import java.time.Instant;
 
 public record FavoriteResponse(
         String id,
+        String placeId,
         String name,
         Location location,
         String address,

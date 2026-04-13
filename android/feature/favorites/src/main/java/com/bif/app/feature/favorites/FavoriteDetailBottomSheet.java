@@ -48,6 +48,7 @@ public class FavoriteDetailBottomSheet extends BottomSheetDialogFragment {
         FavoriteDetailBottomSheet sheet = new FavoriteDetailBottomSheet();
         Bundle args = new Bundle();
         args.putString("favId", favorite.id != null ? favorite.id : "");
+        args.putString("favPlaceId", favorite.placeId != null ? favorite.placeId : "");
         args.putString("favName", favorite.name != null ? favorite.name : "");
         args.putString("favAddress", favorite.address != null ? favorite.address : "");
         args.putString("favDescription", favorite.description != null ? favorite.description : "");
@@ -110,6 +111,7 @@ public class FavoriteDetailBottomSheet extends BottomSheetDialogFragment {
         viewModel.initializeFavorite(favorite);
         setupActions(view);
         observeFavorite();
+        observeDynamicRating();
     }
 
     private void adjustForBottomNavigation() {
@@ -202,6 +204,15 @@ public class FavoriteDetailBottomSheet extends BottomSheetDialogFragment {
         });
     }
 
+    private void observeDynamicRating() {
+        viewModel.getDynamicRating().observe(getViewLifecycleOwner(), rating -> {
+            if (rating == null) {
+                return;
+            }
+            ratingBar.setRating(Math.max(0f, rating));
+        });
+    }
+
     @Nullable
     private Favorite parseFavoriteArgs() {
         Bundle args = getArguments();
@@ -211,6 +222,7 @@ public class FavoriteDetailBottomSheet extends BottomSheetDialogFragment {
 
         Favorite favorite = new Favorite();
         favorite.id = args.getString("favId", "");
+        favorite.placeId = args.getString("favPlaceId", "");
         favorite.name = args.getString("favName", "");
         favorite.address = args.getString("favAddress", "");
         favorite.description = args.getString("favDescription", "");

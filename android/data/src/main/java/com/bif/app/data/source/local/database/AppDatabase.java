@@ -53,6 +53,25 @@ import com.bif.app.data.source.local.entity.TripStopEntity;
 }, version = 22, exportSchema = false)
 @TypeConverters({ FriendshipStatusConverter.class, UploadStatusConverter.class })
 public abstract class AppDatabase extends RoomDatabase {
+    private static boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
+        Cursor cursor = database.query("PRAGMA table_info(`" + tableName + "`)");
+        try {
+            int nameIndex = cursor.getColumnIndex("name");
+            if (nameIndex < 0) {
+                nameIndex = 1;
+            }
+            while (cursor.moveToNext()) {
+                String existing = cursor.getString(nameIndex);
+                if (columnName.equals(existing)) {
+                    return true;
+                }
+            }
+            return false;
+        } finally {
+            cursor.close();
+        }
+    }
+
     public static final Migration MIGRATION_19_20 = new Migration(19, 20) {
         @Override
         public void migrate(SupportSQLiteDatabase database) {
@@ -63,25 +82,6 @@ public abstract class AppDatabase extends RoomDatabase {
             if (!hasIndex(database, "index_sync_queue_userId_entityType_status")) {
                 database.execSQL("CREATE INDEX index_sync_queue_userId_entityType_status "
                         + "ON sync_queue(userId, entityType, status)");
-            }
-        }
-
-        private boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
-            Cursor cursor = database.query("PRAGMA table_info(`" + tableName + "`)");
-            try {
-                int nameIndex = cursor.getColumnIndex("name");
-                if (nameIndex < 0) {
-                    nameIndex = 1;
-                }
-                while (cursor.moveToNext()) {
-                    String existing = cursor.getString(nameIndex);
-                    if (columnName.equals(existing)) {
-                        return true;
-                    }
-                }
-                return false;
-            } finally {
-                cursor.close();
             }
         }
 
@@ -132,25 +132,6 @@ public abstract class AppDatabase extends RoomDatabase {
             }
         }
 
-        private boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
-            Cursor cursor = database.query("PRAGMA table_info(`" + tableName + "`)");
-            try {
-                int nameIndex = cursor.getColumnIndex("name");
-                if (nameIndex < 0) {
-                    nameIndex = 1;
-                }
-                while (cursor.moveToNext()) {
-                    String existing = cursor.getString(nameIndex);
-                    if (columnName.equals(existing)) {
-                        return true;
-                    }
-                }
-                return false;
-            } finally {
-                cursor.close();
-            }
-        }
-
         private boolean hasIndex(SupportSQLiteDatabase database, String indexName) {
             Cursor cursor = database.query("SELECT name FROM sqlite_master "
                     + "WHERE type='index' AND name=?", new Object[]{indexName});
@@ -191,24 +172,6 @@ public abstract class AppDatabase extends RoomDatabase {
             }
         }
 
-        private boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
-            Cursor cursor = database.query("PRAGMA table_info(`" + tableName + "`)");
-            try {
-                int nameIndex = cursor.getColumnIndex("name");
-                if (nameIndex < 0) {
-                    nameIndex = 1;
-                }
-                while (cursor.moveToNext()) {
-                    String existing = cursor.getString(nameIndex);
-                    if (columnName.equals(existing)) {
-                        return true;
-                    }
-                }
-                return false;
-            } finally {
-                cursor.close();
-            }
-        }
     };
 
     public static final Migration MIGRATION_16_17 = new Migration(16, 17) {
@@ -259,24 +222,6 @@ public abstract class AppDatabase extends RoomDatabase {
             }
         }
 
-        private boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
-            Cursor cursor = database.query("PRAGMA table_info(`" + tableName + "`)");
-            try {
-                int nameIndex = cursor.getColumnIndex("name");
-                if (nameIndex < 0) {
-                    nameIndex = 1;
-                }
-                while (cursor.moveToNext()) {
-                    String existing = cursor.getString(nameIndex);
-                    if (columnName.equals(existing)) {
-                        return true;
-                    }
-                }
-                return false;
-            } finally {
-                cursor.close();
-            }
-        }
     };
 
     public static final Migration MIGRATION_17_18 = new Migration(17, 18) {
@@ -299,24 +244,6 @@ public abstract class AppDatabase extends RoomDatabase {
             }
         }
 
-        private boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
-            Cursor cursor = database.query("PRAGMA table_info(`" + tableName + "`)");
-            try {
-                int nameIndex = cursor.getColumnIndex("name");
-                if (nameIndex < 0) {
-                    nameIndex = 1;
-                }
-                while (cursor.moveToNext()) {
-                    String existing = cursor.getString(nameIndex);
-                    if (columnName.equals(existing)) {
-                        return true;
-                    }
-                }
-                return false;
-            } finally {
-                cursor.close();
-            }
-        }
     };
 
     public static final Migration MIGRATION_20_21 = new Migration(20, 21) {
@@ -362,25 +289,6 @@ public abstract class AppDatabase extends RoomDatabase {
             }
         }
 
-        private boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
-            Cursor cursor = database.query("PRAGMA table_info(`" + tableName + "`)");
-            try {
-                int nameIndex = cursor.getColumnIndex("name");
-                if (nameIndex < 0) {
-                    nameIndex = 1;
-                }
-                while (cursor.moveToNext()) {
-                    String existing = cursor.getString(nameIndex);
-                    if (columnName.equals(existing)) {
-                        return true;
-                    }
-                }
-                return false;
-            } finally {
-                cursor.close();
-            }
-        }
-
         private boolean hasIndex(SupportSQLiteDatabase database, String indexName) {
             Cursor cursor = database.query("SELECT name FROM sqlite_master "
                     + "WHERE type='index' AND name=?", new Object[]{indexName});
@@ -395,6 +303,9 @@ public abstract class AppDatabase extends RoomDatabase {
     public static final Migration MIGRATION_21_22 = new Migration(21, 22) {
         @Override
         public void migrate(SupportSQLiteDatabase database) {
+            if (!hasColumn(database, "favorites", "placeId")) {
+                database.execSQL("ALTER TABLE favorites ADD COLUMN placeId TEXT");
+            }
             if (!hasColumn(database, "trip_stops", "addedByUserId")) {
                 database.execSQL("ALTER TABLE trip_stops ADD COLUMN addedByUserId TEXT");
             }
@@ -419,24 +330,6 @@ public abstract class AppDatabase extends RoomDatabase {
             }
         }
 
-        private boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
-            Cursor cursor = database.query("PRAGMA table_info(`" + tableName + "`)");
-            try {
-                int nameIndex = cursor.getColumnIndex("name");
-                if (nameIndex < 0) {
-                    nameIndex = 1;
-                }
-                while (cursor.moveToNext()) {
-                    String existing = cursor.getString(nameIndex);
-                    if (columnName.equals(existing)) {
-                        return true;
-                    }
-                }
-                return false;
-            } finally {
-                cursor.close();
-            }
-        }
     };
 
     public abstract FriendDao friendDao();

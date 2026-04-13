@@ -40,6 +40,7 @@
         tools:layout="@layout/fragment_favorite_detail">
 
         <argument android:name="favId" app:argType="string" android:defaultValue="" />
+        <argument android:name="favPlaceId" app:argType="string" android:defaultValue="" />
         <argument android:name="favName" app:argType="string" android:defaultValue="" />
         <argument android:name="favAddress" app:argType="string" android:defaultValue="" />
         <argument android:name="favDescription" app:argType="string" android:defaultValue="" />
@@ -49,7 +50,7 @@
         <argument android:name="favLongitude" app:argType="string" android:defaultValue="" />
 
         <deepLink
-            app:uri="app://bif.app/favorites/detail?favId={favId}&amp;favName={favName}&amp;favAddress={favAddress}&amp;favDescription={favDescription}&amp;favNotes={favNotes}&amp;favRating={favRating}&amp;favLatitude={favLatitude}&amp;favLongitude={favLongitude}" />
+            app:uri="app://bif.app/favorites/detail?favId={favId}&amp;favPlaceId={favPlaceId}&amp;favName={favName}&amp;favAddress={favAddress}&amp;favDescription={favDescription}&amp;favNotes={favNotes}&amp;favRating={favRating}&amp;favLatitude={favLatitude}&amp;favLongitude={favLongitude}" />
     </fragment>
 
     <fragment

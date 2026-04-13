@@ -3,9 +3,13 @@ package com.bif.server.features.sync.services;
 import com.bif.server.common.models.Location;
 import com.bif.server.features.favorite.models.Favorite;
 import com.bif.server.features.favorite.repositories.FavoriteRepository;
+import com.bif.server.features.place.services.PlaceIdentityService;
 import com.bif.server.features.sync.models.SyncChange;
 import com.bif.server.features.sync.models.SyncChangeEntry;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 
 import java.util.Locale;
@@ -13,12 +17,16 @@ import java.util.Optional;
 
 @Component
 public class FavoriteSyncEntityHandler implements SyncEntityHandler {
+    private static final Logger LOGGER = LoggerFactory.getLogger(FavoriteSyncEntityHandler.class);
 
     private final FavoriteRepository favoriteRepository;
+    private final PlaceIdentityService placeIdentityService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public FavoriteSyncEntityHandler(FavoriteRepository favoriteRepository) {
+    public FavoriteSyncEntityHandler(FavoriteRepository favoriteRepository,
+                                     PlaceIdentityService placeIdentityService) {
         this.favoriteRepository = favoriteRepository;
+        this.placeIdentityService = placeIdentityService;
     }
 
     @Override
@@ -75,11 +83,21 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
         favorite.setRating(payload.rating);
         favorite.setImagePath(payload.imagePath);
         favorite.setUserId(userId);
+        if (!isBlank(payload.placeId)) {
+            favorite.setPlaceId(payload.placeId.trim());
+        }
 
         if (payload.latitude != 0.0 || payload.longitude != 0.0) {
             favorite.setLocation(new Location(payload.latitude, payload.longitude));
         } else if (payload.latitude == 0.0 && payload.longitude == 0.0 && favorite.getLocation() == null) {
             favorite.setLocation(null);
+        }
+
+        if (isBlank(favorite.getPlaceId())) {
+            String resolvedPlaceId = resolvePlaceId(payload);
+            if (!isBlank(resolvedPlaceId)) {
+                favorite.setPlaceId(resolvedPlaceId.trim());
+            }
         }
 
         favorite.setDeleted(payload.deleted);
@@ -131,6 +149,7 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
     private FavoritePayload toPayload(Favorite favorite) {
         FavoritePayload payload = new FavoritePayload();
         payload.id = favorite.getId();
+        payload.placeId = favorite.getPlaceId();
         payload.name = favorite.getName();
         payload.address = favorite.getAddress();
         payload.description = favorite.getDescription();
@@ -150,8 +169,41 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
         return payload;
     }
 
+    private String resolvePlaceId(FavoritePayload payload) {
+        if (payload == null || isBlank(payload.id) || isBlank(payload.name)) {
+            return null;
+        }
+        if (!Double.isFinite(payload.latitude) || !Double.isFinite(payload.longitude)) {
+            return null;
+        }
+        if (payload.latitude == 0.0d && payload.longitude == 0.0d) {
+            return null;
+        }
+        try {
+            return placeIdentityService.resolveInternalPlaceId(
+                    "FAVORITE",
+                    payload.id.trim(),
+                    payload.latitude,
+                    payload.longitude,
+                    payload.name.trim());
+        } catch (DataAccessException ex) {
+            LOGGER.error("Failed to resolve favorite placeId for payload id={}, name={}, lat={}, lng={}",
+                    payload.id,
+                    payload.name,
+                    payload.latitude,
+                    payload.longitude,
+                    ex);
+            return null;
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
     private static class FavoritePayload {
         public String id;
+        public String placeId;
         public String name;
         public String address;
         public String description;

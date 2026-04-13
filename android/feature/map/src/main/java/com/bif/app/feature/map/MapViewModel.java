@@ -23,6 +23,7 @@ import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.IRouteRepository;
 import com.bif.app.domain.repository.IReviewRepository;
+import com.bif.app.domain.repository.IPlaceRepository.PersistenceCallback;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -51,6 +52,12 @@ public class MapViewModel extends ViewModel {
     private final IRouteRepository routeRepository;
     private final IReviewRepository reviewRepository;
     private final Executor reviewExecutor;
+
+    public interface AddFavoriteCallback {
+        void onSuccess();
+
+        void onError(@NonNull String message);
+    }
 
     private final MutableLiveData<Event<String>> _statusText = new MutableLiveData<>();
     public final LiveData<Event<String>> statusText = _statusText;
@@ -290,19 +297,54 @@ public class MapViewModel extends ViewModel {
     }
 
     public void addToFavorites(Place place) {
-        Favorite favorite = new Favorite();
-        favorite.name = place.name;
-        favorite.address = place.address;
-        favorite.rating = (int) place.rating;
-        favorite.description = "";
-        favorite.notes = "";
-        if (place.location != null) {
-            favorite.latitude = place.location.latitude;
-            favorite.longitude = place.location.longitude;
+        addToFavorites(place, null);
+    }
+
+    public void addToFavorites(Place place, @Nullable AddFavoriteCallback callback) {
+        if (place == null) {
+            return;
         }
 
-        favoriteRepository.addFavorite(favorite);
-        placeRepository.persistPlace(place, "favorite");
+        reviewExecutor.execute(() -> {
+            try {
+                Favorite favorite = new Favorite();
+                favorite.placeId = resolveCanonicalFavoritePlaceId(place);
+                favorite.name = place.name;
+                favorite.address = place.address;
+                favorite.rating = (int) place.rating;
+                favorite.description = "";
+                favorite.notes = "";
+                if (place.location != null) {
+                    favorite.latitude = place.location.latitude;
+                    favorite.longitude = place.location.longitude;
+                }
+
+                favoriteRepository.addFavorite(favorite);
+                placeRepository.persistPlace(place, "favorite", new PersistenceCallback() {
+                    @Override
+                    public void onSuccess() {
+                        if (callback != null) {
+                            callback.onSuccess();
+                        }
+                    }
+
+                    @Override
+                    public void onError(Throwable error) {
+                        if (callback != null) {
+                            String message = error != null && error.getMessage() != null
+                                    ? error.getMessage()
+                                    : "Unable to add favorite";
+                            callback.onError(message);
+                        }
+                    }
+                });
+            } catch (RuntimeException ex) {
+                if (callback != null) {
+                    String message = ex.getMessage() != null ? ex.getMessage() : "Unable to add favorite";
+                    callback.onError(message);
+                }
+            }
+        });
     }
 
     public void cacheViewedPlace(Place place) {
@@ -314,23 +356,32 @@ public class MapViewModel extends ViewModel {
             return;
         }
 
+        boolean canResolveWithMetadata = hasText(place.placeSource)
+            && hasText(place.id)
+            && hasText(place.name);
+
         final PlaceIdentityContext placeIdentityContext = new PlaceIdentityContext();
-        placeIdentityContext.externalSource = place.placeSource;
-        placeIdentityContext.externalId = place.id;
-        placeIdentityContext.lat = place.location.latitude;
-        placeIdentityContext.lng = place.location.longitude;
+        placeIdentityContext.externalSource = canResolveWithMetadata ? place.placeSource : null;
+        placeIdentityContext.externalId = canResolveWithMetadata ? place.id : null;
+        placeIdentityContext.lat = place.location != null ? place.location.latitude : null;
+        placeIdentityContext.lng = place.location != null ? place.location.longitude : null;
         placeIdentityContext.placeName = place.name;
 
         final long requestId = reviewLoadRequestId.incrementAndGet();
         _isLoadingReviews.setValue(true);
         _currentPlaceId.setValue(null);
         reviewExecutor.execute(() -> {
-            String internalId = reviewRepository.resolveInternalPlaceId(
-                placeIdentityContext.externalSource,
-                placeIdentityContext.externalId,
-                placeIdentityContext.lat,
-                placeIdentityContext.lng,
-                placeIdentityContext.placeName);
+            String internalId;
+            if (canResolveWithMetadata) {
+                internalId = reviewRepository.resolveInternalPlaceId(
+                        placeIdentityContext.externalSource,
+                        placeIdentityContext.externalId,
+                        placeIdentityContext.lat,
+                        placeIdentityContext.lng,
+                        placeIdentityContext.placeName);
+            } else {
+                internalId = place.id != null ? place.id.trim() : null;
+            }
 
             if (requestId != reviewLoadRequestId.get()) {
                 return;
@@ -349,6 +400,34 @@ public class MapViewModel extends ViewModel {
                 }
             });
         });
+    }
+
+    private String resolveCanonicalFavoritePlaceId(@NonNull Place place) {
+        String fallbackPlaceId = place.id != null ? place.id.trim() : "";
+
+        if (!hasText(place.placeSource)
+                || !hasText(place.id)
+                || !hasText(place.name)
+                || place.location == null) {
+            return fallbackPlaceId;
+        }
+
+        String resolved = reviewRepository.resolveInternalPlaceId(
+                place.placeSource,
+                place.id,
+                place.location.latitude,
+                place.location.longitude,
+                place.name);
+
+        if (!hasText(resolved)) {
+            return fallbackPlaceId;
+        }
+
+        return resolved;
+    }
+
+    private boolean hasText(@Nullable String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     public void submitReview(int stars, String comment) {

@@ -13,6 +13,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 public class Favorite extends SyncDocument {
     @Id
     private String id;
+    private String placeId;
     private String name;
     private Location location;
     private String address;
