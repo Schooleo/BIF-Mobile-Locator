@@ -32,12 +32,14 @@ import com.bif.app.domain.repository.IFavoriteRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
+import com.bif.app.domain.repository.IPlaceRepository.PersistenceCallback;
 import com.bif.app.domain.repository.IReviewRepository;
 import com.bif.app.domain.repository.IRouteRepository;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.Executor;
 
 import org.junit.Before;
@@ -49,6 +51,8 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
+
+import static org.junit.Assert.fail;
 
 @RunWith(MockitoJUnitRunner.class)
 public class MapViewModelTest {
@@ -217,31 +221,70 @@ public class MapViewModelTest {
         // Arrange
         Location loc = new Location(10.762, 106.682);
         Place place = new Place("id1", "Cafe ABC", "123 Nguyen Hue", 4.5, loc);
+        AtomicBoolean callbackCalled = new AtomicBoolean(false);
+
+        Mockito.doAnswer(invocation -> {
+            PersistenceCallback callback = invocation.getArgument(2);
+            if (callback != null) {
+                callback.onSuccess();
+            }
+            return null;
+        }).when(placeRepository).persistPlace(eq(place), eq("favorite"), any(PersistenceCallback.class));
 
         // Act
-        viewModel.addToFavorites(place);
+        viewModel.addToFavorites(place, new MapViewModel.AddFavoriteCallback() {
+            @Override
+            public void onSuccess() {
+                callbackCalled.set(true);
+            }
+
+            @Override
+            public void onError(String message) {
+                fail("Expected success but got error: " + message);
+            }
+        });
 
         // Assert
         ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
         Mockito.verify(favoriteRepository).addFavorite(captor.capture());
         Favorite saved = captor.getValue();
+        assertEquals("id1", saved.placeId);
         assertEquals("Cafe ABC", saved.name);
         assertEquals("123 Nguyen Hue", saved.address);
         assertEquals(10.762, saved.latitude, 0.001);
         assertEquals(106.682, saved.longitude, 0.001);
         assertEquals(4, saved.rating); // (int) 4.5 -> 4
 
-        // Also verifies the place is persisted locally (new behavior)
-        Mockito.verify(placeRepository).persistPlace(place, "favorite");
+        Mockito.verify(placeRepository).persistPlace(eq(place), eq("favorite"), any(PersistenceCallback.class));
+        assertTrue(callbackCalled.get());
     }
 
     @Test
     public void addToFavorites_placeWithNullLocation_callsRepositoryWithZeroCoordinates() {
         // Arrange: place with no location
         Place place = new Place("id2", "No Loc Place", "789 Unknown St", 3.0, null);
+        AtomicBoolean callbackCalled = new AtomicBoolean(false);
+
+        Mockito.doAnswer(invocation -> {
+            PersistenceCallback callback = invocation.getArgument(2);
+            if (callback != null) {
+                callback.onSuccess();
+            }
+            return null;
+        }).when(placeRepository).persistPlace(eq(place), eq("favorite"), any(PersistenceCallback.class));
 
         // Act
-        viewModel.addToFavorites(place);
+        viewModel.addToFavorites(place, new MapViewModel.AddFavoriteCallback() {
+            @Override
+            public void onSuccess() {
+                callbackCalled.set(true);
+            }
+
+            @Override
+            public void onError(String message) {
+                fail("Expected success but got error: " + message);
+            }
+        });
 
         // Assert: coordinates default to 0.0 when location is null
         ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
@@ -249,8 +292,8 @@ public class MapViewModelTest {
         assertEquals(0.0, captor.getValue().latitude, 0.0001);
         assertEquals(0.0, captor.getValue().longitude, 0.0001);
 
-        // Also verifies the place is persisted locally even with null location
-        Mockito.verify(placeRepository).persistPlace(place, "favorite");
+        Mockito.verify(placeRepository).persistPlace(eq(place), eq("favorite"), any(PersistenceCallback.class));
+        assertTrue(callbackCalled.get());
     }
 
     // removeFromFavorites

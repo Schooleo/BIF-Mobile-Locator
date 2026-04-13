@@ -176,6 +176,9 @@ public interface RestApiService {
     @POST("places/resolve")
     Call<PlaceResolveResponseDto> resolvePlace(@Body PlaceResolveRequestDto request);
 
+        @GET("places/{id}")
+        Call<PlaceDto> getPlaceById(@Path("id") String placeId);
+
     @GET("places/{id}/reviews")
     Call<List<PlaceReviewDto>> getPlaceReviews(@Path("id") String placeId);
 

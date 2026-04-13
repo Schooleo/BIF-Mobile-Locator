@@ -53,21 +53,21 @@ public class AppModule {
     @Singleton
     public AppDatabase provideAppDatabase(@ApplicationContext Context context) {
         return Room.databaseBuilder(
-                        context,
-                        AppDatabase.class,
-                        "bif_database")
-                .addMigrations(
-                        AppDatabase.MIGRATION_15_16,
-                        AppDatabase.MIGRATION_16_17,
-                        AppDatabase.MIGRATION_17_18,
-                        AppDatabase.MIGRATION_18_19,
-                        AppDatabase.MIGRATION_19_20,
-                        AppDatabase.MIGRATION_20_21,
-                        AppDatabase.MIGRATION_21_22)
-                // Legacy schemas (v13/v14) have no safe forward chain to v17 in code.
-                // Recreate DB for those versions instead of crashing at startup.
-                .fallbackToDestructiveMigrationFrom(13, 14)
-                .build();
+                context,
+                AppDatabase.class,
+                "bif_database")
+            .addMigrations(
+                AppDatabase.MIGRATION_15_16,
+                AppDatabase.MIGRATION_16_17,
+                AppDatabase.MIGRATION_17_18,
+                AppDatabase.MIGRATION_18_19,
+                AppDatabase.MIGRATION_19_20,
+                AppDatabase.MIGRATION_20_21,
+                AppDatabase.MIGRATION_21_22)
+            // Legacy schemas (v13/v14) have no safe forward chain to v17 in code.
+            // Recreate DB for those versions instead of crashing at startup.
+            .fallbackToDestructiveMigrationFrom(13, 14)
+            .build();
     }
 
     @Provides

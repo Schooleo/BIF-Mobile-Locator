@@ -1,11 +1,14 @@
 package com.bif.server.features.favorite.services;
 
+import com.bif.server.common.models.Location;
 import com.bif.server.features.favorite.models.Favorite;
 import com.bif.server.features.favorite.repositories.FavoriteRepository;
+import com.bif.server.features.place.services.PlaceIdentityService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
@@ -20,11 +23,14 @@ class FavoriteServiceTest {
     @Mock
     private FavoriteRepository favoriteRepository;
 
+    @Mock
+    private PlaceIdentityService placeIdentityService;
+
     private FavoriteService favoriteService;
 
     @BeforeEach
     void setUp() {
-        favoriteService = new FavoriteService(favoriteRepository);
+        favoriteService = new FavoriteService(favoriteRepository, placeIdentityService);
     }
 
     @Test
@@ -72,6 +78,67 @@ class FavoriteServiceTest {
     }
 
     @Test
+    void save_WhenPlaceIdMissing_ResolvesBeforeSaving() {
+        Favorite item = new Favorite();
+        item.setId("f1");
+        item.setUserId("u1");
+        item.setName("Cafe");
+        item.setLocation(new Location(10.0, 20.0));
+
+        when(placeIdentityService.resolveInternalPlaceId("FAVORITE", "f1", 10.0, 20.0, "Cafe"))
+                .thenReturn("place-123");
+        when(favoriteRepository.save(any(Favorite.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Favorite result = favoriteService.save(item);
+
+        ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
+        verify(placeIdentityService).resolveInternalPlaceId("FAVORITE", "f1", 10.0, 20.0, "Cafe");
+        verify(favoriteRepository).save(captor.capture());
+        assertEquals("place-123", captor.getValue().getPlaceId());
+        assertEquals("place-123", result.getPlaceId());
+    }
+
+    @Test
+    void save_WhenPlaceIdExists_DoesNotResolveAndSavesOriginalId() {
+        Favorite item = new Favorite();
+        item.setId("f2");
+        item.setUserId("u1");
+        item.setPlaceId("place-xyz");
+        item.setName("Cafe");
+        item.setLocation(new Location(10.0, 20.0));
+
+        when(favoriteRepository.save(any(Favorite.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Favorite result = favoriteService.save(item);
+
+        ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
+        verify(placeIdentityService, never()).resolveInternalPlaceId(anyString(), anyString(), anyDouble(), anyDouble(), anyString());
+        verify(favoriteRepository).save(captor.capture());
+        assertEquals("place-xyz", captor.getValue().getPlaceId());
+        assertEquals("place-xyz", result.getPlaceId());
+    }
+
+    @Test
+    void save_WhenResolutionFails_FallsBackToOriginalFavorite() {
+        Favorite item = new Favorite();
+        item.setId("f3");
+        item.setUserId("u1");
+        item.setName("Cafe");
+        item.setLocation(new Location(10.0, 20.0));
+
+        when(placeIdentityService.resolveInternalPlaceId("FAVORITE", "f3", 10.0, 20.0, "Cafe"))
+                .thenThrow(new RuntimeException("boom"));
+        when(favoriteRepository.save(any(Favorite.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Favorite result = favoriteService.save(item);
+
+        ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
+        verify(favoriteRepository).save(captor.capture());
+        assertNull(captor.getValue().getPlaceId());
+        assertNull(result.getPlaceId());
+    }
+
+    @Test
     void deleteById_WhenExists_DeletesAndReturnsTrue() {
         when(favoriteRepository.existsById("f1")).thenReturn(true);
 
@@ -94,7 +161,33 @@ class FavoriteServiceTest {
     @Test
     void getMyFavorites_WhenUserIdBlank_ThrowsIllegalArgumentException() {
         assertThrows(IllegalArgumentException.class, () -> favoriteService.getMyFavorites(" "));
-        verify(favoriteRepository, never()).findByUserId(anyString());
+        verify(favoriteRepository, never())
+            .findByUserIdAndDeletedFalse(anyString());
+        }
+
+        @Test
+        void getMyFavorites_FiltersOutDeletedFavorites() {
+        Favorite item = new Favorite();
+        when(favoriteRepository.findByUserIdAndDeletedFalse("u1"))
+            .thenReturn(List.of(item));
+
+        List<Favorite> result = favoriteService.getMyFavorites("u1");
+
+        assertEquals(1, result.size());
+        verify(favoriteRepository).findByUserIdAndDeletedFalse("u1");
+        }
+
+        @Test
+        void getMyFavoriteById_UsesNonDeletedLookup() {
+        Favorite item = new Favorite();
+        when(favoriteRepository.findByIdAndUserIdAndDeletedFalse("f1", "u1"))
+            .thenReturn(Optional.of(item));
+
+        Optional<Favorite> result = favoriteService.getMyFavoriteById("u1",
+            "f1");
+
+        assertTrue(result.isPresent());
+        verify(favoriteRepository).findByIdAndUserIdAndDeletedFalse("f1", "u1");
     }
 
     @Test

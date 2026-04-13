@@ -2,6 +2,7 @@ package com.bif.app.domain.model;
 
 public class Favorite {
     public String id;
+    public String placeId;
     public String name;
     public double latitude;
     public double longitude;

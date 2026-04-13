@@ -17,6 +17,7 @@ public class FavoriteMapperTest {
         // Arrange
         FavoriteEntity entity = new FavoriteEntity();
         entity.id = "fav-1";
+        entity.placeId = "place-1";
         entity.name = "Home";
         entity.address = "123 Main St";
         entity.serverVersion = 10L;
@@ -29,6 +30,7 @@ public class FavoriteMapperTest {
         // Assert
         assertNotNull(domain);
         assertEquals("fav-1", domain.id);
+        assertEquals("place-1", domain.placeId);
         assertEquals("Home", domain.name);
         assertEquals("123 Main St", domain.address);
         assertEquals(10L, domain.serverVersion);
@@ -41,6 +43,7 @@ public class FavoriteMapperTest {
         // Arrange
         Favorite domain = new Favorite();
         domain.id = "fav-2";
+        domain.placeId = "place-2";
         domain.name = "Work";
         domain.rating = 5;
         domain.serverVersion = 20L;
@@ -53,6 +56,7 @@ public class FavoriteMapperTest {
         // Assert
         assertNotNull(entity);
         assertEquals("fav-2", entity.id);
+        assertEquals("place-2", entity.placeId);
         assertEquals("Work", entity.name);
         assertEquals(5, entity.rating);
         assertEquals(20L, entity.serverVersion);
@@ -75,6 +79,7 @@ public class FavoriteMapperTest {
         // Arrange
         FavoriteDto dto = new FavoriteDto();
         dto.id = "dto-1";
+        dto.placeId = "place-3";
         dto.name = "Sync Place";
         dto.serverVersion = 42;
         dto.deleted = true;
@@ -86,6 +91,7 @@ public class FavoriteMapperTest {
         // Assert
         assertNotNull(entity);
         assertEquals("dto-1", entity.id);
+        assertEquals("place-3", entity.placeId);
         assertEquals("Sync Place", entity.name);
         assertEquals(42, entity.serverVersion);
         assertTrue(entity.deleted);
@@ -97,6 +103,7 @@ public class FavoriteMapperTest {
         // Arrange
         Favorite domain = new Favorite();
         domain.id = "dom-1";
+        domain.placeId = "place-4";
         domain.name = "Domain Place";
         domain.rating = 4;
 
@@ -106,6 +113,7 @@ public class FavoriteMapperTest {
         // Assert
         assertNotNull(dto);
         assertEquals("dom-1", dto.id);
+        assertEquals("place-4", dto.placeId);
         assertEquals("Domain Place", dto.name);
         assertEquals(4, dto.rating);
         assertEquals("user-xyz", dto.userId);

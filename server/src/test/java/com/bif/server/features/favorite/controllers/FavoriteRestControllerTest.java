@@ -20,6 +20,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import org.mockito.ArgumentCaptor;
 
 @ExtendWith(MockitoExtension.class)
 class FavoriteRestControllerTest {
@@ -141,7 +142,7 @@ class FavoriteRestControllerTest {
 
     @Test
     void upsertMyFavorite_WhenHeaderMissing_ReturnsUnauthorized() {
-        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest(null, "Coffee", null, null, null, null, 5, null);
+        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest(null, null, "Coffee", null, null, null, null, 5, null);
 
         ResponseEntity<FavoriteResponse> result = controller.upsertMyFavorite(null, request);
 
@@ -152,19 +153,22 @@ class FavoriteRestControllerTest {
     @Test
     void upsertMyFavorite_WhenNotOwner_ReturnsForbidden() {
         Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
-        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", "Coffee", null, null, null, null, 5, null);
+        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", "place-123", "Coffee", null, null, null, null, 5, null);
 
         when(favoriteService.saveMyFavorite(eq("u1"), any(Favorite.class))).thenThrow(new SecurityException("forbidden"));
 
         ResponseEntity<FavoriteResponse> result = controller.upsertMyFavorite(auth, request);
 
         assertEquals(HttpStatus.FORBIDDEN, result.getStatusCode());
+        ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
+        verify(favoriteService).saveMyFavorite(eq("u1"), captor.capture());
+        assertEquals("place-123", captor.getValue().getPlaceId());
     }
 
     @Test
     void upsertMyFavorite_WhenTargetMissing_ReturnsNotFound() {
         Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
-        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", "Coffee", null, null, null, null, 5, null);
+        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", "place-123", "Coffee", null, null, null, null, 5, null);
 
         when(favoriteService.saveMyFavorite(eq("u1"), any(Favorite.class)))
                 .thenThrow(new NoSuchElementException("missing"));
@@ -172,6 +176,26 @@ class FavoriteRestControllerTest {
         ResponseEntity<FavoriteResponse> result = controller.upsertMyFavorite(auth, request);
 
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
+        ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
+        verify(favoriteService).saveMyFavorite(eq("u1"), captor.capture());
+        assertEquals("place-123", captor.getValue().getPlaceId());
+    }
+
+    @Test
+    void upsertMyFavorite_WhenAuthorized_MapsPlaceIdThroughRequest() {
+        Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
+        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", "place-123", "Coffee", null, null, null, null, 5, null);
+        Favorite saved = new Favorite();
+        saved.setId("f1");
+        saved.setPlaceId("place-123");
+        when(favoriteService.saveMyFavorite(eq("u1"), any(Favorite.class))).thenReturn(saved);
+
+        ResponseEntity<FavoriteResponse> result = controller.upsertMyFavorite(auth, request);
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
+        verify(favoriteService).saveMyFavorite(eq("u1"), captor.capture());
+        assertEquals("place-123", captor.getValue().getPlaceId());
     }
 
     @Test
