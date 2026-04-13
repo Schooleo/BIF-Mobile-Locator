@@ -1,37 +1,38 @@
 package com.bif.server.features.ai.agents;
 
-import com.bif.server.features.ai.clients.OllamaJsonClient;
-import com.bif.server.features.ai.dto.PlaceSearchExtraction;
-import com.bif.server.features.ai.support.JsonOnlyResponseParser;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import com.bif.server.features.ai.clients.OllamaJsonClient;
+import com.bif.server.features.ai.dto.PlaceSearchExtraction;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 class PlaceSuggestionAgentTest {
 
     @Test
     void extract_BuildsStrictPromptAndParsesResponse() {
         OllamaJsonClient client = mock(OllamaJsonClient.class);
-        when(client.generateJson(anyString(), anyString(), anyString())).thenReturn(
-            "{\"searchQueries\":[\"coffee in district 1\",\"quiet cafe district 1\"],"
-                + "\"keywords\":[\"coffee\",\"district 1\"],"
-                        + "\"category\":\"cafe\",\"vibe\":\"quiet\",\"locationHint\":\"district 1\"}"
+        PlaceSearchExtraction expectedExtraction = new PlaceSearchExtraction(
+            java.util.List.of("coffee in district 1", "quiet cafe district 1"),
+            java.util.List.of("coffee", "district 1"),
+            "cafe",
+            "quiet",
+            "district 1"
         );
+        when(client.generateJson(anyString(), anyString(), anyString(), eq(PlaceSearchExtraction.class)))
+            .thenReturn(expectedExtraction);
 
-        PlaceSuggestionAgent agent = new PlaceSuggestionAgent(
-                client,
-                new JsonOnlyResponseParser(new ObjectMapper())
-        );
+        PlaceSuggestionAgent agent = new PlaceSuggestionAgent(client);
 
         PlaceSearchExtraction extraction = agent.extract("quiet coffee in district 1");
 
@@ -45,7 +46,11 @@ class PlaceSuggestionAgentTest {
         ArgumentCaptor<String> systemCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> userCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> schemaCaptor = ArgumentCaptor.forClass(String.class);
-        verify(client).generateJson(systemCaptor.capture(), userCaptor.capture(), schemaCaptor.capture());
+        verify(client).generateJson(
+            systemCaptor.capture(),
+            userCaptor.capture(),
+            schemaCaptor.capture(),
+            eq(PlaceSearchExtraction.class));
         JsonNode schema = readTree(schemaCaptor.getValue());
         assertTrue(systemCaptor.getValue().contains("Output strictly valid JSON only"));
         assertTrue(systemCaptor.getValue().contains("searchQueries"));
@@ -64,21 +69,26 @@ class PlaceSuggestionAgentTest {
     @Test
     void retry_InjectsFailureReasonIntoPrompt() {
         OllamaJsonClient client = mock(OllamaJsonClient.class);
-        when(client.generateJson(anyString(), anyString(), anyString())).thenReturn(
-            "{\"searchQueries\":[\"history museum\"],\"keywords\":[\"museum\"],"
-                + "\"category\":\"history\",\"vibe\":null,\"locationHint\":null}"
-        );
+        when(client.generateJson(anyString(), anyString(), anyString(), eq(PlaceSearchExtraction.class)))
+            .thenReturn(new PlaceSearchExtraction(
+                java.util.List.of("history museum"),
+                java.util.List.of("museum"),
+                "history",
+                null,
+                null
+            ));
 
-        PlaceSuggestionAgent agent = new PlaceSuggestionAgent(
-                client,
-                new JsonOnlyResponseParser(new ObjectMapper())
-        );
+        PlaceSuggestionAgent agent = new PlaceSuggestionAgent(client);
 
         agent.retry("history museum", "AI response contained trailing content");
 
         ArgumentCaptor<String> userCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> schemaCaptor = ArgumentCaptor.forClass(String.class);
-        verify(client).generateJson(anyString(), userCaptor.capture(), schemaCaptor.capture());
+        verify(client).generateJson(
+            anyString(),
+            userCaptor.capture(),
+            schemaCaptor.capture(),
+            eq(PlaceSearchExtraction.class));
         JsonNode schema = readTree(schemaCaptor.getValue());
         assertTrue(userCaptor.getValue().contains("Previous response was invalid"));
         assertTrue(userCaptor.getValue().contains("trailing content"));

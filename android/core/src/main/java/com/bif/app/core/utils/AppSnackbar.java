@@ -3,8 +3,12 @@ package com.bif.app.core.utils;
 import android.app.Activity;
 import android.content.Context;
 import android.content.ContextWrapper;
+import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 
@@ -61,6 +65,32 @@ public final class AppSnackbar {
         }
 
         Snackbar snackbar = Snackbar.make(anchor, displayMessage, duration);
+        View bottomNavigation = findBottomNavigation(activity);
+        if (bottomNavigation != null) {
+            snackbar.setAnchorView(bottomNavigation);
+        }
+
+        View snackbarView = snackbar.getView();
+        ViewGroup.LayoutParams params = snackbarView.getLayoutParams();
+        if (params instanceof FrameLayout.LayoutParams) {
+            FrameLayout.LayoutParams layoutParams = (FrameLayout.LayoutParams) params;
+            layoutParams.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+            layoutParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+            int horizontalMargin = dpToPx(activity, 16);
+            layoutParams.leftMargin = horizontalMargin;
+            layoutParams.rightMargin = horizontalMargin;
+            layoutParams.bottomMargin = dpToPx(activity, 12);
+            snackbarView.setLayoutParams(layoutParams);
+        } else if (params instanceof ViewGroup.MarginLayoutParams) {
+            ViewGroup.MarginLayoutParams marginParams = (ViewGroup.MarginLayoutParams) params;
+            int horizontalMargin = dpToPx(activity, 16);
+            marginParams.leftMargin = horizontalMargin;
+            marginParams.rightMargin = horizontalMargin;
+            marginParams.bottomMargin = dpToPx(activity, 12);
+            snackbarView.setLayoutParams(marginParams);
+        }
+
+        snackbar.setAnimationMode(Snackbar.ANIMATION_MODE_SLIDE);
         int backgroundColor = MaterialColors.getColor(anchor,
                 com.google.android.material.R.attr.colorSurface);
         int textColor = MaterialColors.getColor(anchor,
@@ -80,5 +110,21 @@ public final class AppSnackbar {
             current = ((ContextWrapper) current).getBaseContext();
         }
         return null;
+    }
+
+    @Nullable
+    private static View findBottomNavigation(@NonNull Activity activity) {
+        int bottomNavId = activity.getResources().getIdentifier(
+                "bottom_navigation",
+                "id",
+                activity.getPackageName());
+        if (bottomNavId == 0) {
+            return null;
+        }
+        return activity.findViewById(bottomNavId);
+    }
+
+    private static int dpToPx(@NonNull Context context, int dp) {
+        return Math.round(dp * context.getResources().getDisplayMetrics().density);
     }
 }

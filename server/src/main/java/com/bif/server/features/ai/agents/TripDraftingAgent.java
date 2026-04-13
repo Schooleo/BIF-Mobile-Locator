@@ -1,15 +1,15 @@
 package com.bif.server.features.ai.agents;
 
+import java.util.List;
+
+import org.springframework.stereotype.Component;
+
 import com.bif.server.features.ai.AiGenerationConstraints;
 import com.bif.server.features.ai.clients.OllamaJsonClient;
 import com.bif.server.features.ai.dto.GeneratedItinerary;
-import com.bif.server.features.ai.support.JsonOnlyResponseParser;
 import com.bif.server.features.place.models.Place;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.stereotype.Component;
-
-import java.util.List;
 
 @Component
 public class TripDraftingAgent {
@@ -53,15 +53,12 @@ public class TripDraftingAgent {
     );
 
     private final OllamaJsonClient ollamaJsonClient;
-    private final JsonOnlyResponseParser jsonOnlyResponseParser;
     private final ObjectMapper objectMapper;
 
     public TripDraftingAgent(
             OllamaJsonClient ollamaJsonClient,
-            JsonOnlyResponseParser jsonOnlyResponseParser,
             ObjectMapper objectMapper) {
         this.ollamaJsonClient = ollamaJsonClient;
-        this.jsonOnlyResponseParser = jsonOnlyResponseParser;
         this.objectMapper = objectMapper;
     }
 
@@ -96,11 +93,11 @@ public class TripDraftingAgent {
             List<Place> allowedPlaces,
             String failureReason,
             String schedulingHint) {
-        String response = ollamaJsonClient.generateJson(
+        return ollamaJsonClient.generateJson(
                 buildSystemPrompt(),
                 buildUserPrompt(userQuery, allowedPlaces, failureReason, schedulingHint),
-                ITINERARY_SCHEMA);
-        return jsonOnlyResponseParser.parse(response, GeneratedItinerary.class);
+            ITINERARY_SCHEMA,
+            GeneratedItinerary.class);
     }
 
     private String buildSystemPrompt() {

@@ -70,10 +70,8 @@ public class AddTripStopFragment extends Fragment {
 
     private static final int MAX_MAP_CANDIDATES = 5;
     private static final double PLACE_FOCUS_ZOOM = 15.8;
-    private static final double PLACE_TRAVEL_ZOOM = 13.6;
     private static final int CAMERA_TRANSITION_STAGE_DURATION_MS = 520;
     private static final double CAMERA_COORD_THRESHOLD = 0.0002d;
-    private static final double CAMERA_ZOOM_THRESHOLD = 0.20d;
     private static final String DEFAULT_STYLE_URL = "https://demotiles.maplibre.org/style.json";
     private static final String SEARCH_SOURCE_ID = "trip-stop-search-source";
     private static final String SEARCH_LAYER_ID = "trip-stop-search-layer";
@@ -442,46 +440,14 @@ public class AddTripStopFragment extends Fragment {
 
         boolean nearTarget = Math.abs(current.target.getLatitude() - target.getLatitude()) < CAMERA_COORD_THRESHOLD
                 && Math.abs(current.target.getLongitude() - target.getLongitude()) < CAMERA_COORD_THRESHOLD;
-        boolean nearFocusZoom = Math.abs(current.zoom - PLACE_FOCUS_ZOOM) < CAMERA_ZOOM_THRESHOLD;
-        if (nearTarget && nearFocusZoom) {
+        if (nearTarget) {
             return;
         }
 
-        double firstStageZoom = Math.max(PLACE_TRAVEL_ZOOM, Math.min(current.zoom - 0.9d, PLACE_FOCUS_ZOOM - 0.8d));
-
+        // Keep the user's current zoom level and only pan to the selected stop.
         mapLibreMap.animateCamera(
-                CameraUpdateFactory.zoomTo(firstStageZoom),
-                CAMERA_TRANSITION_STAGE_DURATION_MS,
-                new MapLibreMap.CancelableCallback() {
-                    @Override
-                    public void onFinish() {
-                        if (mapLibreMap == null) {
-                            return;
-                        }
-                        mapLibreMap.animateCamera(
-                                CameraUpdateFactory.newLatLngZoom(target, PLACE_TRAVEL_ZOOM),
-                                CAMERA_TRANSITION_STAGE_DURATION_MS,
-                                new MapLibreMap.CancelableCallback() {
-                                    @Override
-                                    public void onFinish() {
-                                        if (mapLibreMap == null) {
-                                            return;
-                                        }
-                                        mapLibreMap.animateCamera(
-                                                CameraUpdateFactory.newLatLngZoom(target, PLACE_FOCUS_ZOOM),
-                                                CAMERA_TRANSITION_STAGE_DURATION_MS);
-                                    }
-
-                                    @Override
-                                    public void onCancel() {
-                                    }
-                                });
-                    }
-
-                    @Override
-                    public void onCancel() {
-                    }
-                });
+                CameraUpdateFactory.newLatLng(target),
+                CAMERA_TRANSITION_STAGE_DURATION_MS);
     }
 
     private void selectRelativeResult(int direction) {
@@ -633,8 +599,6 @@ public class AddTripStopFragment extends Fragment {
             tvAiLoading.clearAnimation();
             return;
         }
-
-        tvAiLoading.setTextColor(android.graphics.Color.parseColor("#2ECC71"));
         AlphaAnimation pulse = new AlphaAnimation(0.35f, 1.0f);
         pulse.setDuration(650L);
         pulse.setRepeatMode(Animation.REVERSE);

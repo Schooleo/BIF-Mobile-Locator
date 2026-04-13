@@ -1,13 +1,5 @@
 package com.bif.server.features.ai.clients;
 
-import com.bif.server.features.ai.config.OllamaProperties;
-import com.bif.server.features.ai.exceptions.AiParseException;
-import com.bif.server.features.ai.exceptions.AiUpstreamException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-
 import java.io.IOException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -16,8 +8,17 @@ import java.net.http.HttpResponse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
 import static org.mockito.ArgumentMatchers.any;
+import org.mockito.Mockito;
 import static org.mockito.Mockito.when;
+
+import com.bif.server.features.ai.config.OllamaProperties;
+import com.bif.server.features.ai.dto.PlaceSearchExtraction;
+import com.bif.server.features.ai.exceptions.AiParseException;
+import com.bif.server.features.ai.exceptions.AiUpstreamException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 class OllamaJsonClientTest {
 
@@ -88,7 +89,11 @@ class OllamaJsonClientTest {
 
         OllamaJsonClient client = new OllamaJsonClient(httpClient, new ObjectMapper(), properties);
 
-        assertThrows(AiUpstreamException.class, () -> client.generateJson("sys", "user"));
+        AiUpstreamException exception = assertThrows(
+            AiUpstreamException.class,
+            () -> client.generateJson("sys", "user")
+        );
+        assertTrue(exception.getMessage().contains("status 503"));
     }
 
     @Test
@@ -104,7 +109,11 @@ class OllamaJsonClientTest {
 
         OllamaJsonClient client = new OllamaJsonClient(httpClient, new ObjectMapper(), properties);
 
-        assertThrows(AiParseException.class, () -> client.generateJson("sys", "user"));
+        AiParseException exception = assertThrows(
+            AiParseException.class,
+            () -> client.generateJson("sys", "user")
+        );
+        assertTrue(exception.getMessage().contains("Failed to decode Ollama transport payload"));
     }
 
     @Test
@@ -120,7 +129,11 @@ class OllamaJsonClientTest {
 
         OllamaJsonClient client = new OllamaJsonClient(httpClient, new ObjectMapper(), properties);
 
-        assertThrows(AiUpstreamException.class, () -> client.generateJson("sys", "user"));
+        AiUpstreamException exception = assertThrows(
+            AiUpstreamException.class,
+            () -> client.generateJson("sys", "user")
+        );
+        assertTrue(exception.getMessage().contains("empty response payload"));
     }
 
     @Test
@@ -170,7 +183,93 @@ class OllamaJsonClientTest {
 
         OllamaJsonClient client = new OllamaJsonClient(httpClient, new ObjectMapper(), properties);
 
-        assertThrows(AiUpstreamException.class, () -> client.generateJson("sys", "user"));
+        AiUpstreamException exception = assertThrows(
+            AiUpstreamException.class,
+            () -> client.generateJson("sys", "user")
+        );
+        assertTrue(exception.getMessage().contains("Failed to call Ollama"));
+    }
+
+    @Test
+    void generateJson_WithSchemaAndTargetType_ParsesStructuredPayload() throws Exception {
+                OllamaProperties properties = new OllamaProperties();
+                HttpClient httpClient = Mockito.mock(HttpClient.class);
+                @SuppressWarnings("unchecked")
+                HttpResponse<String> response = Mockito.mock(HttpResponse.class);
+                when(response.statusCode()).thenReturn(200);
+                when(response.body()).thenReturn(
+                                "{\"response\":\"{\\\"searchQueries\\\":[\\\"coffee\\\"],"
+                                + "\\\"keywords\\\":[\\\"coffee\\\"],"
+                                + "\\\"category\\\":null,\\\"vibe\\\":null,\\\"locationHint\\\":null}\"}"
+                );
+                when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                                .thenReturn(response);
+
+                OllamaJsonClient client = new OllamaJsonClient(httpClient, new ObjectMapper(), properties);
+
+                PlaceSearchExtraction extraction = client.generateJson(
+                                "sys",
+                                "user",
+                                """
+                                {
+                                    "type":"object",
+                                    "properties":{
+                                        "searchQueries":{"type":"array","items":{"type":"string"}},
+                                        "keywords":{"type":"array","items":{"type":"string"}},
+                                        "category":{"type":["string","null"]},
+                                        "vibe":{"type":["string","null"]},
+                                        "locationHint":{"type":["string","null"]}
+                                    },
+                                    "required":["searchQueries","keywords","category","vibe","locationHint"],
+                                    "additionalProperties":false
+                                }
+                                """,
+                                PlaceSearchExtraction.class
+                );
+
+                assertEquals("coffee", extraction.searchQueries().getFirst());
+    }
+
+    @Test
+    void generateJson_WithSchemaAndTargetType_ThrowsOnWrappedStructuredPayload() throws Exception {
+                OllamaProperties properties = new OllamaProperties();
+                HttpClient httpClient = Mockito.mock(HttpClient.class);
+                @SuppressWarnings("unchecked")
+                HttpResponse<String> response = Mockito.mock(HttpResponse.class);
+                when(response.statusCode()).thenReturn(200);
+                when(response.body()).thenReturn(
+                                "{\"response\":\"```json\\n{\\\"searchQueries\\\":[\\\"coffee\\\"],"
+                                + "\\\"keywords\\\":[\\\"coffee\\\"],"
+                                + "\\\"category\\\":null,\\\"vibe\\\":null,\\\"locationHint\\\":null}\\n```\"}"
+                );
+                when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                                .thenReturn(response);
+
+                OllamaJsonClient client = new OllamaJsonClient(httpClient, new ObjectMapper(), properties);
+
+                AiParseException exception = assertThrows(
+                                AiParseException.class,
+                                () -> client.generateJson(
+                                                "sys",
+                                                "user",
+                                                """
+                                                {
+                                                    "type":"object",
+                                                    "properties":{
+                                                        "searchQueries":{"type":"array","items":{"type":"string"}},
+                                                        "keywords":{"type":"array","items":{"type":"string"}},
+                                                        "category":{"type":["string","null"]},
+                                                        "vibe":{"type":["string","null"]},
+                                                        "locationHint":{"type":["string","null"]}
+                                                    },
+                                                    "required":["searchQueries","keywords","category","vibe","locationHint"],
+                                                    "additionalProperties":false
+                                                }
+                                                """,
+                                                PlaceSearchExtraction.class
+                                )
+                );
+                                        assertTrue(exception.getMessage().contains("Failed to decode Ollama structured output"));
     }
 
     private JsonNode readTree(ObjectMapper objectMapper, String body) {

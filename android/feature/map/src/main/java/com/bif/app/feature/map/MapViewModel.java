@@ -42,6 +42,8 @@ public class MapViewModel extends ViewModel {
     private static final String NO_MAP_DATA_DOWNLOADED = "No map data downloaded";
     private static final String OFFLINE_ENGINE_UNAVAILABLE = "Offline routing engine unavailable";
     private static final String ROUTE_ESTIMATING = "Estimating route...";
+    private static final double FOLLOWING_LOCATION_MIN_DELTA_METERS = 1.0d;
+    private static final float FOLLOWING_BEARING_MIN_DELTA_DEGREES = 2.0f;
 
     private final IMapRepository mapRepository;
     private final IPlaceRepository placeRepository;
@@ -103,6 +105,7 @@ public class MapViewModel extends ViewModel {
     private Runnable searchRunnable;
     @Nullable
     private String pendingSearchQuery;
+    private boolean pendingSearchSaveToHistory = true;
     private final long searchDebounceMs;
 
     private final java.util.concurrent.atomic.AtomicBoolean activeSearchPending =
@@ -163,7 +166,8 @@ public class MapViewModel extends ViewModel {
 
             LiveData<List<Place>> source = placeRepository.searchPlaces(
                     trigger.query,
-                    cloneLocation(trigger.userLocation));
+                    cloneLocation(trigger.userLocation),
+                    trigger.saveToHistory);
             if (source == null) {
                 MutableLiveData<List<Place>> empty = new MutableLiveData<>();
                 empty.setValue(new ArrayList<>());
@@ -207,17 +211,30 @@ public class MapViewModel extends ViewModel {
         _statusText.setValue(new Event<>(text));
     }
 
+    public void clearPendingStatusText() {
+        _statusText.setValue(null);
+    }
+
     public void searchLocation(String query) {
         locationSearchQuery.setValue(query);
     }
 
     public void searchForPlaces(String query) {
+        queueSearch(query, true);
+    }
+
+    public void searchForPlacesLive(String query) {
+        queueSearch(query, false);
+    }
+
+    private void queueSearch(String query, boolean saveToHistory) {
         String normalized = query == null ? "" : query.trim();
         if (normalized.isEmpty()) {
             if (searchHandler != null && searchRunnable != null) {
                 searchHandler.removeCallbacks(searchRunnable);
             }
             pendingSearchQuery = null;
+            pendingSearchSaveToHistory = true;
             lastSearchQuery = null;
             _isSearchingPlaces.setValue(false);
             activeSearchPending.set(false);
@@ -228,9 +245,10 @@ public class MapViewModel extends ViewModel {
         activeSearchPending.set(true);
         _isSearchingPlaces.setValue(true);
         pendingSearchQuery = normalized;
+        pendingSearchSaveToHistory = saveToHistory;
  
         if (searchHandler == null) {
-            dispatchSearchQuery(normalized);
+            dispatchSearchQuery(normalized, saveToHistory);
             return;
         }
  
@@ -240,7 +258,7 @@ public class MapViewModel extends ViewModel {
         searchRunnable = () -> {
             String queryToDispatch = pendingSearchQuery;
             if (queryToDispatch != null) {
-                dispatchSearchQuery(queryToDispatch);
+                dispatchSearchQuery(queryToDispatch, pendingSearchSaveToHistory);
             }
         };
         searchHandler.postDelayed(searchRunnable, searchDebounceMs);
@@ -585,7 +603,59 @@ public class MapViewModel extends ViewModel {
         if (!current.hasRoute()) {
             return;
         }
-        _routeSession.setValue(current.withLocation(location, normalizeBearing(bearingDegrees)));
+
+        float normalizedBearing = normalizeBearing(bearingDegrees);
+        if (isEquivalentFollowingUpdate(
+                current.lastKnownLocation,
+                location,
+                current.lastBearingDegrees,
+                normalizedBearing)) {
+            return;
+        }
+
+        _routeSession.setValue(current.withLocation(cloneLocation(location), normalizedBearing));
+    }
+
+    private boolean isEquivalentFollowingUpdate(@Nullable Location previousLocation,
+                                                @Nullable Location nextLocation,
+                                                float previousBearing,
+                                                float nextBearing) {
+        if (!isSameLocationWithinMeters(previousLocation, nextLocation, FOLLOWING_LOCATION_MIN_DELTA_METERS)) {
+            return false;
+        }
+
+        if (!Float.isFinite(previousBearing) || !Float.isFinite(nextBearing)) {
+            return Float.isNaN(previousBearing) && Float.isNaN(nextBearing);
+        }
+
+        return angularDifferenceDegrees(previousBearing, nextBearing) < FOLLOWING_BEARING_MIN_DELTA_DEGREES;
+    }
+
+    private boolean isSameLocationWithinMeters(@Nullable Location first,
+                                               @Nullable Location second,
+                                               double thresholdMeters) {
+        if (first == null || second == null) {
+            return first == second;
+        }
+
+        double earthRadiusMeters = 6371000.0d;
+        double dLat = Math.toRadians(second.latitude - first.latitude);
+        double dLng = Math.toRadians(second.longitude - first.longitude);
+        double lat1 = Math.toRadians(first.latitude);
+        double lat2 = Math.toRadians(second.latitude);
+
+        double sinHalfLat = Math.sin(dLat / 2.0d);
+        double sinHalfLng = Math.sin(dLng / 2.0d);
+        double a = sinHalfLat * sinHalfLat
+                + Math.cos(lat1) * Math.cos(lat2) * sinHalfLng * sinHalfLng;
+        double c = 2.0d * Math.atan2(Math.sqrt(a), Math.sqrt(Math.max(0.0d, 1.0d - a)));
+        double distanceMeters = earthRadiusMeters * c;
+        return distanceMeters <= thresholdMeters;
+    }
+
+    private float angularDifferenceDegrees(float first, float second) {
+        float diff = Math.abs(first - second) % 360f;
+        return diff > 180f ? 360f - diff : diff;
     }
 
     private void requestRoute(@Nullable Place destinationPlace,
@@ -705,7 +775,8 @@ public class MapViewModel extends ViewModel {
 
 
 
-    private void dispatchSearchQuery(@Nullable String rawQuery) {
+    private void dispatchSearchQuery(@Nullable String rawQuery,
+            boolean saveToHistory) {
         String query = rawQuery == null ? "" : rawQuery.trim();
         if (query.isEmpty()) {
             _isSearchingPlaces.postValue(false);
@@ -718,28 +789,35 @@ public class MapViewModel extends ViewModel {
         String locKey = loc == null
                 ? "none"
                 : String.format(Locale.US, "%.4f,%.4f", loc.latitude, loc.longitude);
-        String dedupeKey = query + "|" + locKey;
+        String dedupeKey = query + "|" + locKey + "|" + saveToHistory;
         if (dedupeKey.equals(lastSearchQuery)) {
             _isSearchingPlaces.postValue(false);
             return;
         }
         lastSearchQuery = dedupeKey;
 
-        searchTrigger.postValue(new SearchTrigger(query, cloneLocation(currentSearchUserLocation)));
+        searchTrigger.postValue(new SearchTrigger(
+                query,
+                cloneLocation(currentSearchUserLocation),
+                saveToHistory));
     }
 
     private static final class SearchTrigger {
         private final String query;
         @Nullable
         private final Location userLocation;
+        private final boolean saveToHistory;
 
-        SearchTrigger(@NonNull String query, @Nullable Location userLocation) {
+        SearchTrigger(@NonNull String query,
+                @Nullable Location userLocation,
+                boolean saveToHistory) {
             this.query = query;
             this.userLocation = userLocation;
+            this.saveToHistory = saveToHistory;
         }
 
         static SearchTrigger empty() {
-            return new SearchTrigger("", null);
+            return new SearchTrigger("", null, true);
         }
     }
 
