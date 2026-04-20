@@ -159,4 +159,23 @@ public final class RouteSession {
                 lastKnownLocation,
                 lastBearingDegrees);
     }
+
+    @NonNull
+    public RouteSession stopTracking() {
+        if (!following) {
+            return this;
+        }
+
+        return new RouteSession(
+                status,
+                destinationPlace,
+                route,
+                summaryText,
+                durationText,
+                distanceText,
+                errorText,
+                false,
+                lastKnownLocation,
+                lastBearingDegrees);
+    }
 }

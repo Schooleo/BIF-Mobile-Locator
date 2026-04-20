@@ -664,6 +664,8 @@ public class MapViewModel extends ViewModel {
         }
 
         navigationFinishedDispatched = true;
+        RouteSession currentSession = getCurrentRouteSession();
+        _routeSession.setValue(currentSession.stopTracking());
 
         long endTime = System.currentTimeMillis();
         long startTime = activeTripStartTimeMillis != null ? activeTripStartTimeMillis : endTime;
@@ -671,7 +673,8 @@ public class MapViewModel extends ViewModel {
             startTime = endTime;
         }
 
-        _navigationFinishedEvent.setValue(new Event<>(new TripSummary(startTime, endTime)));
+        TripSummary tripSummary = new TripSummary(startTime, endTime);
+        _navigationFinishedEvent.setValue(new Event<>(tripSummary));
     }
 
     @Nullable

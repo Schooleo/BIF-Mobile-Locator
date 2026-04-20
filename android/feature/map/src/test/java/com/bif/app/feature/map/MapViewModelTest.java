@@ -670,6 +670,7 @@ public class MapViewModelTest {
         assertTrue(tripSummary.getEndTime() >= tripSummary.getStartTime());
         assertTrue(tripSummary.getDurationFormatted().contains("phút"));
         assertTrue(tripSummary.getDurationFormatted().contains("giây"));
+        assertFalse(viewModel.getCurrentRouteSession().following);
     }
 
     @Test
