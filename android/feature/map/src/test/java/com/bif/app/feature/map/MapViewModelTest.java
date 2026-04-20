@@ -646,6 +646,53 @@ public class MapViewModelTest {
     }
 
     @Test
+    public void updateFollowingLocation_whenFollowingAndArriving_dispatchesNavigationFinishedEvent() {
+        MutableLiveData<Route> routeLiveData = new MutableLiveData<>();
+        Mockito.when(routeRepository.getRoute(ArgumentMatchers.anyList())).thenReturn(routeLiveData);
+
+        Place destination = new Place(
+                "p1",
+                "Ben Thanh",
+                "Le Loi",
+                4.2,
+                new Location(10.7720, 106.6980));
+
+        viewModel.beginRoutePreview(destination, new Location(10.7700, 106.6960), destination.location);
+        routeLiveData.setValue(new Route(1800.0, 360.0, "{}", "driving", Route.SOURCE_ONLINE));
+
+        viewModel.startFollowingRoute();
+        viewModel.updateFollowingLocation(new Location(10.7720, 106.6980), 90f);
+
+        Event<TripSummary> navigationEvent = viewModel.navigationFinishedEvent.getValue();
+        assertNotNull(navigationEvent);
+        TripSummary tripSummary = navigationEvent.getContentIfNotHandled();
+        assertNotNull(tripSummary);
+        assertTrue(tripSummary.getEndTime() >= tripSummary.getStartTime());
+        assertTrue(tripSummary.getDurationFormatted().contains("phút"));
+        assertTrue(tripSummary.getDurationFormatted().contains("giây"));
+    }
+
+    @Test
+    public void updateFollowingLocation_whenNotFollowing_doesNotDispatchNavigationFinishedEvent() {
+        MutableLiveData<Route> routeLiveData = new MutableLiveData<>();
+        Mockito.when(routeRepository.getRoute(ArgumentMatchers.anyList())).thenReturn(routeLiveData);
+
+        Place destination = new Place(
+                "p1",
+                "Ben Thanh",
+                "Le Loi",
+                4.2,
+                new Location(10.7720, 106.6980));
+
+        viewModel.beginRoutePreview(destination, new Location(10.7700, 106.6960), destination.location);
+        routeLiveData.setValue(new Route(1800.0, 360.0, "{}", "driving", Route.SOURCE_ONLINE));
+
+        viewModel.updateFollowingLocation(new Location(10.7720, 106.6980), 90f);
+
+        assertNull(viewModel.navigationFinishedEvent.getValue());
+    }
+
+    @Test
     public void newViewModel_startsWithoutRouteSession() {
         MapViewModel freshViewModel = new MapViewModel(
                 mapRepository,
