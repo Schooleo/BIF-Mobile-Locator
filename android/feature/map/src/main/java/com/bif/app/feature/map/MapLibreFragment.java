@@ -8,7 +8,6 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PointF;
-import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -93,10 +92,8 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -222,8 +219,6 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     };
     private boolean suppressQueryTextChange;
     private boolean rvReviewsTouchListenerRegistered = false;
-    @Nullable
-    private androidx.appcompat.app.AlertDialog tripCompletedDialog;
     @Nullable
     private Place pendingNavigationPlace;
     @Nullable
@@ -453,7 +448,19 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 return;
             }
 
-            showTripCompletedDialog(tripSummary);
+            DialogUtils.showArrivedDialog(requireContext(), tripSummary, new DialogUtils.OnActionClickListener() {
+                @Override
+                public void onViewDetailClicked() {
+                    stopRouteAndFocusDestination();
+                }
+
+                @Override
+                public void onCloseClicked() {
+                    reopeningPlaceAfterRouteStop = false;
+                    viewModel.cancelRoute();
+                    clearRouteFeatures();
+                }
+            });
         });
 
         setupSearchUi(view);
@@ -1917,83 +1924,6 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         } else {
             reopeningPlaceAfterRouteStop = false;
         }
-    }
-
-    private void showTripCompletedDialog(@NonNull TripSummary tripSummary) {
-        if (!isAdded()) {
-            return;
-        }
-
-        View dialogView = getLayoutInflater().inflate(R.layout.dialog_trip_completed, null);
-
-        ImageButton closeButton = dialogView.findViewById(R.id.btn_trip_complete_close);
-        TextView destinationNameText = dialogView.findViewById(R.id.tv_trip_complete_destination_name);
-        TextView destinationAddressText = dialogView.findViewById(R.id.tv_trip_complete_destination_address);
-        TextView travelTimeText = dialogView.findViewById(R.id.tv_trip_complete_duration);
-        TextView distanceText = dialogView.findViewById(R.id.tv_trip_complete_distance);
-        TextView startedTimeText = dialogView.findViewById(R.id.tv_trip_complete_started_time);
-        TextView arrivedTimeText = dialogView.findViewById(R.id.tv_trip_complete_arrived_time);
-        MaterialButton viewDestinationButton = dialogView.findViewById(R.id.btn_trip_complete_view_destination);
-
-        RouteSession session = viewModel.getCurrentRouteSession();
-        Place destination = session.destinationPlace;
-
-        String destinationName = destination != null && !TextUtils.isEmpty(destination.name)
-                ? destination.name
-                : getString(R.string.trip_completed_unknown_destination);
-        String destinationAddress = destination != null && !TextUtils.isEmpty(destination.address)
-                ? destination.address
-                : getString(R.string.trip_completed_unknown_address);
-
-        destinationNameText.setText(destinationName);
-        destinationAddressText.setText(destinationAddress);
-        travelTimeText.setText(formatTripDuration(tripSummary));
-        distanceText.setText(session.route != null
-                ? formatDistance(session.route.getDistanceMeters())
-                : getString(R.string.trip_completed_unknown_distance));
-        startedTimeText.setText(formatTripClock(tripSummary.getStartTime()));
-        arrivedTimeText.setText(formatTripClock(tripSummary.getEndTime()));
-
-        if (tripCompletedDialog != null && tripCompletedDialog.isShowing()) {
-            tripCompletedDialog.dismiss();
-        }
-
-        tripCompletedDialog = new MaterialAlertDialogBuilder(requireContext())
-                .setView(dialogView)
-                .create();
-
-        if (tripCompletedDialog.getWindow() != null) {
-            tripCompletedDialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        }
-
-        closeButton.setOnClickListener(v -> {
-            if (tripCompletedDialog != null) {
-                tripCompletedDialog.dismiss();
-            }
-        });
-
-        viewDestinationButton.setOnClickListener(v -> {
-            if (tripCompletedDialog != null) {
-                tripCompletedDialog.dismiss();
-            }
-            stopRouteAndFocusDestination();
-        });
-
-        tripCompletedDialog.setOnDismissListener(dialog -> tripCompletedDialog = null);
-        tripCompletedDialog.show();
-    }
-
-    @NonNull
-    private String formatTripDuration(@NonNull TripSummary tripSummary) {
-        long durationMillis = Math.max(0L, tripSummary.getEndTime() - tripSummary.getStartTime());
-        double durationSeconds = durationMillis / 1000d;
-        return formatDuration(durationSeconds);
-    }
-
-    @NonNull
-    private String formatTripClock(long timestampMillis) {
-        SimpleDateFormat formatter = new SimpleDateFormat("HH:mm", Locale.getDefault());
-        return formatter.format(new Date(timestampMillis));
     }
 
     private void updateFloatingControlsPosition() {
@@ -3825,10 +3755,6 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     public void onDestroyView() {
         stopSingleLocationUpdates();
         stopHeadingSensorUpdates();
-        if (tripCompletedDialog != null) {
-            tripCompletedDialog.dismiss();
-            tripCompletedDialog = null;
-        }
         floatingControlsUpdateScheduled = false;
         userIndicatorVisibleForZoom = null;
         styleLoadRequested = false;

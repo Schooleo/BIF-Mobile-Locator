@@ -2,10 +2,12 @@ package com.bif.app.feature.map;
 
 import androidx.annotation.NonNull;
 
+import com.bif.app.core.utils.DialogUtils;
+
 import java.util.Locale;
 import java.util.Objects;
 
-public final class TripSummary {
+public final class TripSummary implements DialogUtils.TripSummary {
     private final Long startTime;
     private final Long endTime;
 
@@ -25,6 +27,7 @@ public final class TripSummary {
     }
 
     @NonNull
+    @Override
     public String getDurationFormatted() {
         long safeStart = Math.max(0L, startTime);
         long safeEnd = Math.max(0L, endTime);
