@@ -36,6 +36,9 @@ import javax.inject.Inject;
 
 import dagger.hilt.android.lifecycle.HiltViewModel;
 
+import com.bif.app.feature.map.model.TripSummary;
+import com.bif.app.feature.map.utils.SingleLiveEvent;
+
 
 @HiltViewModel
 public class MapViewModel extends ViewModel {
@@ -115,6 +118,10 @@ public class MapViewModel extends ViewModel {
 
     @Nullable
     private volatile PlaceIdentityContext currentPlaceIdentityContext;
+
+    // Sự kiện thông báo khi người dùng đến đích
+    private final SingleLiveEvent<TripSummary> _navigationFinishedEvent = new SingleLiveEvent<>();
+    public final LiveData<TripSummary> navigationFinishedEvent = _navigationFinishedEvent;
 
     @Inject
     public MapViewModel(
@@ -203,6 +210,12 @@ public class MapViewModel extends ViewModel {
                 this.searchHandler = new android.os.Handler(android.os.Looper.getMainLooper());
             } catch (Exception ignored) {
                 this.searchHandler = null;
+            }
+
+            // Gọi hàm này khi người dùng đến đích
+            public void notifyNavigationFinished(long startTime, long endTime) {
+                TripSummary summary = new TripSummary(startTime, endTime);
+                _navigationFinishedEvent.setValue(summary);
             }
         }
     }
