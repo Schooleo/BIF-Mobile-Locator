@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="download_progress_track">#D0D7DE</color>
+    <color name="trip_completed_surface">#F6F7F9</color>
+    <color name="trip_completed_card">#E8EAF0</color>
+    <color name="trip_completed_text_secondary">#566274</color>
+    <color name="trip_completed_line">#C2CAD8</color>
+    <color name="trip_completed_close_bg">#E3E5EA</color>
+    <color name="trip_completed_success_outer">#CCEED9</color>
+    <color name="trip_completed_distance_icon">#8A2BE2</color>
+    <color name="trip_completed_timeline_icon">#FF5A1F</color>
 </resources>
