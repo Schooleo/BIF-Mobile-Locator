@@ -650,9 +650,20 @@ public class MapViewModel extends ViewModel {
             return;
         }
 
-        if (!isSameLocationWithinMeters(currentLocation, destination, NAVIGATION_FINISH_RADIUS_METERS)) {
+        double distanceToDestinationMeters = RouteGeometryUtils.calculateDistance(currentLocation, destination);
+        if (distanceToDestinationMeters >= NAVIGATION_FINISH_RADIUS_METERS) {
             return;
         }
+
+        onDestinationReached();
+    }
+
+    private void onDestinationReached() {
+        if (navigationFinishedDispatched) {
+            return;
+        }
+
+        navigationFinishedDispatched = true;
 
         long endTime = System.currentTimeMillis();
         long startTime = activeTripStartTimeMillis != null ? activeTripStartTimeMillis : endTime;
@@ -661,7 +672,6 @@ public class MapViewModel extends ViewModel {
         }
 
         _navigationFinishedEvent.setValue(new Event<>(new TripSummary(startTime, endTime)));
-        navigationFinishedDispatched = true;
     }
 
     @Nullable

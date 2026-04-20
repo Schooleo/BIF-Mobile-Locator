@@ -673,6 +673,33 @@ public class MapViewModelTest {
     }
 
     @Test
+    public void updateFollowingLocation_whenAlreadyArrived_dispatchesNavigationFinishedEventOnlyOncePerSession() {
+        MutableLiveData<Route> routeLiveData = new MutableLiveData<>();
+        Mockito.when(routeRepository.getRoute(ArgumentMatchers.anyList())).thenReturn(routeLiveData);
+
+        Place destination = new Place(
+                "p1",
+                "Ben Thanh",
+                "Le Loi",
+                4.2,
+                new Location(10.7720, 106.6980));
+
+        viewModel.beginRoutePreview(destination, new Location(10.7700, 106.6960), destination.location);
+        routeLiveData.setValue(new Route(1800.0, 360.0, "{}", "driving", Route.SOURCE_ONLINE));
+
+        viewModel.startFollowingRoute();
+        viewModel.updateFollowingLocation(new Location(10.7720, 106.6980), 90f);
+
+        Event<TripSummary> firstEvent = viewModel.navigationFinishedEvent.getValue();
+        assertNotNull(firstEvent);
+
+        viewModel.updateFollowingLocation(new Location(10.7720, 106.6980), 130f);
+
+        Event<TripSummary> secondEvent = viewModel.navigationFinishedEvent.getValue();
+        assertSame(firstEvent, secondEvent);
+    }
+
+    @Test
     public void updateFollowingLocation_whenNotFollowing_doesNotDispatchNavigationFinishedEvent() {
         MutableLiveData<Route> routeLiveData = new MutableLiveData<>();
         Mockito.when(routeRepository.getRoute(ArgumentMatchers.anyList())).thenReturn(routeLiveData);
