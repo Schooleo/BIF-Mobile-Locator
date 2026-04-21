@@ -673,7 +673,10 @@ public class MapViewModel extends ViewModel {
             startTime = endTime;
         }
 
-        TripSummary tripSummary = new TripSummary(startTime, endTime);
+        String distanceFormatted = currentSession.route != null
+                ? formatDistanceText(currentSession.route)
+                : null;
+        TripSummary tripSummary = new TripSummary(startTime, endTime, distanceFormatted);
         _navigationFinishedEvent.setValue(new Event<>(tripSummary));
     }
 

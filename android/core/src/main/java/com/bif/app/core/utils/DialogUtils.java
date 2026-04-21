@@ -7,6 +7,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -16,6 +17,9 @@ public class DialogUtils {
 
     public interface TripSummary {
         String getDurationFormatted();
+
+        @Nullable
+        String getDistanceFormatted();
     }
 
     public interface OnActionClickListener {
@@ -73,6 +77,17 @@ public class DialogUtils {
                 "tv_trip_complete_duration");
         if (durationText != null && summary != null) {
             durationText.setText(summary.getDurationFormatted());
+        }
+
+        TextView distanceText = findTextView(
+                context,
+                dialogView,
+                "tv_trip_complete_distance");
+        if (distanceText != null && summary != null) {
+            String distanceValue = summary.getDistanceFormatted();
+            if (distanceValue != null && !distanceValue.trim().isEmpty()) {
+                distanceText.setText(distanceValue);
+            }
         }
 
         View btnViewDetail = findView(

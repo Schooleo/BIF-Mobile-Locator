@@ -1,6 +1,7 @@
 package com.bif.app.feature.map;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.bif.app.core.utils.DialogUtils;
 
@@ -10,10 +11,19 @@ import java.util.Objects;
 public final class TripSummary implements DialogUtils.TripSummary {
     private final Long startTime;
     private final Long endTime;
+    @Nullable
+    private final String distanceFormatted;
 
     public TripSummary(@NonNull Long startTime, @NonNull Long endTime) {
+        this(startTime, endTime, null);
+    }
+
+    public TripSummary(@NonNull Long startTime,
+                       @NonNull Long endTime,
+                       @Nullable String distanceFormatted) {
         this.startTime = startTime;
         this.endTime = endTime;
+        this.distanceFormatted = distanceFormatted;
     }
 
     @NonNull
@@ -37,6 +47,12 @@ public final class TripSummary implements DialogUtils.TripSummary {
         return String.format(Locale.getDefault(), "%d phút %d giây", minutes, seconds);
     }
 
+    @Nullable
+    @Override
+    public String getDistanceFormatted() {
+        return distanceFormatted;
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) {
@@ -47,17 +63,21 @@ public final class TripSummary implements DialogUtils.TripSummary {
         }
         TripSummary that = (TripSummary) other;
         return Objects.equals(startTime, that.startTime)
-                && Objects.equals(endTime, that.endTime);
+                && Objects.equals(endTime, that.endTime)
+                && Objects.equals(distanceFormatted, that.distanceFormatted);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(startTime, endTime);
+        return Objects.hash(startTime, endTime, distanceFormatted);
     }
 
     @NonNull
     @Override
     public String toString() {
-        return "TripSummary(startTime=" + startTime + ", endTime=" + endTime + ")";
+        return "TripSummary(startTime=" + startTime
+                + ", endTime=" + endTime
+                + ", distanceFormatted=" + distanceFormatted
+                + ")";
     }
 }
