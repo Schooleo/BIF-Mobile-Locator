@@ -4,6 +4,8 @@ import com.bif.server.features.auth.dto.rest.AuthResponse;
 import com.bif.server.features.auth.dto.rest.AuthUserResponse;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpRequest;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpResponse;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordResetRequest;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordResetResponse;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpRequest;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpResponse;
 import com.bif.server.features.auth.dto.rest.LoginRequest;
@@ -110,6 +112,42 @@ public class AuthService {
         passwordResetOtpRepository.save(passwordResetOtp);
 
         return new ForgotPasswordVerifyOtpResponse(true, resetToken);
+    }
+
+    public ForgotPasswordResetResponse resetForgotPassword(ForgotPasswordResetRequest request) {
+        String resetToken = requiredTrimmed(request.resetToken(), "resetToken");
+        String newPassword = required(request.newPassword(), "newPassword");
+
+        if (newPassword.isBlank()) {
+            throw new InvalidRegistrationException("newPassword must not be blank");
+        }
+        if (newPassword.length() < 8) {
+            throw new InvalidRegistrationException("newPassword must have at least 8 characters");
+        }
+
+        PasswordResetOtp passwordResetOtp = passwordResetOtpRepository.findByResetToken(resetToken)
+                .orElse(null);
+        if (passwordResetOtp == null || passwordResetOtp.getResetTokenExpiresAt() == null
+                || passwordResetOtp.getResetTokenExpiresAt().isBefore(Instant.now())) {
+            return new ForgotPasswordResetResponse(false, "Reset token is invalid or expired");
+        }
+
+        User user = userRepository.findByEmailIgnoreCase(passwordResetOtp.getEmail())
+                .orElse(null);
+        if (user == null) {
+            return new ForgotPasswordResetResponse(false, "User not found");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        passwordResetOtp.setResetToken(null);
+        passwordResetOtp.setResetTokenExpiresAt(null);
+        passwordResetOtp.setOtp(null);
+        passwordResetOtp.setExpiresAt(null);
+        passwordResetOtpRepository.save(passwordResetOtp);
+
+        return new ForgotPasswordResetResponse(true, "Password has been reset successfully");
     }
 
     public AuthResponse register(RegisterRequest request) {

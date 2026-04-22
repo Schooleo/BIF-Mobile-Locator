@@ -3,6 +3,8 @@ package com.bif.server.features.auth.services;
 import com.bif.server.features.auth.dto.rest.AuthResponse;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpRequest;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpResponse;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordResetRequest;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordResetResponse;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpRequest;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpResponse;
 import com.bif.server.features.auth.dto.rest.LoginRequest;
@@ -318,6 +320,69 @@ class AuthServiceTest {
         verify(passwordResetOtpRepository).save(argThat(otp ->
                 result.resetToken().equals(otp.getResetToken())
                         && otp.getResetTokenExpiresAt() != null
+        ));
+    }
+
+    @Test
+    void resetForgotPassword_WhenTokenNotFound_ReturnsFailure() {
+        when(passwordResetOtpRepository.findByResetToken("bad-token")).thenReturn(Optional.empty());
+
+        ForgotPasswordResetResponse result = authService.resetForgotPassword(
+                new ForgotPasswordResetRequest("bad-token", "Password123!")
+        );
+
+        assertFalse(result.success());
+        assertEquals("Reset token is invalid or expired", result.message());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void resetForgotPassword_WhenTokenExpired_ReturnsFailure() {
+        PasswordResetOtp existing = new PasswordResetOtp();
+        existing.setEmail("alex@bif.local");
+        existing.setResetToken("expired-token");
+        existing.setResetTokenExpiresAt(java.time.Instant.now().minusSeconds(1));
+        when(passwordResetOtpRepository.findByResetToken("expired-token")).thenReturn(Optional.of(existing));
+
+        ForgotPasswordResetResponse result = authService.resetForgotPassword(
+                new ForgotPasswordResetRequest("expired-token", "Password123!")
+        );
+
+        assertFalse(result.success());
+        assertEquals("Reset token is invalid or expired", result.message());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void resetForgotPassword_WhenValid_UpdatesPasswordAndInvalidatesToken() {
+        PasswordResetOtp existing = new PasswordResetOtp();
+        existing.setEmail("alex@bif.local");
+        existing.setOtp("123456");
+        existing.setExpiresAt(java.time.Instant.now().plusSeconds(300));
+        existing.setResetToken("reset-token");
+        existing.setResetTokenExpiresAt(java.time.Instant.now().plusSeconds(300));
+
+        User user = new User();
+        user.setId("u1");
+        user.setEmail("alex@bif.local");
+
+        when(passwordResetOtpRepository.findByResetToken("reset-token")).thenReturn(Optional.of(existing));
+        when(userRepository.findByEmailIgnoreCase("alex@bif.local")).thenReturn(Optional.of(user));
+        when(passwordEncoder.encode("Password123!")).thenReturn("hashed-new");
+        when(passwordResetOtpRepository.save(any(PasswordResetOtp.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ForgotPasswordResetResponse result = authService.resetForgotPassword(
+                new ForgotPasswordResetRequest("reset-token", "Password123!")
+        );
+
+        assertTrue(result.success());
+        assertEquals("Password has been reset successfully", result.message());
+        verify(userRepository).save(argThat(savedUser -> "hashed-new".equals(savedUser.getPasswordHash())));
+        verify(passwordResetOtpRepository).save(argThat(otp ->
+                otp.getResetToken() == null
+                        && otp.getResetTokenExpiresAt() == null
+                        && otp.getOtp() == null
+                        && otp.getExpiresAt() == null
         ));
     }
 }

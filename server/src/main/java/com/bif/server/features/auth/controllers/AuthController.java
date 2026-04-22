@@ -3,6 +3,8 @@ package com.bif.server.features.auth.controllers;
 import com.bif.server.features.auth.dto.rest.AuthResponse;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpRequest;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpResponse;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordResetRequest;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordResetResponse;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpRequest;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpResponse;
 import com.bif.server.features.auth.dto.rest.LoginRequest;
@@ -85,6 +87,19 @@ public class AuthController {
             return ResponseEntity.ok(response);
         }
         return ResponseEntity.badRequest().body(response);
+    }
+
+    @PostMapping("/forgot-password/reset")
+    public ResponseEntity<ForgotPasswordResetResponse> resetForgotPassword(@RequestBody ForgotPasswordResetRequest request) {
+        try {
+            ForgotPasswordResetResponse response = authService.resetForgotPassword(request);
+            if (response.success()) {
+                return ResponseEntity.ok(response);
+            }
+            return ResponseEntity.badRequest().body(response);
+        } catch (InvalidRegistrationException e) {
+            return ResponseEntity.badRequest().body(new ForgotPasswordResetResponse(false, e.getMessage()));
+        }
     }
 
     @PostMapping("/logout")
