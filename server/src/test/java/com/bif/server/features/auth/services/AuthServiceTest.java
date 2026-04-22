@@ -1,6 +1,8 @@
 package com.bif.server.features.auth.services;
 
 import com.bif.server.features.auth.dto.rest.AuthResponse;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpRequest;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpResponse;
 import com.bif.server.features.auth.dto.rest.LoginRequest;
 import com.bif.server.features.auth.dto.rest.RefreshTokenRequest;
 import com.bif.server.features.auth.dto.rest.RegisterRequest;
@@ -8,7 +10,9 @@ import com.bif.server.features.auth.exceptions.EmailAlreadyUsedException;
 import com.bif.server.features.auth.exceptions.InvalidCredentialsException;
 import com.bif.server.features.auth.exceptions.InvalidRefreshTokenException;
 import com.bif.server.features.auth.exceptions.InvalidRegistrationException;
+import com.bif.server.features.auth.models.PasswordResetOtp;
 import com.bif.server.features.auth.models.RefreshToken;
+import com.bif.server.features.auth.repositories.PasswordResetOtpRepository;
 import com.bif.server.features.auth.repositories.RefreshTokenRepository;
 import com.bif.server.features.auth.security.AccessTokenBlacklistService;
 import com.bif.server.features.auth.security.JwtService;
@@ -40,6 +44,9 @@ class AuthServiceTest {
     private RefreshTokenRepository refreshTokenRepository;
 
     @Mock
+    private PasswordResetOtpRepository passwordResetOtpRepository;
+
+    @Mock
     private JwtService jwtService;
 
     @Mock
@@ -49,7 +56,15 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, refreshTokenRepository, passwordEncoder, jwtService, accessTokenBlacklistService, 2592000L);
+        authService = new AuthService(
+                userRepository,
+                refreshTokenRepository,
+                passwordResetOtpRepository,
+                passwordEncoder,
+                jwtService,
+                accessTokenBlacklistService,
+                2592000L
+        );
     }
 
     @Test
@@ -210,5 +225,43 @@ class AuthServiceTest {
         assertTrue(existing.isRevoked());
         verify(refreshTokenRepository).save(existing);
         verify(accessTokenBlacklistService).revoke("access-token-value");
+    }
+
+    @Test
+    void requestForgotPasswordOtp_WhenEmailMissing_ThrowsInvalidRegistrationException() {
+        assertThrows(InvalidRegistrationException.class, () -> authService.requestForgotPasswordOtp(new ForgotPasswordOtpRequest(null)));
+        verify(passwordResetOtpRepository, never()).save(any(PasswordResetOtp.class));
+    }
+
+    @Test
+    void requestForgotPasswordOtp_WhenEmailNotFound_ReturnsFailure() {
+        when(userRepository.findByEmailIgnoreCase("unknown@bif.local")).thenReturn(Optional.empty());
+
+        ForgotPasswordOtpResponse result = authService.requestForgotPasswordOtp(new ForgotPasswordOtpRequest("unknown@bif.local"));
+
+        assertFalse(result.success());
+        assertEquals("Email does not exist", result.message());
+        verify(passwordResetOtpRepository, never()).save(any(PasswordResetOtp.class));
+    }
+
+    @Test
+    void requestForgotPasswordOtp_WhenEmailExists_SavesOtpAndReturnsSuccess() {
+        User user = new User();
+        user.setId("u1");
+        user.setEmail("alex@bif.local");
+        when(userRepository.findByEmailIgnoreCase("alex@bif.local")).thenReturn(Optional.of(user));
+        when(passwordResetOtpRepository.save(any(PasswordResetOtp.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ForgotPasswordOtpResponse result = authService.requestForgotPasswordOtp(new ForgotPasswordOtpRequest("alex@bif.local"));
+
+        assertTrue(result.success());
+        assertEquals("OTP has been sent to your email", result.message());
+        verify(passwordResetOtpRepository).save(argThat(otp ->
+                "alex@bif.local".equals(otp.getEmail())
+                        && otp.getOtp() != null
+                        && otp.getOtp().matches("\\d{6}")
+                        && otp.getExpiresAt() != null
+                        && otp.getCreatedAt() != null
+        ));
     }
 }

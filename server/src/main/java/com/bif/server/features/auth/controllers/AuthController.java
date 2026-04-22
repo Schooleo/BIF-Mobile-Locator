@@ -1,6 +1,8 @@
 package com.bif.server.features.auth.controllers;
 
 import com.bif.server.features.auth.dto.rest.AuthResponse;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpRequest;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpResponse;
 import com.bif.server.features.auth.dto.rest.LoginRequest;
 import com.bif.server.features.auth.dto.rest.RefreshTokenRequest;
 import com.bif.server.features.auth.dto.rest.RegisterRequest;
@@ -22,7 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping({"/api/auth", "/auth"})
 public class AuthController {
     private final AuthService authService;
     private final UserService userService;
@@ -63,6 +65,15 @@ public class AuthController {
         } catch (InvalidRefreshTokenException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
+    }
+
+    @PostMapping("/forgot-password/request-otp")
+    public ResponseEntity<ForgotPasswordOtpResponse> requestForgotPasswordOtp(@RequestBody ForgotPasswordOtpRequest request) {
+        ForgotPasswordOtpResponse response = authService.requestForgotPasswordOtp(request);
+        if (response.success()) {
+            return ResponseEntity.ok(response);
+        }
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
     }
 
     @PostMapping("/logout")

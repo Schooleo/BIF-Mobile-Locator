@@ -2,6 +2,8 @@ package com.bif.server.features.auth.services;
 
 import com.bif.server.features.auth.dto.rest.AuthResponse;
 import com.bif.server.features.auth.dto.rest.AuthUserResponse;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpRequest;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpResponse;
 import com.bif.server.features.auth.dto.rest.LoginRequest;
 import com.bif.server.features.auth.dto.rest.RefreshTokenRequest;
 import com.bif.server.features.auth.dto.rest.RegisterRequest;
@@ -9,27 +11,37 @@ import com.bif.server.features.auth.exceptions.EmailAlreadyUsedException;
 import com.bif.server.features.auth.exceptions.InvalidCredentialsException;
 import com.bif.server.features.auth.exceptions.InvalidRefreshTokenException;
 import com.bif.server.features.auth.exceptions.InvalidRegistrationException;
+import com.bif.server.features.auth.models.PasswordResetOtp;
 import com.bif.server.features.auth.models.RefreshToken;
+import com.bif.server.features.auth.repositories.PasswordResetOtpRepository;
 import com.bif.server.features.auth.repositories.RefreshTokenRepository;
 import com.bif.server.features.auth.security.AccessTokenBlacklistService;
 import com.bif.server.features.auth.security.JwtService;
 import com.bif.server.features.user.models.User;
 import com.bif.server.features.user.repositories.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.security.SecureRandom;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
 @Service
 public class AuthService {
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
     private static final Pattern SIMPLE_EMAIL_PATTERN =
             Pattern.compile("^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$", Pattern.CASE_INSENSITIVE);
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final long OTP_EXPIRATION_MINUTES = 5L;
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final PasswordResetOtpRepository passwordResetOtpRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AccessTokenBlacklistService accessTokenBlacklistService;
@@ -38,6 +50,7 @@ public class AuthService {
     public AuthService(
             UserRepository userRepository,
             RefreshTokenRepository refreshTokenRepository,
+            PasswordResetOtpRepository passwordResetOtpRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             AccessTokenBlacklistService accessTokenBlacklistService,
@@ -45,10 +58,32 @@ public class AuthService {
     ) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
+        this.passwordResetOtpRepository = passwordResetOtpRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.accessTokenBlacklistService = accessTokenBlacklistService;
         this.refreshTokenExpirationSeconds = refreshTokenExpirationSeconds;
+    }
+
+    public ForgotPasswordOtpResponse requestForgotPasswordOtp(ForgotPasswordOtpRequest request) {
+        String email = normalizedEmail(request.email());
+
+        User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
+        if (user == null) {
+            return new ForgotPasswordOtpResponse(false, "Email does not exist");
+        }
+
+        String otp = generateOtp();
+        Instant now = Instant.now();
+        PasswordResetOtp passwordResetOtp = new PasswordResetOtp();
+        passwordResetOtp.setEmail(email);
+        passwordResetOtp.setOtp(otp);
+        passwordResetOtp.setCreatedAt(now);
+        passwordResetOtp.setExpiresAt(now.plus(OTP_EXPIRATION_MINUTES, ChronoUnit.MINUTES));
+        passwordResetOtpRepository.save(passwordResetOtp);
+
+        sendOtpEmailMock(email, otp);
+        return new ForgotPasswordOtpResponse(true, "OTP has been sent to your email");
     }
 
     public AuthResponse register(RegisterRequest request) {
@@ -174,5 +209,14 @@ public class AuthService {
 
     private String defaultAvatarLetter(String username) {
         return username.substring(0, 1).toUpperCase();
+    }
+
+    private String generateOtp() {
+        int value = SECURE_RANDOM.nextInt(1_000_000);
+        return String.format("%06d", value);
+    }
+
+    private void sendOtpEmailMock(String email, String otp) {
+        log.info("Mock OTP email sent to {} with code {}", email, otp);
     }
 }

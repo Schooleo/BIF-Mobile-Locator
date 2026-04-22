@@ -2,6 +2,8 @@ package com.bif.server.features.auth.controllers;
 
 import com.bif.server.features.auth.dto.rest.AuthResponse;
 import com.bif.server.features.auth.dto.rest.AuthUserResponse;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpRequest;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpResponse;
 import com.bif.server.features.auth.dto.rest.LoginRequest;
 import com.bif.server.features.auth.dto.rest.RefreshTokenRequest;
 import com.bif.server.features.auth.dto.rest.RegisterRequest;
@@ -121,6 +123,32 @@ class AuthControllerTest {
         ResponseEntity<AuthResponse> result = controller.refresh(request);
 
         assertEquals(HttpStatus.UNAUTHORIZED, result.getStatusCode());
+    }
+
+    @Test
+    void requestForgotPasswordOtp_WhenEmailExists_ReturnsOk() {
+        ForgotPasswordOtpRequest request = new ForgotPasswordOtpRequest("alex@bif.local");
+        ForgotPasswordOtpResponse response = new ForgotPasswordOtpResponse(true, "OTP has been sent to your email");
+        when(authService.requestForgotPasswordOtp(request)).thenReturn(response);
+
+        ResponseEntity<ForgotPasswordOtpResponse> result = controller.requestForgotPasswordOtp(request);
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertNotNull(result.getBody());
+        assertTrue(result.getBody().success());
+    }
+
+    @Test
+    void requestForgotPasswordOtp_WhenEmailMissing_ReturnsNotFound() {
+        ForgotPasswordOtpRequest request = new ForgotPasswordOtpRequest("unknown@bif.local");
+        ForgotPasswordOtpResponse response = new ForgotPasswordOtpResponse(false, "Email does not exist");
+        when(authService.requestForgotPasswordOtp(request)).thenReturn(response);
+
+        ResponseEntity<ForgotPasswordOtpResponse> result = controller.requestForgotPasswordOtp(request);
+
+        assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
+        assertNotNull(result.getBody());
+        assertFalse(result.getBody().success());
     }
 
     @Test
