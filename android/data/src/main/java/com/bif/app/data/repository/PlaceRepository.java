@@ -496,6 +496,7 @@ public class PlaceRepository implements IPlaceRepository {
                 entity.persistedByAction = action;
                 if (existing != null) {
                     entity.serverVersion = existing.serverVersion;
+                    entity.viewedAt = existing.viewedAt;
                 }
 
                 boolean isDelete = "DELETE".equalsIgnoreCase(action)
@@ -503,6 +504,10 @@ public class PlaceRepository implements IPlaceRepository {
                 boolean isViewed = isViewedAction(action);
                 if (isDelete) {
                     entity.deleted = true;
+                }
+
+                if (isViewed) {
+                    entity.viewedAt = System.currentTimeMillis();
                 }
 
                 placeDao.upsert(entity);

@@ -47,6 +47,7 @@ public class PlaceMapper {
             entity.longitude = place.location.longitude;
         }
         entity.lastSyncedAt = System.currentTimeMillis();
+        entity.viewedAt = 0L;
         return entity;
     }
 
@@ -72,6 +73,7 @@ public class PlaceMapper {
         entity.serverVersion = dto.serverVersion;
         entity.deleted = dto.deleted;
         entity.lastSyncedAt = System.currentTimeMillis();
+        entity.viewedAt = 0L;
         if (dto.tags != null) {
             entity.tags = String.join(",", dto.tags);
         }

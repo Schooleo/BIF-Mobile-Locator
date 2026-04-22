@@ -85,6 +85,7 @@ import org.maplibre.geojson.Feature;
 import org.maplibre.geojson.FeatureCollection;
 import org.maplibre.geojson.LineString;
 import org.maplibre.geojson.Point;
+import org.maplibre.geojson.Polygon;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -300,6 +301,29 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             this.point = point;
             this.name = name;
             this.externalId = externalId;
+        }
+    }
+
+    private static final class StylePoiCandidate {
+        final LatLng point;
+        final String name;
+        final String externalId;
+        final int renderIndex;
+        final int geometryPriority;
+        final double areaScore;
+
+        StylePoiCandidate(@NonNull LatLng point,
+                          @Nullable String name,
+                          @Nullable String externalId,
+                          int renderIndex,
+                          int geometryPriority,
+                          double areaScore) {
+            this.point = point;
+            this.name = name;
+            this.externalId = externalId;
+            this.renderIndex = renderIndex;
+            this.geometryPriority = geometryPriority;
+            this.areaScore = areaScore;
         }
     }
 
@@ -2650,26 +2674,161 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             return null;
         }
 
-        for (Feature feature : features) {
-            if (feature == null || !(feature.geometry() instanceof Point)) {
+        List<StylePoiCandidate> dedupedCandidates = new ArrayList<>();
+        for (int index = 0; index < features.size(); index++) {
+            Feature feature = features.get(index);
+            StylePoiCandidate candidate = toStylePoiCandidate(feature, tapPoint, index);
+            if (candidate == null) {
                 continue;
             }
-            Point poiPoint = (Point) feature.geometry();
-            String poiName = firstNonEmptyProperty(feature);
-            
-            String externalId = feature.id();
-            if (TextUtils.isEmpty(externalId)) {
-                externalId = feature.getStringProperty("id");
-            }
-            // Mới: Nếu tile không có ID thật, externalId sẽ null và tự fallback ở buildStablePlaceId sau này.
-            
-            return new PoiTap(
-                    new LatLng(poiPoint.latitude(), poiPoint.longitude()),
-                    poiName,
-                    externalId);
+            upsertStyleCandidate(dedupedCandidates, candidate);
         }
 
-        return null;
+        if (dedupedCandidates.isEmpty()) {
+            return null;
+        }
+
+        StylePoiCandidate best = dedupedCandidates.get(0);
+        for (int i = 1; i < dedupedCandidates.size(); i++) {
+            StylePoiCandidate current = dedupedCandidates.get(i);
+            if (compareStyleCandidates(current, best) < 0) {
+                best = current;
+            }
+        }
+
+        return new PoiTap(best.point, best.name, best.externalId);
+    }
+
+    @Nullable
+    private StylePoiCandidate toStylePoiCandidate(@Nullable Feature feature,
+                                                  @NonNull LatLng tapPoint,
+                                                  int renderIndex) {
+        if (feature == null || feature.geometry() == null) {
+            return null;
+        }
+
+        LatLng candidatePoint;
+        int geometryPriority;
+        double areaScore;
+
+        if (feature.geometry() instanceof Point) {
+            Point poiPoint = (Point) feature.geometry();
+            candidatePoint = new LatLng(poiPoint.latitude(), poiPoint.longitude());
+            geometryPriority = 0;
+            areaScore = 0.0;
+        } else if (feature.geometry() instanceof Polygon) {
+            candidatePoint = tapPoint;
+            geometryPriority = 1;
+            areaScore = estimatePolygonArea((Polygon) feature.geometry());
+        } else {
+            return null;
+        }
+
+        String externalId = feature.id();
+        if (TextUtils.isEmpty(externalId)) {
+            externalId = feature.getStringProperty("id");
+        }
+
+        String poiName = firstNonEmptyProperty(feature);
+        return new StylePoiCandidate(
+                candidatePoint,
+                poiName,
+                externalId,
+                renderIndex,
+                geometryPriority,
+                areaScore);
+    }
+
+    private void upsertStyleCandidate(@NonNull List<StylePoiCandidate> dedupedCandidates,
+                                      @NonNull StylePoiCandidate candidate) {
+        String candidateKey = buildStyleCandidateKey(candidate);
+        for (int i = 0; i < dedupedCandidates.size(); i++) {
+            StylePoiCandidate existing = dedupedCandidates.get(i);
+            if (!buildStyleCandidateKey(existing).equals(candidateKey)) {
+                continue;
+            }
+            if (compareStyleCandidates(candidate, existing) < 0) {
+                dedupedCandidates.set(i, candidate);
+            }
+            return;
+        }
+        dedupedCandidates.add(candidate);
+    }
+
+    @NonNull
+    private String buildStyleCandidateKey(@NonNull StylePoiCandidate candidate) {
+        if (!TextUtils.isEmpty(candidate.externalId)) {
+            return "id:" + candidate.externalId;
+        }
+
+        String normalizedName = candidate.name == null
+                ? ""
+                : candidate.name.trim().toLowerCase(Locale.ROOT);
+        long latBucket = Math.round(candidate.point.getLatitude() * 10_000.0d);
+        long lngBucket = Math.round(candidate.point.getLongitude() * 10_000.0d);
+        return "name:" + normalizedName + "|" + latBucket + "|" + lngBucket;
+    }
+
+    private int compareStyleCandidates(@NonNull StylePoiCandidate left,
+                                       @NonNull StylePoiCandidate right) {
+        boolean leftHasExternalId = !TextUtils.isEmpty(left.externalId);
+        boolean rightHasExternalId = !TextUtils.isEmpty(right.externalId);
+        if (leftHasExternalId != rightHasExternalId) {
+            return leftHasExternalId ? -1 : 1;
+        }
+
+        if (left.renderIndex != right.renderIndex) {
+            return Integer.compare(left.renderIndex, right.renderIndex);
+        }
+
+        if (left.geometryPriority != right.geometryPriority) {
+            return Integer.compare(left.geometryPriority, right.geometryPriority);
+        }
+
+        if (Double.compare(left.areaScore, right.areaScore) != 0) {
+            return Double.compare(left.areaScore, right.areaScore);
+        }
+
+        boolean leftHasName = !TextUtils.isEmpty(left.name);
+        boolean rightHasName = !TextUtils.isEmpty(right.name);
+        if (leftHasName != rightHasName) {
+            return leftHasName ? -1 : 1;
+        }
+
+        return 0;
+    }
+
+    private double estimatePolygonArea(@Nullable Polygon polygon) {
+        if (polygon == null || polygon.coordinates() == null || polygon.coordinates().isEmpty()) {
+            return Double.MAX_VALUE;
+        }
+
+        List<Point> outerRing = polygon.coordinates().get(0);
+        if (outerRing == null || outerRing.size() < 3) {
+            return Double.MAX_VALUE;
+        }
+
+        double minLat = Double.MAX_VALUE;
+        double maxLat = -Double.MAX_VALUE;
+        double minLng = Double.MAX_VALUE;
+        double maxLng = -Double.MAX_VALUE;
+        for (Point point : outerRing) {
+            if (point == null) {
+                continue;
+            }
+            minLat = Math.min(minLat, point.latitude());
+            maxLat = Math.max(maxLat, point.latitude());
+            minLng = Math.min(minLng, point.longitude());
+            maxLng = Math.max(maxLng, point.longitude());
+        }
+
+        if (minLat == Double.MAX_VALUE || minLng == Double.MAX_VALUE) {
+            return Double.MAX_VALUE;
+        }
+
+        double latSpan = Math.max(0.0d, maxLat - minLat);
+        double lngSpan = Math.max(0.0d, maxLng - minLng);
+        return latSpan * lngSpan;
     }
 
     @Nullable
