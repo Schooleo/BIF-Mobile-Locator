@@ -32,6 +32,7 @@ import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.IPlaceRepository.PersistenceCallback;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -499,6 +500,7 @@ public class PlaceRepository implements IPlaceRepository {
 
                 boolean isDelete = "DELETE".equalsIgnoreCase(action)
                         || "REMOVE".equalsIgnoreCase(action);
+                boolean isViewed = isViewedAction(action);
                 if (isDelete) {
                     entity.deleted = true;
                 }
@@ -523,7 +525,7 @@ public class PlaceRepository implements IPlaceRepository {
                 payload.serverVersion = entity.serverVersion;
                 payload.deleted = entity.deleted;
 
-                if (shouldEnqueueChange(existing, entity, operation)) {
+                if (!isViewed && shouldEnqueueChange(existing, entity, operation)) {
                     syncManager.enqueueChange(
                             "place",
                             normalizedPlace.id,
@@ -628,7 +630,7 @@ public class PlaceRepository implements IPlaceRepository {
 
         String placeId = place.id;
         if (placeId == null || placeId.trim().isEmpty()) {
-            placeId = UUID.randomUUID().toString();
+            placeId = buildDeterministicPlaceId(place);
         }
 
         String normalizedAddress = place.address;
@@ -644,6 +646,32 @@ public class PlaceRepository implements IPlaceRepository {
                 place.rating,
                 place.location
         );
+    }
+
+    private String buildDeterministicPlaceId(Place place) {
+        String source = normalizeKeyComponent(place != null ? place.placeSource : null);
+        String name = normalizeKeyComponent(place != null ? place.name : null);
+        String address = normalizeKeyComponent(place != null ? place.address : null);
+        String latitude = place != null && place.location != null
+                ? String.format(java.util.Locale.US, "%.6f", place.location.latitude)
+                : "0.000000";
+        String longitude = place != null && place.location != null
+                ? String.format(java.util.Locale.US, "%.6f", place.location.longitude)
+                : "0.000000";
+
+        String seed = source + "|" + name + "|" + address + "|" + latitude + "|" + longitude;
+        return UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8)).toString();
+    }
+
+    private String normalizeKeyComponent(@Nullable String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private boolean isViewedAction(@Nullable String action) {
+        return "viewed".equalsIgnoreCase(action);
     }
 
     private boolean shouldEnqueueChange(PlaceEntity existing,

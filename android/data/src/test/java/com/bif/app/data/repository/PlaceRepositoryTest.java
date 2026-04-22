@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -732,7 +733,7 @@ public class PlaceRepositoryTest {
     }
 
     @Test
-    public void persistPlace_viewedWithMissingAddress_usesPlaceholderAndQueuesSync()
+    public void persistPlace_viewedWithMissingAddress_usesPlaceholderAndDoesNotQueueSync()
             throws InterruptedException {
         Place place = new Place("p2", "Clicked Place", "", 0,
                 new Location(1.23, 4.56));
@@ -746,7 +747,30 @@ public class PlaceRepositoryTest {
         verify(mockPlaceDao).upsert(entityCaptor.capture());
         assertEquals("Address unavailable", entityCaptor.getValue().address);
 
-        verify(mockSyncManager).enqueueChange(eq("place"), eq("p2"),
+        verify(mockSyncManager, never()).enqueueChange(eq("place"), anyString(),
                 anyString(), anyString(), any());
+        verify(mockSyncManager, never()).syncIfOnline();
+    }
+
+    @Test
+    public void persistPlace_withoutId_generatesDeterministicId()
+            throws InterruptedException {
+        Place place = new Place(null, "Clicked Place", "Clicked Address", 0,
+                new Location(1.23, 4.56));
+        when(mockPlaceDao.count(anyString())).thenReturn(10);
+
+        placeRepository.persistPlace(place, "viewed");
+        placeRepository.persistPlace(place, "viewed");
+        Thread.sleep(300);
+
+        ArgumentCaptor<PlaceEntity> entityCaptor =
+                ArgumentCaptor.forClass(PlaceEntity.class);
+        verify(mockPlaceDao, times(2)).upsert(entityCaptor.capture());
+
+        assertEquals(entityCaptor.getAllValues().get(0).id,
+                entityCaptor.getAllValues().get(1).id);
+        verify(mockSyncManager, never()).enqueueChange(eq("place"), anyString(),
+                anyString(), anyString(), any());
+        verify(mockSyncManager, never()).syncIfOnline();
     }
 }
