@@ -50,7 +50,7 @@ import com.bif.app.data.source.local.entity.TripStopEntity;
         TripPlanEntity.class,
         TripMemberCrossRef.class,
         TripStopEntity.class
-}, version = 22, exportSchema = false)
+}, version = 23, exportSchema = false)
 @TypeConverters({ FriendshipStatusConverter.class, UploadStatusConverter.class })
 public abstract class AppDatabase extends RoomDatabase {
     private static boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
@@ -330,6 +330,21 @@ public abstract class AppDatabase extends RoomDatabase {
             }
         }
 
+    };
+
+    public static final Migration MIGRATION_22_23 = new Migration(22, 23) {
+        @Override
+        public void migrate(SupportSQLiteDatabase database) {
+            if (!hasColumn(database, "favorites", "externalSource")) {
+                database.execSQL("ALTER TABLE favorites ADD COLUMN externalSource TEXT");
+            }
+            if (!hasColumn(database, "favorites", "externalId")) {
+                database.execSQL("ALTER TABLE favorites ADD COLUMN externalId TEXT");
+            }
+            if (!hasColumn(database, "favorites", "placeName")) {
+                database.execSQL("ALTER TABLE favorites ADD COLUMN placeName TEXT");
+            }
+        }
     };
 
     public abstract FriendDao friendDao();

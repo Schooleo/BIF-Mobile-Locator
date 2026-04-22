@@ -84,11 +84,27 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
                 return;
             }
 
-                if (payload.placeId == null
+            if (payload.placeId == null
                     && local != null
                     && local.placeId != null
                     && !local.placeId.trim().isEmpty()) {
                 payload.placeId = local.placeId;
+            }
+
+            if (isBlank(payload.externalSource)
+                    && local != null
+                    && !isBlank(local.externalSource)) {
+                payload.externalSource = local.externalSource;
+            }
+            if (isBlank(payload.externalId)
+                    && local != null
+                    && !isBlank(local.externalId)) {
+                payload.externalId = local.externalId;
+            }
+            if (isBlank(payload.placeName)
+                    && local != null
+                    && !isBlank(local.placeName)) {
+                payload.placeName = local.placeName;
             }
 
             FavoriteEntity mapped = FavoriteMapper.fromDto(payload, resolvedUserId);
@@ -97,6 +113,10 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
         } catch (Exception e) {
             Log.e(TAG, "Failed applying pulled favorite change", e);
         }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 }
 
