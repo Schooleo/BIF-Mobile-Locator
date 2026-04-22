@@ -4,6 +4,8 @@ import com.bif.server.features.auth.dto.rest.AuthResponse;
 import com.bif.server.features.auth.dto.rest.AuthUserResponse;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpRequest;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpResponse;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpRequest;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpResponse;
 import com.bif.server.features.auth.dto.rest.LoginRequest;
 import com.bif.server.features.auth.dto.rest.RefreshTokenRequest;
 import com.bif.server.features.auth.dto.rest.RegisterRequest;
@@ -38,6 +40,7 @@ public class AuthService {
             Pattern.compile("^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$", Pattern.CASE_INSENSITIVE);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final long OTP_EXPIRATION_MINUTES = 5L;
+        private static final long RESET_TOKEN_EXPIRATION_MINUTES = 10L;
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -80,10 +83,33 @@ public class AuthService {
         passwordResetOtp.setOtp(otp);
         passwordResetOtp.setCreatedAt(now);
         passwordResetOtp.setExpiresAt(now.plus(OTP_EXPIRATION_MINUTES, ChronoUnit.MINUTES));
+        passwordResetOtp.setResetToken(null);
+        passwordResetOtp.setResetTokenExpiresAt(null);
         passwordResetOtpRepository.save(passwordResetOtp);
 
         sendOtpEmailMock(email, otp);
         return new ForgotPasswordOtpResponse(true, "OTP has been sent to your email");
+    }
+
+    public ForgotPasswordVerifyOtpResponse verifyForgotPasswordOtp(ForgotPasswordVerifyOtpRequest request) {
+        String email = normalizedEmail(request.email());
+        String otp = requiredTrimmed(request.otp(), "otp");
+
+        PasswordResetOtp passwordResetOtp = passwordResetOtpRepository.findById(email)
+                .orElse(null);
+        if (passwordResetOtp == null || passwordResetOtp.getOtp() == null || !passwordResetOtp.getOtp().equals(otp)) {
+            return new ForgotPasswordVerifyOtpResponse(false, null);
+        }
+        if (passwordResetOtp.getExpiresAt() == null || passwordResetOtp.getExpiresAt().isBefore(Instant.now())) {
+            return new ForgotPasswordVerifyOtpResponse(false, null);
+        }
+
+        String resetToken = UUID.randomUUID().toString();
+        passwordResetOtp.setResetToken(resetToken);
+        passwordResetOtp.setResetTokenExpiresAt(Instant.now().plus(RESET_TOKEN_EXPIRATION_MINUTES, ChronoUnit.MINUTES));
+        passwordResetOtpRepository.save(passwordResetOtp);
+
+        return new ForgotPasswordVerifyOtpResponse(true, resetToken);
     }
 
     public AuthResponse register(RegisterRequest request) {

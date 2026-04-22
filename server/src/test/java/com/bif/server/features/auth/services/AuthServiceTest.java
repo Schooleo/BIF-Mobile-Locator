@@ -3,6 +3,8 @@ package com.bif.server.features.auth.services;
 import com.bif.server.features.auth.dto.rest.AuthResponse;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpRequest;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpResponse;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpRequest;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpResponse;
 import com.bif.server.features.auth.dto.rest.LoginRequest;
 import com.bif.server.features.auth.dto.rest.RefreshTokenRequest;
 import com.bif.server.features.auth.dto.rest.RegisterRequest;
@@ -262,6 +264,60 @@ class AuthServiceTest {
                         && otp.getOtp().matches("\\d{6}")
                         && otp.getExpiresAt() != null
                         && otp.getCreatedAt() != null
+        ));
+    }
+
+    @Test
+    void verifyForgotPasswordOtp_WhenOtpMissing_ThrowsInvalidRegistrationException() {
+        assertThrows(InvalidRegistrationException.class, () -> authService.verifyForgotPasswordOtp(new ForgotPasswordVerifyOtpRequest("alex@bif.local", null)));
+    }
+
+    @Test
+    void verifyForgotPasswordOtp_WhenOtpDoesNotMatch_ReturnsFailure() {
+        PasswordResetOtp existing = new PasswordResetOtp();
+        existing.setEmail("alex@bif.local");
+        existing.setOtp("123456");
+        existing.setExpiresAt(java.time.Instant.now().plusSeconds(300));
+        when(passwordResetOtpRepository.findById("alex@bif.local")).thenReturn(Optional.of(existing));
+
+        ForgotPasswordVerifyOtpResponse result = authService.verifyForgotPasswordOtp(new ForgotPasswordVerifyOtpRequest("alex@bif.local", "000000"));
+
+        assertFalse(result.success());
+        assertNull(result.resetToken());
+        verify(passwordResetOtpRepository, never()).save(any(PasswordResetOtp.class));
+    }
+
+    @Test
+    void verifyForgotPasswordOtp_WhenExpired_ReturnsFailure() {
+        PasswordResetOtp existing = new PasswordResetOtp();
+        existing.setEmail("alex@bif.local");
+        existing.setOtp("123456");
+        existing.setExpiresAt(java.time.Instant.now().minusSeconds(1));
+        when(passwordResetOtpRepository.findById("alex@bif.local")).thenReturn(Optional.of(existing));
+
+        ForgotPasswordVerifyOtpResponse result = authService.verifyForgotPasswordOtp(new ForgotPasswordVerifyOtpRequest("alex@bif.local", "123456"));
+
+        assertFalse(result.success());
+        assertNull(result.resetToken());
+        verify(passwordResetOtpRepository, never()).save(any(PasswordResetOtp.class));
+    }
+
+    @Test
+    void verifyForgotPasswordOtp_WhenValid_ReturnsResetToken() {
+        PasswordResetOtp existing = new PasswordResetOtp();
+        existing.setEmail("alex@bif.local");
+        existing.setOtp("123456");
+        existing.setExpiresAt(java.time.Instant.now().plusSeconds(300));
+        when(passwordResetOtpRepository.findById("alex@bif.local")).thenReturn(Optional.of(existing));
+        when(passwordResetOtpRepository.save(any(PasswordResetOtp.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ForgotPasswordVerifyOtpResponse result = authService.verifyForgotPasswordOtp(new ForgotPasswordVerifyOtpRequest("alex@bif.local", "123456"));
+
+        assertTrue(result.success());
+        assertNotNull(result.resetToken());
+        verify(passwordResetOtpRepository).save(argThat(otp ->
+                result.resetToken().equals(otp.getResetToken())
+                        && otp.getResetTokenExpiresAt() != null
         ));
     }
 }

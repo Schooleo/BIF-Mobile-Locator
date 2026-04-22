@@ -12,6 +12,8 @@ public class PasswordResetOtp {
     private String otp;
     private Instant expiresAt;
     private Instant createdAt;
+    private String resetToken;
+    private Instant resetTokenExpiresAt;
 
     public String getEmail() {
         return email;
@@ -43,5 +45,21 @@ public class PasswordResetOtp {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getResetToken() {
+        return resetToken;
+    }
+
+    public void setResetToken(String resetToken) {
+        this.resetToken = resetToken;
+    }
+
+    public Instant getResetTokenExpiresAt() {
+        return resetTokenExpiresAt;
+    }
+
+    public void setResetTokenExpiresAt(Instant resetTokenExpiresAt) {
+        this.resetTokenExpiresAt = resetTokenExpiresAt;
     }
 }

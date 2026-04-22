@@ -4,6 +4,8 @@ import com.bif.server.features.auth.dto.rest.AuthResponse;
 import com.bif.server.features.auth.dto.rest.AuthUserResponse;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpRequest;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpResponse;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpRequest;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpResponse;
 import com.bif.server.features.auth.dto.rest.LoginRequest;
 import com.bif.server.features.auth.dto.rest.RefreshTokenRequest;
 import com.bif.server.features.auth.dto.rest.RegisterRequest;
@@ -147,6 +149,33 @@ class AuthControllerTest {
         ResponseEntity<ForgotPasswordOtpResponse> result = controller.requestForgotPasswordOtp(request);
 
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
+        assertNotNull(result.getBody());
+        assertFalse(result.getBody().success());
+    }
+
+    @Test
+    void verifyForgotPasswordOtp_WhenValid_ReturnsOk() {
+        ForgotPasswordVerifyOtpRequest request = new ForgotPasswordVerifyOtpRequest("alex@bif.local", "123456");
+        ForgotPasswordVerifyOtpResponse response = new ForgotPasswordVerifyOtpResponse(true, "reset-token");
+        when(authService.verifyForgotPasswordOtp(request)).thenReturn(response);
+
+        ResponseEntity<ForgotPasswordVerifyOtpResponse> result = controller.verifyForgotPasswordOtp(request);
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertNotNull(result.getBody());
+        assertTrue(result.getBody().success());
+        assertEquals("reset-token", result.getBody().resetToken());
+    }
+
+    @Test
+    void verifyForgotPasswordOtp_WhenInvalid_ReturnsBadRequest() {
+        ForgotPasswordVerifyOtpRequest request = new ForgotPasswordVerifyOtpRequest("alex@bif.local", "000000");
+        ForgotPasswordVerifyOtpResponse response = new ForgotPasswordVerifyOtpResponse(false, null);
+        when(authService.verifyForgotPasswordOtp(request)).thenReturn(response);
+
+        ResponseEntity<ForgotPasswordVerifyOtpResponse> result = controller.verifyForgotPasswordOtp(request);
+
+        assertEquals(HttpStatus.BAD_REQUEST, result.getStatusCode());
         assertNotNull(result.getBody());
         assertFalse(result.getBody().success());
     }

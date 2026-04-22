@@ -3,6 +3,8 @@ package com.bif.server.features.auth.controllers;
 import com.bif.server.features.auth.dto.rest.AuthResponse;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpRequest;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpResponse;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpRequest;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpResponse;
 import com.bif.server.features.auth.dto.rest.LoginRequest;
 import com.bif.server.features.auth.dto.rest.RefreshTokenRequest;
 import com.bif.server.features.auth.dto.rest.RegisterRequest;
@@ -74,6 +76,15 @@ public class AuthController {
             return ResponseEntity.ok(response);
         }
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
+
+    @PostMapping("/forgot-password/verify-otp")
+    public ResponseEntity<ForgotPasswordVerifyOtpResponse> verifyForgotPasswordOtp(@RequestBody ForgotPasswordVerifyOtpRequest request) {
+        ForgotPasswordVerifyOtpResponse response = authService.verifyForgotPasswordOtp(request);
+        if (response.success()) {
+            return ResponseEntity.ok(response);
+        }
+        return ResponseEntity.badRequest().body(response);
     }
 
     @PostMapping("/logout")
