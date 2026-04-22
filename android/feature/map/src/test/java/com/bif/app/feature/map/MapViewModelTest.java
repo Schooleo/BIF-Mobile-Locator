@@ -1,5 +1,7 @@
 package com.bif.app.feature.map;
 
+import android.util.Log;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -45,12 +47,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.Executor;
 
 import org.junit.Before;
+import org.junit.After;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
@@ -89,6 +93,7 @@ public class MapViewModelTest {
     private Executor directExecutor;
 
     private MapViewModel viewModel;
+    private MockedStatic<Log> logMock;
 
     private static class QueueExecutor implements Executor {
         final java.util.List<Runnable> tasks = new java.util.ArrayList<>();
@@ -102,6 +107,11 @@ public class MapViewModelTest {
     @Before
     public void setUp() {
         directExecutor = Runnable::run;
+
+        logMock = Mockito.mockStatic(Log.class);
+        logMock.when(() -> Log.d(anyString(), anyString())).thenReturn(0);
+        logMock.when(() -> Log.w(anyString(), anyString())).thenReturn(0);
+        logMock.when(() -> Log.e(anyString(), anyString())).thenReturn(0);
 
         // Lenient: these guard switchMap setup paths but not every test exercises them.
         Mockito.lenient().when(placeRepository.searchLocation(ArgumentMatchers.anyString()))
@@ -134,6 +144,14 @@ public class MapViewModelTest {
                 directExecutor);
         viewModel.searchResult.observeForever(searchResultObserver);
         viewModel.statusText.observeForever(statusTextObserver);
+    }
+
+    @After
+    public void tearDown() {
+        if (logMock != null) {
+            logMock.close();
+            logMock = null;
+        }
     }
 
     @Test
@@ -803,5 +821,43 @@ public class MapViewModelTest {
         verify(reviewRepository, never()).refreshReviews(eq("internal-old"), any());
         verify(reviewRepository).refreshReviews(eq("internal-new"), any());
         assertFalse(queuedViewModel.isLoadingReviews.getValue());
+    }
+
+    @Test
+    public void loadReviews_WhenPreviewPlace_SkipsResolveAndRefresh() {
+        Place preview = new Place(
+                "preview-1",
+                "Selected Location",
+                "10.0000, 106.0000",
+                0.0,
+                new Location(10.0, 106.0),
+            Place.SOURCE_PREVIEW,
+            Place.SelectionState.PREVIEW);
+
+        viewModel.loadReviews(preview);
+
+        verify(reviewRepository, never()).resolveInternalPlaceId(any(), any(), anyDouble(), anyDouble(), any());
+        verify(reviewRepository, never()).refreshReviews(anyString(), any());
+        assertFalse(Boolean.TRUE.equals(viewModel.isLoadingReviews.getValue()));
+    }
+
+    @Test
+    public void addToFavorites_WhenPreviewPlace_SkipsCanonicalResolve() {
+        Place preview = new Place(
+                "preview-fav-1",
+                "Selected Location",
+                "10.0000, 106.0000",
+                0.0,
+                new Location(10.0, 106.0),
+            Place.SOURCE_PREVIEW,
+            Place.SelectionState.PREVIEW);
+
+        viewModel.addToFavorites(preview, null);
+
+        verify(reviewRepository, never()).resolveInternalPlaceId(any(), any(), anyDouble(), anyDouble(), any());
+
+        ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
+        verify(favoriteRepository).addFavorite(captor.capture());
+        assertEquals("preview-fav-1", captor.getValue().placeId);
     }
 }
