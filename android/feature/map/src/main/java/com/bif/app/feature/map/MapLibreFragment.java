@@ -129,6 +129,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private static final String TURN_ARROW_ICON_ID = "turn-arrow-icon";
     private static final String USER_ARROW_ICON_ID = "user-arrow-icon";
     private static final String PROP_PLACE_ID = "placeId";
+    private static final String PROP_PLACE_SOURCE = "placeSource";
     private static final String PROP_NAME = "name";
     private static final String PROP_ADDRESS = "address";
     private static final String PROP_RATING = "rating";
@@ -293,10 +294,12 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private static final class PoiTap {
         final LatLng point;
         final String name;
+        final String externalId;
 
-        PoiTap(@NonNull LatLng point, @Nullable String name) {
+        PoiTap(@NonNull LatLng point, @Nullable String name, @Nullable String externalId) {
             this.point = point;
             this.name = name;
+            this.externalId = externalId;
         }
     }
 
@@ -552,17 +555,17 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                     animateCameraToSelection(new LatLng(
                             tappedPlace.location.latitude,
                             tappedPlace.location.longitude));
-                    showPlaceBottomSheet(tappedPlace, requireView());
+                    showPlaceBottomSheet(tappedPlace, requireView(), true);
                     return true;
                 }
 
                 PoiTap stylePoi = findStylePoiAt(point);
                 if (stylePoi != null) {
-                    fetchAddressAndShowDetails(stylePoi.point, stylePoi.name);
+                    fetchAddressAndShowDetails(stylePoi.point, stylePoi.name, stylePoi.externalId);
                     return true;
                 }
 
-                fetchAddressAndShowDetails(point, null);
+                fetchAddressAndShowDetails(point, null, null);
                 return true;
             });
 
@@ -1332,8 +1335,21 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
         List<Feature> favoriteFeatures = new ArrayList<>();
         for (Favorite favorite : currentFavorites) {
+            if (favorite == null) {
+                continue;
+            }
+
+            String placeId = favorite.placeId != null
+                    ? favorite.placeId.trim()
+                    : "";
+            if (TextUtils.isEmpty(placeId)) {
+                placeId = favorite.id != null
+                        ? favorite.id
+                        : buildStablePlaceId(favorite.latitude, favorite.longitude);
+            }
+
             Place place = new Place(
-                    String.valueOf(favorite.id),
+                    placeId,
                     favorite.name,
                     favorite.address,
                     favorite.rating,
@@ -2594,6 +2610,10 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 place.name != null ? place.name : "Selected Location");
         feature.addStringProperty(PROP_ADDRESS,
             normalizeDisplayAddress(place.name, place.address));
+        feature.addStringProperty(PROP_PLACE_SOURCE,
+            !TextUtils.isEmpty(place.placeSource)
+                ? place.placeSource
+                : Place.SOURCE_OSM);
         feature.addNumberProperty(PROP_RATING, place.rating);
         feature.addNumberProperty(PROP_LAT, latitude);
         feature.addNumberProperty(PROP_LNG, longitude);
@@ -2636,9 +2656,17 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             }
             Point poiPoint = (Point) feature.geometry();
             String poiName = firstNonEmptyProperty(feature);
+            
+            String externalId = feature.id();
+            if (TextUtils.isEmpty(externalId)) {
+                externalId = feature.getStringProperty("id");
+            }
+            // Mới: Nếu tile không có ID thật, externalId sẽ null và tự fallback ở buildStablePlaceId sau này.
+            
             return new PoiTap(
                     new LatLng(poiPoint.latitude(), poiPoint.longitude()),
-                    poiName);
+                    poiName,
+                    externalId);
         }
 
         return null;
@@ -2684,6 +2712,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         String address = feature.hasProperty(PROP_ADDRESS)
                 ? feature.getStringProperty(PROP_ADDRESS)
                 : "Address unavailable";
+        // Mới: Fallback sinh UUID nếu properties không có ID
         String id = feature.hasProperty(PROP_PLACE_ID)
                 ? feature.getStringProperty(PROP_PLACE_ID)
                 : buildStablePlaceId(lat.doubleValue(), lng.doubleValue());
@@ -2691,23 +2720,28 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 ? feature.getNumberProperty(PROP_RATING)
                 : 0.0;
         double rating = ratingNumber != null ? ratingNumber.doubleValue() : 0.0;
+        String placeSource = feature.hasProperty(PROP_PLACE_SOURCE)
+            ? feature.getStringProperty(PROP_PLACE_SOURCE)
+            : Place.SOURCE_OSM;
 
         return new Place(
                 id,
                 name,
             normalizeDisplayAddress(name, address),
                 rating,
-                new Location(lat.doubleValue(), lng.doubleValue()));
+            new Location(lat.doubleValue(), lng.doubleValue()),
+            placeSource);
     }
 
     private void fetchAddressAndShowDetails(LatLng latLng,
-            @Nullable String preferredName) {
-        Place quickPlace = buildInstantTapPlace(latLng, preferredName);
+            @Nullable String preferredName,
+            @Nullable String externalId) {
+        Place quickPlace = buildInstantTapPlace(latLng, preferredName, externalId);
         if (mapLibreMap != null) {
             selectedPlace = quickPlace;
             renderSelectedPlace();
             animateCameraToSelection(latLng);
-            showPlaceBottomSheet(quickPlace, requireView());
+            showPlaceBottomSheet(quickPlace, requireView(), false);
         }
 
         if (!isOnlineNow) {
@@ -2738,13 +2772,21 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                     finalName = quickPlace.name;
                 }
 
+                String placeId = !TextUtils.isEmpty(externalId)
+                        ? externalId
+                        : buildStablePlaceId(latLng.getLatitude(), latLng.getLongitude());
+
+                final boolean reviewEligible = !TextUtils.isEmpty(externalId);
+
                 Place clickedPlace = new Place(
-                        buildStablePlaceId(latLng.getLatitude(), latLng.getLongitude()),
+                        placeId,
                         finalName,
                     normalizeDisplayAddress(finalName,
                         addressText != null ? addressText : quickPlace.address),
                         0.0,
-                        new Location(latLng.getLatitude(), latLng.getLongitude()));
+                    new Location(latLng.getLatitude(), latLng.getLongitude()),
+                    reviewEligible ? Place.SOURCE_OSM : Place.SOURCE_PREVIEW,
+                    reviewEligible ? Place.SelectionState.CANONICAL : Place.SelectionState.PREVIEW);
 
                 requireActivity().runOnUiThread(() -> {
                     if (mapLibreMap == null) {
@@ -2757,7 +2799,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
                     selectedPlace = clickedPlace;
                     renderSelectedPlace();
-                    showPlaceBottomSheet(clickedPlace, requireView());
+                    showPlaceBottomSheet(clickedPlace, requireView(), reviewEligible);
                 });
             } catch (Exception e) {
                 Timber.tag(TAG).e(e, "Geocoding failed");
@@ -2766,7 +2808,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     }
 
     @NonNull
-    private Place buildInstantTapPlace(@NonNull LatLng latLng, @Nullable String preferredName) {
+    private Place buildInstantTapPlace(@NonNull LatLng latLng, @Nullable String preferredName, @Nullable String externalId) {
         String resolvedName = !TextUtils.isEmpty(preferredName)
                 ? preferredName
                 : "Selected Location";
@@ -2776,12 +2818,18 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 latLng.getLatitude(),
                 latLng.getLongitude());
 
+        String placeId = !TextUtils.isEmpty(externalId)
+                ? externalId
+                : buildStablePlaceId(latLng.getLatitude(), latLng.getLongitude());
+
         return new Place(
-                buildStablePlaceId(latLng.getLatitude(), latLng.getLongitude()),
+                placeId,
                 resolvedName,
                 resolvedAddress,
                 0.0,
-                new Location(latLng.getLatitude(), latLng.getLongitude()));
+            new Location(latLng.getLatitude(), latLng.getLongitude()),
+            Place.SOURCE_PREVIEW,
+            Place.SelectionState.PREVIEW);
     }
 
     @NonNull
@@ -2885,10 +2933,25 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     }
 
     private void showPlaceBottomSheet(Place place, View root) {
+        showPlaceBottomSheet(place, root, true);
+    }
+
+    private void showPlaceBottomSheet(Place place, View root, boolean allowReviewLoading) {
+        if (place == null || root == null) {
+            return;
+        }
+
         if (viewModel.hasActiveRouteSession()) {
             viewModel.setStatusText(getString(R.string.route_active_place_sheet_blocked));
             return;
         }
+
+        Timber.tag(TAG).d("showPlaceBottomSheet: id=%s name=%s placeSource=%s lat=%s lng=%s",
+                place != null ? place.id : null,
+                place != null ? place.name : null,
+                place != null ? place.placeSource : null,
+                place != null && place.location != null ? place.location.latitude : null,
+                place != null && place.location != null ? place.location.longitude : null);
 
         viewModel.cacheViewedPlace(place);
         showPlaceSheetOnly();
@@ -2970,11 +3033,21 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             shimmerReviews.setVisibility(View.VISIBLE);
             shimmerReviews.startShimmer();
         }
-        if (!TextUtils.isEmpty(place.placeSource)) {
+        if (allowReviewLoading && place.canResolveCanonicalIdentity()) {
+            Timber.tag(TAG).d("showPlaceBottomSheet: loading reviews with metadata for placeId=%s", place.id);
             viewModel.loadReviews(place);
-        } else if (shimmerReviews != null) {
-            shimmerReviews.stopShimmer();
-            shimmerReviews.setVisibility(View.GONE);
+        } else {
+            Timber.tag(TAG).w("showPlaceBottomSheet: skipping loadReviews (allowReviewLoading=%s, placeSource=%s), placeId=%s name=%s address=%s",
+                    allowReviewLoading,
+                    place.placeSource,
+                    place.id,
+                    place.name,
+                    place.address);
+            viewModel.clearReviewTargetForPreview();
+            if (shimmerReviews != null) {
+                shimmerReviews.stopShimmer();
+                shimmerReviews.setVisibility(View.GONE);
+            }
         }
 
         View layoutContainer = root.findViewById(R.id.layout_container);
@@ -3245,6 +3318,13 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         }
 
         String placeId = place != null && place.id != null ? place.id.trim() : "";
+        Timber.tag(TAG).d("findFavoriteForPlace: placeId=%s name=%s placeSource=%s lat=%s lng=%s favorites=%d",
+                placeId,
+                place.name,
+                place.placeSource,
+                place.location != null ? place.location.latitude : null,
+                place.location != null ? place.location.longitude : null,
+                currentFavorites != null ? currentFavorites.size() : 0);
         for (Favorite favorite : currentFavorites) {
             String favoritePlaceId = favorite != null && favorite.placeId != null
                     ? favorite.placeId.trim()
