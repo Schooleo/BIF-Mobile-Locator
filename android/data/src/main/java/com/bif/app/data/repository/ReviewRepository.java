@@ -21,6 +21,7 @@ import com.bif.app.data.source.local.entity.PlaceEntity;
 import com.bif.app.data.source.local.entity.ReviewEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 import com.bif.app.data.sync.core.SyncManager;
+import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.PlaceIdentityContext;
 import com.bif.app.domain.model.Review;
 import com.bif.app.domain.repository.IReviewRepository;
@@ -323,7 +324,23 @@ public class ReviewRepository implements IReviewRepository {
 
     @Override
     public String resolveInternalPlaceId(String externalSource, String externalId, double lat, double lng, String name) {
+        if (isBlank(externalSource)
+                || isBlank(externalId)
+                || isBlank(name)
+                || Place.SOURCE_PREVIEW.equalsIgnoreCase(externalSource.trim())) {
+            Log.w(TAG, "resolveInternalPlaceId skipped remote resolve due to invalid or preview metadata"
+                    + " source=" + externalSource
+                    + " externalId=" + externalId
+                    + " name=" + name);
+            return buildDeterministicFallbackPlaceId(externalSource, externalId, lat, lng, name);
+        }
+
         try {
+            Log.d(TAG, "resolveInternalPlaceId request: externalSource=" + externalSource
+                    + ", externalId=" + externalId
+                    + ", name=" + name
+                    + ", lat=" + lat
+                    + ", lng=" + lng);
             PlaceResolveRequestDto request = new PlaceResolveRequestDto();
             request.externalSource = externalSource;
             request.externalId = externalId;
@@ -332,6 +349,9 @@ public class ReviewRepository implements IReviewRepository {
             request.name = name;
 
             Response<PlaceResolveResponseDto> res = restApiService.resolvePlace(request).execute();
+            Log.d(TAG, "resolveInternalPlaceId response: code=" + res.code()
+                    + ", successful=" + res.isSuccessful()
+                    + ", body=" + (res.body() != null ? res.body().internalPlaceId : null));
             if (res.isSuccessful() && res.body() != null) {
                 String internalId = res.body().internalPlaceId;
                 if (internalId != null && !internalId.trim().isEmpty()) {

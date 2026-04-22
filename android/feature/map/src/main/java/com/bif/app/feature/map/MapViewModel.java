@@ -1,5 +1,7 @@
 package com.bif.app.feature.map;
 
+import android.util.Log;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.lifecycle.LiveData;
@@ -39,6 +41,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel;
 
 @HiltViewModel
 public class MapViewModel extends ViewModel {
+    private static final String TAG = "MapViewModel";
     private static final String NO_MAP_DATA_DOWNLOADED = "No map data downloaded";
     private static final String OFFLINE_ENGINE_UNAVAILABLE = "Offline routing engine unavailable";
     private static final String ROUTE_ESTIMATING = "Estimating route...";
@@ -309,6 +312,9 @@ public class MapViewModel extends ViewModel {
             try {
                 Favorite favorite = new Favorite();
                 favorite.placeId = resolveCanonicalFavoritePlaceId(place);
+                favorite.externalSource = hasText(place.placeSource) ? place.placeSource.trim() : null;
+                favorite.externalId = hasText(place.id) ? place.id.trim() : null;
+                favorite.placeName = hasText(place.name) ? place.name.trim() : null;
                 favorite.name = place.name;
                 favorite.address = place.address;
                 favorite.rating = (int) place.rating;
@@ -351,14 +357,33 @@ public class MapViewModel extends ViewModel {
         placeRepository.persistPlace(place, "viewed");
     }
 
+    public void clearReviewTargetForPreview() {
+        reviewLoadRequestId.incrementAndGet();
+        _currentPlaceId.setValue(null);
+        _isLoadingReviews.setValue(false);
+        updateCurrentReviewMetadata(null);
+        Log.d(TAG, "clearReviewTargetForPreview: preview selection, skip resolve/reviews");
+    }
+
     public void loadReviews(Place place) {
         if (place == null || place.location == null) {
             return;
         }
 
-        boolean canResolveWithMetadata = hasText(place.placeSource)
-            && hasText(place.id)
-            && hasText(place.name);
+        if (place.isPreviewSelection()) {
+            clearReviewTargetForPreview();
+            Log.d(TAG, "loadReviews skipped for preview selection. id=" + place.id);
+            return;
+        }
+
+        boolean canResolveWithMetadata = place.canResolveCanonicalIdentity();
+
+        Log.d(TAG, "loadReviews: id=" + place.id
+                + ", name=" + place.name
+                + ", placeSource=" + place.placeSource
+                + ", lat=" + place.location.latitude
+                + ", lng=" + place.location.longitude
+                + ", canResolveWithMetadata=" + canResolveWithMetadata);
 
         final PlaceIdentityContext placeIdentityContext = new PlaceIdentityContext();
         placeIdentityContext.externalSource = canResolveWithMetadata ? place.placeSource : null;
@@ -383,6 +408,10 @@ public class MapViewModel extends ViewModel {
                 internalId = place.id != null ? place.id.trim() : null;
             }
 
+            Log.d(TAG, "loadReviews resolved internalId=" + internalId
+                    + " for placeId=" + place.id
+                    + ", request canResolveWithMetadata=" + canResolveWithMetadata);
+
             if (requestId != reviewLoadRequestId.get()) {
                 return;
             }
@@ -405,10 +434,13 @@ public class MapViewModel extends ViewModel {
     private String resolveCanonicalFavoritePlaceId(@NonNull Place place) {
         String fallbackPlaceId = place.id != null ? place.id.trim() : "";
 
-        if (!hasText(place.placeSource)
-                || !hasText(place.id)
-                || !hasText(place.name)
-                || place.location == null) {
+        Log.d(TAG, "resolveCanonicalFavoritePlaceId: id=" + place.id
+            + ", name=" + place.name
+            + ", placeSource=" + place.placeSource
+            + ", lat=" + (place.location != null ? place.location.latitude : null)
+            + ", lng=" + (place.location != null ? place.location.longitude : null));
+
+        if (!place.canResolveCanonicalIdentity()) {
             return fallbackPlaceId;
         }
 
@@ -418,6 +450,9 @@ public class MapViewModel extends ViewModel {
                 place.location.latitude,
                 place.location.longitude,
                 place.name);
+
+        Log.d(TAG, "resolveCanonicalFavoritePlaceId resolved=" + resolved
+            + " fallback=" + fallbackPlaceId);
 
         if (!hasText(resolved)) {
             return fallbackPlaceId;
