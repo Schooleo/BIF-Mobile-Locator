@@ -15,6 +15,9 @@ public class FavoriteEntity {
     @PrimaryKey
     public String id;
     public String placeId;
+    public String externalSource;
+    public String externalId;
+    public String placeName;
     public String name;
     public double latitude;
     public double longitude;
