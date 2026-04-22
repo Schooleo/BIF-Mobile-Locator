@@ -72,14 +72,14 @@ class FavoriteSyncEntityHandlerTest {
         SyncChange pushed = new SyncChange();
         pushed.setEntityId("fav-2");
         pushed.setOperation("UPDATE");
-        String json = "{\"id\":\"fav-2\",\"name\":\"New Name\",\"latitude\":10.0,\"longitude\":20.0,\"rating\":5}";
+        String json = "{\"id\":\"fav-2\",\"name\":\"New Name\",\"placeName\":\"New Name\",\"externalSource\":\"GOOGLE_MAPS\",\"externalId\":\"gm-2\",\"latitude\":10.0,\"longitude\":20.0,\"rating\":5}";
         pushed.setPayload(json);
 
         Favorite existing = new Favorite();
         existing.setId("fav-2");
         existing.setUserId("user-1");
 
-        when(placeIdentityService.resolveInternalPlaceId("FAVORITE", "fav-2", 10.0, 20.0, "New Name"))
+        when(placeIdentityService.resolveInternalPlaceId("GOOGLE_MAPS", "gm-2", 10.0, 20.0, "New Name"))
             .thenReturn("place-2");
         when(favoriteRepository.findByIdAndUserId("fav-2", "user-1")).thenReturn(Optional.of(existing));
 
@@ -96,9 +96,12 @@ class FavoriteSyncEntityHandlerTest {
         assertEquals(15L, saved.getServerVersion());
         assertEquals("user-1", saved.getLastModifiedBy());
         assertEquals("place-2", saved.getPlaceId());
+        assertEquals("GOOGLE_MAPS", saved.getExternalSource());
+        assertEquals("gm-2", saved.getExternalId());
+        assertEquals("New Name", saved.getPlaceName());
         assertTrue(resultPayload.contains("\"serverVersion\":15"));
         assertTrue(resultPayload.contains("\"name\":\"New Name\""));
-        verify(placeIdentityService).resolveInternalPlaceId("FAVORITE", "fav-2", 10.0, 20.0, "New Name");
+        verify(placeIdentityService).resolveInternalPlaceId("GOOGLE_MAPS", "gm-2", 10.0, 20.0, "New Name");
     }
 
     @Test
@@ -106,7 +109,7 @@ class FavoriteSyncEntityHandlerTest {
         SyncChange pushed = new SyncChange();
         pushed.setEntityId("fav-3");
         pushed.setOperation("UPDATE");
-        String json = "{\"id\":\"fav-3\",\"name\":\"Fallback Name\",\"latitude\":10.0,\"longitude\":20.0,\"rating\":4}";
+        String json = "{\"id\":\"fav-3\",\"name\":\"Fallback Name\",\"placeName\":\"Fallback Name\",\"externalSource\":\"GOOGLE_MAPS\",\"externalId\":\"gm-3\",\"latitude\":10.0,\"longitude\":20.0,\"rating\":4}";
         pushed.setPayload(json);
 
         Favorite existing = new Favorite();
@@ -114,7 +117,7 @@ class FavoriteSyncEntityHandlerTest {
         existing.setUserId("user-1");
 
         when(favoriteRepository.findByIdAndUserId("fav-3", "user-1")).thenReturn(Optional.of(existing));
-        when(placeIdentityService.resolveInternalPlaceId("FAVORITE", "fav-3", 10.0, 20.0, "Fallback Name"))
+        when(placeIdentityService.resolveInternalPlaceId("GOOGLE_MAPS", "gm-3", 10.0, 20.0, "Fallback Name"))
                 .thenThrow(new DataAccessResourceFailureException("mongo unavailable"));
 
         String resultPayload = handler.applyPushedChange(pushed, "user-1", 25L);
@@ -127,8 +130,10 @@ class FavoriteSyncEntityHandlerTest {
         assertEquals("Fallback Name", saved.getName());
         assertEquals(25L, saved.getServerVersion());
         assertNull(saved.getPlaceId());
+        assertEquals("GOOGLE_MAPS", saved.getExternalSource());
+        assertEquals("gm-3", saved.getExternalId());
         assertTrue(resultPayload.contains("\"serverVersion\":25"));
-        verify(placeIdentityService).resolveInternalPlaceId("FAVORITE", "fav-3", 10.0, 20.0, "Fallback Name");
+        verify(placeIdentityService).resolveInternalPlaceId("GOOGLE_MAPS", "gm-3", 10.0, 20.0, "Fallback Name");
     }
 
     @Test

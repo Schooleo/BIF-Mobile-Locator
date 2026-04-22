@@ -82,6 +82,9 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
         favorite.setNotes(payload.notes);
         favorite.setRating(payload.rating);
         favorite.setImagePath(payload.imagePath);
+        favorite.setExternalSource(normalizeText(payload.externalSource));
+        favorite.setExternalId(normalizeText(payload.externalId));
+        favorite.setPlaceName(resolvePlaceName(payload));
         favorite.setUserId(userId);
         if (!isBlank(payload.placeId)) {
             favorite.setPlaceId(payload.placeId.trim());
@@ -150,6 +153,9 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
         FavoritePayload payload = new FavoritePayload();
         payload.id = favorite.getId();
         payload.placeId = favorite.getPlaceId();
+        payload.externalSource = favorite.getExternalSource();
+        payload.externalId = favorite.getExternalId();
+        payload.placeName = favorite.getPlaceName();
         payload.name = favorite.getName();
         payload.address = favorite.getAddress();
         payload.description = favorite.getDescription();
@@ -170,7 +176,7 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
     }
 
     private String resolvePlaceId(FavoritePayload payload) {
-        if (payload == null || isBlank(payload.id) || isBlank(payload.name)) {
+        if (payload == null || isBlank(payload.externalSource) || isBlank(payload.externalId)) {
             return null;
         }
         if (!Double.isFinite(payload.latitude) || !Double.isFinite(payload.longitude)) {
@@ -179,22 +185,51 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
         if (payload.latitude == 0.0d && payload.longitude == 0.0d) {
             return null;
         }
+
+        String placeName = resolvePlaceName(payload);
+        if (isBlank(placeName)) {
+            return null;
+        }
+
         try {
             return placeIdentityService.resolveInternalPlaceId(
-                    "FAVORITE",
-                    payload.id.trim(),
+                    payload.externalSource.trim(),
+                    payload.externalId.trim(),
                     payload.latitude,
                     payload.longitude,
-                    payload.name.trim());
+                    placeName);
         } catch (DataAccessException ex) {
-            LOGGER.error("Failed to resolve favorite placeId for payload id={}, name={}, lat={}, lng={}",
-                    payload.id,
-                    payload.name,
+            LOGGER.error("Failed to resolve favorite placeId for payload externalSource={}, externalId={}, placeName={}, lat={}, lng={}",
+                    payload.externalSource,
+                    payload.externalId,
+                    placeName,
                     payload.latitude,
                     payload.longitude,
                     ex);
             return null;
         }
+    }
+
+    private String resolvePlaceName(FavoritePayload payload) {
+        if (payload == null) {
+            return null;
+        }
+        String placeName = normalizeText(payload.placeName);
+        if (isBlank(placeName)) {
+            placeName = normalizeText(payload.name);
+        }
+        if (isBlank(placeName)) {
+            placeName = normalizeText(payload.address);
+        }
+        return placeName;
+    }
+
+    private String normalizeText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 
     private boolean isBlank(String value) {
@@ -204,6 +239,9 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
     private static class FavoritePayload {
         public String id;
         public String placeId;
+        public String externalSource;
+        public String externalId;
+        public String placeName;
         public String name;
         public String address;
         public String description;

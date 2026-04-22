@@ -1,11 +1,16 @@
 package com.bif.server.features.place.services;
 
+import com.bif.server.common.models.Location;
 import com.bif.server.features.place.models.Place;
+import com.bif.server.features.place.models.PlaceMapping;
+import com.bif.server.features.place.repositories.PlaceMappingRepository;
 import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.search.dto.PlaceSearchRequestDTO;
 import com.bif.server.features.search.services.PlaceSearchIndexSyncService;
 import com.bif.server.features.search.services.PlaceSearchProvider;
 import com.bif.server.features.sync.services.SyncVersionService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -15,6 +20,7 @@ import java.util.Optional;
 
 @Service
 public class PlaceService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(PlaceService.class);
     private static final double MIN_PROJECT_LAT = 8.0d;
     private static final double MAX_PROJECT_LAT = 24.0d;
     private static final double MIN_PROJECT_LNG = 102.0d;
@@ -24,6 +30,8 @@ public class PlaceService {
     private final PlaceRepository placeRepository;
     private final SyncVersionService syncVersionService;
     private final PlaceAddressEnrichmentService placeAddressEnrichmentService;
+    private final PlaceIdentityService placeIdentityService;
+    private final PlaceMappingRepository placeMappingRepository;
     private final PlaceSearchProvider placeSearchProvider;
     private final PlaceSearchIndexSyncService placeSearchIndexSyncService;
     private final String defaultSearchPlaceSource;
@@ -31,6 +39,8 @@ public class PlaceService {
     public PlaceService(PlaceRepository placeRepository,
                         SyncVersionService syncVersionService,
                         PlaceAddressEnrichmentService placeAddressEnrichmentService,
+                        PlaceIdentityService placeIdentityService,
+                        PlaceMappingRepository placeMappingRepository,
                         PlaceSearchProvider placeSearchProvider,
                         PlaceSearchIndexSyncService placeSearchIndexSyncService,
                         @Value("${place.search.default-source:osm_geocoder}")
@@ -38,6 +48,8 @@ public class PlaceService {
         this.placeRepository = placeRepository;
         this.syncVersionService = syncVersionService;
         this.placeAddressEnrichmentService = placeAddressEnrichmentService;
+        this.placeIdentityService = placeIdentityService;
+        this.placeMappingRepository = placeMappingRepository;
         this.placeSearchProvider = placeSearchProvider;
         this.placeSearchIndexSyncService = placeSearchIndexSyncService;
         this.defaultSearchPlaceSource = defaultSearchPlaceSource;
@@ -53,12 +65,125 @@ public class PlaceService {
 
     public Place save(Place place) {
         validateProjectLocation(place);
+
+        String externalSource = normalizeText(place != null ? place.getPlaceSource() : null);
+        String externalId = normalizeText(place != null ? place.getId() : null);
+        String resolvedCanonicalId = resolveCanonicalIdForSearch(place, externalSource, externalId);
+        if (resolvedCanonicalId != null) {
+            place.setId(resolvedCanonicalId);
+        }
+
+        Optional<Place> existing = Optional.empty();
+        String targetPlaceId = normalizeText(place != null ? place.getId() : null);
+        if (targetPlaceId != null) {
+            existing = placeRepository.findById(targetPlaceId);
+            existing.ifPresent(existingPlace -> mergePlaceForUpsert(existingPlace, place));
+        }
+
         enrichPlaceAddress(place);
         place.setServerVersion(syncVersionService.nextVersion());
-        place.setLastModifiedBy(place.getPersistedByUserId());
+        place.setLastModifiedBy(resolveLastModifiedBy(place, existing.orElse(null)));
         Place saved = placeRepository.save(place);
+        upsertMappingIfPossible(saved, externalSource, externalId);
         placeSearchIndexSyncService.upsert(saved);
         return saved;
+    }
+
+    private void mergePlaceForUpsert(Place existing, Place incoming) {
+        if (existing == null || incoming == null) {
+            return;
+        }
+
+        if (normalizeText(incoming.getName()) == null) {
+            incoming.setName(existing.getName());
+        }
+        if (incoming.getLocation() == null) {
+            incoming.setLocation(existing.getLocation());
+        }
+        if (normalizeText(incoming.getAddress()) == null) {
+            incoming.setAddress(existing.getAddress());
+        }
+        if (normalizeText(incoming.getCountry()) == null) {
+            incoming.setCountry(existing.getCountry());
+        }
+        if (normalizeText(incoming.getRegion()) == null) {
+            incoming.setRegion(existing.getRegion());
+        }
+        if (normalizeText(incoming.getLocality()) == null) {
+            incoming.setLocality(existing.getLocality());
+        }
+        if (normalizeText(incoming.getCity()) == null) {
+            incoming.setCity(existing.getCity());
+        }
+        if (normalizeText(incoming.getDistrict()) == null) {
+            incoming.setDistrict(existing.getDistrict());
+        }
+        if (incoming.getTags() == null || incoming.getTags().isEmpty()) {
+            incoming.setTags(existing.getTags());
+        }
+        if (normalizeText(incoming.getCategoryMain()) == null) {
+            incoming.setCategoryMain(existing.getCategoryMain());
+        }
+        if (incoming.getCategoryAlternates() == null || incoming.getCategoryAlternates().isEmpty()) {
+            incoming.setCategoryAlternates(existing.getCategoryAlternates());
+        }
+        if (normalizeText(incoming.getNameNormalized()) == null) {
+            incoming.setNameNormalized(existing.getNameNormalized());
+        }
+        if (normalizeText(incoming.getAddressNormalized()) == null) {
+            incoming.setAddressNormalized(existing.getAddressNormalized());
+        }
+        if (normalizeText(incoming.getPlaceSource()) == null) {
+            incoming.setPlaceSource(existing.getPlaceSource());
+        }
+        if (normalizeText(incoming.getPersistedByAction()) == null) {
+            incoming.setPersistedByAction(existing.getPersistedByAction());
+        }
+        if (normalizeText(incoming.getPersistedByUserId()) == null) {
+            incoming.setPersistedByUserId(existing.getPersistedByUserId());
+        }
+        if (Double.compare(incoming.getRating(), 0.0d) == 0 && Double.compare(existing.getRating(), 0.0d) != 0) {
+            incoming.setRating(existing.getRating());
+        }
+        if (incoming.getReviewCount() == 0 && existing.getReviewCount() != 0) {
+            incoming.setReviewCount(existing.getReviewCount());
+        }
+        if (normalizeText(incoming.getPhotoUrl()) == null) {
+            incoming.setPhotoUrl(existing.getPhotoUrl());
+        }
+        if (existing.isDeleted() && !incoming.isDeleted()) {
+            incoming.setDeleted(true);
+        }
+        if (existing.isOrphaned() && !incoming.isOrphaned()) {
+            incoming.setOrphaned(true);
+        }
+        if (incoming.getOrphanedAt() == null && existing.getOrphanedAt() != null) {
+            incoming.setOrphanedAt(existing.getOrphanedAt());
+        }
+    }
+
+    private String resolveLastModifiedBy(Place place, Place existing) {
+        String persistedByUserId = normalizeText(place != null ? place.getPersistedByUserId() : null);
+        if (persistedByUserId != null) {
+            return persistedByUserId;
+        }
+
+        String explicitLastModifiedBy = normalizeText(place != null ? place.getLastModifiedBy() : null);
+        if (explicitLastModifiedBy != null) {
+            return explicitLastModifiedBy;
+        }
+
+        String existingLastModifiedBy = normalizeText(existing != null ? existing.getLastModifiedBy() : null);
+        if (existingLastModifiedBy != null) {
+            return existingLastModifiedBy;
+        }
+
+        String existingUserId = normalizeText(existing != null ? existing.getPersistedByUserId() : null);
+        if (existingUserId != null) {
+            return existingUserId;
+        }
+
+        return "system";
     }
 
     public Place saveFromSearch(Place place) {
@@ -68,21 +193,35 @@ public class PlaceService {
             place.setPlaceSource(defaultSearchPlaceSource);
         }
 
-        if (isGeocodeId(place)) {
+        String externalSource = normalizeText(place != null ? place.getPlaceSource() : null);
+        String externalId = normalizeText(place != null ? place.getId() : null);
+
+        if (isGeocodeExternalId(externalId)) {
             Optional<Place> duplicate = findNearDuplicate(place);
             if (duplicate.isPresent()) {
+                upsertMappingIfPossible(duplicate.get(), externalSource, externalId);
                 return duplicate.get();
             }
         }
 
-        return placeRepository.findById(place.getId()).orElseGet(() -> {
-            enrichPlaceAddress(place);
-            place.setPersistedByAction("search_discovered");
-            place.setServerVersion(syncVersionService.nextVersion());
-            Place saved = placeRepository.save(place);
-            placeSearchIndexSyncService.upsert(saved);
-            return saved;
-        });
+        String resolvedCanonicalId = resolveCanonicalIdForSearch(place, externalSource, externalId);
+        if (resolvedCanonicalId != null) {
+            place.setId(resolvedCanonicalId);
+        }
+
+        Optional<Place> existing = placeRepository.findById(place.getId());
+        if (existing.isPresent()) {
+            upsertMappingIfPossible(existing.get(), externalSource, externalId);
+            return existing.get();
+        }
+
+        enrichPlaceAddress(place);
+        place.setPersistedByAction("search_discovered");
+        place.setServerVersion(syncVersionService.nextVersion());
+        Place saved = placeRepository.save(place);
+        upsertMappingIfPossible(saved, externalSource, externalId);
+        placeSearchIndexSyncService.upsert(saved);
+        return saved;
     }
 
     private Optional<Place> findNearDuplicate(Place candidate) {
@@ -140,10 +279,83 @@ public class PlaceService {
         return earthRadiusMeters * c;
     }
 
-    private boolean isGeocodeId(Place place) {
-        return place != null
-                && place.getId() != null
-                && place.getId().startsWith("geocode_");
+    private String resolveCanonicalIdForSearch(Place place,
+                                               String externalSource,
+                                               String externalId) {
+        if (place == null || externalSource == null || externalId == null) {
+            return null;
+        }
+        if (place.getLocation() == null || !Double.isFinite(place.getLocation().getLatitude())
+                || !Double.isFinite(place.getLocation().getLongitude())) {
+            return null;
+        }
+        String name = normalizeText(place.getName());
+        if (name == null) {
+            return null;
+        }
+
+        try {
+            return placeIdentityService.resolveInternalPlaceId(
+                    externalSource,
+                    externalId,
+                    place.getLocation().getLatitude(),
+                    place.getLocation().getLongitude(),
+                    name);
+        } catch (RuntimeException ex) {
+            LOGGER.warn("Failed to resolve canonical placeId for search place source={}, extId={}",
+                    externalSource,
+                    externalId,
+                    ex);
+            return null;
+        }
+    }
+
+    private void upsertMappingIfPossible(Place canonicalPlace,
+                                         String externalSource,
+                                         String externalId) {
+        if (canonicalPlace == null || canonicalPlace.getLocation() == null
+                || externalSource == null || externalId == null) {
+            return;
+        }
+
+        Location location = canonicalPlace.getLocation();
+        if (!Double.isFinite(location.getLatitude()) || !Double.isFinite(location.getLongitude())) {
+            return;
+        }
+
+        String placeName = normalizeText(canonicalPlace.getName());
+        if (placeName == null) {
+            return;
+        }
+
+        PlaceMapping mapping = placeMappingRepository.upsertByExternalKey(
+                externalSource,
+                externalId,
+                canonicalPlace.getId(),
+                placeName,
+                location.getLatitude(),
+                location.getLongitude());
+
+        if (mapping == null) {
+            placeMappingRepository.findByExternalSourceAndExternalId(externalSource, externalId)
+                    .ifPresent(existing -> LOGGER.debug(
+                            "Mapping already exists for source={} externalId={} -> internalId={}",
+                            externalSource,
+                            externalId,
+                            existing.getInternalPlaceId()));
+        }
+    }
+
+    private boolean isGeocodeExternalId(String externalId) {
+        return externalId != null && externalId.startsWith("geocode_");
+    }
+
+    private String normalizeText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 
     private void validateProjectLocation(Place place) {

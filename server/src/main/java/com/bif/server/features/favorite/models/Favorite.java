@@ -14,6 +14,9 @@ public class Favorite extends SyncDocument {
     @Id
     private String id;
     private String placeId;
+    private String externalSource;
+    private String externalId;
+    private String placeName;
     private String name;
     private Location location;
     private String address;

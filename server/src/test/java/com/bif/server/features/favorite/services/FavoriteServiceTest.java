@@ -83,16 +83,19 @@ class FavoriteServiceTest {
         item.setId("f1");
         item.setUserId("u1");
         item.setName("Cafe");
+        item.setPlaceName("Cafe");
+        item.setExternalSource("GOOGLE_MAPS");
+        item.setExternalId("gm-1");
         item.setLocation(new Location(10.0, 20.0));
 
-        when(placeIdentityService.resolveInternalPlaceId("FAVORITE", "f1", 10.0, 20.0, "Cafe"))
+        when(placeIdentityService.resolveInternalPlaceId("GOOGLE_MAPS", "gm-1", 10.0, 20.0, "Cafe"))
                 .thenReturn("place-123");
         when(favoriteRepository.save(any(Favorite.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Favorite result = favoriteService.save(item);
 
         ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
-        verify(placeIdentityService).resolveInternalPlaceId("FAVORITE", "f1", 10.0, 20.0, "Cafe");
+        verify(placeIdentityService).resolveInternalPlaceId("GOOGLE_MAPS", "gm-1", 10.0, 20.0, "Cafe");
         verify(favoriteRepository).save(captor.capture());
         assertEquals("place-123", captor.getValue().getPlaceId());
         assertEquals("place-123", result.getPlaceId());
@@ -124,9 +127,11 @@ class FavoriteServiceTest {
         item.setId("f3");
         item.setUserId("u1");
         item.setName("Cafe");
+        item.setExternalSource("GOOGLE_MAPS");
+        item.setExternalId("gm-3");
         item.setLocation(new Location(10.0, 20.0));
 
-        when(placeIdentityService.resolveInternalPlaceId("FAVORITE", "f3", 10.0, 20.0, "Cafe"))
+        when(placeIdentityService.resolveInternalPlaceId("GOOGLE_MAPS", "gm-3", 10.0, 20.0, "Cafe"))
                 .thenThrow(new RuntimeException("boom"));
         when(favoriteRepository.save(any(Favorite.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -135,6 +140,22 @@ class FavoriteServiceTest {
         ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
         verify(favoriteRepository).save(captor.capture());
         assertNull(captor.getValue().getPlaceId());
+        assertNull(result.getPlaceId());
+    }
+
+    @Test
+    void save_WhenIdentityMetadataMissing_DoesNotResolveAndPersistsAsIs() {
+        Favorite item = new Favorite();
+        item.setId("f4");
+        item.setUserId("u1");
+        item.setName("Cafe");
+        item.setLocation(new Location(10.0, 20.0));
+
+        when(favoriteRepository.save(any(Favorite.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Favorite result = favoriteService.save(item);
+
+        verify(placeIdentityService, never()).resolveInternalPlaceId(anyString(), anyString(), anyDouble(), anyDouble(), anyString());
         assertNull(result.getPlaceId());
     }
 

@@ -42,6 +42,8 @@ public class FavoriteService {
             throw new IllegalArgumentException("favorite must not be null");
         }
 
+        normalizeIdentityMetadata(favorite);
+
         try {
             String resolvedPlaceId = resolvePlaceIdIfMissing(favorite);
             if (!isBlank(resolvedPlaceId)) {
@@ -103,6 +105,15 @@ public class FavoriteService {
         if (isBlank(input.getPlaceId()) && !isBlank(existing.getPlaceId())) {
             input.setPlaceId(existing.getPlaceId());
         }
+        if (isBlank(input.getExternalSource()) && !isBlank(existing.getExternalSource())) {
+            input.setExternalSource(existing.getExternalSource());
+        }
+        if (isBlank(input.getExternalId()) && !isBlank(existing.getExternalId())) {
+            input.setExternalId(existing.getExternalId());
+        }
+        if (isBlank(input.getPlaceName()) && !isBlank(existing.getPlaceName())) {
+            input.setPlaceName(existing.getPlaceName());
+        }
 
         return save(input);
     }
@@ -145,7 +156,16 @@ public class FavoriteService {
             return null;
         }
 
-        String placeName = normalizeText(favorite.getName());
+        String externalSource = normalizeText(favorite.getExternalSource());
+        String externalId = normalizeText(favorite.getExternalId());
+        if (isBlank(externalSource) || isBlank(externalId)) {
+            return null;
+        }
+
+        String placeName = normalizeText(favorite.getPlaceName());
+        if (isBlank(placeName)) {
+            placeName = normalizeText(favorite.getName());
+        }
         if (isBlank(placeName)) {
             placeName = normalizeText(favorite.getAddress());
         }
@@ -153,14 +173,11 @@ public class FavoriteService {
             return null;
         }
 
-        String externalId = favorite.getId();
-        if (isBlank(externalId)) {
-            return null;
-        }
+        favorite.setPlaceName(placeName);
 
         try {
             return placeIdentityService.resolveInternalPlaceId(
-                    "FAVORITE",
+                    externalSource,
                     externalId.trim(),
                     location.getLatitude(),
                     location.getLongitude(),
@@ -175,6 +192,23 @@ public class FavoriteService {
                     ex);
             throw new FavoritePlaceResolutionException("Failed to resolve favorite placeId", ex);
         }
+    }
+
+    private void normalizeIdentityMetadata(Favorite favorite) {
+        if (favorite == null) {
+            return;
+        }
+        favorite.setExternalSource(normalizeText(favorite.getExternalSource()));
+        favorite.setExternalId(normalizeText(favorite.getExternalId()));
+
+        String placeName = normalizeText(favorite.getPlaceName());
+        if (isBlank(placeName)) {
+            placeName = normalizeText(favorite.getName());
+        }
+        if (isBlank(placeName)) {
+            placeName = normalizeText(favorite.getAddress());
+        }
+        favorite.setPlaceName(placeName);
     }
 
     private String normalizeText(String value) {

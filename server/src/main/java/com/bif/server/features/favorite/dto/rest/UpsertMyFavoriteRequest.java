@@ -5,6 +5,9 @@ import com.bif.server.common.models.Location;
 public record UpsertMyFavoriteRequest(
         String id,
         String placeId,
+        String externalSource,
+        String externalId,
+        String placeName,
         String name,
         Location location,
         String address,
