@@ -2,6 +2,12 @@ package com.bif.app.core.network;
 
 import com.bif.app.core.network.dto.auth.AuthResponse;
 import com.bif.app.core.network.dto.auth.AuthStateResponse;
+import com.bif.app.core.network.dto.auth.ForgotPasswordRequestOtpResponse;
+import com.bif.app.core.network.dto.auth.RequestOtpRequest;
+import com.bif.app.core.network.dto.auth.ResetPasswordRequest;
+import com.bif.app.core.network.dto.auth.ResetPasswordResponse;
+import com.bif.app.core.network.dto.auth.VerifyOtpRequest;
+import com.bif.app.core.network.dto.auth.VerifyOtpResponse;
 import com.bif.app.core.network.dto.auth.LoginRequest;
 import com.bif.app.core.network.dto.auth.RefreshTokenRequest;
 import com.bif.app.core.network.dto.auth.RegisterRequest;
@@ -63,6 +69,15 @@ public interface RestApiService {
 
     @GET("auth/me")
     Call<AuthStateResponse> getAuthState();
+
+        @POST("auth/forgot-password/request-otp")
+        Call<ForgotPasswordRequestOtpResponse> requestForgotPasswordOtp(@Body RequestOtpRequest request);
+
+        @POST("auth/forgot-password/verify-otp")
+        Call<VerifyOtpResponse> verifyForgotPasswordOtp(@Body VerifyOtpRequest request);
+
+        @POST("auth/forgot-password/reset")
+        Call<ResetPasswordResponse> resetForgotPassword(@Body ResetPasswordRequest request);
 
     @GET("favorites/me")
     Call<List<FavoriteResponseDto>> getMyFavorites();
