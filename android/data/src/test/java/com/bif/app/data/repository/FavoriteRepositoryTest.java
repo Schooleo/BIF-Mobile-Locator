@@ -257,6 +257,7 @@ public class FavoriteRepositoryTest {
             @SuppressWarnings("unchecked")
             Call<List<FavoriteResponseDto>> call = org.mockito.Mockito.mock(Call.class);
             when(mockRestApiService.getMyFavorites()).thenReturn(call);
+            when(mockSyncManager.isOnline()).thenReturn(true);
             when(call.execute()).thenReturn(Response.success(new ArrayList<>()));
 
             // Act
@@ -291,6 +292,7 @@ public class FavoriteRepositoryTest {
             @SuppressWarnings("unchecked")
             Call<List<FavoriteResponseDto>> call = org.mockito.Mockito.mock(Call.class);
             when(mockRestApiService.getMyFavorites()).thenReturn(call);
+            when(mockSyncManager.isOnline()).thenReturn(true);
             when(call.execute()).thenThrow(new java.io.IOException("offline"));
 
             final boolean[] success = {false};
@@ -304,15 +306,66 @@ public class FavoriteRepositoryTest {
                 }
 
                 @Override
+                public void onOffline() {
+                    // no-op
+                }
+
+                @Override
                 public void onError(String message) {
                     errorMessage[0] = message;
                 }
             });
 
-            // Assert - Bootstrap failure calls onError (offline-first approach: local data still available)
+            // Assert - Bootstrap failure maps to generic error key.
             assertFalse(success[0]);
             assertNotNull(errorMessage[0]);
-            assertTrue(errorMessage[0].contains("offline"));
+            assertEquals(IFavoriteRepository.ERROR_REFRESH_FAILED, errorMessage[0]);
+        }
+    }
+
+    @Test
+    public void refreshFavorites_WhenDeviceOffline_UsesOfflineCallbackWithoutRemoteCall() {
+        Context appContext = org.mockito.Mockito.mock(Context.class);
+        try (MockedStatic<UserPreferences> userPrefs = org.mockito.Mockito
+                .mockStatic(UserPreferences.class)) {
+            userPrefs.when(() -> UserPreferences.getUserId(appContext))
+                    .thenReturn("user-123");
+
+            repository = new FavoriteRepository(
+                    mockDao,
+                    mockSyncQueueDao,
+                    mockAppDatabase,
+                    mockRestApiService,
+                    mockSyncManager,
+                    mockExecutorService,
+                    appContext
+            );
+
+            when(mockSyncManager.isOnline()).thenReturn(false);
+
+            final boolean[] offline = {false};
+            final boolean[] success = {false};
+
+            repository.refreshFavorites(new IFavoriteRepository.SyncCallback() {
+                @Override
+                public void onSuccess() {
+                    success[0] = true;
+                }
+
+                @Override
+                public void onOffline() {
+                    offline[0] = true;
+                }
+
+                @Override
+                public void onError(String message) {
+                    // no-op
+                }
+            });
+
+            assertTrue(offline[0]);
+            assertFalse(success[0]);
+            verify(mockRestApiService, never()).getMyFavorites();
         }
     }
 }

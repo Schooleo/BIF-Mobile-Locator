@@ -1,6 +1,7 @@
 package com.bif.app.data.repository;
 
 import android.content.Context;
+import android.util.Log;
 
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.Transformations;
@@ -37,8 +38,10 @@ import retrofit2.Response;
 @Singleton
 public class FavoriteRepository implements IFavoriteRepository {
 
+    private static final String TAG = "FavoriteRepository";
     private static final String ENTITY_TYPE_FAVORITE = "favorite";
     private static final String ANONYMOUS_USER_ID = "anonymous";
+    private static final String GENERIC_REFRESH_ERROR_MESSAGE = IFavoriteRepository.ERROR_REFRESH_FAILED;
 
     private final FavoriteDao favoriteDao;
     private final SyncQueueDao syncQueueDao;
@@ -244,26 +247,37 @@ public class FavoriteRepository implements IFavoriteRepository {
     @Override
     public void refreshFavorites(SyncCallback callback) {
         executorService.execute(() -> {
+            String activeUserId = resolveActiveUserId(appContext);
+
+            if (canAttemptRemoteRefresh(activeUserId)
+                    && syncManager != null
+                    && !syncManager.isOnline()) {
+                if (callback != null) {
+                    callback.onOffline();
+                }
+                return;
+            }
+
             try {
-                bootstrapFavorites();
+                bootstrapFavorites(activeUserId);
                 if (callback != null) {
                     callback.onSuccess();
                 }
             } catch (Exception e) {
+                Log.w(TAG, "refreshFavorites bootstrap failed", e);
                 if (callback != null) {
-                    String message = e.getMessage();
-                    callback.onError(message != null ? message : "Failed to refresh favorites");
+                    callback.onError(GENERIC_REFRESH_ERROR_MESSAGE);
                 }
             }
         });
     }
 
-    private void bootstrapFavorites() throws IOException {
-        String activeUserId = resolveActiveUserId(appContext);
-        if (restApiService == null) {
-            return;
-        }
-        if (ANONYMOUS_USER_ID.equals(activeUserId)) {
+    private boolean canAttemptRemoteRefresh(String activeUserId) {
+        return restApiService != null && !ANONYMOUS_USER_ID.equals(activeUserId);
+    }
+
+    private void bootstrapFavorites(String activeUserId) throws IOException {
+        if (!canAttemptRemoteRefresh(activeUserId)) {
             return;
         }
 
