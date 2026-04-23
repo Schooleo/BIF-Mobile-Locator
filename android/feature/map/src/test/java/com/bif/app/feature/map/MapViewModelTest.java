@@ -842,6 +842,27 @@ public class MapViewModelTest {
     }
 
     @Test
+    public void loadReviews_WhenPreviewPlaceHasMeaningfulName_ResolvesCanonicalWithSyntheticIdentity() {
+        Place preview = new Place(
+                "preview-1",
+                "Bui Vien Street",
+                "10.0000, 106.0000",
+                0.0,
+                new Location(10.0, 106.0),
+                Place.SOURCE_PREVIEW,
+                Place.SelectionState.PREVIEW);
+
+        when(reviewRepository.resolveInternalPlaceId(eq(Place.SOURCE_PREVIEW), isNull(), eq(10.0), eq(106.0), eq("Bui Vien Street")))
+                .thenReturn("internal-preview-123");
+
+        viewModel.loadReviews(preview);
+
+        verify(reviewRepository).resolveInternalPlaceId(eq(Place.SOURCE_PREVIEW), isNull(), eq(10.0), eq(106.0), eq("Bui Vien Street"));
+        verify(reviewRepository).refreshReviews(eq("internal-preview-123"), any());
+        assertFalse(Boolean.TRUE.equals(viewModel.isLoadingReviews.getValue()));
+    }
+
+    @Test
     public void addToFavorites_WhenPreviewPlace_SkipsCanonicalResolve() {
         Place preview = new Place(
                 "preview-fav-1",

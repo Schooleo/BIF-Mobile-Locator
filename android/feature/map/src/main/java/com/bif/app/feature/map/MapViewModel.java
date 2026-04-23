@@ -313,7 +313,9 @@ public class MapViewModel extends ViewModel {
                 Favorite favorite = new Favorite();
                 favorite.placeId = resolveCanonicalFavoritePlaceId(place);
                 favorite.externalSource = hasText(place.placeSource) ? place.placeSource.trim() : null;
-                favorite.externalId = hasText(place.id) ? place.id.trim() : null;
+                favorite.externalId = place.hasCanonicalExternalIdentity() && hasText(place.id)
+                        ? place.id.trim()
+                        : null;
                 favorite.placeName = hasText(place.name) ? place.name.trim() : null;
                 favorite.name = place.name;
                 favorite.address = place.address;
@@ -370,13 +372,14 @@ public class MapViewModel extends ViewModel {
             return;
         }
 
-        if (place.isPreviewSelection()) {
+        if (place.isPreviewSelection() && !place.canResolveCanonicalIdentity()) {
             clearReviewTargetForPreview();
             Log.d(TAG, "loadReviews skipped for preview selection. id=" + place.id);
             return;
         }
 
         boolean canResolveWithMetadata = place.canResolveCanonicalIdentity();
+        boolean canUseExternalIdentity = place.hasCanonicalExternalIdentity();
 
         Log.d(TAG, "loadReviews: id=" + place.id
                 + ", name=" + place.name
@@ -387,7 +390,7 @@ public class MapViewModel extends ViewModel {
 
         final PlaceIdentityContext placeIdentityContext = new PlaceIdentityContext();
         placeIdentityContext.externalSource = canResolveWithMetadata ? place.placeSource : null;
-        placeIdentityContext.externalId = canResolveWithMetadata ? place.id : null;
+        placeIdentityContext.externalId = canResolveWithMetadata && canUseExternalIdentity ? place.id : null;
         placeIdentityContext.lat = place.location != null ? place.location.latitude : null;
         placeIdentityContext.lng = place.location != null ? place.location.longitude : null;
         placeIdentityContext.placeName = place.name;
@@ -446,7 +449,7 @@ public class MapViewModel extends ViewModel {
 
         String resolved = reviewRepository.resolveInternalPlaceId(
                 place.placeSource,
-                place.id,
+                place.hasCanonicalExternalIdentity() ? place.id : null,
                 place.location.latitude,
                 place.location.longitude,
                 place.name);

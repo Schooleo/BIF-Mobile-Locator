@@ -2839,8 +2839,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 "name:en",
                 "name:latin",
                 "name:vi",
-                "ref",
-                "class"
+                "ref"
         }) {
             if (!feature.hasProperty(key)) {
                 continue;
@@ -2866,11 +2865,11 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         }
 
         String name = feature.hasProperty(PROP_NAME)
-                ? feature.getStringProperty(PROP_NAME)
-                : "Selected Location";
+            ? feature.getStringProperty(PROP_NAME)
+            : PlaceDisplayTextResolver.FALLBACK_TITLE;
         String address = feature.hasProperty(PROP_ADDRESS)
-                ? feature.getStringProperty(PROP_ADDRESS)
-                : "Address unavailable";
+            ? feature.getStringProperty(PROP_ADDRESS)
+            : PlaceDisplayTextResolver.FALLBACK_ADDRESS;
         // Mới: Fallback sinh UUID nếu properties không có ID
         String id = feature.hasProperty(PROP_PLACE_ID)
                 ? feature.getStringProperty(PROP_PLACE_ID)
@@ -2912,36 +2911,32 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 List<Address> addresses = reverseGeocodeWithOsmFirst(
                         latLng.getLatitude(), latLng.getLongitude());
 
-                String finalName = preferredName;
-                String addressText = "Unknown Address";
+                String finalName;
+                String addressText = null;
+                String geocoderName = null;
 
                 if (!addresses.isEmpty()) {
                     Address address = addresses.get(0);
                     addressText = address.getAddressLine(0);
-
-                    if (TextUtils.isEmpty(finalName)) {
-                        finalName = address.getFeatureName();
-                        if (finalName != null && finalName.equals(addressText)) {
-                            finalName = null;
-                        }
-                    }
+                    geocoderName = address.getFeatureName();
                 }
 
-                if (TextUtils.isEmpty(finalName)) {
-                    finalName = quickPlace.name;
-                }
+                finalName = PlaceDisplayTextResolver.resolveTitle(
+                        preferredName,
+                        geocoderName,
+                        addressText);
 
                 String placeId = !TextUtils.isEmpty(externalId)
                         ? externalId
                         : buildStablePlaceId(latLng.getLatitude(), latLng.getLongitude());
 
-                final boolean reviewEligible = !TextUtils.isEmpty(externalId);
+                final boolean reviewEligible = !TextUtils.isEmpty(externalId)
+                    || PlaceDisplayTextResolver.hasMeaningfulTitle(finalName);
 
                 Place clickedPlace = new Place(
                         placeId,
                         finalName,
-                    normalizeDisplayAddress(finalName,
-                        addressText != null ? addressText : quickPlace.address),
+                        PlaceDisplayTextResolver.resolveAddress(finalName, addressText),
                         0.0,
                     new Location(latLng.getLatitude(), latLng.getLongitude()),
                     reviewEligible ? Place.SOURCE_OSM : Place.SOURCE_PREVIEW,
@@ -2968,14 +2963,8 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
     @NonNull
     private Place buildInstantTapPlace(@NonNull LatLng latLng, @Nullable String preferredName, @Nullable String externalId) {
-        String resolvedName = !TextUtils.isEmpty(preferredName)
-                ? preferredName
-                : "Selected Location";
-        String resolvedAddress = String.format(
-                Locale.getDefault(),
-                "%.5f, %.5f",
-                latLng.getLatitude(),
-                latLng.getLongitude());
+        String resolvedName = PlaceDisplayTextResolver.resolveTitle(preferredName, null, null);
+        String resolvedAddress = PlaceDisplayTextResolver.resolveAddress(resolvedName, null);
 
         String placeId = !TextUtils.isEmpty(externalId)
                 ? externalId

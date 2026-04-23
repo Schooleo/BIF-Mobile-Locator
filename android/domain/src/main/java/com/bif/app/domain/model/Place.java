@@ -3,6 +3,7 @@ package com.bif.app.domain.model;
 public class Place {
     public static final String SOURCE_OSM = "OSM";
     public static final String SOURCE_PREVIEW = "PREVIEW";
+    private static final String GENERIC_PREVIEW_NAME = "Selected Location";
 
     public enum SelectionState {
         CANONICAL,
@@ -46,11 +47,22 @@ public class Place {
     }
 
     public boolean canResolveCanonicalIdentity() {
+        if (!hasText(placeSource) || !hasText(name) || location == null || !hasText(id)) {
+            return false;
+        }
+
+        if (!isPreviewSelection()) {
+            return true;
+        }
+
+        return isMeaningfulPreviewName(name);
+    }
+
+    public boolean hasCanonicalExternalIdentity() {
         return !isPreviewSelection()
                 && hasText(placeSource)
-                && hasText(id)
-                && hasText(name)
-                && location != null;
+                && !SOURCE_PREVIEW.equalsIgnoreCase(placeSource)
+                && hasText(id);
     }
 
     private static boolean hasText(String value) {
@@ -59,5 +71,14 @@ public class Place {
 
     private static String safeTrim(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private static boolean isMeaningfulPreviewName(String value) {
+        if (!hasText(value)) {
+            return false;
+        }
+
+        String normalized = safeTrim(value).toLowerCase(java.util.Locale.ROOT);
+        return !normalized.equals(GENERIC_PREVIEW_NAME.toLowerCase(java.util.Locale.ROOT));
     }
 }
