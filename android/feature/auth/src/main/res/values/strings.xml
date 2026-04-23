@@ -3,6 +3,16 @@
     <string name="sign_up">Sign up</string>
     <string name="sign_in">Sign in</string>
     <string name="register">Register</string>
+    <string name="forgot_password">Forgot password?</string>
+    <string name="forgot_password_title">Forgot Password</string>
+    <string name="forgot_password_subtitle">Enter your email to receive a verification code</string>
+    <string name="send_otp">Send OTP</string>
+    <string name="back_to_login">Back to Login</string>
+    <string name="email_required">Email is required</string>
+    <string name="invalid_email_format">Please enter a valid email</string>
+    <string name="request_otp_failed">Request OTP failed</string>
+    <string name="otp_screen_title">OTP Verification</string>
+    <string name="otp_sent_to">An OTP was sent to %1$s</string>
     <string name="already_have_account">Already have an account?</string>
     <string name="email">Email</string>
     <string name="password">Password</string>

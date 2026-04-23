@@ -27,11 +27,31 @@
         android:layout_width="match_parent"
         android:layout_height="48dp" />
 
-    <!-- Register Link -->
-    <include
-        android:id="@+id/tv_register_link"
-        layout="@layout/component_auth_link"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <!-- Register Link -->
+        <include
+            android:id="@+id/tv_register_link"
+            layout="@layout/component_auth_link"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <!-- Forgot Password Link -->
+        <include
+            android:id="@+id/tv_forgot_password_link"
+            layout="@layout/component_auth_link"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
 
 </LinearLayout>

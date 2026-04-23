@@ -127,6 +127,12 @@ public class LoginFragment extends Fragment {
         tvRegisterLink.setText(R.string.register);
         tvRegisterLink.setPaintFlags(tvRegisterLink.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
         tvRegisterLink.setOnClickListener(v -> navController.navigate(UriUtils.buildUri("/register")));
+
+        // Set link text to "Forgot password?"
+        TextView tvForgotPasswordLink = view.findViewById(R.id.tv_forgot_password_link);
+        tvForgotPasswordLink.setText(R.string.forgot_password);
+        tvForgotPasswordLink.setPaintFlags(tvForgotPasswordLink.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
+        tvForgotPasswordLink.setOnClickListener(v -> navController.navigate(UriUtils.buildUri("/forgot-password")));
     }
 
     private void setAuthLoading(Button button, boolean isLoading) {
