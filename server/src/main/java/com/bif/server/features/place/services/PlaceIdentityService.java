@@ -51,10 +51,11 @@ public class PlaceIdentityService {
 
     public String resolveInternalPlaceId(String source, String extId, double lat, double lng, String name) {
         final String normalizedSource = requireNotBlank(source, "source");
-        final String normalizedExtId = requireNotBlank(extId, "extId");
         final String normalizedName = requireNotBlank(name, "name");
         validateLatitude(lat);
         validateLongitude(lng);
+
+        final String normalizedExtId = normalizeExternalId(normalizedSource, extId, lat, lng, normalizedName);
 
         LOGGER.info("Resolving internalPlaceId for source={}, externalId={}, name={}, coordinates=[{}, {}]",
                 normalizedSource,
@@ -104,7 +105,7 @@ public class PlaceIdentityService {
             }
         }
 
-        String candidateInternalId = UUID.randomUUID().toString();
+        String candidateInternalId = buildDeterministicCanonicalId(source, extId, lat, lng, name);
         String resolvedId = upsertExternalMappingAndResolveInternalId(candidateInternalId, source, extId, lat, lng, name);
         ensurePlaceExists(resolvedId, source, lat, lng, name);
 
@@ -140,6 +141,44 @@ public class PlaceIdentityService {
 
         String resolvedInternalId = trimToNull(mapping.getInternalPlaceId());
         return resolvedInternalId != null ? resolvedInternalId : candidateInternalId;
+    }
+
+    private String normalizeExternalId(String source,
+                                       String extId,
+                                       double lat,
+                                       double lng,
+                                       String name) {
+        String normalizedExtId = trimToNull(extId);
+        if (normalizedExtId != null) {
+            return normalizedExtId;
+        }
+
+        String syntheticSeed = trimToNull(source) + "|"
+                + trimToNull(name) + "|"
+                + String.format(Locale.US, "%.6f", lat) + "|"
+                + String.format(Locale.US, "%.6f", lng);
+        return "synthetic:" + UUID.nameUUIDFromBytes(syntheticSeed.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String buildDeterministicCanonicalId(String source,
+                                                String extId,
+                                                double lat,
+                                                double lng,
+                                                String name) {
+        String normalizedSource = trimToNull(source) != null
+                ? source.trim().toLowerCase(Locale.ROOT)
+                : "";
+        String normalizedExtId = trimToNull(extId) != null
+                ? extId.trim().toLowerCase(Locale.ROOT)
+                : "";
+        String normalizedName = trimToNull(name) != null
+                ? name.trim().toLowerCase(Locale.ROOT)
+                : "";
+        String normalizedLat = String.format(Locale.US, "%.6f", lat);
+        String normalizedLng = String.format(Locale.US, "%.6f", lng);
+        String seed = normalizedSource + "|" + normalizedExtId + "|" + normalizedName + "|"
+                + normalizedLat + "|" + normalizedLng;
+        return UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8)).toString();
     }
 
     private void ensurePlaceExists(String internalId,

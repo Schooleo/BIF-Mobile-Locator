@@ -6,6 +6,7 @@ import com.bif.server.features.place.repositories.PlaceMappingRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.mongodb.core.FindAndModifyOptions;
@@ -13,9 +14,11 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -100,15 +103,58 @@ class PlaceIdentityServiceTest {
         when(mongoTemplate.find(any(Query.class), eq(PlaceMapping.class)))
                 .thenReturn(Collections.emptyList());
 
-    PlaceMapping upsertedMapping = new PlaceMapping();
-    upsertedMapping.setInternalPlaceId("resolved-new-id");
-    when(placeMappingRepository.upsertByExternalKey(eq("NEW_SOURCE"), eq("ext-999"), anyString(), eq("Hanoi Citadel"), eq(21.028), eq(105.834)))
-            .thenReturn(upsertedMapping);
+        PlaceMapping upsertedMapping = new PlaceMapping();
+        upsertedMapping.setInternalPlaceId("resolved-new-id");
+        when(placeMappingRepository.upsertByExternalKey(eq("NEW_SOURCE"), eq("ext-999"), anyString(), eq("Hanoi Citadel"), eq(21.028), eq(105.834)))
+                .thenReturn(upsertedMapping);
 
         String result = placeIdentityService.resolveInternalPlaceId("NEW_SOURCE", "ext-999", 21.028, 105.834, "Hanoi Citadel");
 
-    assertEquals("resolved-new-id", result);
-    verify(mongoTemplate).upsert(any(Query.class), any(Update.class), eq(com.bif.server.features.place.models.Place.class));
+        assertEquals("resolved-new-id", result);
+
+        ArgumentCaptor<String> candidateCaptor = ArgumentCaptor.forClass(String.class);
+        verify(placeMappingRepository).upsertByExternalKey(
+            eq("NEW_SOURCE"),
+            eq("ext-999"),
+            candidateCaptor.capture(),
+            eq("Hanoi Citadel"),
+            eq(21.028),
+            eq(105.834));
+
+        String expectedCandidate = UUID.nameUUIDFromBytes(
+            "new_source|ext-999|hanoi citadel|21.028000|105.834000"
+                .getBytes(StandardCharsets.UTF_8)).toString();
+        assertEquals(expectedCandidate, candidateCaptor.getValue());
+        verify(mongoTemplate).upsert(any(Query.class), any(Update.class), eq(com.bif.server.features.place.models.Place.class));
+    }
+
+    @Test
+    void resolveInternalPlaceId_WhenExternalIdMissing_UsesSyntheticIdentity() {
+        when(placeMappingRepository.findByExternalSourceAndExternalId(eq("NEW_SOURCE"), anyString()))
+                .thenReturn(Optional.empty());
+        when(mongoTemplate.find(any(Query.class), eq(PlaceMapping.class)))
+                .thenReturn(Collections.emptyList());
+
+        PlaceMapping syntheticMapping = new PlaceMapping();
+        syntheticMapping.setInternalPlaceId("resolved-synthetic-id");
+        when(placeMappingRepository.upsertByExternalKey(eq("NEW_SOURCE"), anyString(), anyString(), eq("Hanoi Citadel"), eq(21.028), eq(105.834)))
+                .thenReturn(syntheticMapping);
+
+        String result = placeIdentityService.resolveInternalPlaceId("NEW_SOURCE", null, 21.028, 105.834, "Hanoi Citadel");
+
+        assertEquals("resolved-synthetic-id", result);
+
+        ArgumentCaptor<String> extIdCaptor = ArgumentCaptor.forClass(String.class);
+        verify(placeMappingRepository).upsertByExternalKey(
+                eq("NEW_SOURCE"),
+                extIdCaptor.capture(),
+                anyString(),
+                eq("Hanoi Citadel"),
+                eq(21.028),
+                eq(105.834));
+
+        assertTrue(extIdCaptor.getValue().startsWith("synthetic:"));
+        verify(mongoTemplate).upsert(any(Query.class), any(Update.class), eq(com.bif.server.features.place.models.Place.class));
     }
 
     @Test
@@ -128,5 +174,36 @@ class PlaceIdentityServiceTest {
 
     assertEquals("concurrent-id", result);
     verify(mongoTemplate).upsert(any(Query.class), any(Update.class), eq(com.bif.server.features.place.models.Place.class));
+    }
+
+    @Test
+    void resolveInternalPlaceId_WhenExistingMappingIsOrphaned_RebuildsCanonicalMapping() {
+        PlaceMapping orphanedMapping = new PlaceMapping();
+        orphanedMapping.setId("mapping-1");
+        orphanedMapping.setInternalPlaceId("orphaned-id");
+        orphanedMapping.setName("Old Cafe");
+
+        when(placeMappingRepository.findByExternalSourceAndExternalId("OSM", "ext-orphan"))
+                .thenReturn(Optional.of(orphanedMapping));
+        when(placeCleanupService.reviveOrphanedPlace("orphaned-id")).thenReturn(0L);
+        when(mongoTemplate.find(any(Query.class), eq(PlaceMapping.class)))
+                .thenReturn(Collections.emptyList());
+
+        PlaceMapping rebuiltMapping = new PlaceMapping();
+        rebuiltMapping.setInternalPlaceId("rebuilt-id");
+        when(placeMappingRepository.upsertByExternalKey(
+                eq("OSM"),
+                eq("ext-orphan"),
+                anyString(),
+                eq("Old Cafe"),
+                eq(10.0),
+                eq(106.0)))
+                .thenReturn(rebuiltMapping);
+
+        String result = placeIdentityService.resolveInternalPlaceId("OSM", "ext-orphan", 10.0, 106.0, "Old Cafe");
+
+        assertEquals("rebuilt-id", result);
+        verify(placeMappingRepository).delete(orphanedMapping);
+        verify(mongoTemplate).upsert(any(Query.class), any(Update.class), eq(com.bif.server.features.place.models.Place.class));
     }
 }
