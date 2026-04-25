@@ -118,7 +118,8 @@
         android:id="@+id/nav_reset_password"
         android:name="com.bif.app.feature.auth.ResetPasswordFragment"
         android:label="Reset Password"
-        app:route="/forgot-password/reset">
+        app:route="/forgot-password/reset"
+        tools:layout="@layout/fragment_reset_password">
 
         <argument android:name="email" app:argType="string" android:defaultValue="" />
         <argument android:name="resetToken" app:argType="string" android:defaultValue="" />

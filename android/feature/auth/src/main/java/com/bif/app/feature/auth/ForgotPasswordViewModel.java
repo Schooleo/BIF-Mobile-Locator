@@ -8,6 +8,8 @@ import androidx.lifecycle.ViewModel;
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.auth.ForgotPasswordRequestOtpResponse;
 import com.bif.app.core.network.dto.auth.RequestOtpRequest;
+import com.bif.app.core.network.dto.auth.ResetPasswordRequest;
+import com.bif.app.core.network.dto.auth.ResetPasswordResponse;
 import com.bif.app.core.network.dto.auth.VerifyOtpRequest;
 import com.bif.app.core.network.dto.auth.VerifyOtpResponse;
 
@@ -24,6 +26,7 @@ public class ForgotPasswordViewModel extends ViewModel {
     private final RestApiService restApiService;
     private final MutableLiveData<RequestOtpState> requestOtpState = new MutableLiveData<>(new RequestOtpState.Idle());
     private final MutableLiveData<VerifyOtpState> verifyOtpState = new MutableLiveData<>(new VerifyOtpState.Idle());
+    private final MutableLiveData<ResetPasswordState> resetPasswordState = new MutableLiveData<>(new ResetPasswordState.Idle());
 
     @Inject
     public ForgotPasswordViewModel(RestApiService restApiService) {
@@ -130,6 +133,52 @@ public class ForgotPasswordViewModel extends ViewModel {
         return "OTP verification failed";
     }
 
+    // ── Reset Password ───────────────────────────────────────────────────────
+
+    public LiveData<ResetPasswordState> getResetPasswordState() {
+        return resetPasswordState;
+    }
+
+    public void resetPassword(@NonNull String resetToken, @NonNull String newPassword) {
+        resetPasswordState.setValue(new ResetPasswordState.Loading());
+
+        restApiService.resetForgotPassword(new ResetPasswordRequest(resetToken.trim(), newPassword))
+                .enqueue(new Callback<>() {
+                    @Override
+                    public void onResponse(@NonNull Call<ResetPasswordResponse> call,
+                                           @NonNull Response<ResetPasswordResponse> response) {
+                        if (response.isSuccessful() && response.body() != null && response.body().success) {
+                            resetPasswordState.postValue(new ResetPasswordState.Success());
+                            return;
+                        }
+
+                        String message = resolveResetPasswordErrorMessage(response);
+                        resetPasswordState.postValue(new ResetPasswordState.Error(message));
+                    }
+
+                    @Override
+                    public void onFailure(@NonNull Call<ResetPasswordResponse> call,
+                                          @NonNull Throwable t) {
+                        resetPasswordState.postValue(new ResetPasswordState.Error("Network error. Please try again."));
+                    }
+                });
+    }
+
+    public void clearResetPasswordState() {
+        ResetPasswordState current = resetPasswordState.getValue();
+        if (current instanceof ResetPasswordState.Success || current instanceof ResetPasswordState.Error) {
+            resetPasswordState.setValue(new ResetPasswordState.Idle());
+        }
+    }
+
+    private String resolveResetPasswordErrorMessage(Response<ResetPasswordResponse> response) {
+        ResetPasswordResponse body = response.body();
+        if (body != null && body.message != null && !body.message.trim().isEmpty()) {
+            return body.message.trim();
+        }
+        return "Password reset failed";
+    }
+
     // ── State classes ────────────────────────────────────────────────────────
 
     public abstract static class RequestOtpState {
@@ -190,6 +239,32 @@ public class ForgotPasswordViewModel extends ViewModel {
         }
 
         public static final class Error extends VerifyOtpState {
+            private final String message;
+
+            public Error(String message) {
+                this.message = message;
+            }
+
+            public String getMessage() {
+                return message;
+            }
+        }
+    }
+
+    public abstract static class ResetPasswordState {
+        private ResetPasswordState() {
+        }
+
+        public static final class Idle extends ResetPasswordState {
+        }
+
+        public static final class Loading extends ResetPasswordState {
+        }
+
+        public static final class Success extends ResetPasswordState {
+        }
+
+        public static final class Error extends ResetPasswordState {
             private final String message;
 
             public Error(String message) {

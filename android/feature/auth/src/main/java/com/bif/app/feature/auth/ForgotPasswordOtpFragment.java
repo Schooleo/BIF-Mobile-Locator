@@ -46,6 +46,9 @@ public class ForgotPasswordOtpFragment extends Fragment {
         viewModel = new ViewModelProvider(this).get(ForgotPasswordViewModel.class);
         NavController navController = Navigation.findNavController(view);
 
+        // --- Back button ---
+        view.findViewById(R.id.iv_back).setOnClickListener(v -> navController.popBackStack());
+
         // --- Receive email from arguments ---
         Bundle args = getArguments();
         if (args != null) {

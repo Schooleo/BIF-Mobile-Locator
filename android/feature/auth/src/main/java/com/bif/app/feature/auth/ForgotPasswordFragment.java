@@ -66,12 +66,7 @@ public class ForgotPasswordFragment extends Fragment {
 
         btnSendOtp.setOnClickListener(v -> {
             String email = etEmail.getText().toString().trim();
-            // TODO: restore viewModel.requestOtp(email) when API is ready
-            Uri otpUri = UriUtils.buildUri("/forgot-password/otp")
-                    .buildUpon()
-                    .appendQueryParameter("email", email)
-                    .build();
-            navController.navigate(otpUri);
+            viewModel.requestOtp(email);
         });
 
         TextView tvBackToLogin = view.findViewById(R.id.tv_back_login_link);
