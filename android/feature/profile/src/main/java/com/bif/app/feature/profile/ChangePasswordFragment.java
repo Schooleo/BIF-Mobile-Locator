@@ -15,7 +15,9 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 
+import com.bif.app.core.auth.AuthSessionManager;
 import com.bif.app.core.network.RestApiService;
+import com.bif.app.core.utils.UriUtils;
 
 import javax.inject.Inject;
 
@@ -28,6 +30,9 @@ public class ChangePasswordFragment extends Fragment {
 
     @Inject
     RestApiService restApiService;
+
+    @Inject
+    AuthSessionManager authSessionManager;
 
     @Nullable
     @Override
@@ -109,7 +114,18 @@ public class ChangePasswordFragment extends Fragment {
                 etNewPassword.setText("");
                 etConfirmPassword.setText("");
                 viewModel.clearChangePasswordState();
-                navController.popBackStack();
+                authSessionManager.clearSession(() -> {
+                    if (!isAdded()) {
+                        return;
+                    }
+
+                    requireActivity().runOnUiThread(() -> {
+                        if (!isAdded()) {
+                            return;
+                        }
+                        navController.navigate(UriUtils.buildUri(UriUtils.PathTo.LOGIN));
+                    });
+                });
                 return;
             }
 
