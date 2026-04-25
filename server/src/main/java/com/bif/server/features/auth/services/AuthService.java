@@ -8,6 +8,8 @@ import com.bif.server.features.auth.dto.rest.ForgotPasswordResetRequest;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordResetResponse;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpRequest;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpResponse;
+import com.bif.server.features.auth.dto.rest.ChangePasswordRequest;
+import com.bif.server.features.auth.dto.rest.ChangePasswordResponse;
 import com.bif.server.features.auth.dto.rest.LoginRequest;
 import com.bif.server.features.auth.dto.rest.RefreshTokenRequest;
 import com.bif.server.features.auth.dto.rest.RegisterRequest;
@@ -231,6 +233,20 @@ public class AuthService {
         if (accessToken != null && !accessToken.isBlank()) {
             accessTokenBlacklistService.revoke(accessToken);
         }
+    }
+
+    public ChangePasswordResponse changePassword(String userId, ChangePasswordRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new InvalidCredentialsException("User not found"));
+
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            throw new InvalidCredentialsException("Invalid current password");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
+
+        return new ChangePasswordResponse(true, "Password changed successfully");
     }
 
     private AuthResponse toAuthResponse(User user) {

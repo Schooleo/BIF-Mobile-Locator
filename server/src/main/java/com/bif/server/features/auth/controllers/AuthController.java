@@ -1,6 +1,8 @@
 package com.bif.server.features.auth.controllers;
 
 import com.bif.server.features.auth.dto.rest.AuthResponse;
+import com.bif.server.features.auth.dto.rest.ChangePasswordRequest;
+import com.bif.server.features.auth.dto.rest.ChangePasswordResponse;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpRequest;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpResponse;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordResetRequest;
@@ -112,6 +114,25 @@ public class AuthController {
             return ResponseEntity.noContent().build();
         } catch (InvalidRegistrationException e) {
             return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<ChangePasswordResponse> changePassword(
+            @RequestBody ChangePasswordRequest request,
+            Authentication authentication
+    ) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        String userId = authentication.getPrincipal().toString();
+        
+        try {
+            ChangePasswordResponse response = authService.changePassword(userId, request);
+            return ResponseEntity.ok(response);
+        } catch (InvalidCredentialsException e) {
+            return ResponseEntity.badRequest().body(new ChangePasswordResponse(false, "Invalid current password"));
         }
     }
 
