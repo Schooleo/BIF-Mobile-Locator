@@ -3129,40 +3129,47 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         btnSharePlace.setEnabled(true);
         btnRoutePlace.setEnabled(true);
 
-        updateFavoriteButtonState(btnAddFavorite,
-                findFavoriteForPlace(place) != null);
-
-        btnAddFavorite.setOnClickListener(v -> {
-            Favorite existing = findFavoriteForPlace(place);
-            if (existing != null) {
-                viewModel.removeFromFavorites(existing);
-                viewModel.setStatusText(place.name + " removed from Favorites!");
-                updateFavoriteButtonState(btnAddFavorite, false);
-            } else {
-                viewModel.addToFavorites(place, new MapViewModel.AddFavoriteCallback() {
-                    @Override
-                    public void onSuccess() {
-                        locationHandler.post(() -> {
-                            if (!isAdded()) {
-                                return;
-                            }
-                            viewModel.setStatusText(place.name + " added to Favorites!");
-                            updateFavoriteButtonState(btnAddFavorite, true);
-                        });
-                    }
-
-                    @Override
-                    public void onError(@NonNull String message) {
-                        locationHandler.post(() -> {
-                            if (!isAdded()) {
-                                return;
-                            }
-                            AppSnackbar.show(requireContext(), message);
-                        });
-                    }
-                });
+        findFavoriteForPlaceWithCanonicalMatch(place, favorite -> {
+            if (!isAdded()) {
+                return;
             }
+            locationHandler.post(() -> updateFavoriteButtonState(btnAddFavorite, favorite != null));
         });
+
+        btnAddFavorite.setOnClickListener(v ->
+                findFavoriteForPlaceWithCanonicalMatch(place, existing -> {
+                    if (!isAdded()) {
+                        return;
+                    }
+                    if (existing != null) {
+                        viewModel.removeFromFavorites(existing);
+                        viewModel.setStatusText(place.name + " removed from Favorites!");
+                        updateFavoriteButtonState(btnAddFavorite, false);
+                    } else {
+                        viewModel.addToFavorites(place, new MapViewModel.AddFavoriteCallback() {
+                            @Override
+                            public void onSuccess() {
+                                locationHandler.post(() -> {
+                                    if (!isAdded()) {
+                                        return;
+                                    }
+                                    viewModel.setStatusText(place.name + " added to Favorites!");
+                                    updateFavoriteButtonState(btnAddFavorite, true);
+                                });
+                            }
+
+                            @Override
+                            public void onError(@NonNull String message) {
+                                locationHandler.post(() -> {
+                                    if (!isAdded()) {
+                                        return;
+                                    }
+                                    AppSnackbar.show(requireContext(), message);
+                                });
+                            }
+                        });
+                    }
+                }));
 
         btnRoutePlace.setOnClickListener(v -> routeToPlace(place));
         btnSharePlace.setOnClickListener(v -> showShareToGroupDialog(place));
@@ -3484,14 +3491,6 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 return favorite;
             }
 
-            if (place.address != null && !place.address.isEmpty()
-                    && place.address.equals(favorite.address)) {
-                Timber.d("Matched favorite by address fallback: placeId=%s favoriteId=%s",
-                        placeId,
-                        favorite.id);
-                return favorite;
-            }
-
             if (place.location != null) {
                 double latDelta = favorite.latitude - place.location.latitude;
                 double lngDelta = favorite.longitude - place.location.longitude;
@@ -3504,6 +3503,49 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             }
         }
         return null;
+    }
+
+    private void findFavoriteForPlaceWithCanonicalMatch(
+            @Nullable Place place,
+            @NonNull java.util.function.Consumer<Favorite> onResult) {
+        if (place == null) {
+            onResult.accept(null);
+            return;
+        }
+
+        Favorite quickMatch = findFavoriteForPlace(place);
+        if (quickMatch != null) {
+            onResult.accept(quickMatch);
+            return;
+        }
+
+        if (!place.canResolveCanonicalIdentity()) {
+            onResult.accept(null);
+            return;
+        }
+
+        viewModel.getCanonicalFavoritePlaceId(place, canonicalId -> {
+            if (!hasText(canonicalId)) {
+                onResult.accept(null);
+                return;
+            }
+
+            Favorite canonicalMatch = null;
+            for (Favorite favorite : currentFavorites) {
+                if (favorite == null || !hasText(favorite.placeId)) {
+                    continue;
+                }
+                if (canonicalId.trim().equals(favorite.placeId.trim())) {
+                    canonicalMatch = favorite;
+                    break;
+                }
+            }
+            onResult.accept(canonicalMatch);
+        });
+    }
+
+    private static boolean hasText(@Nullable String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     private void updateFavoriteButtonState(ImageButton button, boolean isFavorite) {

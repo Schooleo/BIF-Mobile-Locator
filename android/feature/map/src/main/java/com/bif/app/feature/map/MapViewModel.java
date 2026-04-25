@@ -303,6 +303,14 @@ public class MapViewModel extends ViewModel {
         addToFavorites(place, null);
     }
 
+    public void getCanonicalFavoritePlaceId(@NonNull Place place,
+                                            @NonNull java.util.function.Consumer<String> onResult) {
+        reviewExecutor.execute(() -> {
+            String canonicalId = resolveCanonicalFavoritePlaceId(place);
+            onResult.accept(canonicalId != null ? canonicalId : "");
+        });
+    }
+
     public void addToFavorites(Place place, @Nullable AddFavoriteCallback callback) {
         if (place == null) {
             return;

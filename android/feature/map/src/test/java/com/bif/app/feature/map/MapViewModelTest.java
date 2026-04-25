@@ -290,6 +290,32 @@ public class MapViewModelTest {
     }
 
     @Test
+    public void getCanonicalFavoritePlaceId_whenPlaceResolvable_returnsResolvedCanonicalId() {
+        Place place = new Place("ext-1", "Central Park", "NY", 4.8, new Location(40.78, -73.96));
+        place.placeSource = "GOOGLE";
+        when(reviewRepository.resolveInternalPlaceId(any(), any(), anyDouble(), anyDouble(), any()))
+                .thenReturn("internal-123");
+
+        final String[] resolved = new String[1];
+        viewModel.getCanonicalFavoritePlaceId(place, id -> resolved[0] = id);
+
+        assertEquals("internal-123", resolved[0]);
+        verify(reviewRepository).resolveInternalPlaceId("GOOGLE", "ext-1", 40.78, -73.96, "Central Park");
+    }
+
+    @Test
+    public void getCanonicalFavoritePlaceId_whenPlaceNotResolvable_returnsTrimmedFallbackId() {
+        Place place = new Place("  tap-id-1  ", "", "Unknown", 0.0, null);
+        place.placeSource = Place.SOURCE_PREVIEW;
+
+        final String[] resolved = new String[1];
+        viewModel.getCanonicalFavoritePlaceId(place, id -> resolved[0] = id);
+
+        assertEquals("tap-id-1", resolved[0]);
+        verify(reviewRepository, never()).resolveInternalPlaceId(any(), any(), anyDouble(), anyDouble(), any());
+    }
+
+    @Test
     public void addToFavorites_placeWithNullLocation_callsRepositoryWithZeroCoordinates() {
         // Arrange: place with no location
         Place place = new Place("id2", "No Loc Place", "789 Unknown St", 3.0, null);
