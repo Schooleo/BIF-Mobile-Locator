@@ -3,6 +3,7 @@ package com.bif.server.features.sync.services;
 import com.bif.server.common.models.Location;
 import com.bif.server.features.favorite.models.Favorite;
 import com.bif.server.features.favorite.repositories.FavoriteRepository;
+import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.place.services.PlaceIdentityService;
 import com.bif.server.features.sync.models.SyncChange;
 import com.bif.server.features.sync.models.SyncChangeEntry;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Locale;
 import java.util.Optional;
+import java.util.function.LongSupplier;
 
 @Component
 public class FavoriteSyncEntityHandler implements SyncEntityHandler {
@@ -21,17 +23,42 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
 
     private final FavoriteRepository favoriteRepository;
     private final PlaceIdentityService placeIdentityService;
+    private final PlaceRepository placeRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public FavoriteSyncEntityHandler(FavoriteRepository favoriteRepository,
-                                     PlaceIdentityService placeIdentityService) {
+                                     PlaceIdentityService placeIdentityService,
+                                     PlaceRepository placeRepository) {
         this.favoriteRepository = favoriteRepository;
         this.placeIdentityService = placeIdentityService;
+        this.placeRepository = placeRepository;
     }
 
     @Override
     public String entityType() {
         return "favorite";
+    }
+
+    @Override
+    public SyncPushApplyResult applyPushedChangeResult(SyncChange pushed,
+                                                       String userId,
+                                                       LongSupplier nextVersionSupplier) {
+        FavoritePayload payload = parseFavoritePayload(pushed != null ? pushed.getPayload() : null);
+        String operation = pushed != null && pushed.getOperation() != null
+                ? pushed.getOperation().toUpperCase(Locale.ROOT)
+                : "UPDATE";
+
+        if (!"DELETE".equals(operation)) {
+            if (payload == null || isBlank(payload.id)) {
+                return SyncPushApplyResult.rejectedValidation("INVALID_FAVORITE_PAYLOAD");
+            }
+            if (!canResolveCanonicalPlaceId(payload)) {
+                return SyncPushApplyResult.rejectedValidation("MISSING_CANONICAL_IDENTITY_SEED");
+            }
+        }
+
+        long newVersion = nextVersionSupplier.getAsLong();
+        return SyncPushApplyResult.applied(applyPushedChange(pushed, userId, newVersion), newVersion);
     }
 
     @Override
@@ -80,15 +107,11 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
         favorite.setAddress(payload.address);
         favorite.setDescription(payload.description);
         favorite.setNotes(payload.notes);
-        favorite.setRating(payload.rating);
         favorite.setImagePath(payload.imagePath);
         favorite.setExternalSource(normalizeText(payload.externalSource));
         favorite.setExternalId(normalizeText(payload.externalId));
         favorite.setPlaceName(resolvePlaceName(payload));
         favorite.setUserId(userId);
-        if (!isBlank(payload.placeId)) {
-            favorite.setPlaceId(payload.placeId.trim());
-        }
 
         if (payload.latitude != 0.0 || payload.longitude != 0.0) {
             favorite.setLocation(new Location(payload.latitude, payload.longitude));
@@ -96,12 +119,13 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
             favorite.setLocation(null);
         }
 
-        if (isBlank(favorite.getPlaceId())) {
-            String resolvedPlaceId = resolvePlaceId(payload);
-            if (!isBlank(resolvedPlaceId)) {
-                favorite.setPlaceId(resolvedPlaceId.trim());
-            }
+        String resolvedPlaceId = resolvePlaceId(payload);
+        if (isBlank(resolvedPlaceId)) {
+            throw new IllegalStateException("Unable to resolve canonical favorite placeId");
         }
+        String normalizedPlaceId = resolvedPlaceId.trim();
+        favorite.setPlaceId(normalizedPlaceId);
+        favorite.setRating(resolveRatingSnapshot(normalizedPlaceId, payload.rating));
 
         favorite.setDeleted(payload.deleted);
         favorite.setServerVersion(newVersion);
@@ -176,7 +200,7 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
     }
 
     private String resolvePlaceId(FavoritePayload payload) {
-        if (payload == null || isBlank(payload.externalSource) || isBlank(payload.externalId)) {
+        if (payload == null || isBlank(payload.externalSource)) {
             return null;
         }
         if (!Double.isFinite(payload.latitude) || !Double.isFinite(payload.longitude)) {
@@ -194,7 +218,7 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
         try {
             return placeIdentityService.resolveInternalPlaceId(
                     payload.externalSource.trim(),
-                    payload.externalId.trim(),
+                    payload.externalId != null ? payload.externalId.trim() : null,
                     payload.latitude,
                     payload.longitude,
                     placeName);
@@ -208,6 +232,18 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
                     ex);
             return null;
         }
+    }
+
+    private boolean canResolveCanonicalPlaceId(FavoritePayload payload) {
+        if (payload == null
+                || isBlank(payload.externalSource)
+                || !Double.isFinite(payload.latitude)
+                || !Double.isFinite(payload.longitude)
+                || payload.latitude == 0.0d
+                || payload.longitude == 0.0d) {
+            return false;
+        }
+        return !isBlank(resolvePlaceName(payload));
     }
 
     private String resolvePlaceName(FavoritePayload payload) {
@@ -234,6 +270,16 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private int resolveRatingSnapshot(String placeId, int fallbackRating) {
+        if (isBlank(placeId)) {
+            return fallbackRating;
+        }
+
+        return placeRepository.findById(placeId.trim())
+                .map(place -> (int) Math.round(place.getRating()))
+                .orElse(fallbackRating);
     }
 
     private static class FavoritePayload {

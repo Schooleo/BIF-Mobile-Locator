@@ -5,6 +5,7 @@ import com.bif.server.common.models.SyncDocument;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Transient;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 @Data
@@ -15,7 +16,9 @@ public class Favorite extends SyncDocument {
     private String id;
     private String placeId;
     private String externalSource;
+    @Transient
     private String externalId;
+    @Transient
     private String placeName;
     private String name;
     private Location location;
