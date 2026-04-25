@@ -135,6 +135,17 @@
 
         <deepLink app:uri="app://bif.app/profile/personal-info" />
     </fragment>
+
+    <fragment
+        android:id="@+id/nav_change_password"
+        android:name="com.bif.app.feature.profile.ChangePasswordFragment"
+        android:label="Change Password"
+        app:route="/profile/change-password"
+        tools:layout="@layout/fragment_change_password">
+
+        <deepLink app:uri="app://bif.app/profile/change-password" />
+    </fragment>
+
     <fragment
         android:id="@+id/nav_social_chat"
         android:name="com.bif.app.feature.social.CommonChatFragment"

@@ -139,6 +139,7 @@ public class ProfileFragment extends Fragment {
 
         View sectionAccount = view.findViewById(R.id.sectionAccount);
         View menuPersonalInfoView = view.findViewById(R.id.menuPersonalInfo);
+        View menuChangePasswordView = view.findViewById(R.id.menuChangePassword);
         View logoutButton = view.findViewById(R.id.btnLogout);
 
         if (state.isLoggedIn) {
@@ -159,6 +160,7 @@ public class ProfileFragment extends Fragment {
 
             sectionAccount.setVisibility(View.VISIBLE);
             menuPersonalInfoView.setVisibility(View.VISIBLE);
+            menuChangePasswordView.setVisibility(View.VISIBLE);
             logoutButton.setVisibility(View.VISIBLE);
             return;
         }
@@ -180,6 +182,7 @@ public class ProfileFragment extends Fragment {
 
         sectionAccount.setVisibility(View.GONE);
         menuPersonalInfoView.setVisibility(View.GONE);
+        menuChangePasswordView.setVisibility(View.GONE);
         logoutButton.setVisibility(View.GONE);
     }
 
@@ -199,6 +202,16 @@ public class ProfileFragment extends Fragment {
         ((android.widget.TextView) menuPersonalInfo.findViewById(com.bif.app.core.R.id.tvTitle))
                 .setText(R.string.personal_information);
         menuPersonalInfo.setOnClickListener(v -> showPersonalInfoDialog());
+
+        // Change Password
+        View menuChangePassword = view.findViewById(R.id.menuChangePassword);
+        android.widget.ImageView ivChangePasswordIcon =
+            menuChangePassword.findViewById(com.bif.app.core.R.id.ivIcon);
+        ivChangePasswordIcon.setImageResource(com.bif.app.core.R.drawable.ic_lock);
+        ivChangePasswordIcon.setImageTintList(ColorStateList.valueOf(0xFFFF6B6B));
+        ((android.widget.TextView) menuChangePassword.findViewById(com.bif.app.core.R.id.tvTitle))
+            .setText(R.string.profile_change_password);
+        menuChangePassword.setOnClickListener(v -> navController.navigate(UriUtils.buildUri("/profile/change-password")));
     }
 
         private void showPersonalInfoDialog() {
