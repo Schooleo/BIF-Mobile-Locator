@@ -15,7 +15,7 @@ import retrofit2.Response;
 
 public class ChangePasswordViewModel extends ViewModel {
 
-    private static final int MIN_PASSWORD_LENGTH = 6;
+    private static final int MIN_PASSWORD_LENGTH = 8;
     private final MutableLiveData<UiState> changePasswordState = new MutableLiveData<>(new UiState.Idle());
 
     public LiveData<UiState> getChangePasswordState() {
@@ -37,12 +37,7 @@ public class ChangePasswordViewModel extends ViewModel {
                             return;
                         }
 
-                        String message = "Change password failed";
-                        if (response.body() != null
-                                && response.body().message != null
-                                && !response.body().message.trim().isEmpty()) {
-                            message = response.body().message.trim();
-                        }
+                        String message = resolveErrorMessage(response);
 
                         changePasswordState.postValue(new UiState.Error(message));
                     }
@@ -87,6 +82,54 @@ public class ChangePasswordViewModel extends ViewModel {
         }
 
         return ValidationError.NONE;
+    }
+
+    private String resolveErrorMessage(Response<ChangePasswordResponse> response) {
+        if (response.body() != null
+                && response.body().message != null
+                && !response.body().message.trim().isEmpty()) {
+            return response.body().message.trim();
+        }
+
+        String parsedErrorBody = parseErrorBody(response);
+        if (parsedErrorBody != null) {
+            return parsedErrorBody;
+        }
+
+        if (response.code() == 400) {
+            return "Current password is incorrect";
+        }
+
+        String responseMessage = response.message();
+        if (responseMessage != null && !responseMessage.trim().isEmpty()) {
+            return responseMessage.trim();
+        }
+
+        return "Unknown error";
+    }
+
+    private String parseErrorBody(Response<?> response) {
+        if (response == null || response.errorBody() == null) {
+            return null;
+        }
+
+        try {
+            String errorStr = response.errorBody().string();
+            if (errorStr == null || errorStr.trim().isEmpty()) {
+                return null;
+            }
+
+            org.json.JSONObject jsonObject = new org.json.JSONObject(errorStr);
+            if (jsonObject.has("message") && !jsonObject.isNull("message")) {
+                String message = jsonObject.getString("message");
+                if (message != null && !message.trim().isEmpty()) {
+                    return message.trim();
+                }
+            }
+        } catch (Exception ignored) {
+        }
+
+        return null;
     }
 
     public abstract static class UiState {

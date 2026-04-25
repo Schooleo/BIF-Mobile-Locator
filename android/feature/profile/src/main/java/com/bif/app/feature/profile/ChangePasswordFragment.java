@@ -6,6 +6,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -14,9 +15,19 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 
+import com.bif.app.core.network.RestApiService;
+
+import javax.inject.Inject;
+
+import dagger.hilt.android.AndroidEntryPoint;
+
+@AndroidEntryPoint
 public class ChangePasswordFragment extends Fragment {
 
     private ChangePasswordViewModel viewModel;
+
+    @Inject
+    RestApiService restApiService;
 
     @Nullable
     @Override
@@ -41,6 +52,9 @@ public class ChangePasswordFragment extends Fragment {
 
         Button btnChangePassword = view.findViewById(R.id.btn_change_password);
         btnChangePassword.setText(R.string.profile_change_password);
+
+        observeChangePasswordState(navController, btnChangePassword,
+            etCurrentPassword, etNewPassword, etConfirmPassword);
 
         btnChangePassword.setOnClickListener(v -> {
             etCurrentPassword.setError(null);
@@ -69,6 +83,49 @@ public class ChangePasswordFragment extends Fragment {
             if (validationError == ChangePasswordViewModel.ValidationError.CONFIRM_PASSWORD_MISMATCH) {
                 etConfirmPassword.setError(getString(R.string.profile_passwords_do_not_match));
                 etConfirmPassword.requestFocus();
+                return;
+            }
+
+            viewModel.changePassword(restApiService, currentPassword, newPassword);
+        });
+    }
+
+    private void observeChangePasswordState(NavController navController,
+                                            Button btnChangePassword,
+                                            EditText etCurrentPassword,
+                                            EditText etNewPassword,
+                                            EditText etConfirmPassword) {
+        viewModel.getChangePasswordState().observe(getViewLifecycleOwner(), state -> {
+            if (state instanceof ChangePasswordViewModel.UiState.Loading) {
+                btnChangePassword.setEnabled(false);
+                return;
+            }
+
+            btnChangePassword.setEnabled(true);
+
+            if (state instanceof ChangePasswordViewModel.UiState.Success) {
+                Toast.makeText(requireContext(), "Password changed successfully", Toast.LENGTH_SHORT).show();
+                etCurrentPassword.setText("");
+                etNewPassword.setText("");
+                etConfirmPassword.setText("");
+                viewModel.clearChangePasswordState();
+                navController.popBackStack();
+                return;
+            }
+
+            if (state instanceof ChangePasswordViewModel.UiState.Error) {
+                String message = ((ChangePasswordViewModel.UiState.Error) state).getMessage();
+
+                String normalized = message == null ? "" : message.toLowerCase();
+                if (normalized.contains("current password")) {
+                    etCurrentPassword.setError("Current password is incorrect");
+                    etCurrentPassword.requestFocus();
+                } else {
+                    etNewPassword.setError(message);
+                    etNewPassword.requestFocus();
+                }
+
+                viewModel.clearChangePasswordState();
             }
         });
     }

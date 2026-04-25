@@ -37,6 +37,6 @@
     <string name="profile_new_password_hint">Enter new password</string>
     <string name="profile_confirm_new_password_hint">Re-enter new password</string>
     <string name="profile_current_password_required">Current password is required</string>
-    <string name="profile_password_too_short">Password must be at least 6 characters</string>
+    <string name="profile_password_too_short">Password must be at least 8 characters</string>
     <string name="profile_passwords_do_not_match">Passwords do not match</string>
 </resources>
