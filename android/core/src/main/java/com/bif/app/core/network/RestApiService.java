@@ -2,6 +2,8 @@ package com.bif.app.core.network;
 
 import com.bif.app.core.network.dto.auth.AuthResponse;
 import com.bif.app.core.network.dto.auth.AuthStateResponse;
+import com.bif.app.core.network.dto.auth.ChangePasswordRequest;
+import com.bif.app.core.network.dto.auth.ChangePasswordResponse;
 import com.bif.app.core.network.dto.auth.ForgotPasswordRequestOtpResponse;
 import com.bif.app.core.network.dto.auth.RequestOtpRequest;
 import com.bif.app.core.network.dto.auth.ResetPasswordRequest;
@@ -66,6 +68,9 @@ public interface RestApiService {
 
     @POST("auth/logout")
     Call<Void> logout(@Body RefreshTokenRequest request);
+
+        @POST("/api/auth/change-password")
+        Call<ChangePasswordResponse> changePassword(@Body ChangePasswordRequest request);
 
     @GET("auth/me")
     Call<AuthStateResponse> getAuthState();
