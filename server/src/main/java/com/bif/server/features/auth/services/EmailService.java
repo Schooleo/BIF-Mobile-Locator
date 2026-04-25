@@ -42,7 +42,7 @@ public class EmailService {
             Map<String, Object> body = new HashMap<>();
 
             // Sender
-            body.put("sender", Map.of("name", "BIF App", "email", senderEmail));
+            body.put("sender", Map.of("name", "BIF Mobile Locator", "email", senderEmail));
 
             // To
             body.put("to", List.of(Map.of("email", toEmail)));
