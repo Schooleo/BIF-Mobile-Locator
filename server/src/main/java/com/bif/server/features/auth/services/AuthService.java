@@ -50,6 +50,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AccessTokenBlacklistService accessTokenBlacklistService;
+    private final EmailService emailService;
     private final long refreshTokenExpirationSeconds;
 
     public AuthService(
@@ -59,6 +60,7 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             AccessTokenBlacklistService accessTokenBlacklistService,
+            EmailService emailService,
             @Value("${security.jwt.refresh-token-expiration-seconds:2592000}") long refreshTokenExpirationSeconds
     ) {
         this.userRepository = userRepository;
@@ -67,6 +69,7 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.accessTokenBlacklistService = accessTokenBlacklistService;
+        this.emailService = emailService;
         this.refreshTokenExpirationSeconds = refreshTokenExpirationSeconds;
     }
 
@@ -89,7 +92,7 @@ public class AuthService {
         passwordResetOtp.setResetTokenExpiresAt(null);
         passwordResetOtpRepository.save(passwordResetOtp);
 
-        sendOtpEmailMock(email, otp);
+        emailService.sendOtpEmail(email, otp);
         return new ForgotPasswordOtpResponse(true, "OTP has been sent to your email");
     }
 
@@ -278,9 +281,5 @@ public class AuthService {
     private String generateOtp() {
         int value = SECURE_RANDOM.nextInt(1_000_000);
         return String.format("%06d", value);
-    }
-
-    private void sendOtpEmailMock(String email, String otp) {
-        log.info("Mock OTP email sent to {} with code {}", email, otp);
     }
 }
