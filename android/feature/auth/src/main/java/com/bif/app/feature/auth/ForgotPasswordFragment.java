@@ -47,20 +47,25 @@ public class ForgotPasswordFragment extends Fragment {
 
         Button btnSendOtp = view.findViewById(R.id.btn_send_otp);
         btnSendOtp.setText(R.string.send_otp);
+        btnSendOtp.setEnabled(false);
+
+        etEmail.addTextChangedListener(new android.text.TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                String email = s.toString().trim();
+                boolean isValid = !email.isEmpty() && Patterns.EMAIL_ADDRESS.matcher(email).matches();
+                btnSendOtp.setEnabled(isValid);
+            }
+
+            @Override
+            public void afterTextChanged(android.text.Editable s) {}
+        });
+
         btnSendOtp.setOnClickListener(v -> {
             String email = etEmail.getText().toString().trim();
-            if (email.isEmpty()) {
-                etEmail.setError(getString(R.string.email_required));
-                etEmail.requestFocus();
-                return;
-            }
-
-            if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-                etEmail.setError(getString(R.string.invalid_email_format));
-                etEmail.requestFocus();
-                return;
-            }
-
             viewModel.requestOtp(email);
         });
 
@@ -69,17 +74,17 @@ public class ForgotPasswordFragment extends Fragment {
         tvBackToLogin.setPaintFlags(tvBackToLogin.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
         tvBackToLogin.setOnClickListener(v -> navController.navigate(UriUtils.buildUri("/login")));
 
-        observeRequestOtpState(navController, btnSendOtp);
+        observeRequestOtpState(navController, btnSendOtp, etEmail);
     }
 
-    private void observeRequestOtpState(NavController navController, Button button) {
+    private void observeRequestOtpState(NavController navController, Button button, EditText etEmail) {
         viewModel.getRequestOtpState().observe(getViewLifecycleOwner(), state -> {
             if (state instanceof ForgotPasswordViewModel.RequestOtpState.Loading) {
-                setLoading(button, true);
+                setLoading(button, true, etEmail);
                 return;
             }
 
-            setLoading(button, false);
+            setLoading(button, false, etEmail);
 
             if (state instanceof ForgotPasswordViewModel.RequestOtpState.Success) {
                 String email = ((ForgotPasswordViewModel.RequestOtpState.Success) state).getEmail();
@@ -100,8 +105,13 @@ public class ForgotPasswordFragment extends Fragment {
         });
     }
 
-    private void setLoading(Button button, boolean isLoading) {
-        button.setEnabled(!isLoading);
-        button.setAlpha(isLoading ? 0.7f : 1f);
+    private void setLoading(Button button, boolean isLoading, EditText etEmail) {
+        if (isLoading) {
+            button.setEnabled(false);
+        } else {
+            String email = etEmail.getText().toString().trim();
+            boolean isValid = !email.isEmpty() && Patterns.EMAIL_ADDRESS.matcher(email).matches();
+            button.setEnabled(isValid);
+        }
     }
 }
