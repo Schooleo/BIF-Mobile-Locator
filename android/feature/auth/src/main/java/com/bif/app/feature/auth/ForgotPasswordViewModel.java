@@ -8,6 +8,8 @@ import androidx.lifecycle.ViewModel;
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.auth.ForgotPasswordRequestOtpResponse;
 import com.bif.app.core.network.dto.auth.RequestOtpRequest;
+import com.bif.app.core.network.dto.auth.VerifyOtpRequest;
+import com.bif.app.core.network.dto.auth.VerifyOtpResponse;
 
 import javax.inject.Inject;
 
@@ -21,11 +23,14 @@ public class ForgotPasswordViewModel extends ViewModel {
 
     private final RestApiService restApiService;
     private final MutableLiveData<RequestOtpState> requestOtpState = new MutableLiveData<>(new RequestOtpState.Idle());
+    private final MutableLiveData<VerifyOtpState> verifyOtpState = new MutableLiveData<>(new VerifyOtpState.Idle());
 
     @Inject
     public ForgotPasswordViewModel(RestApiService restApiService) {
         this.restApiService = restApiService;
     }
+
+    // ── Request OTP ──────────────────────────────────────────────────────────
 
     public LiveData<RequestOtpState> getRequestOtpState() {
         return requestOtpState;
@@ -45,7 +50,7 @@ public class ForgotPasswordViewModel extends ViewModel {
                             return;
                         }
 
-                        String message = resolveErrorMessage(response);
+                        String message = resolveRequestOtpErrorMessage(response);
                         requestOtpState.postValue(new RequestOtpState.Error(message));
                     }
 
@@ -64,7 +69,7 @@ public class ForgotPasswordViewModel extends ViewModel {
         }
     }
 
-    private String resolveErrorMessage(Response<ForgotPasswordRequestOtpResponse> response) {
+    private String resolveRequestOtpErrorMessage(Response<ForgotPasswordRequestOtpResponse> response) {
         ForgotPasswordRequestOtpResponse body = response.body();
         if (body != null && body.message != null && !body.message.trim().isEmpty()) {
             return body.message.trim();
@@ -76,6 +81,56 @@ public class ForgotPasswordViewModel extends ViewModel {
 
         return "Request OTP failed";
     }
+
+    // ── Verify OTP ───────────────────────────────────────────────────────────
+
+    public LiveData<VerifyOtpState> getVerifyOtpState() {
+        return verifyOtpState;
+    }
+
+    public void verifyOtp(@NonNull String email, @NonNull String otp) {
+        String normalizedEmail = email.trim();
+        String normalizedOtp = otp.trim();
+        verifyOtpState.setValue(new VerifyOtpState.Loading());
+
+        restApiService.verifyForgotPasswordOtp(new VerifyOtpRequest(normalizedEmail, normalizedOtp))
+                .enqueue(new Callback<>() {
+                    @Override
+                    public void onResponse(@NonNull Call<VerifyOtpResponse> call,
+                                           @NonNull Response<VerifyOtpResponse> response) {
+                        if (response.isSuccessful() && response.body() != null && response.body().success) {
+                            String resetToken = response.body().resetToken;
+                            verifyOtpState.postValue(new VerifyOtpState.Success(resetToken));
+                            return;
+                        }
+
+                        String message = resolveVerifyOtpErrorMessage(response);
+                        verifyOtpState.postValue(new VerifyOtpState.Error(message));
+                    }
+
+                    @Override
+                    public void onFailure(@NonNull Call<VerifyOtpResponse> call,
+                                          @NonNull Throwable t) {
+                        verifyOtpState.postValue(new VerifyOtpState.Error("Network error. Please try again."));
+                    }
+                });
+    }
+
+    public void clearVerifyOtpState() {
+        VerifyOtpState current = verifyOtpState.getValue();
+        if (current instanceof VerifyOtpState.Success || current instanceof VerifyOtpState.Error) {
+            verifyOtpState.setValue(new VerifyOtpState.Idle());
+        }
+    }
+
+    private String resolveVerifyOtpErrorMessage(Response<VerifyOtpResponse> response) {
+        if (response.code() == 400) {
+            return "Invalid or expired OTP";
+        }
+        return "OTP verification failed";
+    }
+
+    // ── State classes ────────────────────────────────────────────────────────
 
     public abstract static class RequestOtpState {
         private RequestOtpState() {
@@ -100,6 +155,41 @@ public class ForgotPasswordViewModel extends ViewModel {
         }
 
         public static final class Error extends RequestOtpState {
+            private final String message;
+
+            public Error(String message) {
+                this.message = message;
+            }
+
+            public String getMessage() {
+                return message;
+            }
+        }
+    }
+
+    public abstract static class VerifyOtpState {
+        private VerifyOtpState() {
+        }
+
+        public static final class Idle extends VerifyOtpState {
+        }
+
+        public static final class Loading extends VerifyOtpState {
+        }
+
+        public static final class Success extends VerifyOtpState {
+            private final String resetToken;
+
+            public Success(String resetToken) {
+                this.resetToken = resetToken;
+            }
+
+            public String getResetToken() {
+                return resetToken;
+            }
+        }
+
+        public static final class Error extends VerifyOtpState {
             private final String message;
 
             public Error(String message) {

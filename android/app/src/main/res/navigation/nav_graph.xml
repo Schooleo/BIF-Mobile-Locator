@@ -115,6 +115,17 @@
     </fragment>
 
     <fragment
+        android:id="@+id/nav_reset_password"
+        android:name="com.bif.app.feature.auth.ResetPasswordFragment"
+        android:label="Reset Password"
+        app:route="/forgot-password/reset">
+
+        <argument android:name="email" app:argType="string" android:defaultValue="" />
+        <argument android:name="resetToken" app:argType="string" android:defaultValue="" />
+        <deepLink app:uri="app://bif.app/forgot-password/reset?email={email}&amp;resetToken={resetToken}" />
+    </fragment>
+
+    <fragment
         android:id="@+id/nav_personal_info"
         android:name="com.bif.app.feature.profile.PersonalInfoFragment"
         android:label="Personal Information"

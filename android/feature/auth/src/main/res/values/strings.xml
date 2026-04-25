@@ -13,6 +13,14 @@
     <string name="request_otp_failed">Request OTP failed</string>
     <string name="otp_screen_title">OTP Verification</string>
     <string name="otp_sent_to">An OTP was sent to %1$s</string>
+    <string name="otp_subtitle">We\'ve sent a 6-digit code to</string>
+    <string name="otp_hint">000000</string>
+    <string name="verify_code">Verify Code</string>
+    <string name="resend_otp">Resend Code</string>
+    <string name="resend_otp_countdown">Resend Code (%1$ds)</string>
+    <string name="otp_resent">OTP has been resent</string>
+    <string name="otp_invalid">Invalid or expired OTP</string>
+    <string name="otp_verification_failed">OTP verification failed</string>
     <string name="already_have_account">Already have an account?</string>
     <string name="email">Email</string>
     <string name="password">Password</string>
