@@ -269,6 +269,9 @@ input PlaceReviewInput {
 
 input FavoriteInput {
   id: ID
+  externalSource: String
+  externalId: String
+  placeName: String
   name: String
   location: LocationInput
   address: String

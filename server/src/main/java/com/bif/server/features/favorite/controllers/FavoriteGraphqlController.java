@@ -1,6 +1,7 @@
 package com.bif.server.features.favorite.controllers;
 
 import com.bif.server.features.favorite.dto.graphql.DeleteMyFavoriteResult;
+import com.bif.server.features.favorite.dto.graphql.UpsertFavoriteInput;
 import com.bif.server.features.favorite.models.Favorite;
 import com.bif.server.features.favorite.services.FavoriteService;
 import org.springframework.graphql.data.method.annotation.Argument;
@@ -34,8 +35,8 @@ public class FavoriteGraphqlController {
     }
 
     @MutationMapping
-    public Favorite upsertFavorite(@Argument Favorite input) {
-        return favoriteService.save(input);
+    public Favorite upsertFavorite(@Argument UpsertFavoriteInput input) {
+        return favoriteService.save(toFavorite(input));
     }
 
     @MutationMapping
@@ -50,9 +51,10 @@ public class FavoriteGraphqlController {
     }
 
     @MutationMapping
-    public Favorite upsertMyFavorite(@Argument String userId, @Argument Favorite input) {
+    public Favorite upsertMyFavorite(@Argument String userId,
+                                     @Argument UpsertFavoriteInput input) {
         requireUserId(userId);
-        return favoriteService.saveMyFavorite(userId, input);
+        return favoriteService.saveMyFavorite(userId, toFavorite(input));
     }
 
     @MutationMapping
@@ -71,5 +73,26 @@ public class FavoriteGraphqlController {
         if (userId == null || userId.isBlank()) {
             throw new IllegalArgumentException("userId is required");
         }
+    }
+
+    private Favorite toFavorite(UpsertFavoriteInput input) {
+        if (input == null) {
+            throw new IllegalArgumentException("favorite input is required");
+        }
+
+        Favorite favorite = new Favorite();
+        favorite.setId(input.id());
+        favorite.setExternalSource(input.externalSource());
+        favorite.setExternalId(input.externalId());
+        favorite.setPlaceName(input.placeName());
+        favorite.setName(input.name());
+        favorite.setLocation(input.location());
+        favorite.setAddress(input.address());
+        favorite.setDescription(input.description());
+        favorite.setNotes(input.notes());
+        favorite.setRating(input.rating());
+        favorite.setImagePath(input.imagePath());
+        favorite.setUserId(input.userId());
+        return favorite;
     }
 }

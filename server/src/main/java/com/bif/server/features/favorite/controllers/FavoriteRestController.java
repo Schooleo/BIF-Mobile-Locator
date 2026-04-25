@@ -87,7 +87,6 @@ public class FavoriteRestController {
 
         Favorite input = new Favorite();
         input.setId(request.id());
-        input.setPlaceId(request.placeId());
         input.setExternalSource(request.externalSource());
         input.setExternalId(request.externalId());
         input.setPlaceName(request.placeName());
@@ -145,8 +144,6 @@ public class FavoriteRestController {
                 favorite.getId(),
                 favorite.getPlaceId(),
                 favorite.getExternalSource(),
-                favorite.getExternalId(),
-                favorite.getPlaceName(),
                 favorite.getName(),
                 favorite.getLocation(),
                 favorite.getAddress(),

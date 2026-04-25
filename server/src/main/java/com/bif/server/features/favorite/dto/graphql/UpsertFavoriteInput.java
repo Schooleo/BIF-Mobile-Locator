@@ -1,8 +1,8 @@
-package com.bif.server.features.favorite.dto.rest;
+package com.bif.server.features.favorite.dto.graphql;
 
 import com.bif.server.common.models.Location;
 
-public record UpsertMyFavoriteRequest(
+public record UpsertFavoriteInput(
         String id,
         String externalSource,
         String externalId,
@@ -13,6 +13,7 @@ public record UpsertMyFavoriteRequest(
         String description,
         String notes,
         int rating,
-        String imagePath
+        String imagePath,
+        String userId
 ) {
 }
