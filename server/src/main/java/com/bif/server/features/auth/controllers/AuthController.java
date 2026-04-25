@@ -132,7 +132,7 @@ public class AuthController {
             ChangePasswordResponse response = authService.changePassword(userId, request);
             return ResponseEntity.ok(response);
         } catch (InvalidCredentialsException e) {
-            return ResponseEntity.badRequest().body(new ChangePasswordResponse(false, "Invalid current password"));
+            return ResponseEntity.badRequest().body(new ChangePasswordResponse(false, e.getMessage()));
         }
     }
 

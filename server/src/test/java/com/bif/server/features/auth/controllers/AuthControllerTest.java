@@ -11,6 +11,8 @@ import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpResponse;
 import com.bif.server.features.auth.dto.rest.LoginRequest;
 import com.bif.server.features.auth.dto.rest.RefreshTokenRequest;
 import com.bif.server.features.auth.dto.rest.RegisterRequest;
+import com.bif.server.features.auth.dto.rest.ChangePasswordRequest;
+import com.bif.server.features.auth.dto.rest.ChangePasswordResponse;
 import com.bif.server.features.auth.exceptions.EmailAlreadyUsedException;
 import com.bif.server.features.auth.exceptions.InvalidCredentialsException;
 import com.bif.server.features.auth.exceptions.InvalidRefreshTokenException;
@@ -227,6 +229,20 @@ class AuthControllerTest {
 
         assertEquals(HttpStatus.NO_CONTENT, result.getStatusCode());
         verify(authService).logout(request, "access-token-value");
+    }
+
+    @Test
+    void changePassword_WhenCurrentPasswordInvalid_ReturnsBadRequestWithClearMessage() {
+        Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
+        ChangePasswordRequest request = new ChangePasswordRequest("wrong-current", "NewPassword123!");
+        when(authService.changePassword("u1", request)).thenThrow(new InvalidCredentialsException("Current password is incorrect"));
+
+        ResponseEntity<ChangePasswordResponse> result = controller.changePassword(request, auth);
+
+        assertEquals(HttpStatus.BAD_REQUEST, result.getStatusCode());
+        assertNotNull(result.getBody());
+        assertFalse(result.getBody().success());
+        assertEquals("Current password is incorrect", result.getBody().message());
     }
 
     @Test

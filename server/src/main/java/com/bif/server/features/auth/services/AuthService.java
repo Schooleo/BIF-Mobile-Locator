@@ -240,7 +240,7 @@ public class AuthService {
                 .orElseThrow(() -> new InvalidCredentialsException("User not found"));
 
         if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
-            throw new InvalidCredentialsException("Invalid current password");
+            throw new InvalidCredentialsException("Current password is incorrect");
         }
 
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));

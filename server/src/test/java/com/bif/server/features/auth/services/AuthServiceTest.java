@@ -20,6 +20,7 @@ import com.bif.server.features.auth.repositories.PasswordResetOtpRepository;
 import com.bif.server.features.auth.repositories.RefreshTokenRepository;
 import com.bif.server.features.auth.security.AccessTokenBlacklistService;
 import com.bif.server.features.auth.security.JwtService;
+import com.bif.server.features.auth.services.EmailService;
 import com.bif.server.features.user.models.User;
 import com.bif.server.features.user.repositories.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,6 +57,9 @@ class AuthServiceTest {
     @Mock
     private AccessTokenBlacklistService accessTokenBlacklistService;
 
+    @Mock
+    private EmailService emailService;
+
     private AuthService authService;
 
     @BeforeEach
@@ -67,6 +71,7 @@ class AuthServiceTest {
                 passwordEncoder,
                 jwtService,
                 accessTokenBlacklistService,
+            emailService,
                 2592000L
         );
     }
@@ -229,6 +234,23 @@ class AuthServiceTest {
         assertTrue(existing.isRevoked());
         verify(refreshTokenRepository).save(existing);
         verify(accessTokenBlacklistService).revoke("access-token-value");
+    }
+
+    @Test
+    void changePassword_WhenCurrentPasswordWrong_ThrowsInvalidCredentialsException() {
+        User user = new User();
+        user.setId("u1");
+        user.setPasswordHash("hashed-current");
+        when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("wrong-current", "hashed-current")).thenReturn(false);
+
+        InvalidCredentialsException exception = assertThrows(
+                InvalidCredentialsException.class,
+                () -> authService.changePassword("u1", new com.bif.server.features.auth.dto.rest.ChangePasswordRequest("wrong-current", "NewPassword123!") )
+        );
+
+        assertEquals("Current password is incorrect", exception.getMessage());
+        verify(userRepository, never()).save(any(User.class));
     }
 
     @Test
