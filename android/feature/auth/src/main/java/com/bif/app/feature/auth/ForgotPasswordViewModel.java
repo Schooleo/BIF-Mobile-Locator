@@ -24,58 +24,186 @@ import retrofit2.Response;
 public class ForgotPasswordViewModel extends ViewModel {
 
     private final RestApiService restApiService;
-    private final MutableLiveData<RequestOtpState> requestOtpState = new MutableLiveData<>(new RequestOtpState.Idle());
-    private final MutableLiveData<VerifyOtpState> verifyOtpState = new MutableLiveData<>(new VerifyOtpState.Idle());
-    private final MutableLiveData<ResetPasswordState> resetPasswordState = new MutableLiveData<>(new ResetPasswordState.Idle());
+
+    // ── State (shared UiState for all flows) ─────────────────────────────────
+    private final MutableLiveData<UiState> requestOtpState = new MutableLiveData<>(new UiState.Idle());
+    private final MutableLiveData<UiState> verifyOtpState = new MutableLiveData<>(new UiState.Idle());
+    private final MutableLiveData<UiState> resetPasswordState = new MutableLiveData<>(new UiState.Idle());
+
+    // ── Data holders (no View references) ────────────────────────────────────
+    private String email = "";
+    private String resetToken = "";
 
     @Inject
     public ForgotPasswordViewModel(RestApiService restApiService) {
         this.restApiService = restApiService;
     }
 
-    // ── Request OTP ──────────────────────────────────────────────────────────
+    // ── Expose state for UI observe ──────────────────────────────────────────
 
-    public LiveData<RequestOtpState> getRequestOtpState() {
+    public LiveData<UiState> getRequestOtpState() {
         return requestOtpState;
     }
 
-    public void requestOtp(@NonNull String email) {
-        String normalizedEmail = email.trim();
-        requestOtpState.setValue(new RequestOtpState.Loading());
+    public LiveData<UiState> getVerifyOtpState() {
+        return verifyOtpState;
+    }
 
-        restApiService.requestForgotPasswordOtp(new RequestOtpRequest(normalizedEmail))
+    public LiveData<UiState> getResetPasswordState() {
+        return resetPasswordState;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public String getResetToken() {
+        return resetToken;
+    }
+
+    // ── Request OTP ──────────────────────────────────────────────────────────
+
+    public void requestOtp(@NonNull String email) {
+        this.email = email.trim();
+        requestOtpState.setValue(new UiState.Loading());
+
+        restApiService.requestForgotPasswordOtp(new RequestOtpRequest(this.email))
                 .enqueue(new Callback<>() {
                     @Override
                     public void onResponse(@NonNull Call<ForgotPasswordRequestOtpResponse> call,
                                            @NonNull Response<ForgotPasswordRequestOtpResponse> response) {
                         if (response.isSuccessful() && response.body() != null && response.body().success) {
-                            requestOtpState.postValue(new RequestOtpState.Success(normalizedEmail));
+                            requestOtpState.postValue(new UiState.Success());
                             return;
                         }
 
                         String message = resolveRequestOtpErrorMessage(response);
-                        requestOtpState.postValue(new RequestOtpState.Error(message));
+                        requestOtpState.postValue(new UiState.Error(message));
                     }
 
                     @Override
                     public void onFailure(@NonNull Call<ForgotPasswordRequestOtpResponse> call,
                                           @NonNull Throwable t) {
-                        requestOtpState.postValue(new RequestOtpState.Error("Network error. Please try again."));
+                        requestOtpState.postValue(new UiState.Error("Network error. Please try again."));
                     }
                 });
     }
 
-    public void clearTransientState() {
-        RequestOtpState current = requestOtpState.getValue();
-        if (current instanceof RequestOtpState.Success || current instanceof RequestOtpState.Error) {
-            requestOtpState.setValue(new RequestOtpState.Idle());
+    // ── Verify OTP ───────────────────────────────────────────────────────────
+
+    public void verifyOtp(@NonNull String email, @NonNull String otp) {
+        this.email = email.trim();
+        verifyOtpState.setValue(new UiState.Loading());
+
+        restApiService.verifyForgotPasswordOtp(new VerifyOtpRequest(this.email, otp.trim()))
+                .enqueue(new Callback<>() {
+                    @Override
+                    public void onResponse(@NonNull Call<VerifyOtpResponse> call,
+                                           @NonNull Response<VerifyOtpResponse> response) {
+                        if (response.isSuccessful() && response.body() != null && response.body().success) {
+                            resetToken = response.body().resetToken;
+                            verifyOtpState.postValue(new UiState.Success());
+                            return;
+                        }
+
+                        String message = resolveVerifyOtpErrorMessage(response);
+                        verifyOtpState.postValue(new UiState.Error(message));
+                    }
+
+                    @Override
+                    public void onFailure(@NonNull Call<VerifyOtpResponse> call,
+                                          @NonNull Throwable t) {
+                        verifyOtpState.postValue(new UiState.Error("Network error. Please try again."));
+                    }
+                });
+    }
+
+    // ── Reset Password ───────────────────────────────────────────────────────
+
+    public void resetPassword(@NonNull String resetToken, @NonNull String newPassword) {
+        resetPasswordState.setValue(new UiState.Loading());
+
+        restApiService.resetForgotPassword(new ResetPasswordRequest(resetToken.trim(), newPassword))
+                .enqueue(new Callback<>() {
+                    @Override
+                    public void onResponse(@NonNull Call<ResetPasswordResponse> call,
+                                           @NonNull Response<ResetPasswordResponse> response) {
+                        if (response.isSuccessful() && response.body() != null && response.body().success) {
+                            resetPasswordState.postValue(new UiState.Success());
+                            return;
+                        }
+
+                        String message = resolveResetPasswordErrorMessage(response);
+                        resetPasswordState.postValue(new UiState.Error(message));
+                    }
+
+                    @Override
+                    public void onFailure(@NonNull Call<ResetPasswordResponse> call,
+                                          @NonNull Throwable t) {
+                        resetPasswordState.postValue(new UiState.Error("Network error. Please try again."));
+                    }
+                });
+    }
+
+    // ── Clear transient states ───────────────────────────────────────────────
+
+    public void clearRequestOtpState() {
+        UiState current = requestOtpState.getValue();
+        if (current instanceof UiState.Success || current instanceof UiState.Error) {
+            requestOtpState.setValue(new UiState.Idle());
         }
+    }
+
+    public void clearVerifyOtpState() {
+        UiState current = verifyOtpState.getValue();
+        if (current instanceof UiState.Success || current instanceof UiState.Error) {
+            verifyOtpState.setValue(new UiState.Idle());
+        }
+    }
+
+    public void clearResetPasswordState() {
+        UiState current = resetPasswordState.getValue();
+        if (current instanceof UiState.Success || current instanceof UiState.Error) {
+            resetPasswordState.setValue(new UiState.Idle());
+        }
+    }
+
+    // ── Error message resolvers ──────────────────────────────────────────────
+
+    private String parseErrorBody(Response<?> response) {
+        if (response != null && response.errorBody() != null) {
+            try {
+                String errorStr = response.errorBody().string();
+                if (errorStr != null && !errorStr.trim().isEmpty()) {
+                    org.json.JSONObject jsonObject = new org.json.JSONObject(errorStr);
+                    if (jsonObject.has("message") && !jsonObject.isNull("message")) {
+                        String msg = jsonObject.getString("message");
+                        if (msg != null && !msg.trim().isEmpty()) {
+                            return msg.trim();
+                        }
+                    }
+                    if (jsonObject.has("error") && !jsonObject.isNull("error")) {
+                        String err = jsonObject.getString("error");
+                        if (err != null && !err.trim().isEmpty()) {
+                            return err.trim();
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
     }
 
     private String resolveRequestOtpErrorMessage(Response<ForgotPasswordRequestOtpResponse> response) {
         ForgotPasswordRequestOtpResponse body = response.body();
         if (body != null && body.message != null && !body.message.trim().isEmpty()) {
             return body.message.trim();
+        }
+
+        String parsedMessage = parseErrorBody(response);
+        if (parsedMessage != null) {
+            return parsedMessage;
         }
 
         if (response.code() == 404) {
@@ -85,90 +213,16 @@ public class ForgotPasswordViewModel extends ViewModel {
         return "Request OTP failed";
     }
 
-    // ── Verify OTP ───────────────────────────────────────────────────────────
-
-    public LiveData<VerifyOtpState> getVerifyOtpState() {
-        return verifyOtpState;
-    }
-
-    public void verifyOtp(@NonNull String email, @NonNull String otp) {
-        String normalizedEmail = email.trim();
-        String normalizedOtp = otp.trim();
-        verifyOtpState.setValue(new VerifyOtpState.Loading());
-
-        restApiService.verifyForgotPasswordOtp(new VerifyOtpRequest(normalizedEmail, normalizedOtp))
-                .enqueue(new Callback<>() {
-                    @Override
-                    public void onResponse(@NonNull Call<VerifyOtpResponse> call,
-                                           @NonNull Response<VerifyOtpResponse> response) {
-                        if (response.isSuccessful() && response.body() != null && response.body().success) {
-                            String resetToken = response.body().resetToken;
-                            verifyOtpState.postValue(new VerifyOtpState.Success(resetToken));
-                            return;
-                        }
-
-                        String message = resolveVerifyOtpErrorMessage(response);
-                        verifyOtpState.postValue(new VerifyOtpState.Error(message));
-                    }
-
-                    @Override
-                    public void onFailure(@NonNull Call<VerifyOtpResponse> call,
-                                          @NonNull Throwable t) {
-                        verifyOtpState.postValue(new VerifyOtpState.Error("Network error. Please try again."));
-                    }
-                });
-    }
-
-    public void clearVerifyOtpState() {
-        VerifyOtpState current = verifyOtpState.getValue();
-        if (current instanceof VerifyOtpState.Success || current instanceof VerifyOtpState.Error) {
-            verifyOtpState.setValue(new VerifyOtpState.Idle());
-        }
-    }
-
     private String resolveVerifyOtpErrorMessage(Response<VerifyOtpResponse> response) {
+        String parsedMessage = parseErrorBody(response);
+        if (parsedMessage != null) {
+            return parsedMessage;
+        }
+
         if (response.code() == 400) {
             return "Invalid or expired OTP";
         }
         return "OTP verification failed";
-    }
-
-    // ── Reset Password ───────────────────────────────────────────────────────
-
-    public LiveData<ResetPasswordState> getResetPasswordState() {
-        return resetPasswordState;
-    }
-
-    public void resetPassword(@NonNull String resetToken, @NonNull String newPassword) {
-        resetPasswordState.setValue(new ResetPasswordState.Loading());
-
-        restApiService.resetForgotPassword(new ResetPasswordRequest(resetToken.trim(), newPassword))
-                .enqueue(new Callback<>() {
-                    @Override
-                    public void onResponse(@NonNull Call<ResetPasswordResponse> call,
-                                           @NonNull Response<ResetPasswordResponse> response) {
-                        if (response.isSuccessful() && response.body() != null && response.body().success) {
-                            resetPasswordState.postValue(new ResetPasswordState.Success());
-                            return;
-                        }
-
-                        String message = resolveResetPasswordErrorMessage(response);
-                        resetPasswordState.postValue(new ResetPasswordState.Error(message));
-                    }
-
-                    @Override
-                    public void onFailure(@NonNull Call<ResetPasswordResponse> call,
-                                          @NonNull Throwable t) {
-                        resetPasswordState.postValue(new ResetPasswordState.Error("Network error. Please try again."));
-                    }
-                });
-    }
-
-    public void clearResetPasswordState() {
-        ResetPasswordState current = resetPasswordState.getValue();
-        if (current instanceof ResetPasswordState.Success || current instanceof ResetPasswordState.Error) {
-            resetPasswordState.setValue(new ResetPasswordState.Idle());
-        }
     }
 
     private String resolveResetPasswordErrorMessage(Response<ResetPasswordResponse> response) {
@@ -176,95 +230,31 @@ public class ForgotPasswordViewModel extends ViewModel {
         if (body != null && body.message != null && !body.message.trim().isEmpty()) {
             return body.message.trim();
         }
+
+        String parsedMessage = parseErrorBody(response);
+        if (parsedMessage != null) {
+            return parsedMessage;
+        }
+
         return "Password reset failed";
     }
 
-    // ── State classes ────────────────────────────────────────────────────────
+    // ── UiState ──────────────────────────────────────────────────────────────
 
-    public abstract static class RequestOtpState {
-        private RequestOtpState() {
+    public abstract static class UiState {
+        private UiState() {
         }
 
-        public static final class Idle extends RequestOtpState {
+        public static final class Idle extends UiState {
         }
 
-        public static final class Loading extends RequestOtpState {
+        public static final class Loading extends UiState {
         }
 
-        public static final class Success extends RequestOtpState {
-            private final String email;
-
-            public Success(String email) {
-                this.email = email;
-            }
-
-            public String getEmail() {
-                return email;
-            }
+        public static final class Success extends UiState {
         }
 
-        public static final class Error extends RequestOtpState {
-            private final String message;
-
-            public Error(String message) {
-                this.message = message;
-            }
-
-            public String getMessage() {
-                return message;
-            }
-        }
-    }
-
-    public abstract static class VerifyOtpState {
-        private VerifyOtpState() {
-        }
-
-        public static final class Idle extends VerifyOtpState {
-        }
-
-        public static final class Loading extends VerifyOtpState {
-        }
-
-        public static final class Success extends VerifyOtpState {
-            private final String resetToken;
-
-            public Success(String resetToken) {
-                this.resetToken = resetToken;
-            }
-
-            public String getResetToken() {
-                return resetToken;
-            }
-        }
-
-        public static final class Error extends VerifyOtpState {
-            private final String message;
-
-            public Error(String message) {
-                this.message = message;
-            }
-
-            public String getMessage() {
-                return message;
-            }
-        }
-    }
-
-    public abstract static class ResetPasswordState {
-        private ResetPasswordState() {
-        }
-
-        public static final class Idle extends ResetPasswordState {
-        }
-
-        public static final class Loading extends ResetPasswordState {
-        }
-
-        public static final class Success extends ResetPasswordState {
-        }
-
-        public static final class Error extends ResetPasswordState {
+        public static final class Error extends UiState {
             private final String message;
 
             public Error(String message) {

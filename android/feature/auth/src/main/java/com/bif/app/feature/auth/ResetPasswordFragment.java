@@ -113,22 +113,22 @@ public class ResetPasswordFragment extends Fragment {
     private void observeResetPasswordState(NavController navController, Button button,
                                            EditText etPassword, EditText etConfirmPassword) {
         viewModel.getResetPasswordState().observe(getViewLifecycleOwner(), state -> {
-            if (state instanceof ForgotPasswordViewModel.ResetPasswordState.Loading) {
+            if (state instanceof ForgotPasswordViewModel.UiState.Loading) {
                 setLoading(button, true, etPassword, etConfirmPassword);
                 return;
             }
 
             setLoading(button, false, etPassword, etConfirmPassword);
 
-            if (state instanceof ForgotPasswordViewModel.ResetPasswordState.Success) {
+            if (state instanceof ForgotPasswordViewModel.UiState.Success) {
                 Toast.makeText(requireContext(), R.string.password_reset_success, Toast.LENGTH_SHORT).show();
                 navController.navigate(UriUtils.buildUri("/login"));
                 viewModel.clearResetPasswordState();
                 return;
             }
 
-            if (state instanceof ForgotPasswordViewModel.ResetPasswordState.Error) {
-                String message = ((ForgotPasswordViewModel.ResetPasswordState.Error) state).getMessage();
+            if (state instanceof ForgotPasswordViewModel.UiState.Error) {
+                String message = ((ForgotPasswordViewModel.UiState.Error) state).getMessage();
                 Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
                 viewModel.clearResetPasswordState();
             }

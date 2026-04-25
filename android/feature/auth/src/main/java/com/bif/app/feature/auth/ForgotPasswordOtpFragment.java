@@ -105,15 +105,15 @@ public class ForgotPasswordOtpFragment extends Fragment {
 
     private void observeVerifyOtpState(NavController navController, Button button, EditText etOtp) {
         viewModel.getVerifyOtpState().observe(getViewLifecycleOwner(), state -> {
-            if (state instanceof ForgotPasswordViewModel.VerifyOtpState.Loading) {
+            if (state instanceof ForgotPasswordViewModel.UiState.Loading) {
                 setVerifyLoading(button, true, etOtp);
                 return;
             }
 
             setVerifyLoading(button, false, etOtp);
 
-            if (state instanceof ForgotPasswordViewModel.VerifyOtpState.Success) {
-                String resetToken = ((ForgotPasswordViewModel.VerifyOtpState.Success) state).getResetToken();
+            if (state instanceof ForgotPasswordViewModel.UiState.Success) {
+                String resetToken = viewModel.getResetToken();
                 Uri resetUri = UriUtils.buildUri("/forgot-password/reset")
                         .buildUpon()
                         .appendQueryParameter("email", email)
@@ -124,8 +124,8 @@ public class ForgotPasswordOtpFragment extends Fragment {
                 return;
             }
 
-            if (state instanceof ForgotPasswordViewModel.VerifyOtpState.Error) {
-                String message = ((ForgotPasswordViewModel.VerifyOtpState.Error) state).getMessage();
+            if (state instanceof ForgotPasswordViewModel.UiState.Error) {
+                String message = ((ForgotPasswordViewModel.UiState.Error) state).getMessage();
                 Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
                 viewModel.clearVerifyOtpState();
             }
@@ -134,13 +134,13 @@ public class ForgotPasswordOtpFragment extends Fragment {
 
     private void observeRequestOtpState() {
         viewModel.getRequestOtpState().observe(getViewLifecycleOwner(), state -> {
-            if (state instanceof ForgotPasswordViewModel.RequestOtpState.Success) {
+            if (state instanceof ForgotPasswordViewModel.UiState.Success) {
                 Toast.makeText(requireContext(), R.string.otp_resent, Toast.LENGTH_SHORT).show();
-                viewModel.clearTransientState();
-            } else if (state instanceof ForgotPasswordViewModel.RequestOtpState.Error) {
-                String message = ((ForgotPasswordViewModel.RequestOtpState.Error) state).getMessage();
+                viewModel.clearRequestOtpState();
+            } else if (state instanceof ForgotPasswordViewModel.UiState.Error) {
+                String message = ((ForgotPasswordViewModel.UiState.Error) state).getMessage();
                 Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
-                viewModel.clearTransientState();
+                viewModel.clearRequestOtpState();
             }
         });
     }

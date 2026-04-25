@@ -79,28 +79,28 @@ public class ForgotPasswordFragment extends Fragment {
 
     private void observeRequestOtpState(NavController navController, Button button, EditText etEmail) {
         viewModel.getRequestOtpState().observe(getViewLifecycleOwner(), state -> {
-            if (state instanceof ForgotPasswordViewModel.RequestOtpState.Loading) {
+            if (state instanceof ForgotPasswordViewModel.UiState.Loading) {
                 setLoading(button, true, etEmail);
                 return;
             }
 
             setLoading(button, false, etEmail);
 
-            if (state instanceof ForgotPasswordViewModel.RequestOtpState.Success) {
-                String email = ((ForgotPasswordViewModel.RequestOtpState.Success) state).getEmail();
+            if (state instanceof ForgotPasswordViewModel.UiState.Success) {
+                String email = viewModel.getEmail();
                 Uri otpUri = UriUtils.buildUri("/forgot-password/otp")
                         .buildUpon()
                         .appendQueryParameter("email", email)
                         .build();
                 navController.navigate(otpUri);
-                viewModel.clearTransientState();
+                viewModel.clearRequestOtpState();
                 return;
             }
 
-            if (state instanceof ForgotPasswordViewModel.RequestOtpState.Error) {
-                String message = ((ForgotPasswordViewModel.RequestOtpState.Error) state).getMessage();
+            if (state instanceof ForgotPasswordViewModel.UiState.Error) {
+                String message = ((ForgotPasswordViewModel.UiState.Error) state).getMessage();
                 Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
-                viewModel.clearTransientState();
+                viewModel.clearRequestOtpState();
             }
         });
     }
