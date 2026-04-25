@@ -113,7 +113,7 @@ public class FavoriteMapperTest {
         // Assert
         assertNotNull(dto);
         assertEquals("dom-1", dto.id);
-        assertEquals("place-4", dto.placeId);
+        assertNull(dto.placeId);
         assertEquals("Domain Place", dto.name);
         assertEquals(4, dto.rating);
         assertEquals("user-xyz", dto.userId);

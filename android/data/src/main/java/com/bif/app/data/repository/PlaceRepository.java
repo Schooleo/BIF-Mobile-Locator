@@ -649,7 +649,9 @@ public class PlaceRepository implements IPlaceRepository {
                 place.name != null ? place.name : "",
                 normalizedAddress,
                 place.rating,
-                place.location
+            place.location,
+            place.placeSource,
+            place.selectionState
         );
     }
 

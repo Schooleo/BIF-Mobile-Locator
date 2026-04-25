@@ -14,12 +14,16 @@ public class PlaceMapper {
     }
 
     public static Place toDomain(PlaceEntity entity) {
+        String placeSource = entity.placeSource != null && !entity.placeSource.trim().isEmpty()
+            ? entity.placeSource.trim()
+            : Place.SOURCE_OSM;
         return new Place(
                 entity.id,
                 entity.name,
                 entity.address,
                 entity.rating,
-                new Location(entity.latitude, entity.longitude)
+            new Location(entity.latitude, entity.longitude),
+            placeSource
         );
     }
 
@@ -42,6 +46,7 @@ public class PlaceMapper {
         entity.name = place.name;
         entity.address = place.address;
         entity.rating = place.rating;
+        entity.placeSource = place.placeSource;
         if (place.location != null) {
             entity.latitude = place.location.latitude;
             entity.longitude = place.location.longitude;
@@ -100,7 +105,10 @@ public class PlaceMapper {
 
     public static Place fromDto(PlaceDto dto, boolean unused) {
         Location loc = new Location(dto.latitude, dto.longitude);
-        return new Place(dto.id, dto.name, dto.address, dto.rating, loc);
+        String placeSource = dto.placeSource != null && !dto.placeSource.trim().isEmpty()
+                ? dto.placeSource.trim()
+                : Place.SOURCE_OSM;
+        return new Place(dto.id, dto.name, dto.address, dto.rating, loc, placeSource);
     }
 
     public static List<Place> fromDtoList(List<PlaceDto> dtos) {

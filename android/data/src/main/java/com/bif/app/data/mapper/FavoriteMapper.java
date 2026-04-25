@@ -96,7 +96,7 @@ public class FavoriteMapper {
     public static FavoriteDto toDto(Favorite domain, String userId) {
         FavoriteDto dto = new FavoriteDto();
         dto.id = domain.id;
-        dto.placeId = domain.placeId;
+        dto.placeId = null;
         dto.externalSource = domain.externalSource;
         dto.externalId = domain.externalId;
         dto.placeName = domain.placeName;
