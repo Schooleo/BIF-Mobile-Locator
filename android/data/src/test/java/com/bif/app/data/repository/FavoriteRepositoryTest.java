@@ -11,7 +11,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
-
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.MutableLiveData;
 
@@ -19,12 +18,15 @@ import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.favorite.FavoriteResponseDto;
 import com.bif.app.data.LiveDataTestUtil;
+import com.bif.app.data.source.AndroidGeocodingDataSource;
+import com.bif.app.data.source.local.dao.PlaceDao;
 import com.bif.app.data.source.local.database.AppDatabase;
 import com.bif.app.data.source.local.dao.FavoriteDao;
 import com.bif.app.data.source.local.dao.SyncQueueDao;
 import com.bif.app.data.source.local.entity.FavoriteEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 import com.bif.app.data.sync.core.SyncManager;
+import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.Favorite;
 import com.bif.app.domain.repository.IFavoriteRepository;
 
@@ -37,6 +39,7 @@ import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 
@@ -60,6 +63,10 @@ public class FavoriteRepositoryTest {
     private SyncManager mockSyncManager;
     @Mock
     private ExecutorService mockExecutorService;
+    @Mock
+    private PlaceDao mockPlaceDao;
+    @Mock
+    private AndroidGeocodingDataSource mockGeocodingDataSource;
 
     private FavoriteRepository repository;
 
@@ -80,6 +87,8 @@ public class FavoriteRepositoryTest {
             runnable.run();
             return null;
         }).when(mockExecutorService).execute(any(Runnable.class));
+
+        when(mockSyncManager.isOnline()).thenReturn(true);
 
         repository = new FavoriteRepository(
                 mockDao, 
@@ -367,5 +376,50 @@ public class FavoriteRepositoryTest {
             assertFalse(success[0]);
             verify(mockRestApiService, never()).getMyFavorites();
         }
+    }
+
+    @Test
+    public void refreshFavorites_WhenFavoriteHasPlaceholderMetadata_ReconcilesFromReverseGeocode() {
+        FavoriteEntity placeholder = new FavoriteEntity();
+        placeholder.id = "fav-99";
+        placeholder.placeId = "place-99";
+        placeholder.name = "Unnamed place";
+        placeholder.placeName = "Unnamed place";
+        placeholder.address = "Address unavailable";
+        placeholder.latitude = 10.0;
+        placeholder.longitude = 106.0;
+        placeholder.userId = "anonymous";
+
+        when(mockDao.getAllSync("anonymous")).thenReturn(Collections.singletonList(placeholder));
+        when(mockPlaceDao.getByIdSync("place-99", "anonymous")).thenReturn(null);
+
+        android.location.Address address = org.mockito.Mockito.mock(android.location.Address.class);
+        when(address.getFeatureName()).thenReturn("St. Joseph Medical Clinic");
+        when(address.getAddressLine(0)).thenReturn("12 Nguyen Trai, District 1, Ho Chi Minh City");
+        when(mockGeocodingDataSource.reverseGeocodeLocation(10.0, 106.0))
+                .thenReturn(Collections.singletonList(address));
+
+        FavoriteRepository reconciliatingRepository = new FavoriteRepository(
+                mockDao,
+                mockSyncQueueDao,
+                mockAppDatabase,
+                mockPlaceDao,
+                mockGeocodingDataSource,
+                mockRestApiService,
+                mockSyncManager,
+                mockExecutorService,
+                null);
+
+        reconciliatingRepository.refreshFavorites(null);
+
+        verify(mockGeocodingDataSource).reverseGeocodeLocation(10.0, 106.0);
+        ArgumentCaptor<FavoriteEntity> captor = ArgumentCaptor.forClass(FavoriteEntity.class);
+        verify(mockDao).update(captor.capture());
+        FavoriteEntity updated = captor.getValue();
+        assertEquals("St. Joseph Medical Clinic", updated.name);
+        assertEquals("St. Joseph Medical Clinic", updated.placeName);
+        assertEquals("12 Nguyen Trai, District 1, Ho Chi Minh City", updated.address);
+        assertEquals(Place.SOURCE_OSM, updated.externalSource);
+        verify(mockSyncQueueDao).enqueue(any(SyncQueueEntity.class));
     }
 }
