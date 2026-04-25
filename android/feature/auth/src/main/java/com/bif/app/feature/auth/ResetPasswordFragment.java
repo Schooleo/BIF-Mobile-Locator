@@ -1,8 +1,6 @@
 package com.bif.app.feature.auth;
 
 import android.os.Bundle;
-import android.text.Editable;
-import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -65,28 +63,6 @@ public class ResetPasswordFragment extends Fragment {
         // --- Reset button ---
         Button btnReset = view.findViewById(R.id.btn_reset_password);
         btnReset.setText(R.string.reset_password_button);
-        btnReset.setEnabled(false);
-
-        // --- Validation: enable button only when both fields valid ---
-        TextWatcher validationWatcher = new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                String password = etPassword.getText().toString();
-                String confirm = etConfirmPassword.getText().toString();
-                boolean isValid = password.length() >= MIN_PASSWORD_LENGTH
-                        && password.equals(confirm);
-                btnReset.setEnabled(isValid);
-            }
-
-            @Override
-            public void afterTextChanged(Editable s) {}
-        };
-
-        etPassword.addTextChangedListener(validationWatcher);
-        etConfirmPassword.addTextChangedListener(validationWatcher);
 
         // --- Reset click ---
         btnReset.setOnClickListener(v -> {
@@ -94,12 +70,14 @@ public class ResetPasswordFragment extends Fragment {
             String confirm = etConfirmPassword.getText().toString();
 
             if (password.length() < MIN_PASSWORD_LENGTH) {
-                Toast.makeText(requireContext(), R.string.password_too_short, Toast.LENGTH_SHORT).show();
+                etPassword.setError(getString(R.string.password_too_short));
+                etPassword.requestFocus();
                 return;
             }
 
             if (!password.equals(confirm)) {
-                Toast.makeText(requireContext(), R.string.passwords_do_not_match, Toast.LENGTH_SHORT).show();
+                etConfirmPassword.setError(getString(R.string.passwords_do_not_match));
+                etConfirmPassword.requestFocus();
                 return;
             }
 
@@ -129,7 +107,8 @@ public class ResetPasswordFragment extends Fragment {
 
             if (state instanceof ForgotPasswordViewModel.UiState.Error) {
                 String message = ((ForgotPasswordViewModel.UiState.Error) state).getMessage();
-                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+                etPassword.setError(message);
+                etPassword.requestFocus();
                 viewModel.clearResetPasswordState();
             }
         });
@@ -137,14 +116,6 @@ public class ResetPasswordFragment extends Fragment {
 
     private void setLoading(Button button, boolean isLoading,
                             EditText etPassword, EditText etConfirmPassword) {
-        if (isLoading) {
-            button.setEnabled(false);
-        } else {
-            String password = etPassword.getText().toString();
-            String confirm = etConfirmPassword.getText().toString();
-            boolean isValid = password.length() >= MIN_PASSWORD_LENGTH
-                    && password.equals(confirm);
-            button.setEnabled(isValid);
-        }
+        button.setEnabled(!isLoading);
     }
 }

@@ -2,8 +2,6 @@ package com.bif.app.feature.auth;
 
 import android.os.Bundle;
 import android.os.CountDownTimer;
-import android.text.Editable;
-import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -66,25 +64,21 @@ public class ForgotPasswordOtpFragment extends Fragment {
         // --- Verify button ---
         Button btnVerify = view.findViewById(R.id.btn_verify_otp);
         btnVerify.setText(R.string.verify_code);
-        btnVerify.setEnabled(false);
-
-        // Enable verify button only when 6 digits entered
-        etOtp.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                boolean isFull = s.toString().trim().length() == 6;
-                btnVerify.setEnabled(isFull);
-            }
-
-            @Override
-            public void afterTextChanged(Editable s) {}
-        });
 
         btnVerify.setOnClickListener(v -> {
             String otp = etOtp.getText().toString().trim();
+            if (otp.isEmpty()) {
+                etOtp.setError("Please enter OTP");
+                etOtp.requestFocus();
+                return;
+            }
+
+            if (otp.length() != 6) {
+                etOtp.setError("OTP must be 6 digits");
+                etOtp.requestFocus();
+                return;
+            }
+
             viewModel.verifyOtp(email, otp);
         });
 
@@ -126,7 +120,8 @@ public class ForgotPasswordOtpFragment extends Fragment {
 
             if (state instanceof ForgotPasswordViewModel.UiState.Error) {
                 String message = ((ForgotPasswordViewModel.UiState.Error) state).getMessage();
-                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+                etOtp.setError(message);
+                etOtp.requestFocus();
                 viewModel.clearVerifyOtpState();
             }
         });
@@ -146,12 +141,7 @@ public class ForgotPasswordOtpFragment extends Fragment {
     }
 
     private void setVerifyLoading(Button button, boolean isLoading, EditText etOtp) {
-        if (isLoading) {
-            button.setEnabled(false);
-        } else {
-            boolean isFull = etOtp.getText().toString().trim().length() == 6;
-            button.setEnabled(isFull);
-        }
+        button.setEnabled(!isLoading);
     }
 
     private void startResendCountdown(TextView tvResend) {
