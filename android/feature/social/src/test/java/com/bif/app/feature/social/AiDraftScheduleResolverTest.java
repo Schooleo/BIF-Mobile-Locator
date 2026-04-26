@@ -11,7 +11,7 @@ import java.time.ZoneId;
 public class AiDraftScheduleResolverTest {
 
     @Test
-    public void resolveStopTimes_multiDayEqualStartTime_rollsToNextDay() {
+    public void resolveStopTimes_multiDayEqualStartTime_keepsSameDay() {
         ZoneId zone = ZoneId.systemDefault();
         long tripStartAt = LocalDate.of(2026, 5, 1)
                 .atStartOfDay(zone)
@@ -42,7 +42,7 @@ public class AiDraftScheduleResolverTest {
                 );
 
         assertEquals(
-                LocalDate.of(2026, 5, 2),
+                LocalDate.of(2026, 5, 1),
                 Instant.ofEpochMilli(second.arrivalAt).atZone(zone).toLocalDate()
         );
     }

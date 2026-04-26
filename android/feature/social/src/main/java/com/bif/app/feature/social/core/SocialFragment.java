@@ -490,9 +490,10 @@ public class SocialFragment extends Fragment {
 
 
     private void updateAuthenticationUi() {
+        String token = UserPreferences.getAuthToken(requireContext());
         authenticated = UserPreferences.isLoggedIn(requireContext())
-                && UserPreferences.getAuthToken(requireContext()) != null
-                && !UserPreferences.getAuthToken(requireContext()).trim().isEmpty();
+                && token != null
+                && !token.trim().isEmpty();
         updateAiTripDrafterFabVisibility();
     }
 
@@ -730,15 +731,27 @@ public class SocialFragment extends Fragment {
         String endText = formatDate(aiDraftEndMillis);
         if (tvAiStartDate != null) {
             tvAiStartDate.setText(startText);
+            tvAiStartDate.setContentDescription(aiDraftStartMillis > 0L
+                    ? getString(R.string.trip_ai_start_date_selected, startText)
+                    : getString(R.string.trip_ai_start_date_not_set));
         }
         if (tvAiEndDate != null) {
             tvAiEndDate.setText(endText);
+            tvAiEndDate.setContentDescription(aiDraftEndMillis > 0L
+                    ? getString(R.string.trip_ai_end_date_selected, endText)
+                    : getString(R.string.trip_ai_end_date_not_set));
         }
         if (tvAiErrorStartDate != null) {
             tvAiErrorStartDate.setText(startText);
+            tvAiErrorStartDate.setContentDescription(aiDraftStartMillis > 0L
+                    ? getString(R.string.trip_ai_start_date_selected, startText)
+                    : getString(R.string.trip_ai_start_date_not_set));
         }
         if (tvAiErrorEndDate != null) {
             tvAiErrorEndDate.setText(endText);
+            tvAiErrorEndDate.setContentDescription(aiDraftEndMillis > 0L
+                    ? getString(R.string.trip_ai_end_date_selected, endText)
+                    : getString(R.string.trip_ai_end_date_not_set));
         }
     }
 

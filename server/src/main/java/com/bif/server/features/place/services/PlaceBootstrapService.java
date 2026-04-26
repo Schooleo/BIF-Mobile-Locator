@@ -13,6 +13,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.nio.file.Files;
@@ -85,13 +86,16 @@ public class PlaceBootstrapService implements ApplicationRunner {
     private int rejectAuditMaxLines = 5000;
 
     @Value("${app.bootstrap.batch-size:250}")
-    private int batchSize = 250;
+    private int batchSize;
 
     @Value("${app.bootstrap.batch-write.max-attempts:3}")
-    private int batchWriteMaxAttempts = 3;
+    private int batchWriteMaxAttempts;
 
     @Value("${app.bootstrap.batch-write.retry-backoff-ms:500}")
-    private long batchWriteRetryBackoffMs = 500;
+    private long batchWriteRetryBackoffMs;
+
+    @Value("${app.bootstrap.batch-write.max-backoff-ms:5000}")
+    private long batchWriteMaxBackoffMs;
     private static final Pattern DISTRICT_PATTERN = Pattern.compile(
             "\\b(?:district|quan|quận|q)\\s*([0-9]{1,2})\\b",
             Pattern.CASE_INSENSITIVE);
@@ -100,7 +104,7 @@ public class PlaceBootstrapService implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         // 1. Check if DB is already populated to avoid re-running on every restart
-        if (placeRepository.count() > 1000) {
+        if (placeRepository.count() > 0) {
             log.info("✅ Places database is already populated. Skipping MongoDB bootstrap.");
             return;
         }
@@ -266,7 +270,12 @@ public class PlaceBootstrapService implements ApplicationRunner {
             return;
         }
         try {
-            Thread.sleep(batchWriteRetryBackoffMs * attemptNumber);
+            long exponentialDelay = batchWriteRetryBackoffMs
+                    * (1L << Math.min(20, Math.max(0, attemptNumber - 1)));
+            long maxBackoff = Math.max(batchWriteRetryBackoffMs, batchWriteMaxBackoffMs);
+            long cappedDelay = Math.min(exponentialDelay, maxBackoff);
+            long jitter = cappedDelay <= 1L ? 0L : ThreadLocalRandom.current().nextLong(cappedDelay / 4L + 1L);
+            Thread.sleep(cappedDelay + jitter);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while retrying MongoDB place bootstrap batch write", e);

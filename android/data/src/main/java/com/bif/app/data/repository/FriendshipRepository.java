@@ -81,7 +81,6 @@ public class FriendshipRepository implements IFriendshipRepository {
     @Override
     public LiveData<List<Friendship>> getPendingRequests() {
         if (!isAuthenticated()) {
-            pendingRequestsLiveData.setValue(Collections.emptyList());
             executorService.execute(this::clearFriendSessionCacheSync);
             return pendingRequestsLiveData;
         }
@@ -92,7 +91,6 @@ public class FriendshipRepository implements IFriendshipRepository {
     @Override
     public LiveData<List<Friendship>> getOutgoingRequests() {
         if (!isAuthenticated()) {
-            outgoingRequestsLiveData.setValue(Collections.emptyList());
             executorService.execute(this::clearFriendSessionCacheSync);
             return outgoingRequestsLiveData;
         }
@@ -103,7 +101,6 @@ public class FriendshipRepository implements IFriendshipRepository {
     @Override
     public LiveData<List<Friend>> getFriends() {
         if (!isAuthenticated()) {
-            friendsLiveData.setValue(Collections.emptyList());
             executorService.execute(this::clearFriendSessionCacheSync);
             return friendsLiveData;
         }

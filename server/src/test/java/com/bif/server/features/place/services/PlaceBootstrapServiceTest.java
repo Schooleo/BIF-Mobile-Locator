@@ -13,6 +13,7 @@ import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.List;
 
+import com.mongodb.MongoException;
 import com.mongodb.bulk.BulkWriteResult;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.DefaultApplicationArguments;
@@ -87,6 +88,54 @@ class PlaceBootstrapServiceTest {
 
         verify(bulkOperations, Mockito.times(2)).replaceOne(any(), any(), any());
         verify(bulkOperations).execute();
+        verify(placeRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void run_RetriesTransientBulkWriteFailure() throws Exception {
+        PlaceRepository placeRepository = Mockito.mock(PlaceRepository.class);
+        MongoTemplate mongoTemplate = Mockito.mock(MongoTemplate.class);
+        BulkOperations bulkOperations = Mockito.mock(BulkOperations.class);
+        PlaceBootstrapService service = new PlaceBootstrapService(
+                placeRepository,
+                mongoTemplate,
+                objectMapper);
+
+        Path placesFile = tempDir.resolve("places-retry.geojson");
+        java.nio.file.Files.writeString(placesFile, """
+                {
+                  "type": "FeatureCollection",
+                  "features": [
+                    {
+                      "type":"Feature",
+                      "geometry":{"type":"Point","coordinates":[106.7009,10.7769]},
+                      "properties":{
+                        "id":"place-vn-retry",
+                        "names":{"primary":"Retry Museum"},
+                        "categories":{"primary":"museum","alternate":["tourism"]},
+                        "addresses":[{"freeform":"District 1","country":"VN"}]
+                      }
+                    }
+                  ]
+                }
+                """);
+
+        when(placeRepository.count()).thenReturn(0L);
+        when(mongoTemplate.bulkOps(eq(BulkOperations.BulkMode.UNORDERED), eq(Place.class)))
+                .thenReturn(bulkOperations);
+        when(bulkOperations.replaceOne(any(), any(), any())).thenReturn(bulkOperations);
+        when(bulkOperations.execute())
+                .thenThrow(new MongoException("transient"))
+                .thenReturn(BulkWriteResult.acknowledged(0, 0, 0, 0, List.of(), List.of()));
+        setField(service, "placesFilePath", placesFile.toString());
+        setField(service, "rejectAuditEnabled", false);
+        setField(service, "batchSize", 1);
+        setField(service, "batchWriteMaxAttempts", 2);
+        setField(service, "batchWriteRetryBackoffMs", 0L);
+
+        service.run(new DefaultApplicationArguments());
+
+        verify(bulkOperations, Mockito.times(2)).execute();
         verify(placeRepository, never()).saveAll(any());
     }
 
@@ -223,9 +272,18 @@ class PlaceBootstrapServiceTest {
     }
 
     private void setField(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
+        Class<?> clazz = target.getClass();
+        while (clazz != null) {
+            try {
+                Field field = clazz.getDeclaredField(fieldName);
+                field.setAccessible(true);
+                field.set(target, value);
+                return;
+            } catch (NoSuchFieldException ignored) {
+                clazz = clazz.getSuperclass();
+            }
+        }
+        throw new NoSuchFieldException(fieldName);
     }
 
     private Place invokeParse(PlaceBootstrapService service, JsonNode featureNode) throws Exception {

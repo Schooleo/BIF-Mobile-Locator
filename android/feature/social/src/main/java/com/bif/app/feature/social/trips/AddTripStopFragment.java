@@ -297,7 +297,7 @@ public class AddTripStopFragment extends Fragment {
         viewModel.getAiModeEnabled().observe(getViewLifecycleOwner(), enabled -> {
             boolean aiEnabled = Boolean.TRUE.equals(enabled);
             btnAiToggle.setImageResource(aiEnabled ? R.drawable.ic_ai_sparkle_on : R.drawable.ic_ai_sparkle_off);
-            styleSearchBarForAi(aiEnabled);
+            styleSearchBarForAi(aiEnabled && isAuthenticated());
         });
 
         viewModel.getSearchHint().observe(getViewLifecycleOwner(), hint -> etSearch.setHint(hint));
@@ -372,9 +372,10 @@ public class AddTripStopFragment extends Fragment {
     }
 
     private boolean isAuthenticated() {
+        String token = UserPreferences.getAuthToken(requireContext());
         return UserPreferences.isLoggedIn(requireContext())
-                && UserPreferences.getAuthToken(requireContext()) != null
-                && !UserPreferences.getAuthToken(requireContext()).trim().isEmpty();
+                && token != null
+                && !token.trim().isEmpty();
     }
 
     private void updateAiToggleAuthUi() {

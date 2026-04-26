@@ -30,6 +30,7 @@ public class AiPlaceGroundingService {
     private static final int MAX_QUERY_VARIANTS = 10;
     private static final int MAX_CANDIDATE_POOL = 32;
     private static final int TYPESENSE_BATCH_SIZE = 16;
+    private static final int MIN_CONTAINS_VIBE_LENGTH = 3;
     private static final Pattern DISTRICT_NUMBER_PATTERN = Pattern.compile(
             "\\b(?:district|quan|q)\\s*([0-9]{1,2})\\b");
     private static final Set<String> GENERIC_LOCATION_TERMS = Set.of(
@@ -401,8 +402,15 @@ public class AiPlaceGroundingService {
         }
         double score = 0.0;
         for (String targetVibe : constraints.getTargetVibes()) {
-            if (tags.stream().anyMatch(tag -> containsNormalized(tag, targetVibe)
-                    || containsNormalized(targetVibe, tag))) {
+            String normalizedTargetVibe = normalizeForMatch(targetVibe);
+            if (tags.stream().anyMatch(tag -> {
+                String normalizedTag = normalizeForMatch(tag);
+                return normalizedTag.equals(normalizedTargetVibe)
+                        || (normalizedTag.length() >= MIN_CONTAINS_VIBE_LENGTH
+                        && normalizedTargetVibe.length() >= MIN_CONTAINS_VIBE_LENGTH
+                        && (normalizedTag.contains(normalizedTargetVibe)
+                        || normalizedTargetVibe.contains(normalizedTag)));
+            })) {
                 score += 1.2;
             }
             if (score >= 3.0) {
@@ -574,8 +582,9 @@ public class AiPlaceGroundingService {
         if (normalized == null) {
             return false;
         }
+        Set<String> tokens = new HashSet<>(List.of(normalized.split("\\s+")));
         for (String word : words) {
-            if (normalized.matches(".*\\b" + Pattern.quote(word) + "\\b.*")) {
+            if (tokens.contains(word)) {
                 return true;
             }
         }

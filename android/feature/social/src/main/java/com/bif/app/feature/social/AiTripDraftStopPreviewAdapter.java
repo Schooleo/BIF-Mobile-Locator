@@ -11,6 +11,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.format.FormatStyle;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -19,10 +20,10 @@ class AiTripDraftStopPreviewAdapter
         extends RecyclerView.Adapter<AiTripDraftStopPreviewAdapter.StopPreviewViewHolder> {
 
     private static final int MAX_TIME_LABEL_LENGTH = 14;
-    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern(
-            "MM/dd - HH:mm",
-            Locale.getDefault()
-    ).withZone(ZoneId.systemDefault());
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter
+            .ofLocalizedDateTime(FormatStyle.SHORT, FormatStyle.SHORT)
+            .withLocale(Locale.getDefault())
+            .withZone(ZoneId.systemDefault());
 
     private final List<SocialViewModel.AiDraftStopPreview> items = new ArrayList<>();
 
@@ -91,7 +92,7 @@ class AiTripDraftStopPreviewAdapter
                 try {
                     formattedTime = TIME_FORMATTER.format(Instant.parse(plannedDateTime.trim()));
                 } catch (Exception ignored) {
-                    formattedTime = shortenTimeLabel(plannedDateTime);
+                    formattedTime = null;
                 }
             }
 
@@ -103,6 +104,9 @@ class AiTripDraftStopPreviewAdapter
                         && endTime != null && !endTime.trim().isEmpty()) {
                     formattedTime = startTime.trim() + "–" + endTime.trim();
                 }
+            }
+            if (formattedTime == null || formattedTime.trim().isEmpty()) {
+                formattedTime = shortenTimeLabel(plannedDateTime);
             }
             if (formattedTime == null || formattedTime.trim().isEmpty()) {
                 return itemView.getContext().getString(R.string.trip_ai_duration_only, duration);

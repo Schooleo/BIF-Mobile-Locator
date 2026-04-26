@@ -117,7 +117,7 @@ public class TripDraftingAgent {
                 Return 1-8 stops.
                 Use durationMinutes between 15 and 360.
                 For each stop in the itinerary, you MUST provide 'startTime' (String, format HH:mm), 'endTime' (String, format HH:mm), and 'duration' (Integer, total minutes spent). Include these fields in your JSON output explicitly.
-                The duration field MUST be an integer number of minutes, never text such as "2 hours"; keep duration equal to durationMinutes.
+                Treat durationMinutes as the canonical scheduled duration in minutes; duration is a compatibility alias and MUST equal durationMinutes.
                 Use 24-hour HH:mm values for startTime and endTime and make endTime exactly startTime plus duration minutes when possible.
                 Do not repeat the same placeId more than once.
                 Return exactly this schema:

@@ -1,7 +1,6 @@
 package com.bif.server.features.ai.services;
 
 import java.text.Normalizer;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -84,11 +83,9 @@ public class VibeHintNormalizer {
         if (normalizedText.equals(keyword)) {
             return true;
         }
-        List<String> tokens = new ArrayList<>(List.of(normalizedText.split("-")));
-        List<String> keywordTokens = List.of(keyword.split("-"));
-        if (keywordTokens.size() == 1) {
-            return tokens.contains(keyword);
+        if (keyword.contains("-")) {
+            return ("-" + normalizedText + "-").contains("-" + keyword + "-");
         }
-        return normalizedText.contains(keyword);
+        return List.of(normalizedText.split("-")).contains(keyword);
     }
 }

@@ -19,20 +19,20 @@ import java.util.regex.Pattern;
 public class TripScheduleHintExtractor {
 
     private static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
-    private static final Pattern DAYS_PATTERN = Pattern.compile("(\\d+)\\s*ng\\u00e0y");
-    private static final Pattern WEEKS_PATTERN = Pattern.compile("(\\d+)\\s*tu\\u1ea7n");
+    private static final Pattern DAYS_PATTERN = Pattern.compile("(\\d+)\\s*ngày");
+    private static final Pattern WEEKS_PATTERN = Pattern.compile("(\\d+)\\s*tuần");
     private static final Pattern DAYS_PATTERN_EN = Pattern.compile("(\\d+)\\s*day(?:s)?");
     private static final Pattern WEEKS_PATTERN_EN = Pattern.compile("(\\d+)\\s*week(?:s)?");
-    private static final Pattern AFTER_DAYS_PATTERN = Pattern.compile("sau\\s+(\\d+)\\s*ng\\u00e0y");
-    private static final Pattern AFTER_WEEKS_PATTERN = Pattern.compile("sau\\s+(\\d+)\\s*tu\\u1ea7n");
+    private static final Pattern AFTER_DAYS_PATTERN = Pattern.compile("sau\\s+(\\d+)\\s*ngày");
+    private static final Pattern AFTER_WEEKS_PATTERN = Pattern.compile("sau\\s+(\\d+)\\s*tuần");
     private static final Pattern AFTER_DAYS_PATTERN_EN = Pattern.compile("(?:after|in)\\s+(\\d+)\\s*day(?:s)?");
     private static final Pattern AFTER_WEEKS_PATTERN_EN = Pattern.compile("(?:after|in)\\s+(\\d+)\\s*week(?:s)?");
     private static final Pattern START_DATE_LABEL_PATTERN = Pattern.compile(
-            "(?:start\\s*date|ng\\u00e0y\\s*b\\u1eaft\\s*\\u0111\\u1ea7u)\\s*[:\\-]?\\s*(\\d{4}-\\d{2}-\\d{2})");
+            "(?:start\\s*date|ngày\\s*bắt\\s*đầu)\\s*[:\\-]?\\s*(\\d{4}-\\d{2}-\\d{2})");
     private static final Pattern END_DATE_LABEL_PATTERN = Pattern.compile(
-            "(?:end\\s*date|ng\\u00e0y\\s*k\\u1ebft\\s*th\\u00fac)\\s*[:\\-]?\\s*(\\d{4}-\\d{2}-\\d{2})");
+            "(?:end\\s*date|ngày\\s*kết\\s*thúc)\\s*[:\\-]?\\s*(\\d{4}-\\d{2}-\\d{2})");
     private static final Pattern INLINE_DATE_RANGE_PATTERN = Pattern.compile(
-            "(\\d{4}-\\d{2}-\\d{2})\\s*(?:to|\\-|\\u0111\\u1ebfn)\\s*(\\d{4}-\\d{2}-\\d{2})");
+            "(\\d{4}-\\d{2}-\\d{2})\\s*(?:to|\\-|đến)\\s*(\\d{4}-\\d{2}-\\d{2})");
 
     private static final Pattern TIME_RANGE_PATTERN = Pattern.compile("(?:từ|tu|from)\\s+([0-9]{1,2})(?:[:h]([0-9]{2}))?\\s*(sáng|sang|chiều|chieu|tối|toi|đêm|dem|am|pm)?\\s+(?:đến|den|to|-)\\s+([0-9]{1,2})(?:[:h]([0-9]{2}))?\\s*(sáng|sang|chiều|chieu|tối|toi|đêm|dem|am|pm)?");
     private static final Pattern SINGLE_TIME_PATTERN = Pattern.compile("\\b([0-9]{1,2})(?:[:h]([0-9]{2}))?\\s*(sáng|sang|chiều|chieu|tối|toi|đêm|dem|am|pm)\\b");
@@ -143,13 +143,13 @@ public class TripScheduleHintExtractor {
             }
         }
 
-        if (normalized.contains("m\u1ed9t ng\u00e0y") || normalized.contains("1 ng\u00e0y")) {
+        if (normalized.contains("một ngày") || normalized.contains("1 ngày")) {
             daySpan = Math.max(daySpan, 1);
         }
-        if (normalized.contains("hai ng\u00e0y") || normalized.contains("2 ng\u00e0y")) {
+        if (normalized.contains("hai ngày") || normalized.contains("2 ngày")) {
             daySpan = Math.max(daySpan, 2);
         }
-        if (normalized.contains("ba ng\u00e0y") || normalized.contains("3 ng\u00e0y")) {
+        if (normalized.contains("ba ngày") || normalized.contains("3 ngày")) {
             daySpan = Math.max(daySpan, 3);
         }
         if (normalized.contains("one day") || normalized.contains("1 day")) {
@@ -194,13 +194,13 @@ public class TripScheduleHintExtractor {
             offset = Math.max(offset, parseInt(afterWeeksEn.group(1)) * 7);
         }
 
-        if (normalized.contains("sau m\u1ed9t tu\u1ea7n")) {
+        if (normalized.contains("sau một tuần")) {
             offset = Math.max(offset, 7);
         }
-        if (normalized.contains("tu\u1ea7n sau")) {
+        if (normalized.contains("tuần sau")) {
             offset = Math.max(offset, 7);
         }
-        if (normalized.contains("ng\u00e0y mai")) {
+        if (normalized.contains("ngày mai")) {
             offset = Math.max(offset, 1);
         }
         if (normalized.contains("tomorrow")) {
@@ -209,7 +209,7 @@ public class TripScheduleHintExtractor {
         if (normalized.contains("next week")) {
             offset = Math.max(offset, 7);
         }
-        if (normalized.contains("h\u00f4m nay")) {
+        if (normalized.contains("hôm nay")) {
             signals.add("start=today");
         }
         if (normalized.contains("today")) {
@@ -223,7 +223,7 @@ public class TripScheduleHintExtractor {
     }
 
     private LocalTime resolvePreferredStartTime(String normalized, List<String> signals) {
-        if (normalized.contains("bu\u1ed5i t\u1ed1i") || normalized.contains("t\u1ed1i")) {
+        if (normalized.contains("buổi tối") || normalized.contains("tối")) {
             signals.add("time=evening");
             return LocalTime.of(18, 30);
         }
@@ -231,7 +231,7 @@ public class TripScheduleHintExtractor {
             signals.add("time=evening");
             return LocalTime.of(18, 30);
         }
-        if (normalized.contains("bu\u1ed5i chi\u1ec1u") || normalized.contains("chi\u1ec1u")) {
+        if (normalized.contains("buổi chiều") || normalized.contains("chiều")) {
             signals.add("time=afternoon");
             return LocalTime.of(14, 0);
         }
@@ -239,7 +239,7 @@ public class TripScheduleHintExtractor {
             signals.add("time=afternoon");
             return LocalTime.of(14, 0);
         }
-        if (normalized.contains("bu\u1ed5i tr\u01b0a") || normalized.contains("tr\u01b0a")) {
+        if (normalized.contains("buổi trưa") || normalized.contains("trưa")) {
             signals.add("time=noon");
             return LocalTime.of(11, 30);
         }
@@ -247,7 +247,7 @@ public class TripScheduleHintExtractor {
             signals.add("time=noon");
             return LocalTime.of(11, 30);
         }
-        if (normalized.contains("bu\u1ed5i s\u00e1ng") || normalized.contains("s\u00e1ng")) {
+        if (normalized.contains("buổi sáng") || normalized.contains("sáng")) {
             signals.add("time=morning");
             return LocalTime.of(8, 30);
         }
@@ -306,10 +306,13 @@ public class TripScheduleHintExtractor {
             return null;
         }
         String meridiem = meridiemValue == null ? "" : meridiemValue;
-        if ((meridiem.contains("chiều") || meridiem.contains("chieu")
-                || meridiem.contains("tối") || meridiem.contains("toi")
-                || meridiem.contains("đêm") || meridiem.contains("dem")
-                || meridiem.equals("pm")) && hour < 12) {
+        boolean night = meridiem.contains("tối") || meridiem.contains("toi")
+                || meridiem.contains("đêm") || meridiem.contains("dem");
+        boolean pmLike = meridiem.contains("chiều") || meridiem.contains("chieu")
+                || night || meridiem.equals("pm");
+        if (night && hour == 12) {
+            hour = 0;
+        } else if (pmLike && hour < 12) {
             hour += 12;
         }
         if ((meridiem.contains("sáng") || meridiem.contains("sang") || meridiem.equals("am"))

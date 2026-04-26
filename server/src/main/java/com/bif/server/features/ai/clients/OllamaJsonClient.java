@@ -63,7 +63,7 @@ public class OllamaJsonClient {
     private String generate(String systemPrompt, String userPrompt, Object format) {
         String requestBody = buildRequestBody(systemPrompt, userPrompt, format);
         List<String> endpoints = resolveGenerateEndpoints();
-        AiUpstreamException lastNotFoundException = null;
+        RuntimeException lastRecoverableException = null;
         try {
             for (int index = 0; index < endpoints.size(); index++) {
                 String endpoint = endpoints.get(index);
@@ -85,23 +85,30 @@ public class OllamaJsonClient {
                             + " body="
                             + snippet(response.body());
                     if (response.statusCode() == 404 && index + 1 < endpoints.size()) {
-                        lastNotFoundException = new AiUpstreamException(detail);
+                        lastRecoverableException = new AiUpstreamException(detail);
                         continue;
                     }
                     throw new AiUpstreamException(detail);
                 }
 
-                return decodeGeneratePayload(response.body(), endpoint);
+                try {
+                    return decodeGeneratePayload(response.body(), endpoint);
+                } catch (JsonProcessingException e) {
+                    String detail = "Failed to decode Ollama transport payload at "
+                            + endpoint
+                            + " body="
+                            + snippet(response.body());
+                    if (index + 1 < endpoints.size()) {
+                        lastRecoverableException = new AiUpstreamException(detail, e);
+                        continue;
+                    }
+                    throw new AiParseException(detail, e);
+                }
             }
-            if (lastNotFoundException != null) {
-                throw lastNotFoundException;
+            if (lastRecoverableException != null) {
+                throw lastRecoverableException;
             }
             throw new AiUpstreamException("Ollama request failed without a reachable endpoint");
-        } catch (JsonProcessingException e) {
-            throw new AiParseException(
-                    "Failed to decode Ollama transport payload",
-                    e
-            );
         } catch (HttpTimeoutException e) {
             throw new AiUpstreamException(
                     "Ollama request timed out after "
@@ -219,6 +226,7 @@ public class OllamaJsonClient {
             endpoints.add(baseUrl + "/generate");
             return endpoints;
         }
+        // Treat any configured path ending in /generate as the final Ollama/proxy endpoint.
         if (normalizedLower.endsWith("/generate")) {
             endpoints.add(baseUrl);
             return endpoints;

@@ -209,6 +209,7 @@ type SyncChange {
   operation: String
   clientChangeId: String
   timestamp: String
+  payload: String
 }
 
 type SyncConflict {
@@ -364,4 +365,6 @@ input SyncChangeInput {
   serverVersion: Int
   operation: String
   clientChangeId: String
+  timestamp: String
+  payload: String
 }

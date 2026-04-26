@@ -19,9 +19,6 @@ public record GeneratedStop(
         endTime = normalize(endTime);
         note = normalize(note);
         plannedDateTime = normalize(plannedDateTime);
-        if (duration == null) {
-            duration = durationMinutes;
-        }
         if (durationMinutes == null) {
             durationMinutes = duration;
         }

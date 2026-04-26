@@ -24,9 +24,6 @@ import com.bif.app.domain.repository.IFriendshipRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.ITripRepository;
 
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -46,7 +43,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext;
 
 @HiltViewModel
 public class SocialViewModel extends ViewModel {
-    private static final DateTimeFormatter AI_DRAFT_DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
 
     public static final String AI_DRAFT_EMPTY_QUERY_MESSAGE = "__MSG_AI_DRAFT_EMPTY_QUERY__";
     public static final String AI_DRAFT_FAILED_MESSAGE = "__MSG_AI_DRAFT_FAILED__";
@@ -228,7 +224,7 @@ public class SocialViewModel extends ViewModel {
 
         int requestToken = aiDraftRequestToken.incrementAndGet();
         LiveData<AiTripDraftResult> source = chatRepository.draftTripFromQuery(
-                buildDraftQueryWithDateRange(query, lastAiDraftStartAt, lastAiDraftEndAt)
+                AiDraftPromptBuilder.buildDraftQueryWithDateRange(query, lastAiDraftStartAt, lastAiDraftEndAt)
         );
         observeOnce(source, result -> {
             if (requestToken != aiDraftRequestToken.get()) {
@@ -755,25 +751,6 @@ public class SocialViewModel extends ViewModel {
             return fallbackEndAt > 0L ? Math.max(startAt, fallbackEndAt) : startAt;
         }
         return Math.max(startAt, maxDeparture);
-    }
-
-    private String buildDraftQueryWithDateRange(String rawQuery, long startAt, long endAt) {
-        String query = trimToEmpty(rawQuery);
-        if (query.isEmpty() || startAt <= 0L || endAt < startAt) {
-            return query;
-        }
-        return query
-                + "\n\nTrip date range:"
-                + "\n- Start date: " + formatAiDraftDate(startAt)
-                + "\n- End date: " + formatAiDraftDate(endAt)
-                + "\nSchedule each stop within this date range and return concrete plannedDateTime values when possible.";
-    }
-
-    private String formatAiDraftDate(long millis) {
-        return Instant.ofEpochMilli(millis)
-                .atZone(ZoneId.systemDefault())
-                .toLocalDate()
-                .format(AI_DRAFT_DATE_FORMATTER);
     }
 
     private String trimToEmpty(String value) {

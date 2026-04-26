@@ -167,6 +167,12 @@ class OllamaJsonClientTest {
         OllamaJsonClient client = new OllamaJsonClient(httpClient, new ObjectMapper(), properties);
 
         assertEquals("{\"ok\":true}", client.generateJson("sys", "user"));
+
+        ArgumentCaptor<HttpRequest> requestCaptor = ArgumentCaptor.forClass(HttpRequest.class);
+        Mockito.verify(httpClient, Mockito.times(2))
+                .send(requestCaptor.capture(), any(HttpResponse.BodyHandler.class));
+        assertTrue(requestCaptor.getAllValues().get(0).uri().getPath().endsWith("/api/generate"));
+        assertTrue(requestCaptor.getAllValues().get(1).uri().getPath().endsWith("/generate"));
     }
 
     @Test

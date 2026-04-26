@@ -2,7 +2,6 @@ package com.bif.app.feature.social;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -50,13 +49,33 @@ final class AiDraftScheduleResolver {
         if (parsedStart == null && parsedEnd != null) {
             parsedStart = parsedEnd.minusMinutes(safeDurationMinutes);
         }
+        if (parsedStart != null && cursor == null) {
+            ZoneId zone = ZoneId.systemDefault();
+            LocalDate today = LocalDate.now(zone);
+            ZonedDateTime arrival = ZonedDateTime.of(today, parsedStart, zone);
+            ZonedDateTime departure = parsedEnd != null
+                    ? ZonedDateTime.of(parsedEnd.isBefore(parsedStart) ? today.plusDays(1) : today, parsedEnd, zone)
+                    : arrival.plusMinutes(safeDurationMinutes);
+            if (departure.toInstant().isBefore(arrival.toInstant())) {
+                departure = arrival.plusMinutes(safeDurationMinutes);
+            }
+            return new ScheduledTime(arrival.toInstant().toEpochMilli(), departure.toInstant().toEpochMilli());
+        }
         if (parsedStart == null || cursor == null) {
             return new ScheduledTime(0L, 0L);
         }
 
         LocalDate scheduledDate = cursor.currentDate;
-        if (cursor.previousTime != null && !parsedStart.isAfter(cursor.previousTime)) {
+        ZonedDateTime candidateArrival = ZonedDateTime.of(scheduledDate, parsedStart, cursor.zone);
+        if (cursor.previousInstant != null && candidateArrival.isBefore(cursor.previousInstant)) {
             LocalDate nextDate = scheduledDate.plusDays(1);
+            if (nextDate.isAfter(cursor.endDate)
+                    && cursor.previousInstant.toLocalDate().equals(cursor.endDate)) {
+                ZonedDateTime arrival = cursor.previousInstant.plusMinutes(safeDurationMinutes);
+                ZonedDateTime departure = arrival.plusMinutes(safeDurationMinutes);
+                cursor.updateFrom(arrival.toInstant().toEpochMilli(), departure.toInstant().toEpochMilli());
+                return new ScheduledTime(arrival.toInstant().toEpochMilli(), departure.toInstant().toEpochMilli());
+            }
             scheduledDate = nextDate.isAfter(cursor.endDate) ? cursor.endDate : nextDate;
         }
 
@@ -100,14 +119,7 @@ final class AiDraftScheduleResolver {
             return ZonedDateTime.parse(normalized).toInstant().toEpochMilli();
         } catch (Exception ignored) {
         }
-        try {
-            return LocalDateTime.parse(normalized)
-                    .atZone(ZoneId.systemDefault())
-                    .toInstant()
-                    .toEpochMilli();
-        } catch (Exception ignored) {
-            return 0L;
-        }
+        return 0L;
     }
 
     private static long resolveDepartureFromPlanned(long plannedAt,
@@ -160,9 +172,9 @@ final class AiDraftScheduleResolver {
         private final ZoneId zone;
         private final LocalDate endDate;
         private LocalDate currentDate;
-        private LocalTime previousTime;
+        private ZonedDateTime previousInstant;
 
-        private ScheduleCursor(ZoneId zone, LocalDate currentDate, LocalDate endDate) {
+        ScheduleCursor(ZoneId zone, LocalDate currentDate, LocalDate endDate) {
             this.zone = zone;
             this.currentDate = currentDate;
             this.endDate = endDate;
@@ -171,7 +183,7 @@ final class AiDraftScheduleResolver {
         private void updateFrom(long arrivalAt, long departureAt) {
             ZonedDateTime departure = Instant.ofEpochMilli(Math.max(arrivalAt, departureAt)).atZone(zone);
             currentDate = departure.toLocalDate().isAfter(endDate) ? endDate : departure.toLocalDate();
-            previousTime = departure.toLocalTime();
+            previousInstant = departure;
         }
     }
 }

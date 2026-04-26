@@ -115,6 +115,10 @@
     <string name="trip_ai_drafter_fab">Open AI Trip Drafter</string>
     <string name="trip_ai_drafter_title">AI Trip Drafter</string>
     <string name="trip_ai_drafter_hint">Ask for a trip idea…</string>
+    <string name="trip_ai_start_date_not_set">Start date, not set</string>
+    <string name="trip_ai_end_date_not_set">End date, not set</string>
+    <string name="trip_ai_start_date_selected">Start date, %1$s</string>
+    <string name="trip_ai_end_date_selected">End date, %1$s</string>
     <string name="trip_ai_drafter_result">Drafted Trip</string>
     <string name="trip_ai_loading_drafter">AI is drafting your trip…</string>
     <string name="trip_ai_retry">Retry</string>
@@ -122,7 +126,7 @@
     <string name="trip_ai_stop_count">Trip stops (%1$d)</string>
     <string name="trip_ai_stop_index">Stop %1$d</string>
     <string name="trip_ai_duration_only">%1$d min</string>
-    <string name="trip_ai_time_and_duration">%1$s • %2$dm</string>
+    <string name="trip_ai_time_and_duration">%1$s • %2$d min</string>
     <string name="trip_ai_error_fallback">Trip drafting failed. Please retry.</string>
     <string name="trip_ai_empty_query">Please enter your trip request.</string>
     <string name="trip_ai_invalid_draft">AI draft is missing usable stops.</string>

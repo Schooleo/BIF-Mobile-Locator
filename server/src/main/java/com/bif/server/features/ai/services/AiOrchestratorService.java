@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -205,10 +206,11 @@ public class AiOrchestratorService {
             GeneratedItinerary itinerary = withRetry(
                     () -> validateGeneratedItinerary(
                             enrichGeneratedItinerary(
-                                    tripDraftingAgent.draft(
+                                    validateRequiredTimeFields(tripDraftingAgent.draft(
                                             query,
                                             resolvedCandidatePlaces,
                                             scheduleHints.promptDirective()),
+                                            scheduleHints),
                                     resolvedCandidatePlaces,
                                     extraction,
                                     scheduleHints,
@@ -218,11 +220,12 @@ public class AiOrchestratorService {
                             scheduleHints),
                     reason -> validateGeneratedItinerary(
                             enrichGeneratedItinerary(
-                                    tripDraftingAgent.retry(
+                                    validateRequiredTimeFields(tripDraftingAgent.retry(
                                             query,
                                             resolvedCandidatePlaces,
                                             reason,
                                             scheduleHints.promptDirective()),
+                                            scheduleHints),
                                     resolvedCandidatePlaces,
                                     extraction,
                                     scheduleHints,
@@ -409,10 +412,10 @@ public class AiOrchestratorService {
                 && searchQueries.stream().noneMatch(effectiveCityBias::equalsIgnoreCase)) {
             searchQueries.add(0, effectiveCityBias);
         }
-        String coordinateQuery = coordinateLocationHint(latitude, longitude);
-        if (coordinateQuery != null
-                && searchQueries.stream().noneMatch(coordinateQuery::equalsIgnoreCase)) {
-            searchQueries.add(0, coordinateQuery);
+        if (coordinateCityBias != null
+                && !coordinateCityBias.equalsIgnoreCase(effectiveCityBias)
+                && searchQueries.stream().noneMatch(coordinateCityBias::equalsIgnoreCase)) {
+            searchQueries.add(0, coordinateCityBias);
         }
 
         return new PlaceSearchExtraction(
@@ -570,6 +573,33 @@ public class AiOrchestratorService {
 
         validateLocationFocus(itinerary, candidatePlaces, extraction, placeById);
 
+        return itinerary;
+    }
+
+    private GeneratedItinerary validateRequiredTimeFields(
+            GeneratedItinerary itinerary,
+            TripScheduleHintExtractor.TripScheduleHints scheduleHints) {
+        if (itinerary == null || itinerary.stops().isEmpty()
+                || (scheduleHints != null && scheduleHints.shouldArrangeDateTime())) {
+            return itinerary;
+        }
+        List<String> missingFields = new ArrayList<>();
+        for (GeneratedStop stop : itinerary.stops()) {
+            if (stop.startTime() == null) {
+                missingFields.add("startTime");
+            }
+            if (stop.endTime() == null) {
+                missingFields.add("endTime");
+            }
+            if (stop.duration() == null) {
+                missingFields.add("duration");
+            }
+            if (!missingFields.isEmpty()) {
+                throw new AiValidationException(
+                        "AI draft missing required time fields: "
+                                + missingFields.stream().distinct().collect(Collectors.joining(", ")));
+            }
+        }
         return itinerary;
     }
 
@@ -737,9 +767,15 @@ public class AiOrchestratorService {
                     noteLanguage);
 
             TimeFields timeFields = resolveTimeFields(stop, plannedDateTime, fallbackStopTime);
-            fallbackStopTime = parseLocalTimeQuietly(timeFields.endTime()) != null
-                    ? parseLocalTimeQuietly(timeFields.endTime()).plusMinutes(TRAVEL_BUFFER_MINUTES)
-                    : fallbackStopTime.plusMinutes(timeFields.durationMinutes() + TRAVEL_BUFFER_MINUTES);
+            LocalTime parsedEndTime = parseLocalTimeQuietly(timeFields.endTime());
+            if (parsedEndTime != null) {
+                LocalTime nextFallbackTime = parsedEndTime.plusMinutes(TRAVEL_BUFFER_MINUTES);
+                fallbackStopTime = nextFallbackTime;
+            } else {
+                LocalTime nextFallbackTime = fallbackStopTime.plusMinutes(
+                        timeFields.durationMinutes() + TRAVEL_BUFFER_MINUTES);
+                fallbackStopTime = nextFallbackTime;
+            }
             enriched.add(new GeneratedStop(
                     stop.placeId(),
                     timeFields.durationMinutes(),
@@ -795,8 +831,8 @@ public class AiOrchestratorService {
         String endTime = normalizeClockTime(stop.endTime());
         if (plannedDateTime != null) {
             startTime = plannedDateTime.toLocalTime().truncatedTo(ChronoUnit.MINUTES).toString();
-            endTime = plannedDateTime.plusMinutes(durationMinutes)
-                    .toLocalTime()
+            OffsetDateTime computedEnd = plannedDateTime.plusMinutes(durationMinutes);
+            endTime = computedEnd.toLocalTime()
                     .truncatedTo(ChronoUnit.MINUTES)
                     .toString();
         }
@@ -1035,6 +1071,7 @@ public class AiOrchestratorService {
             List<Place> candidatePlaces) {
         Map<String, Place> placeById = indexPlaces(candidatePlaces);
         List<AiTripDraftStop> stops = itinerary.stops().stream()
+                .filter(stop -> stop != null && placeById.get(stop.placeId()) != null)
                 .map(stop -> new AiTripDraftStop(
                 stop.placeId(),
                 placeById.get(stop.placeId()),

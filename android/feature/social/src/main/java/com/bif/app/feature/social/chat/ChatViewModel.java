@@ -26,9 +26,6 @@ import com.bif.app.domain.repository.ITripRepository;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -46,7 +43,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext;
 
 @HiltViewModel
 public class ChatViewModel extends ViewModel {
-    private static final DateTimeFormatter AI_DRAFT_DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
 
     private static final String AI_SENDER_USER_ID = "ai-assistant";
     private static final String AI_SENDER_NAME = "AI Trip Drafter";
@@ -162,9 +158,9 @@ public class ChatViewModel extends ViewModel {
     }
 
     public boolean isAuthenticated() {
+        String token = UserPreferences.getAuthToken(appContext);
         return UserPreferences.isLoggedIn(appContext)
-                && UserPreferences.getAuthToken(appContext) != null
-                && !UserPreferences.getAuthToken(appContext).trim().isEmpty();
+                && !trim(token).isEmpty();
     }
 
     public LiveData<String> getSnackbarMessage() {
@@ -1110,22 +1106,13 @@ public class ChatViewModel extends ViewModel {
 
     private String buildDraftQueryWithTripDates(String rawQuery, TripPlan currentTrip) {
         String query = trim(rawQuery);
-        if (query.isEmpty() || currentTrip == null
-                || currentTrip.getStartAt() <= 0L || currentTrip.getEndAt() <= 0L) {
+        if (currentTrip == null) {
             return query;
         }
-        return query
-                + "\n\nTrip date range:"
-                + "\n- Start date: " + formatAiDraftDate(currentTrip.getStartAt())
-                + "\n- End date: " + formatAiDraftDate(currentTrip.getEndAt())
-                + "\nSchedule each stop within this trip date range and return concrete plannedDateTime values when possible.";
-    }
-
-    private String formatAiDraftDate(long millis) {
-        return Instant.ofEpochMilli(millis)
-                .atZone(ZoneId.systemDefault())
-                .toLocalDate()
-                .format(AI_DRAFT_DATE_FORMATTER);
+        return AiDraftPromptBuilder.buildDraftQueryWithDateRange(
+                query,
+                currentTrip.getStartAt(),
+                currentTrip.getEndAt());
     }
 
     private boolean hasTripIdInCurrentTrips(String tripId) {
