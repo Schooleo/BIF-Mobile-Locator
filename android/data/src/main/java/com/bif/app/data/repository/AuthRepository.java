@@ -1,6 +1,8 @@
 package com.bif.app.data.repository;
 
 import com.bif.app.core.network.RestApiService;
+import com.bif.app.core.network.dto.auth.ChangePasswordRequest;
+import com.bif.app.core.network.dto.auth.ChangePasswordResponse;
 import com.bif.app.core.network.dto.auth.ForgotPasswordRequestOtpResponse;
 import com.bif.app.core.network.dto.auth.RequestOtpRequest;
 import com.bif.app.core.network.dto.auth.ResetPasswordRequest;
@@ -119,6 +121,41 @@ public class AuthRepository {
 
             return new Result.Error<>(
                     parseErrorMessage(response, "Reset password failed"),
+                    response.code(),
+                    null);
+        } catch (IOException ioException) {
+            return new Result.Error<>("Network error. Please try again.", 0, ioException);
+        } catch (Exception exception) {
+            return new Result.Error<>("Unexpected error. Please try again.", 0, exception);
+        }
+    }
+
+    public Result<ChangePasswordResponse> changePassword(String currentPassword, String newPassword) {
+        if (isBlank(currentPassword)) {
+            return new Result.Error<>("Current password is required", 0, null);
+        }
+        if (isBlank(newPassword)) {
+            return new Result.Error<>("New password is required", 0, null);
+        }
+
+        try {
+            Response<ChangePasswordResponse> response = restApiService
+                    .changePassword(new ChangePasswordRequest(currentPassword, newPassword))
+                    .execute();
+
+            if (response.isSuccessful() && response.body() != null) {
+                ChangePasswordResponse body = response.body();
+                if (body.success) {
+                    return new Result.Success<>(body);
+                }
+                return new Result.Error<>(
+                        coalesce(body.message, "Change password failed"),
+                        response.code(),
+                        null);
+            }
+
+            return new Result.Error<>(
+                    parseErrorMessage(response, "Change password failed"),
                     response.code(),
                     null);
         } catch (IOException ioException) {

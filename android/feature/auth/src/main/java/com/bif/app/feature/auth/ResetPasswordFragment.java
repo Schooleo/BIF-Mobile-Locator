@@ -22,7 +22,7 @@ import dagger.hilt.android.AndroidEntryPoint;
 @AndroidEntryPoint
 public class ResetPasswordFragment extends Fragment {
 
-    private static final int MIN_PASSWORD_LENGTH = 6;
+    private static final int MIN_PASSWORD_LENGTH = 8;
 
     private ForgotPasswordViewModel viewModel;
     private String email = "";
@@ -106,8 +106,7 @@ public class ResetPasswordFragment extends Fragment {
             }
 
             if (state instanceof ForgotPasswordViewModel.UiState.Error) {
-                String message = ((ForgotPasswordViewModel.UiState.Error) state).getMessage();
-                etPassword.setError(message);
+                etPassword.setError(getString(R.string.password_reset_failed));
                 etPassword.requestFocus();
                 viewModel.clearResetPasswordState();
             }

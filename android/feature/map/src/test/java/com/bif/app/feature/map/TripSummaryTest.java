@@ -7,9 +7,10 @@ import org.junit.Test;
 public class TripSummaryTest {
 
     @Test
-    public void getDurationFormatted_formatsAsMinutesAndSeconds() {
+    public void getDurationParts_returnsMinutesAndSeconds() {
         TripSummary summary = new TripSummary(1000L, 126000L);
 
-        assertEquals("2 phút 5 giây", summary.getDurationFormatted());
+        assertEquals(Long.valueOf(2L), summary.getDurationMinutes());
+        assertEquals(Long.valueOf(5L), summary.getDurationSeconds());
     }
 }

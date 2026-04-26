@@ -51,12 +51,12 @@ public class ForgotPasswordFragment extends Fragment {
         btnSendOtp.setOnClickListener(v -> {
             String email = etEmail.getText().toString().trim();
             if (email.isEmpty()){
-                etEmail.setError("Email is required");
+                etEmail.setError(getString(R.string.email_required));
                 etEmail.requestFocus();
                 return;
             }
             if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-                etEmail.setError("Please enter a valid email");
+                etEmail.setError(getString(R.string.invalid_email_format));
                 etEmail.requestFocus();
                 return;
             }
@@ -92,8 +92,7 @@ public class ForgotPasswordFragment extends Fragment {
             }
 
             if (state instanceof ForgotPasswordViewModel.UiState.Error) {
-                String message = ((ForgotPasswordViewModel.UiState.Error) state).getMessage();
-                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+                Toast.makeText(requireContext(), getString(R.string.request_otp_failed), Toast.LENGTH_SHORT).show();
                 viewModel.clearRequestOtpState();
             }
         });

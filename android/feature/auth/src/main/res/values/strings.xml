@@ -37,7 +37,7 @@
     <string name="new_password_hint">New Password</string>
     <string name="confirm_password_hint">Confirm Password</string>
     <string name="reset_password_button">Reset Password</string>
-    <string name="password_too_short">Password must be at least 6 characters</string>
+    <string name="password_too_short">Password must be at least 8 characters</string>
     <string name="passwords_do_not_match">Passwords do not match</string>
     <string name="password_reset_success">Password reset successfully!</string>
     <string name="password_reset_failed">Password reset failed</string>

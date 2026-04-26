@@ -72,6 +72,7 @@
     <string name="trip_completed_view_destination_details">View Destination Details</string>
     <string name="trip_completed_unknown_destination">Destination</string>
     <string name="trip_completed_unknown_address">Address unavailable</string>
+    <string name="trip_completed_duration_format">%1$d min %2$d sec</string>
     <string name="trip_completed_unknown_duration">--</string>
     <string name="trip_completed_unknown_distance">--</string>
     <string name="trip_completed_unknown_time">--:--</string>

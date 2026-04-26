@@ -5,25 +5,21 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 
-import com.bif.app.core.network.RestApiService;
-import com.bif.app.core.network.dto.auth.ForgotPasswordRequestOtpResponse;
-import com.bif.app.core.network.dto.auth.RequestOtpRequest;
-import com.bif.app.core.network.dto.auth.ResetPasswordRequest;
-import com.bif.app.core.network.dto.auth.ResetPasswordResponse;
-import com.bif.app.core.network.dto.auth.VerifyOtpRequest;
+import com.bif.app.data.repository.AuthRepository;
 import com.bif.app.core.network.dto.auth.VerifyOtpResponse;
 
 import javax.inject.Inject;
 
 import dagger.hilt.android.lifecycle.HiltViewModel;
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @HiltViewModel
 public class ForgotPasswordViewModel extends ViewModel {
 
-    private final RestApiService restApiService;
+    private final AuthRepository authRepository;
+    private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
 
     // ── State (shared UiState for all flows) ─────────────────────────────────
     private final MutableLiveData<UiState> requestOtpState = new MutableLiveData<>(new UiState.Idle());
@@ -35,8 +31,8 @@ public class ForgotPasswordViewModel extends ViewModel {
     private String resetToken = "";
 
     @Inject
-    public ForgotPasswordViewModel(RestApiService restApiService) {
-        this.restApiService = restApiService;
+    public ForgotPasswordViewModel(AuthRepository authRepository) {
+        this.authRepository = authRepository;
     }
 
     // ── Expose state for UI observe ──────────────────────────────────────────
@@ -67,26 +63,15 @@ public class ForgotPasswordViewModel extends ViewModel {
         this.email = email.trim();
         requestOtpState.setValue(new UiState.Loading());
 
-        restApiService.requestForgotPasswordOtp(new RequestOtpRequest(this.email))
-                .enqueue(new Callback<>() {
-                    @Override
-                    public void onResponse(@NonNull Call<ForgotPasswordRequestOtpResponse> call,
-                                           @NonNull Response<ForgotPasswordRequestOtpResponse> response) {
-                        if (response.isSuccessful() && response.body() != null && response.body().success) {
-                            requestOtpState.postValue(new UiState.Success());
-                            return;
-                        }
-
-                        String message = resolveRequestOtpErrorMessage(response);
-                        requestOtpState.postValue(new UiState.Error(message));
-                    }
-
-                    @Override
-                    public void onFailure(@NonNull Call<ForgotPasswordRequestOtpResponse> call,
-                                          @NonNull Throwable t) {
-                        requestOtpState.postValue(new UiState.Error("Network error. Please try again."));
-                    }
-                });
+        ioExecutor.execute(() -> {
+            AuthRepository.Result<?> result = authRepository.requestOtp(this.email);
+            if (result instanceof AuthRepository.Result.Success) {
+                requestOtpState.postValue(new UiState.Success());
+                return;
+            }
+            AuthRepository.Result.Error<?> error = (AuthRepository.Result.Error<?>) result;
+            requestOtpState.postValue(new UiState.Error(error.message));
+        });
     }
 
     // ── Verify OTP ───────────────────────────────────────────────────────────
@@ -95,27 +80,22 @@ public class ForgotPasswordViewModel extends ViewModel {
         this.email = email.trim();
         verifyOtpState.setValue(new UiState.Loading());
 
-        restApiService.verifyForgotPasswordOtp(new VerifyOtpRequest(this.email, otp.trim()))
-                .enqueue(new Callback<>() {
-                    @Override
-                    public void onResponse(@NonNull Call<VerifyOtpResponse> call,
-                                           @NonNull Response<VerifyOtpResponse> response) {
-                        if (response.isSuccessful() && response.body() != null && response.body().success) {
-                            resetToken = response.body().resetToken;
-                            verifyOtpState.postValue(new UiState.Success());
-                            return;
-                        }
-
-                        String message = resolveVerifyOtpErrorMessage(response);
-                        verifyOtpState.postValue(new UiState.Error(message));
-                    }
-
-                    @Override
-                    public void onFailure(@NonNull Call<VerifyOtpResponse> call,
-                                          @NonNull Throwable t) {
-                        verifyOtpState.postValue(new UiState.Error("Network error. Please try again."));
-                    }
-                });
+        ioExecutor.execute(() -> {
+            AuthRepository.Result<VerifyOtpResponse> result = authRepository.verifyOtp(this.email, otp.trim());
+            if (result instanceof AuthRepository.Result.Success) {
+                VerifyOtpResponse data = ((AuthRepository.Result.Success<VerifyOtpResponse>) result).data;
+                String token = data == null ? null : data.resetToken;
+                if (token != null && !token.trim().isEmpty()) {
+                    resetToken = token.trim();
+                    verifyOtpState.postValue(new UiState.Success());
+                } else {
+                    verifyOtpState.postValue(new UiState.Error("OTP verification failed"));
+                }
+                return;
+            }
+            AuthRepository.Result.Error<VerifyOtpResponse> error = (AuthRepository.Result.Error<VerifyOtpResponse>) result;
+            verifyOtpState.postValue(new UiState.Error(error.message));
+        });
     }
 
     // ── Reset Password ───────────────────────────────────────────────────────
@@ -123,26 +103,15 @@ public class ForgotPasswordViewModel extends ViewModel {
     public void resetPassword(@NonNull String resetToken, @NonNull String newPassword) {
         resetPasswordState.setValue(new UiState.Loading());
 
-        restApiService.resetForgotPassword(new ResetPasswordRequest(resetToken.trim(), newPassword))
-                .enqueue(new Callback<>() {
-                    @Override
-                    public void onResponse(@NonNull Call<ResetPasswordResponse> call,
-                                           @NonNull Response<ResetPasswordResponse> response) {
-                        if (response.isSuccessful() && response.body() != null && response.body().success) {
-                            resetPasswordState.postValue(new UiState.Success());
-                            return;
-                        }
-
-                        String message = resolveResetPasswordErrorMessage(response);
-                        resetPasswordState.postValue(new UiState.Error(message));
-                    }
-
-                    @Override
-                    public void onFailure(@NonNull Call<ResetPasswordResponse> call,
-                                          @NonNull Throwable t) {
-                        resetPasswordState.postValue(new UiState.Error("Network error. Please try again."));
-                    }
-                });
+        ioExecutor.execute(() -> {
+            AuthRepository.Result<?> result = authRepository.resetPassword(resetToken.trim(), newPassword);
+            if (result instanceof AuthRepository.Result.Success) {
+                resetPasswordState.postValue(new UiState.Success());
+                return;
+            }
+            AuthRepository.Result.Error<?> error = (AuthRepository.Result.Error<?>) result;
+            resetPasswordState.postValue(new UiState.Error(error.message));
+        });
     }
 
     // ── Clear transient states ───────────────────────────────────────────────
@@ -168,75 +137,10 @@ public class ForgotPasswordViewModel extends ViewModel {
         }
     }
 
-    // ── Error message resolvers ──────────────────────────────────────────────
-
-    private String parseErrorBody(Response<?> response) {
-        if (response != null && response.errorBody() != null) {
-            try {
-                String errorStr = response.errorBody().string();
-                if (errorStr != null && !errorStr.trim().isEmpty()) {
-                    org.json.JSONObject jsonObject = new org.json.JSONObject(errorStr);
-                    if (jsonObject.has("message") && !jsonObject.isNull("message")) {
-                        String msg = jsonObject.getString("message");
-                        if (msg != null && !msg.trim().isEmpty()) {
-                            return msg.trim();
-                        }
-                    }
-                    if (jsonObject.has("error") && !jsonObject.isNull("error")) {
-                        String err = jsonObject.getString("error");
-                        if (err != null && !err.trim().isEmpty()) {
-                            return err.trim();
-                        }
-                    }
-                }
-            } catch (Exception ignored) {
-            }
-        }
-        return null;
-    }
-
-    private String resolveRequestOtpErrorMessage(Response<ForgotPasswordRequestOtpResponse> response) {
-        ForgotPasswordRequestOtpResponse body = response.body();
-        if (body != null && body.message != null && !body.message.trim().isEmpty()) {
-            return body.message.trim();
-        }
-
-        String parsedMessage = parseErrorBody(response);
-        if (parsedMessage != null) {
-            return parsedMessage;
-        }
-
-        if (response.code() == 404) {
-            return "Email does not exist";
-        }
-
-        return "Request OTP failed";
-    }
-
-    private String resolveVerifyOtpErrorMessage(Response<VerifyOtpResponse> response) {
-        String parsedMessage = parseErrorBody(response);
-        if (parsedMessage != null) {
-            return parsedMessage;
-        }
-
-        if (response.code() == 400) {
-            return "Invalid or expired OTP";
-        }
-        return "OTP verification failed";
-    }
-
-    private String resolveResetPasswordErrorMessage(Response<ResetPasswordResponse> response) {
-        ResetPasswordResponse body = response.body();
-        if (body != null && body.message != null && !body.message.trim().isEmpty()) {
-            return body.message.trim();
-        }
-
-        String parsedMessage = parseErrorBody(response);
-        if (parsedMessage != null) {
-            return parsedMessage;
-        }
-
-        return "Password reset failed";
+    @Override
+    protected void onCleared() {
+        super.onCleared();
+        ioExecutor.shutdownNow();
     }
 
     // ── UiState ──────────────────────────────────────────────────────────────

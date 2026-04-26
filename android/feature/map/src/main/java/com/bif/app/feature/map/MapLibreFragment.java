@@ -448,19 +448,39 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 return;
             }
 
-            DialogUtils.showArrivedDialog(requireContext(), tripSummary, new DialogUtils.OnActionClickListener() {
+            final boolean[] actionClicked = {false};
+            final boolean[] cleanupHandled = {false};
+
+            androidx.appcompat.app.AlertDialog arrivedDialog = DialogUtils.showArrivedDialog(requireContext(), tripSummary, new DialogUtils.OnActionClickListener() {
                 @Override
                 public void onViewDetailClicked() {
+                    actionClicked[0] = true;
                     stopRouteAndFocusDestination();
                 }
 
                 @Override
                 public void onCloseClicked() {
+                    actionClicked[0] = true;
                     reopeningPlaceAfterRouteStop = false;
                     viewModel.cancelRoute();
                     clearRouteFeatures();
                 }
             });
+
+            if (arrivedDialog != null) {
+                Runnable dismissCleanup = () -> {
+                    if (cleanupHandled[0] || actionClicked[0]) {
+                        return;
+                    }
+                    cleanupHandled[0] = true;
+                    reopeningPlaceAfterRouteStop = false;
+                    viewModel.cancelRoute();
+                    clearRouteFeatures();
+                };
+
+                arrivedDialog.setOnCancelListener(dialog -> dismissCleanup.run());
+                arrivedDialog.setOnDismissListener(dialog -> dismissCleanup.run());
+            }
         });
 
         setupSearchUi(view);

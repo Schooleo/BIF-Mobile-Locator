@@ -5,49 +5,46 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 
-import com.bif.app.core.network.RestApiService;
-import com.bif.app.core.network.dto.auth.ChangePasswordRequest;
-import com.bif.app.core.network.dto.auth.ChangePasswordResponse;
+import com.bif.app.data.repository.AuthRepository;
 
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
+import javax.inject.Inject;
+
+import dagger.hilt.android.lifecycle.HiltViewModel;
+
+@HiltViewModel
 public class ChangePasswordViewModel extends ViewModel {
 
     private static final int MIN_PASSWORD_LENGTH = 8;
     private final MutableLiveData<UiState> changePasswordState = new MutableLiveData<>(new UiState.Idle());
+    private final AuthRepository authRepository;
+    private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
+
+    @Inject
+    public ChangePasswordViewModel(AuthRepository authRepository) {
+        this.authRepository = authRepository;
+    }
 
     public LiveData<UiState> getChangePasswordState() {
         return changePasswordState;
     }
 
-    public void changePassword(@NonNull RestApiService restApiService,
-                               @NonNull String currentPassword,
+    public void changePassword(@NonNull String currentPassword,
                                @NonNull String newPassword) {
         changePasswordState.setValue(new UiState.Loading());
 
-        restApiService.changePassword(new ChangePasswordRequest(currentPassword, newPassword))
-                .enqueue(new Callback<>() {
-                    @Override
-                    public void onResponse(@NonNull Call<ChangePasswordResponse> call,
-                                           @NonNull Response<ChangePasswordResponse> response) {
-                        if (response.isSuccessful() && response.body() != null && response.body().success) {
-                            changePasswordState.postValue(new UiState.Success());
-                            return;
-                        }
+        ioExecutor.execute(() -> {
+            AuthRepository.Result<?> result = authRepository.changePassword(currentPassword, newPassword);
+            if (result instanceof AuthRepository.Result.Success) {
+                changePasswordState.postValue(new UiState.Success());
+                return;
+            }
 
-                        String message = resolveErrorMessage(response);
-
-                        changePasswordState.postValue(new UiState.Error(message));
-                    }
-
-                    @Override
-                    public void onFailure(@NonNull Call<ChangePasswordResponse> call,
-                                          @NonNull Throwable t) {
-                        changePasswordState.postValue(new UiState.Error("Network error. Please try again."));
-                    }
-                });
+            AuthRepository.Result.Error<?> error = (AuthRepository.Result.Error<?>) result;
+            changePasswordState.postValue(new UiState.Error(error.message));
+        });
     }
 
     public void clearChangePasswordState() {
@@ -84,52 +81,10 @@ public class ChangePasswordViewModel extends ViewModel {
         return ValidationError.NONE;
     }
 
-    private String resolveErrorMessage(Response<ChangePasswordResponse> response) {
-        if (response.body() != null
-                && response.body().message != null
-                && !response.body().message.trim().isEmpty()) {
-            return response.body().message.trim();
-        }
-
-        String parsedErrorBody = parseErrorBody(response);
-        if (parsedErrorBody != null) {
-            return parsedErrorBody;
-        }
-
-        if (response.code() == 400) {
-            return "Current password is incorrect";
-        }
-
-        String responseMessage = response.message();
-        if (responseMessage != null && !responseMessage.trim().isEmpty()) {
-            return responseMessage.trim();
-        }
-
-        return "Unknown error";
-    }
-
-    private String parseErrorBody(Response<?> response) {
-        if (response == null || response.errorBody() == null) {
-            return null;
-        }
-
-        try {
-            String errorStr = response.errorBody().string();
-            if (errorStr == null || errorStr.trim().isEmpty()) {
-                return null;
-            }
-
-            org.json.JSONObject jsonObject = new org.json.JSONObject(errorStr);
-            if (jsonObject.has("message") && !jsonObject.isNull("message")) {
-                String message = jsonObject.getString("message");
-                if (message != null && !message.trim().isEmpty()) {
-                    return message.trim();
-                }
-            }
-        } catch (Exception ignored) {
-        }
-
-        return null;
+    @Override
+    protected void onCleared() {
+        super.onCleared();
+        ioExecutor.shutdownNow();
     }
 
     public abstract static class UiState {

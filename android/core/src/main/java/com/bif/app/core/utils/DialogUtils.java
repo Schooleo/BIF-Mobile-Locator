@@ -16,7 +16,9 @@ public class DialogUtils {
     private static final String TAG = "DialogUtils";
 
     public interface TripSummary {
-        String getDurationFormatted();
+        Long getDurationMinutes();
+
+        Long getDurationSeconds();
 
         @Nullable
         String getDistanceFormatted();
@@ -43,21 +45,22 @@ public class DialogUtils {
                 .show();
     }
 
-    public static void showArrivedDialog(Context context,
-                                         TripSummary summary,
-                                         OnActionClickListener listener) {
+    @Nullable
+    public static AlertDialog showArrivedDialog(Context context,
+                                                TripSummary summary,
+                                                OnActionClickListener listener) {
         if (context == null) {
-            return;
+            return null;
         }
 
         int layoutId = resolveResourceId(context, "layout", "dialog_trip_completed");
         if (layoutId == 0) {
-            return;
+            return null;
         }
 
         View dialogView = LayoutInflater.from(context).inflate(layoutId, null);
         if (dialogView == null) {
-            return;
+            return null;
         }
 
         AlertDialog dialog = new MaterialAlertDialogBuilder(
@@ -76,7 +79,16 @@ public class DialogUtils {
                 dialogView,
                 "tv_trip_complete_duration");
         if (durationText != null && summary != null) {
-            durationText.setText(summary.getDurationFormatted());
+            int durationFormatId = resolveResourceId(context, "string", "trip_completed_duration_format");
+            int unknownDurationId = resolveResourceId(context, "string", "trip_completed_unknown_duration");
+            Long minutes = summary.getDurationMinutes();
+            Long seconds = summary.getDurationSeconds();
+
+            if (durationFormatId != 0 && minutes != null && seconds != null) {
+                durationText.setText(context.getString(durationFormatId, minutes, seconds));
+            } else if (unknownDurationId != 0) {
+                durationText.setText(context.getString(unknownDurationId));
+            }
         }
 
         TextView distanceText = findTextView(
@@ -119,6 +131,7 @@ public class DialogUtils {
         }
 
         dialog.show();
+        return dialog;
     }
 
     private static int resolveResourceId(Context context, String resourceType, String resourceName) {

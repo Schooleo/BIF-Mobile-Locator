@@ -16,7 +16,6 @@ import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 
 import com.bif.app.core.auth.AuthSessionManager;
-import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.utils.UriUtils;
 
 import javax.inject.Inject;
@@ -27,9 +26,6 @@ import dagger.hilt.android.AndroidEntryPoint;
 public class ChangePasswordFragment extends Fragment {
 
     private ChangePasswordViewModel viewModel;
-
-    @Inject
-    RestApiService restApiService;
 
     @Inject
     AuthSessionManager authSessionManager;
@@ -91,7 +87,7 @@ public class ChangePasswordFragment extends Fragment {
                 return;
             }
 
-            viewModel.changePassword(restApiService, currentPassword, newPassword);
+            viewModel.changePassword(currentPassword, newPassword);
         });
     }
 

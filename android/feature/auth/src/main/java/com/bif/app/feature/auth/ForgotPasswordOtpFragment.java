@@ -120,7 +120,11 @@ public class ForgotPasswordOtpFragment extends Fragment {
 
             if (state instanceof ForgotPasswordViewModel.UiState.Error) {
                 String message = ((ForgotPasswordViewModel.UiState.Error) state).getMessage();
-                etOtp.setError(message);
+                if ("Invalid or expired OTP".equalsIgnoreCase(message)) {
+                    etOtp.setError(getString(R.string.otp_invalid));
+                } else {
+                    etOtp.setError(getString(R.string.otp_verification_failed));
+                }
                 etOtp.requestFocus();
                 viewModel.clearVerifyOtpState();
             }
@@ -133,8 +137,7 @@ public class ForgotPasswordOtpFragment extends Fragment {
                 Toast.makeText(requireContext(), R.string.otp_resent, Toast.LENGTH_SHORT).show();
                 viewModel.clearRequestOtpState();
             } else if (state instanceof ForgotPasswordViewModel.UiState.Error) {
-                String message = ((ForgotPasswordViewModel.UiState.Error) state).getMessage();
-                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+                Toast.makeText(requireContext(), getString(R.string.request_otp_failed), Toast.LENGTH_SHORT).show();
                 viewModel.clearRequestOtpState();
             }
         });

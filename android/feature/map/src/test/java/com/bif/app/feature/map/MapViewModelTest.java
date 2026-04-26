@@ -668,8 +668,11 @@ public class MapViewModelTest {
         TripSummary tripSummary = navigationEvent.getContentIfNotHandled();
         assertNotNull(tripSummary);
         assertTrue(tripSummary.getEndTime() >= tripSummary.getStartTime());
-        assertTrue(tripSummary.getDurationFormatted().contains("phút"));
-        assertTrue(tripSummary.getDurationFormatted().contains("giây"));
+        assertNotNull(tripSummary.getDurationMinutes());
+        assertNotNull(tripSummary.getDurationSeconds());
+        assertTrue(tripSummary.getDurationMinutes() >= 0L);
+        assertTrue(tripSummary.getDurationSeconds() >= 0L);
+        assertTrue(tripSummary.getDurationSeconds() < 60L);
         assertFalse(viewModel.getCurrentRouteSession().following);
     }
 

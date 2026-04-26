@@ -69,7 +69,7 @@ public interface RestApiService {
     @POST("auth/logout")
     Call<Void> logout(@Body RefreshTokenRequest request);
 
-        @POST("/api/auth/change-password")
+        @POST("auth/change-password")
         Call<ChangePasswordResponse> changePassword(@Body ChangePasswordRequest request);
 
     @GET("auth/me")

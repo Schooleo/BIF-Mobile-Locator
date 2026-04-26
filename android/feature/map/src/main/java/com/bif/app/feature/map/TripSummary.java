@@ -5,7 +5,6 @@ import androidx.annotation.Nullable;
 
 import com.bif.app.core.utils.DialogUtils;
 
-import java.util.Locale;
 import java.util.Objects;
 
 public final class TripSummary implements DialogUtils.TripSummary {
@@ -38,13 +37,20 @@ public final class TripSummary implements DialogUtils.TripSummary {
 
     @NonNull
     @Override
-    public String getDurationFormatted() {
+    public Long getDurationMinutes() {
+        return getDurationSecondsTotal() / 60L;
+    }
+
+    @NonNull
+    @Override
+    public Long getDurationSeconds() {
+        return getDurationSecondsTotal() % 60L;
+    }
+
+    private long getDurationSecondsTotal() {
         long safeStart = Math.max(0L, startTime);
         long safeEnd = Math.max(0L, endTime);
-        long durationSeconds = Math.max(0L, (safeEnd - safeStart) / 1000L);
-        long minutes = durationSeconds / 60L;
-        long seconds = durationSeconds % 60L;
-        return String.format(Locale.getDefault(), "%d phút %d giây", minutes, seconds);
+        return Math.max(0L, (safeEnd - safeStart) / 1000L);
     }
 
     @Nullable
