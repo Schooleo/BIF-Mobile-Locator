@@ -2,6 +2,7 @@ package com.bif.server;
 
 import com.bif.server.features.auth.repositories.RefreshTokenRepository;
 import com.bif.server.features.auth.repositories.RevokedAccessTokenRepository;
+import com.bif.server.features.auth.repositories.PasswordResetOtpRepository;
 import com.bif.server.features.chat.repositories.ChatMessageRepository;
 import com.bif.server.features.favorite.repositories.FavoriteRepository;
 import com.bif.server.features.friendship.repositories.FriendshipRepository;
@@ -71,6 +72,9 @@ class ServerApplicationTests {
 
     @MockitoBean
     private RefreshTokenRepository refreshTokenRepository;
+
+    @MockitoBean
+    private PasswordResetOtpRepository passwordResetOtpRepository;
 
     @MockitoBean
     private RevokedAccessTokenRepository revokedAccessTokenRepository;
