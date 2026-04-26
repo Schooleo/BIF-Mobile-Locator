@@ -79,6 +79,7 @@
                 android:background="@android:color/transparent"
                 android:hint="@string/trip_search_places_hint"
                 android:imeOptions="actionSearch"
+                android:importantForAutofill="no"
                 android:inputType="text"
                 android:maxLines="1"
                 android:textColor="?attr/colorOnSurface"
@@ -86,8 +87,8 @@
 
             <ImageButton
                 android:id="@+id/btn_clear_search"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
                 android:background="@android:color/transparent"
                 android:contentDescription="@string/close"
                 android:src="@android:drawable/ic_menu_close_clear_cancel"
@@ -98,7 +99,8 @@
                 android:id="@+id/btn_ai_toggle"
                 android:layout_width="32dp"
                 android:layout_height="32dp"
-                android:layout_marginStart="4dp"
+                android:layout_marginStart="8dp"
+                android:paddingTop="6dp"
                 android:background="@drawable/bg_ai_toggle_sparkle"
                 android:contentDescription="@string/trip_ai_toggle"
                 android:src="@drawable/ic_sparkle"

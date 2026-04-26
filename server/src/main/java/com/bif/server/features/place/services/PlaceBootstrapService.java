@@ -19,10 +19,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
+import com.mongodb.MongoException;
+import com.mongodb.bulk.BulkWriteResult;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
+import org.springframework.dao.DataAccessException;
+import org.springframework.data.mongodb.core.BulkOperations;
+import org.springframework.data.mongodb.core.FindAndReplaceOptions;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 
 import com.bif.server.common.models.Location;
@@ -44,6 +53,7 @@ import lombok.extern.slf4j.Slf4j;
 public class PlaceBootstrapService implements ApplicationRunner {
 
     private final PlaceRepository placeRepository;
+    private final MongoTemplate mongoTemplate;
     private final ObjectMapper objectMapper;
     /*  */
     // Points to the Docker volume mapped in docker-compose.yml
@@ -74,7 +84,14 @@ public class PlaceBootstrapService implements ApplicationRunner {
     @Value("${app.bootstrap.filter.reject-audit.max-lines:5000}")
     private int rejectAuditMaxLines = 5000;
 
-    private static final int BATCH_SIZE = 1000;
+    @Value("${app.bootstrap.batch-size:250}")
+    private int batchSize = 250;
+
+    @Value("${app.bootstrap.batch-write.max-attempts:3}")
+    private int batchWriteMaxAttempts = 3;
+
+    @Value("${app.bootstrap.batch-write.retry-backoff-ms:500}")
+    private long batchWriteRetryBackoffMs = 500;
     private static final Pattern DISTRICT_PATTERN = Pattern.compile(
             "\\b(?:district|quan|quận|q)\\s*([0-9]{1,2})\\b",
             Pattern.CASE_INSENSITIVE);
@@ -149,8 +166,8 @@ public class PlaceBootstrapService implements ApplicationRunner {
                     }
                 }
 
-                if (batch.size() >= BATCH_SIZE) {
-                    placeRepository.saveAll(batch);
+                if (batch.size() >= batchSize) {
+                    persistBatch(batch);
                     totalImported += batch.size();
                     log.info("Imported {} places into MongoDB...", totalImported);
                     batch.clear();
@@ -159,7 +176,7 @@ public class PlaceBootstrapService implements ApplicationRunner {
 
             // Save the final remaining items
             if (!batch.isEmpty()) {
-                placeRepository.saveAll(batch);
+                persistBatch(batch);
                 totalImported += batch.size();
             }
 
@@ -183,6 +200,76 @@ public class PlaceBootstrapService implements ApplicationRunner {
 
         } catch (Exception e) {
             log.error("❌ Failed to parse and bootstrap places.geojson", e);
+        }
+    }
+
+
+    private void persistBatch(List<Place> batch) {
+        persistBatch(batch, Math.max(1, batchWriteMaxAttempts));
+    }
+
+    private void persistBatch(List<Place> batch, int attemptsRemaining) {
+        try {
+            bulkUpsert(batch);
+        } catch (DataAccessException | MongoException e) {
+            if (attemptsRemaining > 1) {
+                int attemptNumber = Math.max(1, batchWriteMaxAttempts - attemptsRemaining + 1);
+                log.warn(
+                        "MongoDB place bootstrap batch write failed on attempt {}/{} for {} places; retrying: {}",
+                        attemptNumber,
+                        batchWriteMaxAttempts,
+                        batch.size(),
+                        e.getMessage());
+                sleepBeforeRetry(attemptNumber);
+                persistBatch(batch, attemptsRemaining - 1);
+                return;
+            }
+
+            if (batch.size() > 1) {
+                int midpoint = batch.size() / 2;
+                log.warn(
+                        "MongoDB place bootstrap batch write still failing after {} attempts; "
+                                + "splitting {} places into {} and {}.",
+                        batchWriteMaxAttempts,
+                        batch.size(),
+                        midpoint,
+                        batch.size() - midpoint);
+                persistBatch(new ArrayList<>(batch.subList(0, midpoint)));
+                persistBatch(new ArrayList<>(batch.subList(midpoint, batch.size())));
+                return;
+            }
+
+            throw e;
+        }
+    }
+
+    private void bulkUpsert(List<Place> batch) {
+        BulkOperations bulkOperations = mongoTemplate.bulkOps(BulkOperations.BulkMode.UNORDERED, Place.class);
+        FindAndReplaceOptions upsertOptions = FindAndReplaceOptions.options().upsert();
+        for (Place place : batch) {
+            bulkOperations.replaceOne(
+                    Query.query(Criteria.where("_id").is(place.getId())),
+                    place,
+                    upsertOptions);
+        }
+        BulkWriteResult result = bulkOperations.execute();
+        log.debug(
+                "MongoDB place bootstrap bulk upsert acknowledged={}, matched={}, modified={}, upserted={}",
+                result.wasAcknowledged(),
+                result.getMatchedCount(),
+                result.getModifiedCount(),
+                result.getUpserts().size());
+    }
+
+    private void sleepBeforeRetry(int attemptNumber) {
+        if (batchWriteRetryBackoffMs <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(batchWriteRetryBackoffMs * attemptNumber);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while retrying MongoDB place bootstrap batch write", e);
         }
     }
 

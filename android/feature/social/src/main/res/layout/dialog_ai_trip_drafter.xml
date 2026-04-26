@@ -58,6 +58,40 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/social_spacing_md"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tv_ai_start_date"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@drawable/bg_search_input"
+                android:backgroundTint="?attr/colorListItemBackground"
+                android:drawablePadding="8dp"
+                android:hint="@string/start_date"
+                android:padding="@dimen/social_spacing_md"
+                android:textColor="?attr/colorTextPrimary"
+                android:textColorHint="?attr/colorTextSecondary" />
+
+            <TextView
+                android:id="@+id/tv_ai_end_date"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/social_spacing_sm"
+                android:layout_weight="1"
+                android:background="@drawable/bg_search_input"
+                android:backgroundTint="?attr/colorListItemBackground"
+                android:drawablePadding="8dp"
+                android:hint="@string/end_date"
+                android:padding="@dimen/social_spacing_md"
+                android:textColor="?attr/colorTextPrimary"
+                android:textColorHint="?attr/colorTextSecondary" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/social_spacing_md"
             android:gravity="end"
             android:orientation="horizontal">
 
@@ -230,6 +264,40 @@
             android:padding="@dimen/social_spacing_md"
             android:textColor="?attr/colorTextPrimary"
             android:textColorHint="?attr/colorTextSecondary" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/social_spacing_md"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tv_ai_error_start_date"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@drawable/bg_search_input"
+                android:backgroundTint="?attr/colorListItemBackground"
+                android:drawablePadding="8dp"
+                android:hint="@string/start_date"
+                android:padding="@dimen/social_spacing_md"
+                android:textColor="?attr/colorTextPrimary"
+                android:textColorHint="?attr/colorTextSecondary" />
+
+            <TextView
+                android:id="@+id/tv_ai_error_end_date"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/social_spacing_sm"
+                android:layout_weight="1"
+                android:background="@drawable/bg_search_input"
+                android:backgroundTint="?attr/colorListItemBackground"
+                android:drawablePadding="8dp"
+                android:hint="@string/end_date"
+                android:padding="@dimen/social_spacing_md"
+                android:textColor="?attr/colorTextPrimary"
+                android:textColorHint="?attr/colorTextSecondary" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"

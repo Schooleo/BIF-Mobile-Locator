@@ -201,8 +201,8 @@ public class CommonChatFragment extends Fragment {
             }
         });
         viewModel.getAiBadgesEnabled().observe(getViewLifecycleOwner(), enabled -> {
-            boolean isEnabled = supportsAiModes && Boolean.TRUE.equals(enabled);
-            aiBadgesRow.setVisibility(isEnabled ? View.VISIBLE : View.GONE);
+            boolean isEnabled = supportsAiModes && Boolean.TRUE.equals(enabled) && viewModel.isAuthenticated();
+            aiBadgesRow.setVisibility(supportsAiModes ? View.VISIBLE : View.GONE);
             btnAiDraftTrip.setClickable(true);
             btnAiSuggestPlaces.setClickable(true);
             float alpha = isEnabled ? 1f : 0.45f;
@@ -264,6 +264,10 @@ public class CommonChatFragment extends Fragment {
         });
 
         btnAiDraftTrip.setOnClickListener(v -> {
+            if (!viewModel.isAuthenticated()) {
+                AppSnackbar.show(requireContext(), R.string.social_login_required_ai);
+                return;
+            }
             if (!viewModel.isAiAvailable()) {
                 AppSnackbar.show(requireContext(), R.string.chat_ai_offline);
                 return;
@@ -272,6 +276,10 @@ public class CommonChatFragment extends Fragment {
             focusInputAndShowKeyboard(etMessage);
         });
         btnAiSuggestPlaces.setOnClickListener(v -> {
+            if (!viewModel.isAuthenticated()) {
+                AppSnackbar.show(requireContext(), R.string.social_login_required_ai);
+                return;
+            }
             if (!viewModel.isAiAvailable()) {
                 AppSnackbar.show(requireContext(), R.string.chat_ai_offline);
                 return;
@@ -735,7 +743,9 @@ public class CommonChatFragment extends Fragment {
 
             String note = stop.optString("note", "").trim();
             String plannedDateTime = stop.optString("plannedDateTime", "").trim();
-            int durationMinutes = Math.max(0, stop.optInt("durationMinutes", 0));
+            String startTime = stop.optString("startTime", "").trim();
+            String endTime = stop.optString("endTime", "").trim();
+            int durationMinutes = Math.max(0, stop.optInt("duration", stop.optInt("durationMinutes", 0)));
             Double latitude = optNullableDouble(stop, "latitude");
             Double longitude = optNullableDouble(stop, "longitude");
 
@@ -745,6 +755,8 @@ public class CommonChatFragment extends Fragment {
                     address,
                     note,
                     plannedDateTime,
+                    startTime,
+                    endTime,
                     durationMinutes,
                     latitude,
                     longitude

@@ -171,6 +171,9 @@ type AiTripDraftStop {
   placeId: ID!
   place: Place!
   durationMinutes: Int!
+  startTime: String
+  endTime: String
+  duration: Int
   note: String
   plannedDateTime: String
 }

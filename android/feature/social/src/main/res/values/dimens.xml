@@ -3,6 +3,7 @@
     <dimen name="social_dialog_padding">24dp</dimen>
     <dimen name="social_icon_button_size">32dp</dimen>
     <dimen name="social_spacing_xs">4dp</dimen>
+    <dimen name="social_spacing_sm">8dp</dimen>
     <dimen name="social_spacing_md">12dp</dimen>
     <dimen name="social_spacing_lg">20dp</dimen>
     <dimen name="social_dialog_primary_button_height">56dp</dimen>

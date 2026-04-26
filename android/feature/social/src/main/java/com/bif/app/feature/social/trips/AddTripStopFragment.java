@@ -23,6 +23,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import com.bif.app.core.utils.AppSnackbar;
+import com.bif.app.core.utils.UserPreferences;
 import androidx.annotation.Nullable;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.core.graphics.drawable.DrawableCompat;
@@ -212,7 +213,13 @@ public class AddTripStopFragment extends Fragment {
         rvResults.setAdapter(adapter);
 
         btnBack.setOnClickListener(v -> Navigation.findNavController(v).popBackStack());
-        btnAiToggle.setOnClickListener(v -> viewModel.toggleAiMode());
+        btnAiToggle.setOnClickListener(v -> {
+            if (!isAuthenticated()) {
+                AppSnackbar.show(requireContext(), R.string.social_login_required_ai);
+                return;
+            }
+            viewModel.toggleAiMode();
+        });
         btnClearSearch.setOnClickListener(v -> etSearch.setText(""));
         btnPreviousPlace.setOnClickListener(v -> selectRelativeResult(-1));
         btnNextPlace.setOnClickListener(v -> selectRelativeResult(1));
@@ -227,6 +234,10 @@ public class AddTripStopFragment extends Fragment {
                     || actionId == EditorInfo.IME_ACTION_DONE
                     || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER);
             if (submit) {
+                if (Boolean.TRUE.equals(viewModel.getAiModeEnabled().getValue()) && !isAuthenticated()) {
+                    AppSnackbar.show(requireContext(), R.string.social_login_required_ai);
+                    return true;
+                }
                 updateAiSearchBiasFromMapCenter();
                 viewModel.search(v.getText() == null ? "" : v.getText().toString());
                 return true;
@@ -281,14 +292,7 @@ public class AddTripStopFragment extends Fragment {
     }
 
     private void observeUi() {
-        viewModel.getAiToggleEnabled().observe(getViewLifecycleOwner(), enabled -> {
-            boolean isEnabled = Boolean.TRUE.equals(enabled);
-            btnAiToggle.setEnabled(isEnabled);
-            btnAiToggle.setAlpha(isEnabled ? 1f : 0.4f);
-            if (!isEnabled) {
-                styleSearchBarForAi(false);
-            }
-        });
+        viewModel.getAiToggleEnabled().observe(getViewLifecycleOwner(), enabled -> updateAiToggleAuthUi());
 
         viewModel.getAiModeEnabled().observe(getViewLifecycleOwner(), enabled -> {
             boolean aiEnabled = Boolean.TRUE.equals(enabled);
@@ -365,6 +369,27 @@ public class AddTripStopFragment extends Fragment {
                 tvEmpty.setVisibility(View.GONE);
             }
         });
+    }
+
+    private boolean isAuthenticated() {
+        return UserPreferences.isLoggedIn(requireContext())
+                && UserPreferences.getAuthToken(requireContext()) != null
+                && !UserPreferences.getAuthToken(requireContext()).trim().isEmpty();
+    }
+
+    private void updateAiToggleAuthUi() {
+        if (btnAiToggle == null || viewModel == null) {
+            return;
+        }
+        Boolean enabled = viewModel.getAiToggleEnabled().getValue();
+        boolean isOnline = Boolean.TRUE.equals(enabled);
+        boolean isAvailable = isOnline && isAuthenticated();
+        btnAiToggle.setEnabled(true);
+        btnAiToggle.setClickable(true);
+        btnAiToggle.setAlpha(isAvailable ? 1f : 0.4f);
+        if (!isAvailable) {
+            styleSearchBarForAi(false);
+        }
     }
 
     private void updateAiSearchBiasFromMapCenter() {
@@ -867,6 +892,7 @@ public class AddTripStopFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        updateAiToggleAuthUi();
         if (mapView != null) {
             mapView.onResume();
         }

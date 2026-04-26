@@ -162,6 +162,11 @@ public class ChatRepository implements IChatRepository {
             return result;
         }
 
+        if (!UserPreferences.isLoggedIn(context) || isBlank(UserPreferences.getAuthToken(context))) {
+            result.setValue(failureResult("UNAUTHORIZED", new ArrayList<>()));
+            return result;
+        }
+
         if (!networkMonitor.isOnline()) {
             result.setValue(failureResult("OFFLINE", new ArrayList<>()));
             return result;
@@ -501,6 +506,9 @@ public class ChatRepository implements IChatRepository {
                         stopPayload.placeId,
                         place,
                         Math.max(0, stopPayload.durationMinutes),
+                        stopPayload.startTime,
+                        stopPayload.endTime,
+                        stopPayload.duration,
                         stopPayload.note,
                         stopPayload.plannedDateTime
                 ));

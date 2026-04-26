@@ -1,6 +1,12 @@
 package com.bif.server.features.ai.services;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -37,6 +43,7 @@ import com.bif.server.features.place.models.Place;
 public class AiOrchestratorService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AiOrchestratorService.class);
+    private static final ZoneId DEFAULT_AI_TIME_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final PlaceSuggestionAgent placeSuggestionAgent;
     private final TripDraftingAgent tripDraftingAgent;
@@ -44,20 +51,9 @@ public class AiOrchestratorService {
     private final AiRequestGuardService aiRequestGuardService;
     private final OllamaProperties ollamaProperties;
     private final TripScheduleHintExtractor tripScheduleHintExtractor;
+    private final VibeHintNormalizer vibeHintNormalizer;
 
     private static final int TRAVEL_BUFFER_MINUTES = 30;
-    private static final double HCM_MIN_LAT = 10.30d;
-    private static final double HCM_MAX_LAT = 11.20d;
-    private static final double HCM_MIN_LNG = 106.35d;
-    private static final double HCM_MAX_LNG = 107.05d;
-    private static final double HANOI_MIN_LAT = 20.80d;
-    private static final double HANOI_MAX_LAT = 21.30d;
-    private static final double HANOI_MIN_LNG = 105.60d;
-    private static final double HANOI_MAX_LNG = 106.10d;
-    private static final double DA_NANG_MIN_LAT = 15.95d;
-    private static final double DA_NANG_MAX_LAT = 16.25d;
-    private static final double DA_NANG_MIN_LNG = 107.95d;
-    private static final double DA_NANG_MAX_LNG = 108.40d;
 
     public AiOrchestratorService(
             PlaceSuggestionAgent placeSuggestionAgent,
@@ -65,13 +61,15 @@ public class AiOrchestratorService {
             AiSearchOrchestratorService aiSearchOrchestratorService,
             AiRequestGuardService aiRequestGuardService,
             OllamaProperties ollamaProperties,
-            TripScheduleHintExtractor tripScheduleHintExtractor) {
+            TripScheduleHintExtractor tripScheduleHintExtractor,
+            VibeHintNormalizer vibeHintNormalizer) {
         this.placeSuggestionAgent = placeSuggestionAgent;
         this.tripDraftingAgent = tripDraftingAgent;
         this.aiSearchOrchestratorService = aiSearchOrchestratorService;
         this.aiRequestGuardService = aiRequestGuardService;
         this.ollamaProperties = ollamaProperties;
         this.tripScheduleHintExtractor = tripScheduleHintExtractor;
+        this.vibeHintNormalizer = vibeHintNormalizer;
     }
 
     public AiPlaceSuggestionResult suggestPlacesFromQuery(String query) {
@@ -173,6 +171,7 @@ public class AiOrchestratorService {
         List<String> searchQueries = List.of();
         TripScheduleHintExtractor.TripScheduleHints scheduleHints
                 = tripScheduleHintExtractor.extract(query);
+        AiGenerationConstraints constraints = buildGenerationConstraints(query, scheduleHints);
         try {
             PlaceSearchExtraction extraction = withRetry(
                     () -> placeSuggestionAgent.extract(query),
@@ -182,7 +181,7 @@ public class AiOrchestratorService {
             searchQueries = extraction.searchQueries().isEmpty()
                     ? extraction.keywords()
                     : extraction.searchQueries();
-            candidatePlaces = aiSearchOrchestratorService.resolveCandidates(extraction);
+            candidatePlaces = resolveContextAwareCandidates(extraction, constraints, warnings);
             if (candidatePlaces.isEmpty()) {
                 warnings.add("No candidate places were available for drafting.");
                 LOGGER.warn(
@@ -326,6 +325,44 @@ public class AiOrchestratorService {
         return focusedCandidates;
     }
 
+
+    private AiGenerationConstraints buildGenerationConstraints(
+            String query,
+            TripScheduleHintExtractor.TripScheduleHints scheduleHints) {
+        LocalTime preferredStartTime = scheduleHints == null ? null : scheduleHints.preferredStartTime();
+        LocalTime preferredEndTime = scheduleHints == null ? null : scheduleHints.preferredEndTime();
+        List<String> targetVibes = vibeHintNormalizer.extractTargetVibes(query);
+        return AiGenerationConstraints.of(preferredStartTime, preferredEndTime, targetVibes);
+    }
+
+    private List<Place> resolveContextAwareCandidates(
+            PlaceSearchExtraction extraction,
+            AiGenerationConstraints constraints,
+            List<String> warnings) {
+        if (constraints == null || !constraints.hasTargetVibes()) {
+            List<Place> candidates = aiSearchOrchestratorService.resolveCandidates(extraction);
+            return candidates == null ? List.of() : candidates;
+        }
+
+        List<Place> constrainedCandidates = aiSearchOrchestratorService.resolveCandidates(extraction, constraints);
+        if (constrainedCandidates == null) {
+            constrainedCandidates = List.of();
+        }
+        if (!constrainedCandidates.isEmpty()) {
+            warnings.add("Applied schedule/vibe context before drafting candidates.");
+            return constrainedCandidates;
+        }
+
+        List<Place> fallbackCandidates = aiSearchOrchestratorService.resolveCandidates(extraction);
+        if (fallbackCandidates == null) {
+            fallbackCandidates = List.of();
+        }
+        if (!fallbackCandidates.isEmpty()) {
+            warnings.add("Relaxed AI hint constraints because the context-aware search returned no places.");
+        }
+        return fallbackCandidates;
+    }
+
     private AiPlaceSuggestionResult deniedSuggestion(AiRequestDecision decision) {
         return new AiPlaceSuggestionResult(
                 List.of(),
@@ -348,7 +385,7 @@ public class AiOrchestratorService {
         }
 
         String normalizedCityBias = normalizeBias(cityBias);
-        String coordinateCityBias = inferCityBiasFromCoordinates(latitude, longitude);
+        String coordinateCityBias = coordinateLocationHint(latitude, longitude);
         String locationHint = extraction.locationHint();
         boolean locationHintBackedByTerms = isLocationHintBackedByTerms(extraction, locationHint);
 
@@ -372,8 +409,10 @@ public class AiOrchestratorService {
                 && searchQueries.stream().noneMatch(effectiveCityBias::equalsIgnoreCase)) {
             searchQueries.add(0, effectiveCityBias);
         }
-        if (isValidCoordinates(latitude, longitude)) {
-            searchQueries.add(0, String.format("near %.6f, %.6f", latitude, longitude));
+        String coordinateQuery = coordinateLocationHint(latitude, longitude);
+        if (coordinateQuery != null
+                && searchQueries.stream().noneMatch(coordinateQuery::equalsIgnoreCase)) {
+            searchQueries.add(0, coordinateQuery);
         }
 
         return new PlaceSearchExtraction(
@@ -427,37 +466,11 @@ public class AiOrchestratorService {
                 .trim();
     }
 
-    private String inferCityBiasFromCoordinates(Double latitude, Double longitude) {
+    private String coordinateLocationHint(Double latitude, Double longitude) {
         if (!isValidCoordinates(latitude, longitude)) {
             return null;
         }
-
-        if (isWithinBounds(latitude, longitude, HCM_MIN_LAT, HCM_MAX_LAT, HCM_MIN_LNG, HCM_MAX_LNG)) {
-            return "ho chi minh city";
-        }
-        if (isWithinBounds(latitude, longitude, HANOI_MIN_LAT, HANOI_MAX_LAT, HANOI_MIN_LNG, HANOI_MAX_LNG)) {
-            return "hanoi";
-        }
-        if (isWithinBounds(latitude, longitude, DA_NANG_MIN_LAT, DA_NANG_MAX_LAT, DA_NANG_MIN_LNG, DA_NANG_MAX_LNG)) {
-            return "da nang";
-        }
-
-        return null;
-    }
-
-    private boolean isWithinBounds(
-            Double latitude,
-            Double longitude,
-            double minLat,
-            double maxLat,
-            double minLng,
-            double maxLng) {
-        return latitude != null
-                && longitude != null
-                && latitude >= minLat
-                && latitude <= maxLat
-                && longitude >= minLng
-                && longitude <= maxLng;
+        return String.format(Locale.ROOT, "near %.6f, %.6f", latitude, longitude);
     }
 
     private boolean isValidCoordinates(Double latitude, Double longitude) {
@@ -543,10 +556,8 @@ public class AiOrchestratorService {
                 continue;
             }
 
-            OffsetDateTime current;
-            try {
-                current = OffsetDateTime.parse(stop.plannedDateTime());
-            } catch (DateTimeParseException e) {
+            OffsetDateTime current = parseDateTimeQuietly(stop.plannedDateTime());
+            if (current == null) {
                 throw new AiValidationException("AI draft included an invalid plannedDateTime value.");
             }
 
@@ -659,6 +670,9 @@ public class AiOrchestratorService {
             normalizedStops.add(new GeneratedStop(
                     replacementPlaceId,
                     stop.durationMinutes(),
+                    stop.startTime(),
+                    stop.endTime(),
+                    stop.duration(),
                     stop.note(),
                     stop.plannedDateTime()));
         }
@@ -691,6 +705,9 @@ public class AiOrchestratorService {
         int stopsPerDay = Math.max(1, (int) Math.ceil((double) stops.size() / daySpan));
         OffsetDateTime[] dayCursor = initializeDayCursor(initialStart, daySpan);
         NoteLanguage noteLanguage = resolveNoteLanguage(userQuery, extraction);
+        LocalTime fallbackStopTime = scheduleHints.preferredStartTime() != null
+                ? scheduleHints.preferredStartTime()
+                : LocalTime.of(9, 0);
 
         List<GeneratedStop> enriched = new ArrayList<>(stops.size());
         for (int i = 0; i < stops.size(); i++) {
@@ -719,9 +736,16 @@ public class AiOrchestratorService {
                     plannedDateTime,
                     noteLanguage);
 
+            TimeFields timeFields = resolveTimeFields(stop, plannedDateTime, fallbackStopTime);
+            fallbackStopTime = parseLocalTimeQuietly(timeFields.endTime()) != null
+                    ? parseLocalTimeQuietly(timeFields.endTime()).plusMinutes(TRAVEL_BUFFER_MINUTES)
+                    : fallbackStopTime.plusMinutes(timeFields.durationMinutes() + TRAVEL_BUFFER_MINUTES);
             enriched.add(new GeneratedStop(
                     stop.placeId(),
-                    stop.durationMinutes(),
+                    timeFields.durationMinutes(),
+                    timeFields.startTime(),
+                    timeFields.endTime(),
+                    timeFields.durationMinutes(),
                     note,
                     outputPlannedDateTime));
         }
@@ -759,12 +783,84 @@ public class AiOrchestratorService {
         return cursor;
     }
 
-    private OffsetDateTime parseDateTimeQuietly(String value) {
+
+    private TimeFields resolveTimeFields(
+            GeneratedStop stop,
+            OffsetDateTime plannedDateTime,
+            LocalTime fallbackStartTime) {
+        int durationMinutes = stop.durationMinutes() != null
+                ? stop.durationMinutes()
+                : (stop.duration() != null ? stop.duration() : 60);
+        String startTime = normalizeClockTime(stop.startTime());
+        String endTime = normalizeClockTime(stop.endTime());
+        if (plannedDateTime != null) {
+            startTime = plannedDateTime.toLocalTime().truncatedTo(ChronoUnit.MINUTES).toString();
+            endTime = plannedDateTime.plusMinutes(durationMinutes)
+                    .toLocalTime()
+                    .truncatedTo(ChronoUnit.MINUTES)
+                    .toString();
+        }
+        if (startTime == null && fallbackStartTime != null) {
+            startTime = fallbackStartTime.truncatedTo(ChronoUnit.MINUTES).toString();
+        }
+        if (startTime != null && endTime == null) {
+            LocalTime parsed = parseLocalTimeQuietly(startTime);
+            if (parsed != null) {
+                endTime = parsed.plusMinutes(durationMinutes).toString();
+            }
+        }
+        return new TimeFields(durationMinutes, startTime, endTime);
+    }
+
+    private String normalizeClockTime(String value) {
+        LocalTime parsed = parseLocalTimeQuietly(value);
+        return parsed == null ? null : parsed.truncatedTo(ChronoUnit.MINUTES).toString();
+    }
+
+    private LocalTime parseLocalTimeQuietly(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
         try {
-            return OffsetDateTime.parse(value);
+            return LocalTime.parse(value.trim());
+        } catch (DateTimeParseException ignored) {
+            return null;
+        }
+    }
+
+    private OffsetDateTime parseDateTimeQuietly(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.trim();
+
+        try {
+            return OffsetDateTime.parse(normalized);
+        } catch (DateTimeParseException ignored) {
+            // Fall through to permissive parsing.
+        }
+
+        try {
+            return Instant.parse(normalized).atOffset(ZoneOffset.UTC);
+        } catch (DateTimeParseException ignored) {
+            // Fall through to permissive parsing.
+        }
+
+        String normalizedWithT = normalized.contains("T")
+                ? normalized
+                : normalized.replace(' ', 'T');
+        try {
+            return LocalDateTime.parse(normalizedWithT)
+                    .atZone(DEFAULT_AI_TIME_ZONE)
+                    .toOffsetDateTime();
+        } catch (DateTimeParseException ignored) {
+            // Fall through to date-only parsing.
+        }
+
+        try {
+            return LocalDate.parse(normalized)
+                    .atStartOfDay(DEFAULT_AI_TIME_ZONE)
+                    .toOffsetDateTime();
         } catch (DateTimeParseException ignored) {
             return null;
         }
@@ -891,6 +987,9 @@ public class AiOrchestratorService {
         return value.matches(".*[đĐăĂâÂêÊôÔơƠưƯ].*");
     }
 
+    private record TimeFields(int durationMinutes, String startTime, String endTime) {
+    }
+
     private enum NoteLanguage {
         VI,
         EN
@@ -940,6 +1039,9 @@ public class AiOrchestratorService {
                 stop.placeId(),
                 placeById.get(stop.placeId()),
                 stop.durationMinutes(),
+                stop.startTime(),
+                stop.endTime(),
+                stop.duration(),
                 stop.note(),
                 stop.plannedDateTime()))
                 .toList();

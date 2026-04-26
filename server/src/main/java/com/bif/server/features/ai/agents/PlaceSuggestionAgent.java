@@ -69,8 +69,8 @@ public class PlaceSuggestionAgent {
         return ollamaJsonClient.generateJson(
                 buildSystemPrompt(),
                 buildUserPrompt(userQuery, failureReason),
-            EXTRACTION_SCHEMA,
-            PlaceSearchExtraction.class);
+                EXTRACTION_SCHEMA,
+                PlaceSearchExtraction.class);
     }
 
     private String buildSystemPrompt() {
@@ -80,11 +80,11 @@ public class PlaceSuggestionAgent {
                 Do not include markdown fences, explanations, or conversational filler.
                 Return exactly this schema:
                 {
-                                    "searchQueries": ["string"],
-                  "keywords": ["string"],
-                  "category": "string|null",
-                                    "vibe": "string|null",
-                                    "locationHint": "string|null"
+                    "searchQueries": ["string"],
+                    "keywords": ["string"],
+                    "category": "string|null",
+                    "vibe": "string|null",
+                    "locationHint": "string|null"
                 }
                 searchQueries must be concise, high-signal place-search strings ordered by best first.
                 Use concise keywords suitable for place search grounding.

@@ -74,7 +74,8 @@ class AiOrchestratorServiceTest {
                 aiSearchOrchestratorService,
                 aiRequestGuardService,
                 properties,
-                tripScheduleHintExtractor
+                tripScheduleHintExtractor,
+                new VibeHintNormalizer()
         );
         when(aiRequestGuardService.evaluateCurrentRequest())
                 .thenReturn(AiRequestDecision.allowed("user-1"));
@@ -150,8 +151,8 @@ class AiOrchestratorServiceTest {
                 .resolveCandidates(extractionCaptor.capture(), eq(10.780000d), eq(106.700000d));
 
         PlaceSearchExtraction sent = extractionCaptor.getValue();
-        assertEquals("ho chi minh city", sent.locationHint());
-        assertTrue(sent.searchQueries().contains("ho chi minh city"));
+        assertEquals("near 10.780000, 106.700000", sent.locationHint());
+        assertTrue(sent.searchQueries().contains("near 10.780000, 106.700000"));
         assertTrue(sent.searchQueries().stream().anyMatch(
                 query -> query.startsWith("near 10.780000, 106.700000")));
     }
@@ -182,6 +183,8 @@ class AiOrchestratorServiceTest {
         PlaceSearchExtraction sent = extractionCaptor.getValue();
         assertEquals("Hanoi", sent.locationHint());
         assertTrue(sent.searchQueries().stream().noneMatch("ho chi minh city"::equalsIgnoreCase));
+        assertTrue(sent.searchQueries().stream().anyMatch(
+                query -> query.startsWith("near 10.780000, 106.700000")));
     }
 
     @Test
@@ -448,6 +451,45 @@ class AiOrchestratorServiceTest {
         assertEquals(AiFailureCode.AI_VALIDATION_FAILURE, result.failureCode());
         assertTrue(result.warnings().stream().anyMatch(
                 warning -> warning.contains("invalid plannedDateTime")));
+    }
+
+    @Test
+    void draftTripFromQuery_ArrangesDateRangeEvenWhenAgentPlannedDateTimeIsInvalid() {
+        String query = "Da Lat Mountains Trip date range:\n"
+                + "- Start date: 2026-04-27\n"
+                + "- End date: 2026-04-29\n"
+                + "Schedule each stop within this date range.";
+        PlaceSearchExtraction extraction = new PlaceSearchExtraction(
+                List.of("da lat mountain route"),
+                List.of("mountain"),
+                null,
+                null
+        );
+        Place first = place("p1", "Pine Hill");
+        Place second = place("p2", "Valley View");
+        List<Place> candidates = List.of(first, second);
+        GeneratedItinerary draftWithInvalidDateTime = new GeneratedItinerary(
+                "Da Lat",
+                null,
+                List.of(
+                        new GeneratedStop("p1", 90, null, "not-a-datetime"),
+                        new GeneratedStop("p2", 90, null, "still-not-a-datetime")
+                )
+        );
+
+        when(placeSuggestionAgent.extract(query)).thenReturn(extraction);
+        when(aiSearchOrchestratorService.resolveCandidates(extraction)).thenReturn(candidates);
+        when(aiSearchOrchestratorService.hasLocationFocus(extraction)).thenReturn(false);
+        when(tripDraftingAgent.draft(eq(query), eq(candidates), any())).thenReturn(draftWithInvalidDateTime);
+
+        AiTripDraftResult result = aiOrchestratorService.draftTripFromQuery(query);
+
+        assertNull(result.failureCode());
+        assertEquals(2, result.draft().stops().size());
+        OffsetDateTime firstStop = OffsetDateTime.parse(result.draft().stops().get(0).plannedDateTime());
+        OffsetDateTime secondStop = OffsetDateTime.parse(result.draft().stops().get(1).plannedDateTime());
+        assertEquals(27, firstStop.getDayOfMonth());
+        assertTrue(secondStop.isAfter(firstStop));
     }
 
     @Test

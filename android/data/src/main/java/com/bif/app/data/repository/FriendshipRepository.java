@@ -1,9 +1,12 @@
 package com.bif.app.data.repository;
 
+import android.content.Context;
+
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
 import com.bif.app.core.network.RestApiService;
+import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.core.network.dto.user.UserApiModel;
 import com.bif.app.core.network.dto.friendship.CreateFriendRequestDto;
 import com.bif.app.core.network.dto.friendship.FriendshipApiModel;
@@ -37,6 +40,8 @@ import java.io.IOException;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
+import dagger.hilt.android.qualifiers.ApplicationContext;
+
 import retrofit2.Response;
 
 @Singleton
@@ -46,6 +51,7 @@ public class FriendshipRepository implements IFriendshipRepository {
     private final FriendDao friendDao;
     private final SyncManager syncManager;
     private final NetworkMonitor networkMonitor;
+    private final Context appContext;
     private final ExecutorService executorService;
     private final MutableLiveData<List<Friendship>> pendingRequestsLiveData;
     private final MutableLiveData<List<Friendship>> outgoingRequestsLiveData;
@@ -58,12 +64,14 @@ public class FriendshipRepository implements IFriendshipRepository {
                                 FriendshipDao friendshipDao,
                                 FriendDao friendDao,
                                 SyncManager syncManager,
-                                NetworkMonitor networkMonitor) {
+                                NetworkMonitor networkMonitor,
+                                @ApplicationContext Context appContext) {
         this.restApiService = restApiService;
         this.friendshipDao = friendshipDao;
         this.friendDao = friendDao;
         this.syncManager = syncManager;
         this.networkMonitor = networkMonitor;
+        this.appContext = appContext;
         this.executorService = Executors.newSingleThreadExecutor();
         this.pendingRequestsLiveData = new MutableLiveData<>(new ArrayList<>());
         this.outgoingRequestsLiveData = new MutableLiveData<>(new ArrayList<>());
@@ -72,24 +80,42 @@ public class FriendshipRepository implements IFriendshipRepository {
 
     @Override
     public LiveData<List<Friendship>> getPendingRequests() {
+        if (!isAuthenticated()) {
+            pendingRequestsLiveData.setValue(Collections.emptyList());
+            executorService.execute(this::clearFriendSessionCacheSync);
+            return pendingRequestsLiveData;
+        }
         refreshPendingRequests();
         return pendingRequestsLiveData;
     }
 
     @Override
     public LiveData<List<Friendship>> getOutgoingRequests() {
+        if (!isAuthenticated()) {
+            outgoingRequestsLiveData.setValue(Collections.emptyList());
+            executorService.execute(this::clearFriendSessionCacheSync);
+            return outgoingRequestsLiveData;
+        }
         refreshOutgoingRequests();
         return outgoingRequestsLiveData;
     }
 
     @Override
     public LiveData<List<Friend>> getFriends() {
+        if (!isAuthenticated()) {
+            friendsLiveData.setValue(Collections.emptyList());
+            executorService.execute(this::clearFriendSessionCacheSync);
+            return friendsLiveData;
+        }
         refreshFriends();
         return friendsLiveData;
     }
 
     @Override
     public String resolveUserId(String query) {
+        if (!isAuthenticated()) {
+            return null;
+        }
         if (isBlank(query)) {
             return null;
         }
@@ -122,6 +148,9 @@ public class FriendshipRepository implements IFriendshipRepository {
 
     @Override
     public void sendFriendRequest(String receiverId) {
+        if (!isAuthenticated()) {
+            throw new IllegalStateException("AUTH_REQUIRED");
+        }
         if (isBlank(receiverId)) {
             return;
         }
@@ -205,6 +234,9 @@ public class FriendshipRepository implements IFriendshipRepository {
 
     @Override
     public void unfriend(String friendId) {
+        if (!isAuthenticated()) {
+            throw new IllegalStateException("AUTH_REQUIRED");
+        }
         if (isBlank(friendId)) {
             return;
         }
@@ -239,20 +271,42 @@ public class FriendshipRepository implements IFriendshipRepository {
 
     @Override
     public void refreshPendingRequests() {
-        executorService.execute(this::refreshRequestCachesSync);
+        executorService.execute(() -> {
+            if (!isAuthenticated()) {
+                clearFriendSessionCacheSync();
+                return;
+            }
+            refreshRequestCachesSync();
+        });
     }
 
     @Override
     public void refreshOutgoingRequests() {
-        executorService.execute(this::refreshRequestCachesSync);
+        executorService.execute(() -> {
+            if (!isAuthenticated()) {
+                clearFriendSessionCacheSync();
+                return;
+            }
+            refreshRequestCachesSync();
+        });
     }
 
     @Override
     public void refreshFriends() {
-        executorService.execute(this::refreshFriendsSync);
+        executorService.execute(() -> {
+            if (!isAuthenticated()) {
+                clearFriendSessionCacheSync();
+                return;
+            }
+            refreshFriendsSync();
+        });
     }
 
     private void refreshRequestCachesSync() {
+        if (!isAuthenticated()) {
+            clearFriendSessionCacheSync();
+            return;
+        }
         try {
             Response<List<FriendshipApiModel>> incomingResponse = restApiService
                     .getIncomingFriendRequests()
@@ -285,6 +339,10 @@ public class FriendshipRepository implements IFriendshipRepository {
     }
 
     private void refreshFriendsSync() {
+        if (!isAuthenticated()) {
+            clearFriendSessionCacheSync();
+            return;
+        }
         try {
             Response<List<UserApiModel>> response = restApiService.getFriends().execute();
             if (!response.isSuccessful() || response.body() == null) {
@@ -391,6 +449,9 @@ public class FriendshipRepository implements IFriendshipRepository {
     }
 
     private void handleFriendRequestDecision(int friendshipId, boolean accept) {
+        if (!isAuthenticated()) {
+            throw new IllegalStateException("AUTH_REQUIRED");
+        }
         if (friendshipId <= 0) {
             return;
         }
@@ -431,6 +492,24 @@ public class FriendshipRepository implements IFriendshipRepository {
         if (accept) {
             refreshFriendsSync();
         }
+    }
+
+
+    private boolean isAuthenticated() {
+        return UserPreferences.isLoggedIn(appContext)
+                && !isBlank(UserPreferences.getAuthToken(appContext));
+    }
+
+    private void clearFriendSessionCacheSync() {
+        try {
+            friendDao.clearAll();
+            friendshipDao.clearAll();
+        } catch (Exception ignored) {
+            // Best-effort cache purge; LiveData is still reset below.
+        }
+        friendsLiveData.postValue(Collections.emptyList());
+        pendingRequestsLiveData.postValue(Collections.emptyList());
+        outgoingRequestsLiveData.postValue(Collections.emptyList());
     }
 
     private boolean containsFriendshipId(List<FriendshipEntity> items, int id) {

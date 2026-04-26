@@ -19,6 +19,9 @@ mutation DraftTripFromQuery($query: String!) {
       stops {
         placeId
         durationMinutes
+        startTime
+        endTime
+        duration
         note
         plannedDateTime
         place {

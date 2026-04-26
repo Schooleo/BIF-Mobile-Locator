@@ -47,8 +47,6 @@ subprojects {
             force 'org.apache.httpcomponents:httpclient:4.5.14'
             force 'org.apache.httpcomponents:httpmime:4.5.14'
             force 'org.java-websocket:Java-WebSocket:1.5.7'
-
-            force 'org.jetbrains.kotlin:kotlin-stdlib:2.1.0'
         }
     }
 }

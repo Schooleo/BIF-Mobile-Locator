@@ -153,12 +153,13 @@ public class AppModule {
                 executor.execute(() -> {
                     try {
                         appDatabase.clearAllTables();
-                        if (onComplete != null) {
-                            new android.os.Handler(android.os.Looper.getMainLooper()).post(onComplete);
-                        }
                     } catch (Exception exception) {
                         Timber.tag(TAG).e(exception,
                                 "Failed to clear local session data");
+                    } finally {
+                        if (onComplete != null) {
+                            new android.os.Handler(android.os.Looper.getMainLooper()).post(onComplete);
+                        }
                     }
                 });
             }

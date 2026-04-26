@@ -1,10 +1,13 @@
 package com.bif.app.feature.social;
 
+import android.content.Context;
+
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModel;
 
+import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.sync.core.NetworkMonitor;
 import com.bif.app.domain.model.AiPlaceSuggestion;
 import com.bif.app.domain.model.AiPlaceSuggestionResult;
@@ -24,6 +27,8 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -37,9 +42,11 @@ import java.util.regex.Pattern;
 import javax.inject.Inject;
 
 import dagger.hilt.android.lifecycle.HiltViewModel;
+import dagger.hilt.android.qualifiers.ApplicationContext;
 
 @HiltViewModel
 public class ChatViewModel extends ViewModel {
+    private static final DateTimeFormatter AI_DRAFT_DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
 
     private static final String AI_SENDER_USER_ID = "ai-assistant";
     private static final String AI_SENDER_NAME = "AI Trip Drafter";
@@ -54,6 +61,7 @@ public class ChatViewModel extends ViewModel {
     private final IPlaceRepository placeRepository;
     private final ITripRepository tripRepository;
     private final NetworkMonitor networkMonitor;
+    private final Context appContext;
 
     private String groupId;
     private String groupName;
@@ -91,11 +99,13 @@ public class ChatViewModel extends ViewModel {
     public ChatViewModel(IChatRepository chatRepository,
             IPlaceRepository placeRepository,
             ITripRepository tripRepository,
-            NetworkMonitor networkMonitor) {
+            NetworkMonitor networkMonitor,
+            @ApplicationContext Context appContext) {
         this.chatRepository = chatRepository;
         this.placeRepository = placeRepository;
         this.tripRepository = tripRepository;
         this.networkMonitor = networkMonitor;
+        this.appContext = appContext;
         aiBadgesEnabledLiveData.setValue(networkMonitor.isOnline());
         networkMonitor.observeConnectivity().observeForever(networkObserver);
     }
@@ -144,8 +154,17 @@ public class ChatViewModel extends ViewModel {
     }
 
     public boolean isAiAvailable() {
+        if (!isAuthenticated()) {
+            return false;
+        }
         Boolean available = aiBadgesEnabledLiveData.getValue();
         return available != null ? available : networkMonitor.isOnline();
+    }
+
+    public boolean isAuthenticated() {
+        return UserPreferences.isLoggedIn(appContext)
+                && UserPreferences.getAuthToken(appContext) != null
+                && !UserPreferences.getAuthToken(appContext).trim().isEmpty();
     }
 
     public LiveData<String> getSnackbarMessage() {
@@ -195,6 +214,11 @@ public class ChatViewModel extends ViewModel {
             aiDraftModeEnabledLiveData.setValue(false);
             return;
         }
+        if (!isAuthenticated()) {
+            aiDraftModeEnabledLiveData.setValue(false);
+            snackbarMessageLiveData.setValue("Please log in to use AI trip drafting.");
+            return;
+        }
         if (!networkMonitor.isOnline()) {
             aiDraftModeEnabledLiveData.setValue(false);
             snackbarMessageLiveData.setValue("AI drafting is unavailable while offline.");
@@ -211,6 +235,11 @@ public class ChatViewModel extends ViewModel {
     public void enterAiSuggestPlacesMode() {
         if (Boolean.TRUE.equals(aiSuggestPlacesModeEnabledLiveData.getValue())) {
             aiSuggestPlacesModeEnabledLiveData.setValue(false);
+            return;
+        }
+        if (!isAuthenticated()) {
+            aiSuggestPlacesModeEnabledLiveData.setValue(false);
+            snackbarMessageLiveData.setValue("Please log in to use AI place suggestions.");
             return;
         }
         if (!networkMonitor.isOnline()) {
@@ -326,8 +355,15 @@ public class ChatViewModel extends ViewModel {
                     : ("ai-draft-" + UUID.randomUUID());
         }
 
-        long startAt = snapshot.startAt > 0L ? snapshot.startAt : resolveStartAt(snapshot.stops);
-        long endAt = snapshot.endAt > 0L ? snapshot.endAt : resolveEndAt(snapshot.stops, startAt);
+        long startAt;
+        long endAt;
+        if (snapshot.startAt > 0L && snapshot.endAt > snapshot.startAt) {
+            startAt = snapshot.startAt;
+            endAt = snapshot.endAt;
+        } else {
+            startAt = resolveStartAt(snapshot.stops, snapshot.startAt);
+            endAt = resolveEndAt(snapshot.stops, startAt, snapshot.endAt);
+        }
         tripRepository.saveDraftTrip(
                 targetTripId,
                 trim(groupId),
@@ -405,11 +441,13 @@ public class ChatViewModel extends ViewModel {
             return;
         }
 
+        TripPlan currentTrip = resolveCurrentGroupTrip();
+        String aiQuery = buildDraftQueryWithTripDates(query.trim(), currentTrip);
         String progressMessageId = UUID.randomUUID().toString();
         long progressSentAt = System.currentTimeMillis();
         upsertAiStatusMessage(progressMessageId, progressSentAt, AI_DRAFTING_MESSAGE);
 
-        LiveData<AiTripDraftResult> source = chatRepository.draftTripFromQuery(query);
+        LiveData<AiTripDraftResult> source = chatRepository.draftTripFromQuery(aiQuery);
         observeOnce(source, result -> {
             String failureCode = result != null ? result.getFailureCode() : "AI_FAILURE";
             if (failureCode != null) {
@@ -496,6 +534,7 @@ public class ChatViewModel extends ViewModel {
         AiTripDraft draft = result.getDraft();
         List<AiTripDraftStop> stops = draft.getStops();
         int stopCount = stops != null ? stops.size() : 0;
+        TripPlan currentTrip = resolveCurrentGroupTrip();
 
         String draftTripId = "ai-draft-" + UUID.randomUUID();
         String payload = buildDraftPayloadJson(
@@ -504,7 +543,7 @@ public class ChatViewModel extends ViewModel {
                 stops,
                 result.getCandidatePlaces(),
                 stopCount,
-                getCurrentTripId()
+                currentTrip
         );
 
         return new ChatMessage(
@@ -571,11 +610,14 @@ public class ChatViewModel extends ViewModel {
             List<AiTripDraftStop> stops,
             List<Place> candidates,
             int stopCount,
-            String currentTripId) {
+            TripPlan currentTrip) {
+        String currentTripId = currentTrip != null ? trim(currentTrip.getId()) : "";
         StringBuilder sb = new StringBuilder();
         sb.append("{");
         sb.append("\"tripId\":").append(jsonString(draftTripId)).append(",");
         sb.append("\"currentTripId\":").append(jsonString(currentTripId)).append(",");
+        sb.append("\"startAt\":").append(currentTrip != null ? currentTrip.getStartAt() : 0L).append(",");
+        sb.append("\"endAt\":").append(currentTrip != null ? currentTrip.getEndAt() : 0L).append(",");
         sb.append("\"stopCount\":").append(stopCount).append(",");
         sb.append("\"isSaved\":false,");
         sb.append("\"totalDistance\":0.0,");
@@ -602,6 +644,10 @@ public class ChatViewModel extends ViewModel {
                 sb.append("{");
                 sb.append("\"placeId\":").append(jsonString(stop.getPlaceId())).append(",");
                 sb.append("\"durationMinutes\":").append(Math.max(0, stop.getDurationMinutes())).append(",");
+                sb.append("\"startTime\":").append(jsonString(
+                        stop.getStartTime() != null ? stop.getStartTime() : "")).append(",");
+                sb.append("\"endTime\":").append(jsonString(
+                        stop.getEndTime() != null ? stop.getEndTime() : "")).append(",");
                 sb.append("\"note\":").append(jsonString(stop.getNote() != null ? stop.getNote() : "")).append(",");
                 sb.append("\"plannedDateTime\":").append(jsonString(
                         stop.getPlannedDateTime() != null ? stop.getPlannedDateTime() : "")).append(",");
@@ -739,9 +785,9 @@ public class ChatViewModel extends ViewModel {
                 description = trim(json.optString("description", ""));
             }
 
-            List<TripStop> stops = toTripStops(json.optJSONArray("stops"));
-            long startAt = json.optLong("startTime", 0L);
-            long endAt = json.optLong("endTime", 0L);
+            long startAt = json.optLong("startAt", json.optLong("startTime", 0L));
+            long endAt = json.optLong("endAt", json.optLong("endTime", 0L));
+            List<TripStop> stops = toTripStops(json.optJSONArray("stops"), startAt, endAt);
 
             return new DraftTripCardSnapshot(
                     draftTripId,
@@ -769,9 +815,9 @@ public class ChatViewModel extends ViewModel {
                 extractQuotedValue(payload, "summary"),
                 extractQuotedValue(payload, "description")
         );
-        long startAt = extractLongValue(payload, "startTime", 0L);
-        long endAt = extractLongValue(payload, "endTime", 0L);
-        List<TripStop> stops = parseStopsFromPayloadFallback(payload);
+        long startAt = extractLongValue(payload, "startAt", extractLongValue(payload, "startTime", 0L));
+        long endAt = extractLongValue(payload, "endAt", extractLongValue(payload, "endTime", 0L));
+        List<TripStop> stops = parseStopsFromPayloadFallback(payload, startAt, endAt);
 
         return new DraftTripCardSnapshot(
                 draftTripId,
@@ -784,12 +830,14 @@ public class ChatViewModel extends ViewModel {
         );
     }
 
-    private List<TripStop> toTripStops(JSONArray stops) {
+    private List<TripStop> toTripStops(JSONArray stops, long fallbackStartAt, long fallbackEndAt) {
         List<TripStop> mapped = new ArrayList<>();
         if (stops == null) {
             return mapped;
         }
 
+        AiDraftScheduleResolver.ScheduleCursor cursor =
+                AiDraftScheduleResolver.newCursor(fallbackStartAt, fallbackEndAt);
         int orderIndex = 0;
         for (int i = 0; i < stops.length(); i++) {
             JSONObject stop = stops.optJSONObject(i);
@@ -810,10 +858,16 @@ public class ChatViewModel extends ViewModel {
             String stopAddress = trim(stop.optString("address", ""));
             String note = trim(stop.optString("note", ""));
             int durationMinutes = Math.max(0, stop.optInt("durationMinutes", 0));
-            long arrivalTime = parsePlannedDateTime(stop.optString("plannedDateTime", ""));
-            long departureTime = arrivalTime > 0
-                    ? arrivalTime + (durationMinutes * 60_000L)
-                    : 0L;
+            AiDraftScheduleResolver.ScheduledTime scheduledTime =
+                    AiDraftScheduleResolver.resolveStopTimes(
+                            stop.optString("plannedDateTime", ""),
+                            stop.optString("startTime", ""),
+                            stop.optString("endTime", ""),
+                            durationMinutes,
+                            cursor
+                    );
+            long arrivalTime = scheduledTime.arrivalAt;
+            long departureTime = scheduledTime.departureAt;
 
             mapped.add(new TripStop(
                     UUID.randomUUID().toString(),
@@ -831,7 +885,9 @@ public class ChatViewModel extends ViewModel {
         return mapped;
     }
 
-    private List<TripStop> parseStopsFromPayloadFallback(String payload) {
+    private List<TripStop> parseStopsFromPayloadFallback(String payload,
+                                                         long fallbackStartAt,
+                                                         long fallbackEndAt) {
         List<TripStop> mapped = new ArrayList<>();
         String stopsSegment = extractStopsSegment(payload);
         if (stopsSegment.isEmpty()) {
@@ -839,6 +895,8 @@ public class ChatViewModel extends ViewModel {
         }
 
         Matcher matcher = Pattern.compile("\\{([^{}]*)\\}").matcher(stopsSegment);
+        AiDraftScheduleResolver.ScheduleCursor cursor =
+                AiDraftScheduleResolver.newCursor(fallbackStartAt, fallbackEndAt);
         int orderIndex = 0;
         while (matcher.find()) {
             String stopJson = matcher.group(1);
@@ -852,12 +910,17 @@ public class ChatViewModel extends ViewModel {
             String name = extractQuotedValue(stopJson, "name");
             String address = extractQuotedValue(stopJson, "address");
             String note = extractQuotedValue(stopJson, "note");
-            String plannedDateTime = extractQuotedValue(stopJson, "plannedDateTime");
             int durationMinutes = (int) extractLongValue(stopJson, "durationMinutes", 0L);
-            long arrivalTime = parsePlannedDateTime(plannedDateTime);
-            long departureTime = arrivalTime > 0L
-                    ? arrivalTime + (Math.max(0, durationMinutes) * 60_000L)
-                    : 0L;
+            AiDraftScheduleResolver.ScheduledTime scheduledTime =
+                    AiDraftScheduleResolver.resolveStopTimes(
+                            extractQuotedValue(stopJson, "plannedDateTime"),
+                            extractQuotedValue(stopJson, "startTime"),
+                            extractQuotedValue(stopJson, "endTime"),
+                            durationMinutes,
+                            cursor
+                    );
+            long arrivalTime = scheduledTime.arrivalAt;
+            long departureTime = scheduledTime.departureAt;
 
             mapped.add(new TripStop(
                     UUID.randomUUID().toString(),
@@ -943,6 +1006,10 @@ public class ChatViewModel extends ViewModel {
     }
 
     private long resolveStartAt(List<TripStop> stops) {
+        return resolveStartAt(stops, 0L);
+    }
+
+    private long resolveStartAt(List<TripStop> stops, long fallbackStartAt) {
         long minArrival = Long.MAX_VALUE;
         if (stops != null) {
             for (TripStop stop : stops) {
@@ -956,12 +1023,16 @@ public class ChatViewModel extends ViewModel {
             }
         }
         if (minArrival == Long.MAX_VALUE) {
-            return System.currentTimeMillis();
+            return fallbackStartAt > 0L ? fallbackStartAt : System.currentTimeMillis();
         }
         return minArrival;
     }
 
     private long resolveEndAt(List<TripStop> stops, long startAt) {
+        return resolveEndAt(stops, startAt, 0L);
+    }
+
+    private long resolveEndAt(List<TripStop> stops, long startAt, long fallbackEndAt) {
         long maxDeparture = 0L;
         if (stops != null) {
             for (TripStop stop : stops) {
@@ -975,20 +1046,9 @@ public class ChatViewModel extends ViewModel {
             }
         }
         if (maxDeparture <= 0L) {
-            return startAt;
+            return fallbackEndAt > 0L ? Math.max(startAt, fallbackEndAt) : startAt;
         }
         return Math.max(startAt, maxDeparture);
-    }
-
-    private long parsePlannedDateTime(String value) {
-        if (value == null || value.trim().isEmpty()) {
-            return 0L;
-        }
-        try {
-            return Instant.parse(value).toEpochMilli();
-        } catch (Exception ignored) {
-            return 0L;
-        }
     }
 
     private void appendNullableDouble(StringBuilder sb, Double value) {
@@ -1046,6 +1106,26 @@ public class ChatViewModel extends ViewModel {
             return latestPast;
         }
         return trips.get(0);
+    }
+
+    private String buildDraftQueryWithTripDates(String rawQuery, TripPlan currentTrip) {
+        String query = trim(rawQuery);
+        if (query.isEmpty() || currentTrip == null
+                || currentTrip.getStartAt() <= 0L || currentTrip.getEndAt() <= 0L) {
+            return query;
+        }
+        return query
+                + "\n\nTrip date range:"
+                + "\n- Start date: " + formatAiDraftDate(currentTrip.getStartAt())
+                + "\n- End date: " + formatAiDraftDate(currentTrip.getEndAt())
+                + "\nSchedule each stop within this trip date range and return concrete plannedDateTime values when possible.";
+    }
+
+    private String formatAiDraftDate(long millis) {
+        return Instant.ofEpochMilli(millis)
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate()
+                .format(AI_DRAFT_DATE_FORMATTER);
     }
 
     private boolean hasTripIdInCurrentTrips(String tripId) {
