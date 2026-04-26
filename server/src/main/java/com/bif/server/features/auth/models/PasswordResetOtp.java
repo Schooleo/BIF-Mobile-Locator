@@ -12,6 +12,8 @@ public class PasswordResetOtp {
     private String otp;
     private Instant expiresAt;
     private Instant createdAt;
+    private Integer attemptCount;
+    private Instant lastAttemptAt;
     private String resetToken;
     private Instant resetTokenExpiresAt;
 
@@ -45,6 +47,22 @@ public class PasswordResetOtp {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Integer getAttemptCount() {
+        return attemptCount;
+    }
+
+    public void setAttemptCount(Integer attemptCount) {
+        this.attemptCount = attemptCount;
+    }
+
+    public Instant getLastAttemptAt() {
+        return lastAttemptAt;
+    }
+
+    public void setLastAttemptAt(Instant lastAttemptAt) {
+        this.lastAttemptAt = lastAttemptAt;
     }
 
     public String getResetToken() {

@@ -32,6 +32,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping({"/api/auth", "/auth"})
 public class AuthController {
+    private static final String GENERIC_OTP_REQUEST_MESSAGE = "If this email is registered, an OTP has been sent";
+
     private final AuthService authService;
     private final UserService userService;
 
@@ -75,11 +77,8 @@ public class AuthController {
 
     @PostMapping("/forgot-password/request-otp")
     public ResponseEntity<ForgotPasswordOtpResponse> requestForgotPasswordOtp(@RequestBody ForgotPasswordOtpRequest request) {
-        ForgotPasswordOtpResponse response = authService.requestForgotPasswordOtp(request);
-        if (response.success()) {
-            return ResponseEntity.ok(response);
-        }
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        authService.requestForgotPasswordOtp(request);
+        return ResponseEntity.ok(new ForgotPasswordOtpResponse(true, GENERIC_OTP_REQUEST_MESSAGE));
     }
 
     @PostMapping("/forgot-password/verify-otp")
@@ -131,6 +130,8 @@ public class AuthController {
         try {
             ChangePasswordResponse response = authService.changePassword(userId, request);
             return ResponseEntity.ok(response);
+        } catch (InvalidRegistrationException e) {
+            return ResponseEntity.badRequest().body(new ChangePasswordResponse(false, e.getMessage()));
         } catch (InvalidCredentialsException e) {
             return ResponseEntity.badRequest().body(new ChangePasswordResponse(false, e.getMessage()));
         }

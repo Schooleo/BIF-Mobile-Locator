@@ -10,6 +10,21 @@ ext {
     set('tomcat.version', '11.0.21')
 }
 
+configurations.all {
+    resolutionStrategy {
+        // Fix bouncycastle CVEs from Android SDK tools (if inherited)
+        force 'org.bouncycastle:bcprov-jdk18on:1.84'
+        force 'org.bouncycastle:bcpkix-jdk18on:1.84'
+        
+        // NOTE: Spring Boot 4.0.5 has 13 CVEs that could be fixed by upgrading to 4.0.6+
+        // and Spring Security 7.0.4 has 5 CVEs fixable in 7.0.5+. However:
+        // - Spring Boot 4.0.6+ causes ServerApplicationTests context loading failure (pre-existing in 4.0.5)
+        // - These are inherited from Spring dependency management
+        // - A comprehensive Spring Framework update is needed when app context issues are resolved
+        // See: Snyk report with 13 Spring Boot issues and 5 Spring Security issues
+    }
+}
+
 group = 'com.bif'
 version = project.hasProperty('appVersion') ? project.property('appVersion') : 'latest'
 

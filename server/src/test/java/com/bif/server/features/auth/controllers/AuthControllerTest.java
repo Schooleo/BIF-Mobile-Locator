@@ -134,7 +134,7 @@ class AuthControllerTest {
     @Test
     void requestForgotPasswordOtp_WhenEmailExists_ReturnsOk() {
         ForgotPasswordOtpRequest request = new ForgotPasswordOtpRequest("alex@bif.local");
-        ForgotPasswordOtpResponse response = new ForgotPasswordOtpResponse(true, "OTP has been sent to your email");
+        ForgotPasswordOtpResponse response = new ForgotPasswordOtpResponse(true, "If this email is registered, an OTP has been sent");
         when(authService.requestForgotPasswordOtp(request)).thenReturn(response);
 
         ResponseEntity<ForgotPasswordOtpResponse> result = controller.requestForgotPasswordOtp(request);
@@ -142,19 +142,21 @@ class AuthControllerTest {
         assertEquals(HttpStatus.OK, result.getStatusCode());
         assertNotNull(result.getBody());
         assertTrue(result.getBody().success());
+        assertEquals("If this email is registered, an OTP has been sent", result.getBody().message());
     }
 
     @Test
-    void requestForgotPasswordOtp_WhenEmailMissing_ReturnsNotFound() {
+    void requestForgotPasswordOtp_WhenEmailMissing_ReturnsOkWithGenericMessage() {
         ForgotPasswordOtpRequest request = new ForgotPasswordOtpRequest("unknown@bif.local");
-        ForgotPasswordOtpResponse response = new ForgotPasswordOtpResponse(false, "Email does not exist");
+        ForgotPasswordOtpResponse response = new ForgotPasswordOtpResponse(true, "If this email is registered, an OTP has been sent");
         when(authService.requestForgotPasswordOtp(request)).thenReturn(response);
 
         ResponseEntity<ForgotPasswordOtpResponse> result = controller.requestForgotPasswordOtp(request);
 
-        assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
+        assertEquals(HttpStatus.OK, result.getStatusCode());
         assertNotNull(result.getBody());
-        assertFalse(result.getBody().success());
+        assertTrue(result.getBody().success());
+        assertEquals("If this email is registered, an OTP has been sent", result.getBody().message());
     }
 
     @Test
@@ -243,6 +245,21 @@ class AuthControllerTest {
         assertNotNull(result.getBody());
         assertFalse(result.getBody().success());
         assertEquals("Current password is incorrect", result.getBody().message());
+    }
+
+    @Test
+    void changePassword_WhenValidationFails_ReturnsBadRequestWithValidationMessage() {
+        Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
+        ChangePasswordRequest request = new ChangePasswordRequest("current-password", "short");
+        when(authService.changePassword("u1", request))
+                .thenThrow(new InvalidRegistrationException("newPassword must have at least 8 characters"));
+
+        ResponseEntity<ChangePasswordResponse> result = controller.changePassword(request, auth);
+
+        assertEquals(HttpStatus.BAD_REQUEST, result.getStatusCode());
+        assertNotNull(result.getBody());
+        assertFalse(result.getBody().success());
+        assertEquals("newPassword must have at least 8 characters", result.getBody().message());
     }
 
     @Test

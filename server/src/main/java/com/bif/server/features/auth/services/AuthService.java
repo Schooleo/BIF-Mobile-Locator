@@ -31,6 +31,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -44,7 +46,9 @@ public class AuthService {
             Pattern.compile("^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$", Pattern.CASE_INSENSITIVE);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final long OTP_EXPIRATION_MINUTES = 5L;
-        private static final long RESET_TOKEN_EXPIRATION_MINUTES = 10L;
+    private static final long RESET_TOKEN_EXPIRATION_MINUTES = 10L;
+    private static final int MAX_OTP_VERIFY_ATTEMPTS = 5;
+    private static final String GENERIC_OTP_REQUEST_MESSAGE = "If this email is registered, an OTP has been sent";
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -80,7 +84,8 @@ public class AuthService {
 
         User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
         if (user == null) {
-            return new ForgotPasswordOtpResponse(false, "Email does not exist");
+            log.info("Ignored forgot-password OTP request for non-registered email");
+            return new ForgotPasswordOtpResponse(true, GENERIC_OTP_REQUEST_MESSAGE);
         }
 
         String otp = generateOtp();
@@ -90,33 +95,72 @@ public class AuthService {
         passwordResetOtp.setOtp(otp);
         passwordResetOtp.setCreatedAt(now);
         passwordResetOtp.setExpiresAt(now.plus(OTP_EXPIRATION_MINUTES, ChronoUnit.MINUTES));
+        passwordResetOtp.setAttemptCount(0);
+        passwordResetOtp.setLastAttemptAt(null);
         passwordResetOtp.setResetToken(null);
         passwordResetOtp.setResetTokenExpiresAt(null);
         passwordResetOtpRepository.save(passwordResetOtp);
 
         emailService.sendOtpEmail(email, otp);
-        return new ForgotPasswordOtpResponse(true, "OTP has been sent to your email");
+        return new ForgotPasswordOtpResponse(true, GENERIC_OTP_REQUEST_MESSAGE);
     }
 
     public ForgotPasswordVerifyOtpResponse verifyForgotPasswordOtp(ForgotPasswordVerifyOtpRequest request) {
         String email = normalizedEmail(request.email());
         String otp = requiredTrimmed(request.otp(), "otp");
+        Instant now = Instant.now();
 
         PasswordResetOtp passwordResetOtp = passwordResetOtpRepository.findById(email)
                 .orElse(null);
-        if (passwordResetOtp == null || passwordResetOtp.getOtp() == null || !passwordResetOtp.getOtp().equals(otp)) {
+        if (passwordResetOtp == null || passwordResetOtp.getOtp() == null) {
             return new ForgotPasswordVerifyOtpResponse(false, null);
         }
-        if (passwordResetOtp.getExpiresAt() == null || passwordResetOtp.getExpiresAt().isBefore(Instant.now())) {
+        if (passwordResetOtp.getExpiresAt() == null || passwordResetOtp.getExpiresAt().isBefore(now)) {
+            return new ForgotPasswordVerifyOtpResponse(false, null);
+        }
+        if (currentAttemptCount(passwordResetOtp) > MAX_OTP_VERIFY_ATTEMPTS) {
+            invalidateOtpAfterLockout(passwordResetOtp, now);
+            passwordResetOtpRepository.save(passwordResetOtp);
+            return new ForgotPasswordVerifyOtpResponse(false, null);
+        }
+
+        if (!constantTimeEquals(passwordResetOtp.getOtp(), otp)) {
+            int updatedAttempts = currentAttemptCount(passwordResetOtp) + 1;
+            passwordResetOtp.setAttemptCount(updatedAttempts);
+            passwordResetOtp.setLastAttemptAt(now);
+            if (updatedAttempts > MAX_OTP_VERIFY_ATTEMPTS) {
+                invalidateOtpAfterLockout(passwordResetOtp, now);
+            }
+            passwordResetOtpRepository.save(passwordResetOtp);
             return new ForgotPasswordVerifyOtpResponse(false, null);
         }
 
         String resetToken = UUID.randomUUID().toString();
+        passwordResetOtp.setAttemptCount(0);
+        passwordResetOtp.setLastAttemptAt(now);
         passwordResetOtp.setResetToken(resetToken);
-        passwordResetOtp.setResetTokenExpiresAt(Instant.now().plus(RESET_TOKEN_EXPIRATION_MINUTES, ChronoUnit.MINUTES));
+        passwordResetOtp.setResetTokenExpiresAt(now.plus(RESET_TOKEN_EXPIRATION_MINUTES, ChronoUnit.MINUTES));
         passwordResetOtpRepository.save(passwordResetOtp);
 
         return new ForgotPasswordVerifyOtpResponse(true, resetToken);
+    }
+
+    private int currentAttemptCount(PasswordResetOtp passwordResetOtp) {
+        return passwordResetOtp.getAttemptCount() == null ? 0 : passwordResetOtp.getAttemptCount();
+    }
+
+    private void invalidateOtpAfterLockout(PasswordResetOtp passwordResetOtp, Instant now) {
+        passwordResetOtp.setOtp(null);
+        passwordResetOtp.setExpiresAt(null);
+        passwordResetOtp.setResetToken(null);
+        passwordResetOtp.setResetTokenExpiresAt(null);
+        passwordResetOtp.setLastAttemptAt(now);
+    }
+
+    private boolean constantTimeEquals(String expected, String provided) {
+        byte[] expectedBytes = expected.getBytes(StandardCharsets.UTF_8);
+        byte[] providedBytes = provided.getBytes(StandardCharsets.UTF_8);
+        return MessageDigest.isEqual(expectedBytes, providedBytes);
     }
 
     public ForgotPasswordResetResponse resetForgotPassword(ForgotPasswordResetRequest request) {
@@ -243,7 +287,15 @@ public class AuthService {
             throw new InvalidCredentialsException("Current password is incorrect");
         }
 
-        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        String newPassword = required(request.newPassword(), "newPassword");
+        if (newPassword.isBlank()) {
+            throw new InvalidRegistrationException("newPassword must not be blank");
+        }
+        if (newPassword.length() < 8) {
+            throw new InvalidRegistrationException("newPassword must have at least 8 characters");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
 
         return new ChangePasswordResponse(true, "Password changed successfully");
