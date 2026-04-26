@@ -3,7 +3,11 @@ package com.bif.server.features.place.services;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.text.Normalizer;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -16,12 +20,6 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-
-import com.mongodb.MongoException;
-import com.mongodb.bulk.BulkWriteResult;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
@@ -43,6 +41,8 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mongodb.MongoException;
+import com.mongodb.bulk.BulkWriteResult;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -104,7 +104,7 @@ public class PlaceBootstrapService implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         // 1. Check if DB is already populated to avoid re-running on every restart
-        if (placeRepository.count() > 0) {
+        if (placeRepository.count() > 100) {
             log.info("✅ Places database is already populated. Skipping MongoDB bootstrap.");
             return;
         }
@@ -250,7 +250,12 @@ public class PlaceBootstrapService implements ApplicationRunner {
     private void bulkUpsert(List<Place> batch) {
         BulkOperations bulkOperations = mongoTemplate.bulkOps(BulkOperations.BulkMode.UNORDERED, Place.class);
         FindAndReplaceOptions upsertOptions = FindAndReplaceOptions.options().upsert();
+        Instant now = Instant.now();
         for (Place place : batch) {
+            place.setUpdatedAt(now);
+            if (place.getLastModifiedBy() == null || place.getLastModifiedBy().isBlank()) {
+                place.setLastModifiedBy("SYSTEM_BOOTSTRAP");
+            }
             bulkOperations.replaceOne(
                     Query.query(Criteria.where("_id").is(place.getId())),
                     place,

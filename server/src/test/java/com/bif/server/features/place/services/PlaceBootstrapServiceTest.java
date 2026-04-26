@@ -10,6 +10,7 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.time.Instant;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -23,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.mockito.ArgumentCaptor;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -86,7 +88,14 @@ class PlaceBootstrapServiceTest {
 
         service.run(new DefaultApplicationArguments());
 
+        ArgumentCaptor<Place> placeCaptor = ArgumentCaptor.forClass(Place.class);
         verify(bulkOperations, Mockito.times(2)).replaceOne(any(), any(), any());
+        verify(bulkOperations, Mockito.times(2)).replaceOne(any(), placeCaptor.capture(), any());
+        for (Place persistedPlace : placeCaptor.getAllValues()) {
+            assertNotNull(persistedPlace.getUpdatedAt());
+            assertEquals("SYSTEM_BOOTSTRAP", persistedPlace.getLastModifiedBy());
+            assertTrue(!persistedPlace.getUpdatedAt().isAfter(Instant.now()));
+        }
         verify(bulkOperations).execute();
         verify(placeRepository, never()).saveAll(any());
     }
