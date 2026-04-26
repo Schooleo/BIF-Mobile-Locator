@@ -5,11 +5,15 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doAnswer;
+
+import android.content.Context;
+import android.content.SharedPreferences;
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.MutableLiveData;
@@ -36,6 +40,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -58,6 +65,12 @@ public class ChatViewModelTest {
     @Mock
     private NetworkMonitor networkMonitor;
 
+    @Mock
+    private Context mockContext;
+
+    @Mock
+    private SharedPreferences mockSharedPreferences;
+
     private MutableLiveData<Boolean> connectivityLiveData;
     private MutableLiveData<List<TripPlan>> tripsLiveData;
 
@@ -66,6 +79,9 @@ public class ChatViewModelTest {
     @Before
     public void setup() {
         MockitoAnnotations.initMocks(this);
+        when(mockContext.getSharedPreferences(anyString(), anyInt())).thenReturn(mockSharedPreferences);
+        when(mockSharedPreferences.getBoolean(eq("is_logged_in"), eq(false))).thenReturn(true);
+        when(mockSharedPreferences.getString(eq("auth_token"), anyString())).thenReturn("test-token");
         connectivityLiveData = new MutableLiveData<>(true);
         tripsLiveData = new MutableLiveData<>(Collections.emptyList());
         
@@ -82,7 +98,7 @@ public class ChatViewModelTest {
                 )));
 
         viewModel = new ChatViewModel(mockChatRepository, mockPlaceRepository,
-                mockTripRepository, networkMonitor);
+                mockTripRepository, networkMonitor, mockContext);
     }
 
     @Test
@@ -211,6 +227,136 @@ public class ChatViewModelTest {
         assertTrue(message.getContent().contains("\"longitude\":20.0"));
         assertTrue(message.getContent().contains("\"plannedDateTime\":\"2026-01-01T09:00:00Z\""));
         assertEquals("u1", message.getSenderUserId());
+    }
+
+    @Test
+    public void sendMessage_AiModeWithCurrentTrip_AppendsTripDatesToDraftQuery() {
+        viewModel.init("group1", "Group 1", "u1");
+        long startAt = LocalDate.of(2026, 5, 1)
+                .atStartOfDay(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli();
+        long endAt = LocalDate.of(2026, 5, 3)
+                .atStartOfDay(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli();
+        tripsLiveData.setValue(Collections.singletonList(new TripPlan(
+                "trip-1",
+                "group1",
+                "Weekend",
+                "Trip",
+                startAt,
+                endAt,
+                Collections.emptyList(),
+                Collections.singletonList("u1")
+        )));
+
+        Place place = new Place("place1", "Cafe", "Addr", 4.5, new Location(10.0, 20.0));
+        AiTripDraft draft = new AiTripDraft("Weekend plan", "Relaxed trip", Collections.singletonList(
+                new AiTripDraftStop("place1", place, 90, "Morning coffee", "2026-05-01T09:00:00Z")
+        ));
+        when(mockChatRepository.draftTripFromQuery(anyString())).thenReturn(
+                new MutableLiveData<>(new AiTripDraftResult(
+                        draft,
+                        Collections.singletonList(place),
+                        Collections.emptyList(),
+                        null
+                ))
+        );
+
+        viewModel.enterAiDraftMode();
+        viewModel.sendMessage("draft me a weekend trip");
+
+        ArgumentCaptor<String> queryCaptor = ArgumentCaptor.forClass(String.class);
+        verify(mockChatRepository).draftTripFromQuery(queryCaptor.capture());
+        String submittedQuery = queryCaptor.getValue();
+        assertTrue(submittedQuery.contains("draft me a weekend trip"));
+        assertTrue(submittedQuery.contains("Start date: 2026-05-01"));
+        assertTrue(submittedQuery.contains("End date: 2026-05-03"));
+    }
+
+    @Test
+    public void onSaveTripCardAsNew_UsesTripDateRangeWhenOnlyStartEndTimesExist() {
+        viewModel.init("group1", "Group 1", "u1");
+        long startAt = LocalDate.of(2026, 5, 1)
+                .atStartOfDay(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli();
+        long endAt = LocalDate.of(2026, 5, 3)
+                .atStartOfDay(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli();
+        tripsLiveData.setValue(Collections.singletonList(new TripPlan(
+                "trip-1",
+                "group1",
+                "Weekend",
+                "Trip",
+                startAt,
+                endAt,
+                Collections.emptyList(),
+                Collections.singletonList("u1")
+        )));
+        doAnswer(invocation -> {
+            ITripRepository.OperationCallback callback = invocation.getArgument(7);
+            callback.onComplete(true);
+            return null;
+        }).when(mockTripRepository).saveDraftTrip(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyLong(),
+                anyLong(),
+                anyList(),
+                any()
+        );
+
+        String payload = "{"
+                + "\"tripId\":\"draft-1\","
+                + "\"currentTripId\":\"trip-1\","
+                + "\"startAt\":" + startAt + ","
+                + "\"endAt\":" + endAt + ","
+                + "\"title\":\"Weekend\","
+                + "\"summary\":\"Trip\","
+                + "\"stops\":[{"
+                + "\"name\":\"Cafe\","
+                + "\"address\":\"Addr\","
+                + "\"note\":\"Morning coffee\","
+                + "\"durationMinutes\":90,"
+                + "\"startTime\":\"09:00\","
+                + "\"endTime\":\"10:30\","
+                + "\"latitude\":10.0,"
+                + "\"longitude\":20.0"
+                + "}]"
+                + "}";
+
+        viewModel.onSaveTripCardAsNew("draft-1", payload);
+
+        ArgumentCaptor<List> stopsCaptor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<Long> startCaptor = ArgumentCaptor.forClass(Long.class);
+        ArgumentCaptor<Long> endCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(mockTripRepository).saveDraftTrip(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                startCaptor.capture(),
+                endCaptor.capture(),
+                stopsCaptor.capture(),
+                any()
+        );
+        assertEquals(startAt, startCaptor.getValue().longValue());
+        assertEquals(endAt, endCaptor.getValue().longValue());
+        List<?> capturedStops = stopsCaptor.getValue();
+        assertEquals(1, capturedStops.size());
+        TripStop scheduledStop = (TripStop) capturedStops.get(0);
+        assertEquals(
+                LocalDate.of(2026, 5, 1),
+                Instant.ofEpochMilli(scheduledStop.getArrivalTime())
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDate()
+        );
+        assertTrue(scheduledStop.getDepartureTime() > scheduledStop.getArrivalTime());
     }
 
     @Test

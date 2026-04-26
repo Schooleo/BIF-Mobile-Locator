@@ -1,5 +1,6 @@
 package com.bif.server.features.ai.services;
 
+import com.bif.server.features.ai.AiGenerationConstraints;
 import com.bif.server.features.ai.dto.PlaceSearchExtraction;
 import com.bif.server.features.place.models.Place;
 import com.bif.server.features.place.repositories.PlaceRepository;
@@ -29,6 +30,7 @@ public class AiPlaceGroundingService {
     private static final int MAX_QUERY_VARIANTS = 10;
     private static final int MAX_CANDIDATE_POOL = 32;
     private static final int TYPESENSE_BATCH_SIZE = 16;
+    private static final int MIN_CONTAINS_VIBE_LENGTH = 3;
     private static final Pattern DISTRICT_NUMBER_PATTERN = Pattern.compile(
             "\\b(?:district|quan|q)\\s*([0-9]{1,2})\\b");
     private static final Set<String> GENERIC_LOCATION_TERMS = Set.of(
@@ -63,11 +65,22 @@ public class AiPlaceGroundingService {
     }
 
     public List<Place> ground(PlaceSearchExtraction extraction, Double latitude, Double longitude) {
+        return ground(extraction, latitude, longitude, AiGenerationConstraints.none());
+    }
+
+    public List<Place> ground(
+            PlaceSearchExtraction extraction,
+            Double latitude,
+            Double longitude,
+            AiGenerationConstraints constraints) {
         if (extraction == null) {
             return List.of();
         }
 
-        LinkedHashSet<String> queryTerms = buildQueryTerms(extraction);
+        AiGenerationConstraints effectiveConstraints = constraints == null
+                ? AiGenerationConstraints.none()
+                : constraints;
+        LinkedHashSet<String> queryTerms = buildQueryTerms(extraction, effectiveConstraints);
         if (queryTerms.isEmpty()) {
             return List.of();
         }
@@ -118,12 +131,15 @@ public class AiPlaceGroundingService {
             for (String vibeHint : vibeHintNormalizer.expand(extraction.vibe())) {
                 addTagMatches(matches, vibeHint);
             }
+            for (String targetVibe : effectiveConstraints.getTargetVibes()) {
+                addTagMatches(matches, targetVibe);
+            }
         }
 
         return matches.values().stream()
                 .filter(place -> !place.isDeleted())
                 .sorted(Comparator.comparingDouble(
-                        place -> -rankingScore(place, locationFocus, queryTerms)))
+                        place -> -rankingScore(place, locationFocus, queryTerms, effectiveConstraints)))
                 .limit(MAX_RESULTS)
                 .toList();
     }
@@ -144,6 +160,10 @@ public class AiPlaceGroundingService {
     }
 
     private LinkedHashSet<String> buildQueryTerms(PlaceSearchExtraction extraction) {
+        return buildQueryTerms(extraction, AiGenerationConstraints.none());
+    }
+
+    private LinkedHashSet<String> buildQueryTerms(PlaceSearchExtraction extraction, AiGenerationConstraints constraints) {
         LinkedHashSet<String> queryTerms = new LinkedHashSet<>();
         if (extraction == null) {
             return queryTerms;
@@ -154,6 +174,9 @@ public class AiPlaceGroundingService {
             queryTerms.add(extraction.category());
         }
         queryTerms.addAll(vibeHintNormalizer.expand(extraction.vibe()));
+        if (constraints != null) {
+            queryTerms.addAll(constraints.getTargetVibes());
+        }
         return queryTerms;
     }
 
@@ -284,10 +307,15 @@ public class AiPlaceGroundingService {
         return nonGenericWordCount > 0;
     }
 
-    private double rankingScore(Place place, LocationFocus locationFocus, LinkedHashSet<String> queryTerms) {
+    private double rankingScore(
+            Place place,
+            LocationFocus locationFocus,
+            LinkedHashSet<String> queryTerms,
+            AiGenerationConstraints constraints) {
         return popularityScore(place)
                 + locationMatchScore(place, locationFocus)
-                + lexicalSignalScore(place, queryTerms);
+                + lexicalSignalScore(place, queryTerms)
+                + vibeMatchScore(place, constraints);
     }
 
     private double popularityScore(Place place) {
@@ -363,6 +391,35 @@ public class AiPlaceGroundingService {
         return Math.min(score, 0.8);
     }
 
+
+    private double vibeMatchScore(Place place, AiGenerationConstraints constraints) {
+        if (place == null || constraints == null || !constraints.hasTargetVibes()) {
+            return 0.0;
+        }
+        List<String> tags = place.getTags() == null ? List.of() : place.getTags();
+        if (tags.isEmpty()) {
+            return 0.0;
+        }
+        double score = 0.0;
+        for (String targetVibe : constraints.getTargetVibes()) {
+            String normalizedTargetVibe = normalizeForMatch(targetVibe);
+            if (tags.stream().anyMatch(tag -> {
+                String normalizedTag = normalizeForMatch(tag);
+                return normalizedTag.equals(normalizedTargetVibe)
+                        || (normalizedTag.length() >= MIN_CONTAINS_VIBE_LENGTH
+                        && normalizedTargetVibe.length() >= MIN_CONTAINS_VIBE_LENGTH
+                        && (normalizedTag.contains(normalizedTargetVibe)
+                        || normalizedTargetVibe.contains(normalizedTag)));
+            })) {
+                score += 1.2;
+            }
+            if (score >= 3.0) {
+                break;
+            }
+        }
+        return Math.min(score, 3.0);
+    }
+
     private boolean containsNormalized(String value, String lookup) {
         if (value == null || lookup == null || lookup.isBlank()) {
             return false;
@@ -436,6 +493,7 @@ public class AiPlaceGroundingService {
 
         if (allowDirectAlias && looksLikeLocation(rawValue)) {
             directAliases.add(normalized);
+            addGenericAdministrativeAliases(directAliases, cityAliases, areaAliases, normalized);
         }
 
         if (containsAlias(normalized,
@@ -487,6 +545,50 @@ public class AiPlaceGroundingService {
             areaAliases.add("quan " + districtNumber);
             areaAliases.add("q" + districtNumber);
         }
+    }
+
+
+    private void addGenericAdministrativeAliases(
+            Set<String> directAliases,
+            Set<String> cityAliases,
+            Set<String> areaAliases,
+            String normalized) {
+        if (normalized == null || normalized.isBlank()) {
+            return;
+        }
+
+        if (containsAnyWord(normalized, "city", "province", "town", "commune", "locality")) {
+            cityAliases.add(normalized);
+            addStrippedAdministrativeAlias(cityAliases, normalized);
+        }
+        if (containsAnyWord(normalized, "district", "quan", "ward", "phuong", "neighborhood")) {
+            areaAliases.add(normalized);
+            addStrippedAdministrativeAlias(areaAliases, normalized);
+        }
+        addStrippedAdministrativeAlias(directAliases, normalized);
+    }
+
+    private void addStrippedAdministrativeAlias(Set<String> aliases, String normalized) {
+        String stripped = normalized
+                .replaceAll("\\b(city|province|town|commune|locality|district|quan|ward|phuong|neighborhood)\\b", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (!stripped.isBlank() && looksLikeLocation(stripped)) {
+            aliases.add(stripped);
+        }
+    }
+
+    private boolean containsAnyWord(String normalized, String... words) {
+        if (normalized == null) {
+            return false;
+        }
+        Set<String> tokens = new HashSet<>(List.of(normalized.split("\\s+")));
+        for (String word : words) {
+            if (tokens.contains(word)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean containsAlias(String normalized, String... aliases) {

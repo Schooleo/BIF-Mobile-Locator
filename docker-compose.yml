@@ -132,8 +132,8 @@ services:
         reservations:
           devices:
             - driver: nvidia
+              count: all
               capabilities: [gpu]
-              count: 1
     env_file:
       - .env
     environment:

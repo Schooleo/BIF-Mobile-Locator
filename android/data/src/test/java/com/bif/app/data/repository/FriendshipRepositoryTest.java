@@ -1,8 +1,12 @@
 package com.bif.app.data.repository;
 
+import android.content.Context;
+import android.content.SharedPreferences;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
  import static org.mockito.Mockito.never;
@@ -50,14 +54,23 @@ public class FriendshipRepositoryTest {
         @Mock
         private NetworkMonitor mockNetworkMonitor;
 
+    @Mock
+    private Context mockContext;
+
+    @Mock
+    private SharedPreferences mockSharedPreferences;
+
     private FriendshipRepository repository;
 
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
+        when(mockContext.getSharedPreferences(anyString(), anyInt())).thenReturn(mockSharedPreferences);
+        when(mockSharedPreferences.getBoolean(eq("is_logged_in"), eq(false))).thenReturn(true);
+        when(mockSharedPreferences.getString(eq("auth_token"), anyString())).thenReturn("test-token");
         repository = new FriendshipRepository(mockRestApiService,
                                 mockFriendshipDao, mockFriendDao, mockSyncManager,
-                                mockNetworkMonitor);
+                                mockNetworkMonitor, mockContext);
                 when(mockNetworkMonitor.isOnline()).thenReturn(true);
 
         stubAuthUser();

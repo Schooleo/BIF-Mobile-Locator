@@ -8,6 +8,9 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
@@ -58,55 +61,90 @@ public class OllamaJsonClient {
     }
 
     private String generate(String systemPrompt, String userPrompt, Object format) {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(resolveGenerateEndpoint()))
-                .timeout(Duration.ofMillis(ollamaProperties.getTimeoutMs()))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(
-                        buildRequestBody(systemPrompt, userPrompt, format),
-                        StandardCharsets.UTF_8))
-                .build();
-
-        String rawBody = null;
+        String requestBody = buildRequestBody(systemPrompt, userPrompt, format);
+        List<String> endpoints = resolveGenerateEndpoints();
+        RuntimeException lastRecoverableException = null;
         try {
-            HttpResponse<String> response = httpClient.send(
-                    request,
-                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new AiUpstreamException(
-                        "Ollama request failed with status " + response.statusCode());
-            }
+            for (int index = 0; index < endpoints.size(); index++) {
+                String endpoint = endpoints.get(index);
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(endpoint))
+                        .timeout(Duration.ofMillis(ollamaProperties.getTimeoutMs()))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(requestBody, StandardCharsets.UTF_8))
+                        .build();
 
-            rawBody = response.body();
-            JsonNode payload = objectMapper.readTree(rawBody);
-            JsonNode errorNode = payload.path("error");
-            if (!errorNode.isMissingNode() && !errorNode.isNull()) {
-                throw new AiUpstreamException(
-                        "Ollama returned an error payload: " + textOrSnippet(errorNode.asText()));
-            }
+                HttpResponse<String> response = httpClient.send(
+                        request,
+                        HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                    String detail = "Ollama request failed with status "
+                            + response.statusCode()
+                            + " at "
+                            + endpoint
+                            + " body="
+                            + snippet(response.body());
+                    if (response.statusCode() == 404 && index + 1 < endpoints.size()) {
+                        lastRecoverableException = new AiUpstreamException(detail);
+                        continue;
+                    }
+                    throw new AiUpstreamException(detail);
+                }
 
-            JsonNode responseNode = payload.path("response");
-            if (!responseNode.isTextual() || responseNode.asText().isBlank()) {
-                throw new AiUpstreamException("Ollama returned an empty response payload");
+                try {
+                    return decodeGeneratePayload(response.body(), endpoint);
+                } catch (JsonProcessingException e) {
+                    String detail = "Failed to decode Ollama transport payload at "
+                            + endpoint
+                            + " body="
+                            + snippet(response.body());
+                    if (index + 1 < endpoints.size()) {
+                        lastRecoverableException = new AiUpstreamException(detail, e);
+                        continue;
+                    }
+                    throw new AiParseException(detail, e);
+                }
             }
-            return responseNode.asText();
-        } catch (JsonProcessingException e) {
-            throw new AiParseException(
-                    "Failed to decode Ollama transport payload: " + snippet(rawBody),
-                    e
-            );
+            if (lastRecoverableException != null) {
+                throw lastRecoverableException;
+            }
+            throw new AiUpstreamException("Ollama request failed without a reachable endpoint");
         } catch (HttpTimeoutException e) {
             throw new AiUpstreamException(
-                "Ollama request timed out after "
-                    + ollamaProperties.getTimeoutMs()
-                    + " ms",
-                e);
+                    "Ollama request timed out after "
+                            + ollamaProperties.getTimeoutMs()
+                            + " ms",
+                    e);
         } catch (IOException e) {
             throw new AiUpstreamException("Failed to call Ollama", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new AiUpstreamException("Ollama request was interrupted", e);
         }
+    }
+
+    private String decodeGeneratePayload(String rawBody, String endpoint) throws JsonProcessingException {
+        JsonNode payload = objectMapper.readTree(rawBody);
+        JsonNode errorNode = payload.path("error");
+        if (!errorNode.isMissingNode() && !errorNode.isNull()) {
+            throw new AiUpstreamException(
+                    "Ollama returned an error payload from "
+                            + endpoint
+                            + ": "
+                            + textOrSnippet(errorNode.asText())
+            );
+        }
+
+        JsonNode responseNode = payload.path("response");
+        if (!responseNode.isTextual() || responseNode.asText().isBlank()) {
+            throw new AiUpstreamException(
+                    "Ollama returned an empty response payload from "
+                            + endpoint
+                            + ": "
+                            + snippet(rawBody)
+            );
+        }
+        return responseNode.asText();
     }
 
     private String textOrSnippet(String value) {
@@ -168,12 +206,34 @@ public class OllamaJsonClient {
         }
     }
 
-    private String resolveGenerateEndpoint() {
+    private List<String> resolveGenerateEndpoints() {
         String baseUrl = ollamaProperties.getBaseUrl();
+        if (baseUrl == null || baseUrl.isBlank()) {
+            baseUrl = "http://localhost:11434";
+        }
+        baseUrl = baseUrl.trim();
         if (baseUrl.endsWith("/")) {
             baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
         }
-        return baseUrl + "/api/generate";
+
+        String normalizedLower = baseUrl.toLowerCase(Locale.ROOT);
+        List<String> endpoints = new ArrayList<>();
+        if (normalizedLower.endsWith("/api/generate")) {
+            endpoints.add(baseUrl);
+            return endpoints;
+        }
+        if (normalizedLower.endsWith("/api")) {
+            endpoints.add(baseUrl + "/generate");
+            return endpoints;
+        }
+        // Treat any configured path ending in /generate as the final Ollama/proxy endpoint.
+        if (normalizedLower.endsWith("/generate")) {
+            endpoints.add(baseUrl);
+            return endpoints;
+        }
+        endpoints.add(baseUrl + "/api/generate");
+        endpoints.add(baseUrl + "/generate");
+        return endpoints;
     }
 
     private record GenerateRequest(

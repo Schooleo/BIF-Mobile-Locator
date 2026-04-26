@@ -3801,3 +3801,4 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         super.onDestroyView();
     }
 }
+

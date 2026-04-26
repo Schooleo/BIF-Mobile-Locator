@@ -1,6 +1,8 @@
 package com.bif.app.di;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 
 import androidx.room.Room;
 
@@ -36,6 +38,7 @@ import timber.log.Timber;
 public class AppModule {
 
     private static final String TAG = "AppModule";
+    private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
 
     @Provides
     @Singleton
@@ -153,12 +156,13 @@ public class AppModule {
                 executor.execute(() -> {
                     try {
                         appDatabase.clearAllTables();
-                        if (onComplete != null) {
-                            new android.os.Handler(android.os.Looper.getMainLooper()).post(onComplete);
-                        }
                     } catch (Exception exception) {
                         Timber.tag(TAG).e(exception,
                                 "Failed to clear local session data");
+                    } finally {
+                        if (onComplete != null) {
+                            MAIN_HANDLER.post(onComplete);
+                        }
                     }
                 });
             }

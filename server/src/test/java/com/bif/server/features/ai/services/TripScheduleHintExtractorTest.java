@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -65,5 +66,27 @@ class TripScheduleHintExtractorTest {
         assertEquals(7, hints.startOffsetDays());
         assertNotNull(hints.suggestedStartDateTime());
         assertEquals(18, hints.suggestedStartDateTime().getHour());
+    }
+
+    @Test
+    void extract_ParsesExplicitDateRangeDirective() {
+        TripScheduleHintExtractor extractor = new TripScheduleHintExtractor(
+                Clock.fixed(
+                        Instant.parse("2026-04-11T00:00:00Z"),
+                        ZoneId.of("Asia/Ho_Chi_Minh")));
+
+        TripScheduleHintExtractor.TripScheduleHints hints = extractor.extract(
+                "Da Lat Mountains Trip date range:\n"
+                        + "- Start date: 2026-04-27\n"
+                        + "- End date: 2026-04-29\n"
+                        + "Schedule each stop within this date range.");
+
+        assertTrue(hints.shouldArrangeDateTime());
+        assertEquals(3, hints.daySpan());
+        assertNotNull(hints.suggestedStartDateTime());
+        OffsetDateTime suggestedStart = hints.suggestedStartDateTime();
+        assertEquals(27, suggestedStart.getDayOfMonth());
+        assertEquals(9, suggestedStart.getHour());
+        assertTrue(hints.signals().stream().anyMatch(signal -> signal.contains("dateRange=")));
     }
 }

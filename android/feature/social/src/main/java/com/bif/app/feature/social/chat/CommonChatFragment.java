@@ -70,6 +70,10 @@ public class CommonChatFragment extends Fragment {
     private SwipeRefreshLayout swipeRefreshLayout;
     private View layoutInputBar;
     private Drawable defaultInputBarBackground;
+    private View aiBadgesRow;
+    private MaterialCardView btnAiDraftTrip;
+    private MaterialCardView btnAiSuggestPlaces;
+    private boolean supportsAiModes;
     private List<ChatMessage> latestMessages = new ArrayList<>();
     private int previousSoftInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_UNSPECIFIED;
     private boolean applyingMention = false;
@@ -93,7 +97,7 @@ public class CommonChatFragment extends Fragment {
         String chatName = getArg(args, "chatName", getString(R.string.chat_default_name));
         int memberCount = args != null ? args.getInt("memberCount", 0) : 0;
         long friendshipCreatedAt = args != null ? args.getLong("friendshipCreatedAt", 0L) : 0L;
-        boolean supportsAiModes = "group".equalsIgnoreCase(chatType);
+        supportsAiModes = "group".equalsIgnoreCase(chatType);
 
         TextView tvTitle = view.findViewById(R.id.tv_chat_title);
         TextView tvSubtitle = view.findViewById(R.id.tv_chat_subtitle);
@@ -104,9 +108,9 @@ public class CommonChatFragment extends Fragment {
         View composerBar = view.findViewById(R.id.layout_chat_composer);
         layoutInputBar = view.findViewById(R.id.layout_input_bar);
         defaultInputBarBackground = layoutInputBar.getBackground();
-        View aiBadgesRow = view.findViewById(R.id.layout_ai_badges);
-        MaterialCardView btnAiDraftTrip = view.findViewById(R.id.btn_ai_draft_trip);
-        MaterialCardView btnAiSuggestPlaces = view.findViewById(R.id.btn_ai_suggest_places);
+        aiBadgesRow = view.findViewById(R.id.layout_ai_badges);
+        btnAiDraftTrip = view.findViewById(R.id.btn_ai_draft_trip);
+        btnAiSuggestPlaces = view.findViewById(R.id.btn_ai_suggest_places);
         EditText etMessage = view.findViewById(R.id.et_message);
         messageInput = etMessage;
         MaterialButton btnSend = view.findViewById(R.id.btn_send);
@@ -201,17 +205,7 @@ public class CommonChatFragment extends Fragment {
             }
         });
         viewModel.getAiBadgesEnabled().observe(getViewLifecycleOwner(), enabled -> {
-            boolean isEnabled = supportsAiModes && Boolean.TRUE.equals(enabled);
-            aiBadgesRow.setVisibility(isEnabled ? View.VISIBLE : View.GONE);
-            btnAiDraftTrip.setClickable(true);
-            btnAiSuggestPlaces.setClickable(true);
-            float alpha = isEnabled ? 1f : 0.45f;
-            btnAiDraftTrip.setAlpha(alpha);
-            btnAiSuggestPlaces.setAlpha(alpha);
-            if (!isEnabled) {
-                viewModel.cancelAiDraftMode();
-                viewModel.cancelAiSuggestPlacesMode();
-            }
+            updateAiBadgeAvailability(Boolean.TRUE.equals(enabled));
         });
         viewModel.getAiDraftModeEnabled().observe(getViewLifecycleOwner(), isDraftMode -> {
             boolean enabled = Boolean.TRUE.equals(isDraftMode);
@@ -264,6 +258,10 @@ public class CommonChatFragment extends Fragment {
         });
 
         btnAiDraftTrip.setOnClickListener(v -> {
+            if (!viewModel.isAuthenticated()) {
+                AppSnackbar.show(requireContext(), R.string.social_login_required_ai);
+                return;
+            }
             if (!viewModel.isAiAvailable()) {
                 AppSnackbar.show(requireContext(), R.string.chat_ai_offline);
                 return;
@@ -272,6 +270,10 @@ public class CommonChatFragment extends Fragment {
             focusInputAndShowKeyboard(etMessage);
         });
         btnAiSuggestPlaces.setOnClickListener(v -> {
+            if (!viewModel.isAuthenticated()) {
+                AppSnackbar.show(requireContext(), R.string.social_login_required_ai);
+                return;
+            }
             if (!viewModel.isAiAvailable()) {
                 AppSnackbar.show(requireContext(), R.string.chat_ai_offline);
                 return;
@@ -307,12 +309,31 @@ public class CommonChatFragment extends Fragment {
         if (messageInput != null) {
             messageInput.clearFocus();
         }
+        Boolean aiBadgesEnabled = viewModel != null ? viewModel.getAiBadgesEnabled().getValue() : null;
+        updateAiBadgeAvailability(Boolean.TRUE.equals(aiBadgesEnabled));
     }
 
     @Override
     public void onPause() {
         requireActivity().getWindow().setSoftInputMode(previousSoftInputMode);
         super.onPause();
+    }
+
+    private void updateAiBadgeAvailability(boolean aiBadgesEnabled) {
+        if (aiBadgesRow == null || btnAiDraftTrip == null || btnAiSuggestPlaces == null || viewModel == null) {
+            return;
+        }
+        boolean isEnabled = supportsAiModes && aiBadgesEnabled && viewModel.isAuthenticated();
+        aiBadgesRow.setVisibility(supportsAiModes ? View.VISIBLE : View.GONE);
+        btnAiDraftTrip.setClickable(true);
+        btnAiSuggestPlaces.setClickable(true);
+        float alpha = isEnabled ? 1f : 0.45f;
+        btnAiDraftTrip.setAlpha(alpha);
+        btnAiSuggestPlaces.setAlpha(alpha);
+        if (!isEnabled) {
+            viewModel.cancelAiDraftMode();
+            viewModel.cancelAiSuggestPlacesMode();
+        }
     }
 
     // ─── LiveData observers ────────────────────────────────────────────────────
@@ -735,7 +756,9 @@ public class CommonChatFragment extends Fragment {
 
             String note = stop.optString("note", "").trim();
             String plannedDateTime = stop.optString("plannedDateTime", "").trim();
-            int durationMinutes = Math.max(0, stop.optInt("durationMinutes", 0));
+            String startTime = stop.optString("startTime", "").trim();
+            String endTime = stop.optString("endTime", "").trim();
+            int durationMinutes = Math.max(0, stop.optInt("duration", stop.optInt("durationMinutes", 0)));
             Double latitude = optNullableDouble(stop, "latitude");
             Double longitude = optNullableDouble(stop, "longitude");
 
@@ -745,6 +768,8 @@ public class CommonChatFragment extends Fragment {
                     address,
                     note,
                     plannedDateTime,
+                    startTime,
+                    endTime,
                     durationMinutes,
                     latitude,
                     longitude

@@ -33,11 +33,17 @@ public class TripDraftingAgent {
                                     "minimum": %d,
                                     "maximum": %d
                                 },
-                                "note": { "type": ["string", "null"] }
-                                ,
+                                "startTime": { "type": ["string", "null"] },
+                                "endTime": { "type": ["string", "null"] },
+                                "duration": {
+                                    "type": "integer",
+                                    "minimum": %d,
+                                    "maximum": %d
+                                },
+                                "note": { "type": ["string", "null"] },
                                 "plannedDateTime": { "type": ["string", "null"] }
                             },
-                            "required": ["placeId", "durationMinutes"],
+                            "required": ["placeId", "durationMinutes", "startTime", "endTime", "duration"],
                             "additionalProperties": false
                         }
                     }
@@ -48,6 +54,8 @@ public class TripDraftingAgent {
             """.formatted(
             AiGenerationConstraints.MIN_STOPS,
             AiGenerationConstraints.MAX_STOPS,
+            AiGenerationConstraints.MIN_STOP_DURATION_MINUTES,
+            AiGenerationConstraints.MAX_STOP_DURATION_MINUTES,
             AiGenerationConstraints.MIN_STOP_DURATION_MINUTES,
             AiGenerationConstraints.MAX_STOP_DURATION_MINUTES
     );
@@ -96,8 +104,8 @@ public class TripDraftingAgent {
         return ollamaJsonClient.generateJson(
                 buildSystemPrompt(),
                 buildUserPrompt(userQuery, allowedPlaces, failureReason, schedulingHint),
-            ITINERARY_SCHEMA,
-            GeneratedItinerary.class);
+                ITINERARY_SCHEMA,
+                GeneratedItinerary.class);
     }
 
     private String buildSystemPrompt() {
@@ -108,6 +116,9 @@ public class TripDraftingAgent {
                 You must use only the exact placeId values provided in the context.
                 Return 1-8 stops.
                 Use durationMinutes between 15 and 360.
+                For each stop in the itinerary, you MUST provide 'startTime' (String, format HH:mm), 'endTime' (String, format HH:mm), and 'duration' (Integer, total minutes spent). Include these fields in your JSON output explicitly.
+                Treat durationMinutes as the canonical scheduled duration in minutes; duration is a compatibility alias and MUST equal durationMinutes.
+                Use 24-hour HH:mm values for startTime and endTime and make endTime exactly startTime plus duration minutes when possible.
                 Do not repeat the same placeId more than once.
                 Return exactly this schema:
                 {
@@ -117,6 +128,9 @@ public class TripDraftingAgent {
                         {
                             "placeId": "string",
                             "durationMinutes": 60,
+                            "startTime": "HH:mm",
+                            "endTime": "HH:mm",
+                            "duration": 60,
                             "note": "string|null",
                             "plannedDateTime": "ISO-8601 string|null"
                         }

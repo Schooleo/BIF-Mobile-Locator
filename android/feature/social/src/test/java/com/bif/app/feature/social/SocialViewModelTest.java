@@ -3,6 +3,7 @@ package com.bif.app.feature.social;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.after;
@@ -10,6 +11,9 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import android.content.Context;
+import android.content.SharedPreferences;
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule;
 import androidx.lifecycle.MutableLiveData;
@@ -21,6 +25,7 @@ import com.bif.app.domain.model.Friend;
 import com.bif.app.domain.model.Group;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
+import com.bif.app.domain.model.TripStop;
 import com.bif.app.domain.repository.IChatRepository;
 import com.bif.app.domain.repository.IFriendshipRepository;
 import com.bif.app.domain.repository.IGroupRepository;
@@ -29,9 +34,13 @@ import com.bif.app.domain.repository.ITripRepository;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -53,11 +62,20 @@ public class SocialViewModelTest {
     @Mock
     private IChatRepository mockChatRepository;
 
+    @Mock
+    private Context mockContext;
+
+    @Mock
+    private SharedPreferences mockSharedPreferences;
+
     private SocialViewModel viewModel;
 
     @Before
     public void setup() {
         MockitoAnnotations.initMocks(this);
+        when(mockContext.getSharedPreferences(anyString(), anyInt())).thenReturn(mockSharedPreferences);
+        when(mockSharedPreferences.getBoolean(eq("is_logged_in"), eq(false))).thenReturn(true);
+        when(mockSharedPreferences.getString(eq("auth_token"), anyString())).thenReturn("test-token");
         when(mockFriendshipRepository.getFriends()).thenReturn(new MutableLiveData<>());
         when(mockFriendshipRepository.getPendingRequests()).thenReturn(new MutableLiveData<>());
         when(mockGroupRepository.getGroups()).thenReturn(new MutableLiveData<>());
@@ -66,7 +84,8 @@ public class SocialViewModelTest {
             mockFriendshipRepository,
             mockGroupRepository,
             mockTripRepository,
-            mockChatRepository);
+            mockChatRepository,
+            mockContext);
     }
 
     // ==================== Friend Tests ====================
@@ -236,6 +255,75 @@ public class SocialViewModelTest {
     }
 
     @Test
+    public void submitAiTripDraftQuery_withDateRange_AppendsDatesToPrompt() {
+        Place place = new Place("place-1", "Museum", "District 1", 4.6, new Location(10.77, 106.70));
+        AiTripDraftStop stop = new AiTripDraftStop(
+                "place-1",
+                place,
+                90,
+                "Visit gallery",
+                "2026-05-01T09:00:00Z"
+        );
+        when(mockChatRepository.draftTripFromQuery(anyString())).thenReturn(new MutableLiveData<>(
+                new AiTripDraftResult(
+                        new AiTripDraft("Culture day", "City museums and cafés", Collections.singletonList(stop)),
+                        Collections.singletonList(place),
+                        Collections.emptyList(),
+                        null
+                )
+        ));
+
+        long startAt = LocalDate.of(2026, 5, 1)
+                .atStartOfDay(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli();
+        long endAt = LocalDate.of(2026, 5, 3)
+                .atStartOfDay(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli();
+        viewModel.submitAiTripDraftQuery("plan me a museum day", startAt, endAt);
+
+        ArgumentCaptor<String> queryCaptor = ArgumentCaptor.forClass(String.class);
+        verify(mockChatRepository).draftTripFromQuery(queryCaptor.capture());
+        String submittedQuery = queryCaptor.getValue();
+        org.junit.Assert.assertTrue(submittedQuery.contains("Start date: 2026-05-01"));
+        org.junit.Assert.assertTrue(submittedQuery.contains("End date: 2026-05-03"));
+    }
+
+    @Test
+    public void submitAiTripDraftQuery_sameStartAndEndDate_StillAppendsDatesToPrompt() {
+        Place place = new Place("place-1", "Museum", "District 1", 4.6, new Location(10.77, 106.70));
+        AiTripDraftStop stop = new AiTripDraftStop(
+                "place-1",
+                place,
+                90,
+                "Visit gallery",
+                "2026-05-01T09:00:00Z"
+        );
+        when(mockChatRepository.draftTripFromQuery(anyString())).thenReturn(new MutableLiveData<>(
+                new AiTripDraftResult(
+                        new AiTripDraft("Culture day", "City museums and cafés", Collections.singletonList(stop)),
+                        Collections.singletonList(place),
+                        Collections.emptyList(),
+                        null
+                )
+        ));
+
+        long startAt = LocalDate.of(2026, 5, 1)
+                .atStartOfDay(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli();
+        long endAt = startAt;
+        viewModel.submitAiTripDraftQuery("plan me a museum day", startAt, endAt);
+
+        ArgumentCaptor<String> queryCaptor = ArgumentCaptor.forClass(String.class);
+        verify(mockChatRepository).draftTripFromQuery(queryCaptor.capture());
+        String submittedQuery = queryCaptor.getValue();
+        org.junit.Assert.assertTrue(submittedQuery.contains("Start date: 2026-05-01"));
+        org.junit.Assert.assertTrue(submittedQuery.contains("End date: 2026-05-01"));
+    }
+
+    @Test
     public void submitAiTripDraftQuery_failure_PublishesErrorState() {
         MutableLiveData<AiTripDraftResult> result = new MutableLiveData<>(
                 new AiTripDraftResult(
@@ -304,6 +392,80 @@ public class SocialViewModelTest {
                 SocialViewModel.AI_DRAFT_SAVE_SUCCESS_MESSAGE,
                 viewModel.getTripActionMessage().getValue()
         );
+    }
+
+    @Test
+    public void saveCurrentAiDraftTrip_withoutPlannedDateTime_UsesSelectedDateRange() {
+        Place place = new Place("place-1", "Museum", "District 1", 4.6, new Location(10.77, 106.70));
+        AiTripDraftStop stop = new AiTripDraftStop(
+                "place-1",
+                place,
+                90,
+                "09:00",
+                "10:30",
+                90,
+                "Visit gallery",
+                null
+        );
+        when(mockChatRepository.draftTripFromQuery(anyString())).thenReturn(new MutableLiveData<>(
+                new AiTripDraftResult(
+                        new AiTripDraft("Culture day", "City museums and cafés", Collections.singletonList(stop)),
+                        Collections.singletonList(place),
+                        Collections.emptyList(),
+                        null
+                )
+        ));
+        doAnswer(invocation -> {
+            ITripRepository.OperationCallback callback = invocation.getArgument(7);
+            callback.onComplete(true);
+            return null;
+        }).when(mockTripRepository).saveDraftTrip(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyLong(),
+                anyLong(),
+                anyList(),
+                any()
+        );
+
+        long startAt = LocalDate.of(2026, 5, 1)
+                .atStartOfDay(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli();
+        long endAt = LocalDate.of(2026, 5, 3)
+                .atStartOfDay(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli();
+        viewModel.submitAiTripDraftQuery("plan me a museum day", startAt, endAt);
+        viewModel.saveCurrentAiDraftTrip(null);
+
+        ArgumentCaptor<List> stopsCaptor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<Long> startCaptor = ArgumentCaptor.forClass(Long.class);
+        ArgumentCaptor<Long> endCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(mockTripRepository, timeout(1000)).saveDraftTrip(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                startCaptor.capture(),
+                endCaptor.capture(),
+                stopsCaptor.capture(),
+                any()
+        );
+        org.junit.Assert.assertEquals(startAt, startCaptor.getValue().longValue());
+        org.junit.Assert.assertEquals(endAt, endCaptor.getValue().longValue());
+        List<?> capturedStops = stopsCaptor.getValue();
+        org.junit.Assert.assertEquals(1, capturedStops.size());
+        TripStop scheduledStop = (TripStop) capturedStops.get(0);
+        org.junit.Assert.assertEquals(
+                LocalDate.of(2026, 5, 1),
+                Instant.ofEpochMilli(scheduledStop.getArrivalTime())
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDate()
+        );
+        org.junit.Assert.assertTrue(scheduledStop.getDepartureTime() > scheduledStop.getArrivalTime());
     }
 
     @Test
