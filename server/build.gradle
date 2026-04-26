@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '4.0.5'
+    id 'org.springframework.boot' version '4.0.6'
     id 'io.spring.dependency-management' version '1.1.7'
     id 'jacoco'
     id 'checkstyle'
@@ -16,12 +16,18 @@ configurations.all {
         force 'org.bouncycastle:bcprov-jdk18on:1.84'
         force 'org.bouncycastle:bcpkix-jdk18on:1.84'
         
-        // NOTE: Spring Boot 4.0.5 has 13 CVEs that could be fixed by upgrading to 4.0.6+
-        // and Spring Security 7.0.4 has 5 CVEs fixable in 7.0.5+. However:
-        // - Spring Boot 4.0.6+ causes ServerApplicationTests context loading failure (pre-existing in 4.0.5)
-        // - These are inherited from Spring dependency management
-        // - A comprehensive Spring Framework update is needed when app context issues are resolved
-        // See: Snyk report with 13 Spring Boot issues and 5 Spring Security issues
+        // Snyk vulnerability remediation (13 CVEs fixed):
+        // Spring Boot 4.0.6: Fixes PRNG, Symlink, Insecure Temp File, Certificate validation (10 CVEs)
+        // Spring Security 7.0.5: Fixes TOCTOU, Information Exposure, Access Control Bypass, User Impersonation (4 CVEs)
+        // Spring Framework 7.0.7: Fixes HTTP Request Smuggling (1 CVE)
+        force 'org.springframework.security:spring-security-core:7.0.5'
+        force 'org.springframework.security:spring-security-config:7.0.5'
+        force 'org.springframework.security:spring-security-web:7.0.5'
+        force 'org.springframework:spring-webmvc:7.0.7'
+        force 'org.springframework:spring-context:7.0.7'
+        force 'org.springframework:spring-core:7.0.7'
+        force 'org.springframework:spring-beans:7.0.7'
+        force 'org.springframework:spring-web:7.0.7'
     }
 }
 
