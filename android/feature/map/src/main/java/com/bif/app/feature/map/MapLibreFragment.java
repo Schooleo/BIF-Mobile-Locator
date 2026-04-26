@@ -449,6 +449,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         });
 
         viewModel.allFavorites.observe(getViewLifecycleOwner(), favorites -> {
+
             currentFavorites = favorites != null ? favorites : new ArrayList<>();
             refreshFavoriteMarkers();
         });
@@ -1356,6 +1357,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             clearFavoriteMarkers();
             return;
         }
+
 
         List<Feature> favoriteFeatures = new ArrayList<>();
         for (Favorite favorite : currentFavorites) {
@@ -3094,12 +3096,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             return;
         }
 
-        Timber.tag(TAG).d("showPlaceBottomSheet: id=%s name=%s placeSource=%s lat=%s lng=%s",
-                place != null ? place.id : null,
-                place != null ? place.name : null,
-                place != null ? place.placeSource : null,
-                place != null && place.location != null ? place.location.latitude : null,
-                place != null && place.location != null ? place.location.longitude : null);
+
 
         viewModel.cacheViewedPlace(place);
         showPlaceSheetOnly();
@@ -3138,6 +3135,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
         btnAddFavorite.setOnClickListener(v ->
                 findFavoriteForPlaceWithCanonicalMatch(place, existing -> {
+
                     if (!isAdded()) {
                         return;
                     }
@@ -3149,6 +3147,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                         viewModel.addToFavorites(place, new MapViewModel.AddFavoriteCallback() {
                             @Override
                             public void onSuccess() {
+
                                 locationHandler.post(() -> {
                                     if (!isAdded()) {
                                         return;
@@ -3160,6 +3159,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
                             @Override
                             public void onError(@NonNull String message) {
+                                Timber.tag(TAG).e("addToFavorites onError: %s", message);
                                 locationHandler.post(() -> {
                                     if (!isAdded()) {
                                         return;
@@ -3189,7 +3189,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             shimmerReviews.startShimmer();
         }
         if (allowReviewLoading && place.canResolveCanonicalIdentity()) {
-            Timber.tag(TAG).d("showPlaceBottomSheet: loading reviews with metadata for placeId=%s", place.id);
+
             viewModel.loadReviews(place);
         } else {
             Timber.tag(TAG).w("showPlaceBottomSheet: skipping loadReviews (allowReviewLoading=%s, placeSource=%s), placeId=%s name=%s address=%s",
@@ -3473,13 +3473,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         }
 
         String placeId = place != null && place.id != null ? place.id.trim() : "";
-        Timber.tag(TAG).d("findFavoriteForPlace: placeId=%s name=%s placeSource=%s lat=%s lng=%s favorites=%d",
-                placeId,
-                place.name,
-                place.placeSource,
-                place.location != null ? place.location.latitude : null,
-                place.location != null ? place.location.longitude : null,
-                currentFavorites != null ? currentFavorites.size() : 0);
+
         for (Favorite favorite : currentFavorites) {
             String favoritePlaceId = favorite != null && favorite.placeId != null
                     ? favorite.placeId.trim()

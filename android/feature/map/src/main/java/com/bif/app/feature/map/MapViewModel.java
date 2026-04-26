@@ -372,7 +372,7 @@ public class MapViewModel extends ViewModel {
         _currentPlaceId.setValue(null);
         _isLoadingReviews.setValue(false);
         updateCurrentReviewMetadata(null);
-        Log.d(TAG, "clearReviewTargetForPreview: preview selection, skip resolve/reviews");
+
     }
 
     public void loadReviews(Place place) {
@@ -382,19 +382,14 @@ public class MapViewModel extends ViewModel {
 
         if (place.isPreviewSelection() && !place.canResolveCanonicalIdentity()) {
             clearReviewTargetForPreview();
-            Log.d(TAG, "loadReviews skipped for preview selection. id=" + place.id);
+
             return;
         }
 
         boolean canResolveWithMetadata = place.canResolveCanonicalIdentity();
         boolean canUseExternalIdentity = place.hasCanonicalExternalIdentity();
 
-        Log.d(TAG, "loadReviews: id=" + place.id
-                + ", name=" + place.name
-                + ", placeSource=" + place.placeSource
-                + ", lat=" + place.location.latitude
-                + ", lng=" + place.location.longitude
-                + ", canResolveWithMetadata=" + canResolveWithMetadata);
+
 
         final PlaceIdentityContext placeIdentityContext = new PlaceIdentityContext();
         placeIdentityContext.externalSource = canResolveWithMetadata ? place.placeSource : null;
@@ -419,9 +414,7 @@ public class MapViewModel extends ViewModel {
                 internalId = place.id != null ? place.id.trim() : null;
             }
 
-            Log.d(TAG, "loadReviews resolved internalId=" + internalId
-                    + " for placeId=" + place.id
-                    + ", request canResolveWithMetadata=" + canResolveWithMetadata);
+
 
             if (requestId != reviewLoadRequestId.get()) {
                 return;
@@ -445,11 +438,7 @@ public class MapViewModel extends ViewModel {
     private String resolveCanonicalFavoritePlaceId(@NonNull Place place) {
         String fallbackPlaceId = place.id != null ? place.id.trim() : "";
 
-        Log.d(TAG, "resolveCanonicalFavoritePlaceId: id=" + place.id
-            + ", name=" + place.name
-            + ", placeSource=" + place.placeSource
-            + ", lat=" + (place.location != null ? place.location.latitude : null)
-            + ", lng=" + (place.location != null ? place.location.longitude : null));
+
 
         if (!place.canResolveCanonicalIdentity()) {
             return fallbackPlaceId;
@@ -462,8 +451,7 @@ public class MapViewModel extends ViewModel {
                 place.location.longitude,
                 place.name);
 
-        Log.d(TAG, "resolveCanonicalFavoritePlaceId resolved=" + resolved
-            + " fallback=" + fallbackPlaceId);
+
 
         if (!hasText(resolved)) {
             return fallbackPlaceId;
