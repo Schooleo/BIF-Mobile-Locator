@@ -57,7 +57,10 @@ public class RegisterFragment extends Fragment {
 
         btnSendOtp.setOnClickListener(v -> viewModel.requestOtp(etEmail.getText().toString()));
 
-        btnRegister.setOnClickListener(v -> viewModel.onRegisterClicked());
+        btnRegister.setOnClickListener(v -> viewModel.register(
+            etEmail.getText().toString(),
+            etUsername.getText().toString(),
+            etPassword.getText().toString()));
 
         // Set link text to "Already have an account?"
         TextView tvSignInLink = view.findViewById(R.id.tv_signin_link);
@@ -111,6 +114,12 @@ public class RegisterFragment extends Fragment {
             }
 
             btnRegister.setEnabled(true);
+
+            if (state instanceof RegisterViewModel.UiState.Success) {
+                Toast.makeText(requireContext(), "Register success", Toast.LENGTH_SHORT).show();
+                navController.navigate(UriUtils.buildUri("/login"));
+                return;
+            }
 
             if (state instanceof RegisterViewModel.UiState.Error) {
                 String message = ((RegisterViewModel.UiState.Error) state).getMessage();

@@ -115,12 +115,15 @@ public class RegisterViewModel extends ViewModel {
         });
     }
 
-    public void onRegisterClicked() {
+    public void register(String email, String username, String password) {
+        this.email = email == null ? "" : email.trim();
+        this.username = username == null ? "" : username.trim();
+        this.password = password == null ? "" : password;
         registerState.setValue(new UiState.Loading());
 
-        String resolvedEmail = email == null ? "" : email.trim();
+        String resolvedEmail = this.email;
         String resolvedOtp = otp == null ? "" : otp.trim();
-        String resolvedUsername = username == null ? "" : username.trim();
+        String resolvedUsername = this.username;
 
         ioExecutor.execute(() -> {
             AuthRepository.Result<?> verifyResult = authRepository.verifyRegisterOtp(resolvedEmail, resolvedOtp);
