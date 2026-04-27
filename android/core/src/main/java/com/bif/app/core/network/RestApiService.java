@@ -13,6 +13,10 @@ import com.bif.app.core.network.dto.auth.VerifyOtpResponse;
 import com.bif.app.core.network.dto.auth.LoginRequest;
 import com.bif.app.core.network.dto.auth.RefreshTokenRequest;
 import com.bif.app.core.network.dto.auth.RegisterRequest;
+import com.bif.app.core.network.dto.auth.RegisterOtpRequest;
+import com.bif.app.core.network.dto.auth.RegisterOtpResponse;
+import com.bif.app.core.network.dto.auth.RegisterVerifyOtpRequest;
+import com.bif.app.core.network.dto.auth.RegisterVerifyOtpResponse;
 import com.bif.app.core.network.dto.favorite.FavoriteRequestDto;
 import com.bif.app.core.network.dto.favorite.FavoriteResponseDto;
 import com.bif.app.core.network.dto.friendship.CreateFriendRequestDto;
@@ -59,6 +63,12 @@ public interface RestApiService {
 
     @POST("auth/register")
     Call<AuthResponse> register(@Body RegisterRequest request);
+
+        @POST("auth/register/request-otp")
+        Call<RegisterOtpResponse> requestRegisterOtp(@Body RegisterOtpRequest request);
+
+        @POST("auth/register/verify-otp")
+        Call<RegisterVerifyOtpResponse> verifyRegisterOtp(@Body RegisterVerifyOtpRequest request);
 
     @POST("auth/login")
     Call<AuthResponse> login(@Body LoginRequest request);

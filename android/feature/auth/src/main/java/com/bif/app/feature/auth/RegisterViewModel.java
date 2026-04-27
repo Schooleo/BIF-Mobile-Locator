@@ -25,6 +25,7 @@ public class RegisterViewModel extends ViewModel {
     private final MutableLiveData<Boolean> credentialsEnabled = new MutableLiveData<>(false);
     private final MutableLiveData<Boolean> registerEnabled = new MutableLiveData<>(false);
     private final MutableLiveData<UiState> requestOtpState = new MutableLiveData<>(new UiState.Idle());
+    private final MutableLiveData<UiState> registerState = new MutableLiveData<>(new UiState.Idle());
 
     private final AuthRepository authRepository;
     private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
@@ -59,6 +60,10 @@ public class RegisterViewModel extends ViewModel {
 
     public LiveData<UiState> getRequestOtpState() {
         return requestOtpState;
+    }
+
+    public LiveData<UiState> getRegisterState() {
+        return registerState;
     }
 
     public void onEmailChanged(String value) {
@@ -100,13 +105,41 @@ public class RegisterViewModel extends ViewModel {
 
         requestOtpState.setValue(new UiState.Loading());
         ioExecutor.execute(() -> {
-            AuthRepository.Result<?> result = authRepository.requestOtp(resolvedEmail);
+            AuthRepository.Result<?> result = authRepository.requestRegisterOtp(resolvedEmail);
             if (result instanceof AuthRepository.Result.Success) {
                 requestOtpState.postValue(new UiState.Success());
                 return;
             }
             AuthRepository.Result.Error<?> error = (AuthRepository.Result.Error<?>) result;
             requestOtpState.postValue(new UiState.Error(error.message));
+        });
+    }
+
+    public void onRegisterClicked() {
+        registerState.setValue(new UiState.Loading());
+
+        String resolvedEmail = email == null ? "" : email.trim();
+        String resolvedOtp = otp == null ? "" : otp.trim();
+        String resolvedUsername = username == null ? "" : username.trim();
+
+        ioExecutor.execute(() -> {
+            AuthRepository.Result<?> verifyResult = authRepository.verifyRegisterOtp(resolvedEmail, resolvedOtp);
+            if (!(verifyResult instanceof AuthRepository.Result.Success)) {
+                registerState.postValue(new UiState.Error("Invalid OTP"));
+                return;
+            }
+
+            AuthRepository.Result<?> registerResult = authRepository.register(
+                    resolvedUsername,
+                    resolvedEmail,
+                    password,
+                    confirmPassword);
+            if (registerResult instanceof AuthRepository.Result.Success) {
+                registerState.postValue(new UiState.Success());
+                return;
+            }
+            AuthRepository.Result.Error<?> error = (AuthRepository.Result.Error<?>) registerResult;
+            registerState.postValue(new UiState.Error(error.message));
         });
     }
 

@@ -3,8 +3,14 @@ package com.bif.app.data.repository;
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.auth.ChangePasswordRequest;
 import com.bif.app.core.network.dto.auth.ChangePasswordResponse;
+import com.bif.app.core.network.dto.auth.AuthResponse;
 import com.bif.app.core.network.dto.auth.ForgotPasswordRequestOtpResponse;
 import com.bif.app.core.network.dto.auth.RequestOtpRequest;
+import com.bif.app.core.network.dto.auth.RegisterOtpRequest;
+import com.bif.app.core.network.dto.auth.RegisterOtpResponse;
+import com.bif.app.core.network.dto.auth.RegisterRequest;
+import com.bif.app.core.network.dto.auth.RegisterVerifyOtpRequest;
+import com.bif.app.core.network.dto.auth.RegisterVerifyOtpResponse;
 import com.bif.app.core.network.dto.auth.ResetPasswordRequest;
 import com.bif.app.core.network.dto.auth.ResetPasswordResponse;
 import com.bif.app.core.network.dto.auth.VerifyOtpRequest;
@@ -63,6 +69,38 @@ public class AuthRepository {
         }
     }
 
+    public Result<RegisterOtpResponse> requestRegisterOtp(String email) {
+        if (isBlank(email)) {
+            return new Result.Error<>("Email is required", 0, null);
+        }
+
+        try {
+            Response<RegisterOtpResponse> response = restApiService
+                    .requestRegisterOtp(new RegisterOtpRequest(email.trim()))
+                    .execute();
+
+            if (response.isSuccessful() && response.body() != null) {
+                RegisterOtpResponse body = response.body();
+                if (body.success) {
+                    return new Result.Success<>(body);
+                }
+                return new Result.Error<>(
+                        coalesce(body.message, "Request OTP failed"),
+                        response.code(),
+                        null);
+            }
+
+            return new Result.Error<>(
+                    parseErrorMessage(response, "Request OTP failed"),
+                    response.code(),
+                    null);
+        } catch (IOException ioException) {
+            return new Result.Error<>("Network error. Please try again.", 0, ioException);
+        } catch (Exception exception) {
+            return new Result.Error<>("Unexpected error. Please try again.", 0, exception);
+        }
+    }
+
     public Result<VerifyOtpResponse> verifyOtp(String email, String otp) {
         if (isBlank(email)) {
             return new Result.Error<>("Email is required", 0, null);
@@ -86,6 +124,69 @@ public class AuthRepository {
 
             return new Result.Error<>(
                     parseErrorMessage(response, "OTP is invalid or expired"),
+                    response.code(),
+                    null);
+        } catch (IOException ioException) {
+            return new Result.Error<>("Network error. Please try again.", 0, ioException);
+        } catch (Exception exception) {
+            return new Result.Error<>("Unexpected error. Please try again.", 0, exception);
+        }
+    }
+
+    public Result<RegisterVerifyOtpResponse> verifyRegisterOtp(String email, String otp) {
+        if (isBlank(email)) {
+            return new Result.Error<>("Email is required", 0, null);
+        }
+        if (isBlank(otp)) {
+            return new Result.Error<>("OTP is required", 0, null);
+        }
+
+        try {
+            Response<RegisterVerifyOtpResponse> response = restApiService
+                    .verifyRegisterOtp(new RegisterVerifyOtpRequest(email.trim(), otp.trim()))
+                    .execute();
+
+            if (response.isSuccessful() && response.body() != null) {
+                RegisterVerifyOtpResponse body = response.body();
+                if (body.success) {
+                    return new Result.Success<>(body);
+                }
+                return new Result.Error<>("Invalid OTP", response.code(), null);
+            }
+
+            return new Result.Error<>(
+                    parseErrorMessage(response, "Invalid OTP"),
+                    response.code(),
+                    null);
+        } catch (IOException ioException) {
+            return new Result.Error<>("Network error. Please try again.", 0, ioException);
+        } catch (Exception exception) {
+            return new Result.Error<>("Unexpected error. Please try again.", 0, exception);
+        }
+    }
+
+    public Result<AuthResponse> register(String username, String email, String password, String confirmPassword) {
+        if (isBlank(username)) {
+            return new Result.Error<>("Username is required", 0, null);
+        }
+        if (isBlank(email)) {
+            return new Result.Error<>("Email is required", 0, null);
+        }
+        if (isBlank(password) || isBlank(confirmPassword)) {
+            return new Result.Error<>("Password is required", 0, null);
+        }
+
+        try {
+            Response<AuthResponse> response = restApiService
+                    .register(new RegisterRequest(username.trim(), email.trim(), password, confirmPassword))
+                    .execute();
+
+            if (response.isSuccessful() && response.body() != null) {
+                return new Result.Success<>(response.body());
+            }
+
+            return new Result.Error<>(
+                    parseErrorMessage(response, "Registration failed"),
                     response.code(),
                     null);
         } catch (IOException ioException) {

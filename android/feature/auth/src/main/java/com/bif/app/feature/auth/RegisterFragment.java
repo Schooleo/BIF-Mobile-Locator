@@ -57,9 +57,7 @@ public class RegisterFragment extends Fragment {
 
         btnSendOtp.setOnClickListener(v -> viewModel.requestOtp(etEmail.getText().toString()));
 
-        btnRegister.setOnClickListener(v -> {
-            // UI-only screen: no API call
-        });
+        btnRegister.setOnClickListener(v -> viewModel.onRegisterClicked());
 
         // Set link text to "Already have an account?"
         TextView tvSignInLink = view.findViewById(R.id.tv_signin_link);
@@ -102,6 +100,24 @@ public class RegisterFragment extends Fragment {
             if (state instanceof RegisterViewModel.UiState.Error) {
                 btnSendOtp.setEnabled(true);
                 String message = ((RegisterViewModel.UiState.Error) state).getMessage();
+                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        viewModel.getRegisterState().observe(getViewLifecycleOwner(), state -> {
+            if (state instanceof RegisterViewModel.UiState.Loading) {
+                btnRegister.setEnabled(false);
+                return;
+            }
+
+            btnRegister.setEnabled(true);
+
+            if (state instanceof RegisterViewModel.UiState.Error) {
+                String message = ((RegisterViewModel.UiState.Error) state).getMessage();
+                if ("Invalid OTP".equalsIgnoreCase(message)) {
+                    etOtp.setError("Invalid OTP");
+                    etOtp.requestFocus();
+                }
                 Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
             }
         });
