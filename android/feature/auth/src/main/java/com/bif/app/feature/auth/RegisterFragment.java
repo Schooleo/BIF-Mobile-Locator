@@ -42,6 +42,8 @@ public class RegisterFragment extends Fragment {
 
         viewModel = new ViewModelProvider(this).get(RegisterViewModel.class);
         NavController navController = Navigation.findNavController(view);
+        view.findViewById(R.id.iv_profile)
+            .setOnClickListener(v -> navController.navigate(UriUtils.buildUri(UriUtils.PathTo.PROFILE)));
 
         EditText etEmail = view.findViewById(com.bif.app.core.R.id.et_input);
         EditText etOtp = view.findViewById(R.id.et_otp);

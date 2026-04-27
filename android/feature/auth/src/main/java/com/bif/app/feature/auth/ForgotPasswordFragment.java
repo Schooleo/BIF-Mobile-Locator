@@ -1,6 +1,5 @@
 package com.bif.app.feature.auth;
 
-import android.graphics.Paint;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Patterns;
@@ -9,7 +8,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -43,6 +41,8 @@ public class ForgotPasswordFragment extends Fragment {
         viewModel = new ViewModelProvider(this).get(ForgotPasswordViewModel.class);
         NavController navController = Navigation.findNavController(view);
 
+        view.findViewById(R.id.iv_back).setOnClickListener(v -> navController.popBackStack());
+
         EditText etEmail = view.findViewById(com.bif.app.core.R.id.et_input);
 
         Button btnSendOtp = view.findViewById(R.id.btn_send_otp);
@@ -62,11 +62,6 @@ public class ForgotPasswordFragment extends Fragment {
             }
             viewModel.requestOtp(email);
         });
-
-        TextView tvBackToLogin = view.findViewById(R.id.tv_back_login_link);
-        tvBackToLogin.setText(R.string.back_to_login);
-        tvBackToLogin.setPaintFlags(tvBackToLogin.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
-        tvBackToLogin.setOnClickListener(v -> navController.navigate(UriUtils.buildUri("/login")));
 
         observeRequestOtpState(navController, btnSendOtp, etEmail);
     }

@@ -54,6 +54,8 @@ public class LoginFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         NavController navController = Navigation.findNavController(view);
+        view.findViewById(R.id.iv_profile)
+            .setOnClickListener(v -> navController.navigate(UriUtils.buildUri(UriUtils.PathTo.PROFILE)));
         EditText etEmail = view.findViewById(com.bif.app.core.R.id.et_input);
         EditText etPassword = view.findViewById(com.bif.app.core.R.id.et_password);
 
