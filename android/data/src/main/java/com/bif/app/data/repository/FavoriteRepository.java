@@ -6,7 +6,9 @@ import android.util.Log;
 
 import androidx.annotation.Nullable;
 import androidx.lifecycle.LiveData;
+import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Transformations;
+import android.content.SharedPreferences;
 
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.favorite.FavoriteResponseDto;
@@ -61,6 +63,8 @@ public class FavoriteRepository implements IFavoriteRepository {
     private final ExecutorService executorService;
     private final Context appContext;
     private final Gson gson;
+    private final MutableLiveData<String> activeUserIdLiveData;
+    private final SharedPreferences.OnSharedPreferenceChangeListener prefListener;
 
     @Inject
     public FavoriteRepository(FavoriteDao favoriteDao,
@@ -82,6 +86,17 @@ public class FavoriteRepository implements IFavoriteRepository {
         this.executorService = executorService;
         this.appContext = appContext;
         this.gson = new Gson();
+
+        this.activeUserIdLiveData = new MutableLiveData<>(resolveActiveUserId(appContext));
+        this.prefListener = (prefs, key) -> {
+            if ("user_id".equals(key)) {
+                this.activeUserIdLiveData.postValue(resolveActiveUserId(appContext));
+            }
+        };
+        if (appContext != null) {
+            appContext.getSharedPreferences("USER_PREF", Context.MODE_PRIVATE)
+                    .registerOnSharedPreferenceChangeListener(this.prefListener);
+        }
     }
 
     public FavoriteRepository(FavoriteDao favoriteDao,
@@ -120,40 +135,66 @@ public class FavoriteRepository implements IFavoriteRepository {
 
     @Override
     public LiveData<List<Favorite>> searchFavorites(String query) {
-        String activeUserId = resolveActiveUserId(appContext);
-        return Transformations.map(
-                favoriteDao.searchFavorites(activeUserId, query),
-                FavoriteMapper::toDomainList);
+        return Transformations.switchMap(activeUserIdLiveData, userId ->
+                Transformations.map(
+                        favoriteDao.searchFavorites(userId, query),
+                        FavoriteMapper::toDomainList));
     }
 
     @Override
     public LiveData<List<Favorite>> getAllFavorites() {
-        String activeUserId = resolveActiveUserId(appContext);
-        return Transformations.map(
-                favoriteDao.getAll(activeUserId),
-                FavoriteMapper::toDomainList);
+        return Transformations.switchMap(activeUserIdLiveData, userId -> {
+
+            return Transformations.map(
+                    favoriteDao.getAll(userId),
+                    entities -> {
+
+                        return FavoriteMapper.toDomainList(entities);
+                    });
+        });
     }
 
     @Override
     public void addFavorite(Favorite favorite) {
+
         executorService.execute(() -> {
             String activeUserId = resolveActiveUserId(appContext);
+
             applySyncUserContext(activeUserId);
             appDatabase.runInTransaction(() -> {
-                FavoriteEntity entity = FavoriteMapper.toEntity(favorite);
-                entity.userId = activeUserId;
-                entity.pendingSync = true;
-                favoriteDao.insert(entity);
+                FavoriteEntity existing = null;
+                if (favorite.placeId != null && !favorite.placeId.trim().isEmpty()) {
+                    existing = favoriteDao.findActiveByPlaceId(favorite.placeId.trim(), activeUserId);
+                }
 
-                Favorite syncFavorite = FavoriteMapper.toDomain(entity);
-                favorite.id = syncFavorite.id;
+                if (existing != null) {
+
+                    // Update existing with new data but keep ID
+                    FavoriteEntity updated = FavoriteMapper.toEntity(favorite);
+                    updated.id = existing.id; // Keep original ID
+                    updated.userId = activeUserId;
+                    updated.pendingSync = true;
+                    updated.deleted = false;
+                    favoriteDao.update(updated);
+                    favorite.id = updated.id;
+                } else {
+                    FavoriteEntity entity = FavoriteMapper.toEntity(favorite);
+                    entity.userId = activeUserId;
+                    entity.pendingSync = true;
+                    entity.deleted = false;
+                    favoriteDao.insert(entity);
+
+                    
+                    Favorite syncFavorite = FavoriteMapper.toDomain(entity);
+                    favorite.id = syncFavorite.id;
+                }
 
                 SyncQueueEntity syncEntry = createSyncEntry(
                         activeUserId,
                         ENTITY_TYPE_FAVORITE,
-                        syncFavorite.id,
+                        favorite.id,
                         "CREATE",
-                        FavoriteMapper.toDto(syncFavorite, activeUserId));
+                        FavoriteMapper.toDto(favorite, activeUserId));
                 syncQueueDao.enqueue(syncEntry);
             });
             if (syncManager != null) {
@@ -267,14 +308,16 @@ public class FavoriteRepository implements IFavoriteRepository {
 
             try {
                 if (online) {
+
                     bootstrapFavorites(activeUserId);
                 }
+
                 reconcileFavoriteMetadata(activeUserId, online);
                 if (callback != null) {
                     callback.onSuccess();
                 }
             } catch (Exception e) {
-                Log.w(TAG, "refreshFavorites bootstrap failed", e);
+                Log.e(TAG, "refreshFavorites bootstrap failed", e);
                 if (callback != null) {
                     callback.onError(GENERIC_REFRESH_ERROR_MESSAGE);
                 }
@@ -324,6 +367,7 @@ public class FavoriteRepository implements IFavoriteRepository {
 
     private void mergeServerFavorites(List<FavoriteResponseDto> serverFavorites,
                                       String activeUserId) {
+
         appDatabase.runInTransaction(() -> {
             List<String> trackedIds = syncQueueDao.getTrackedEntityIds(activeUserId, ENTITY_TYPE_FAVORITE);
             Set<String> protectedIds = new HashSet<>();
@@ -383,10 +427,12 @@ public class FavoriteRepository implements IFavoriteRepository {
                     continue;
                 }
                 if (!serverIds.contains(local.id)) {
+
                     favoriteDao.deleteById(local.id, activeUserId);
                 }
             }
         });
+
     }
 
     private void reconcileFavoriteMetadata(String activeUserId, boolean online) {
@@ -696,17 +742,21 @@ public class FavoriteRepository implements IFavoriteRepository {
 
     private String resolveActiveUserId(Context appContext) {
         if (appContext == null) {
+
             return ANONYMOUS_USER_ID;
         }
         String userId = UserPreferences.getUserId(appContext);
         if (userId == null || userId.isEmpty()) {
+
             return ANONYMOUS_USER_ID;
         }
 
         String normalizedUserId = userId.trim();
         if (normalizedUserId.isEmpty()) {
+
             return ANONYMOUS_USER_ID;
         }
+
         return normalizedUserId;
     }
 

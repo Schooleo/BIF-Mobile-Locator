@@ -49,6 +49,7 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
 
         if ("DELETE".equalsIgnoreCase(change.operation)
                 && (change.payload == null || change.payload.isEmpty())) {
+
             FavoriteEntity local = favoriteDao.findById(change.entityId, resolvedUserId);
             if (local != null && local.pendingSync) {
                 return;
@@ -76,12 +77,28 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
             payload.serverVersion = Math.max(payload.serverVersion,
                     change.serverVersion);
             if ("DELETE".equalsIgnoreCase(change.operation)) {
+
                 payload.deleted = true;
             }
 
             FavoriteEntity local = favoriteDao.findById(payload.id, resolvedUserId);
             if (local != null && local.pendingSync) {
+
                 return;
+            }
+
+            // Deduplication by placeId
+            if (payload.placeId != null && !payload.placeId.trim().isEmpty()) {
+                FavoriteEntity existingWithSamePlaceId = favoriteDao.findActiveByPlaceId(payload.placeId.trim(), resolvedUserId);
+                if (existingWithSamePlaceId != null && !existingWithSamePlaceId.id.equals(payload.id)) {
+                    if (existingWithSamePlaceId.pendingSync) {
+
+                        return;
+                    } else {
+
+                        favoriteDao.delete(existingWithSamePlaceId);
+                    }
+                }
             }
 
             if (payload.placeId == null
@@ -109,6 +126,7 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
 
             FavoriteEntity mapped = FavoriteMapper.fromDto(payload, resolvedUserId);
             mapped.pendingSync = false;
+
             favoriteDao.upsert(mapped);
         } catch (Exception e) {
             Log.e(TAG, "Failed applying pulled favorite change", e);
