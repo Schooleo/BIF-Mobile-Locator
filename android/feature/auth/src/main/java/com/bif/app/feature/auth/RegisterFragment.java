@@ -10,6 +10,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -54,7 +55,7 @@ public class RegisterFragment extends Fragment {
         btnRegister.setText(R.string.sign_up);
         btnSendOtp.setText(R.string.send_otp);
 
-        btnSendOtp.setOnClickListener(v -> viewModel.onSendOtpClicked());
+        btnSendOtp.setOnClickListener(v -> viewModel.requestOtp(etEmail.getText().toString()));
 
         btnRegister.setOnClickListener(v -> {
             // UI-only screen: no API call
@@ -84,6 +85,26 @@ public class RegisterFragment extends Fragment {
         });
         viewModel.getRegisterEnabled().observe(getViewLifecycleOwner(), enabled ->
                 btnRegister.setEnabled(Boolean.TRUE.equals(enabled)));
+
+        viewModel.getRequestOtpState().observe(getViewLifecycleOwner(), state -> {
+            if (state instanceof RegisterViewModel.UiState.Loading) {
+                btnSendOtp.setEnabled(false);
+                return;
+            }
+
+            if (state instanceof RegisterViewModel.UiState.Success) {
+                btnSendOtp.setEnabled(true);
+                Toast.makeText(requireContext(), "OTP sent", Toast.LENGTH_SHORT).show();
+                viewModel.onSendOtpClicked();
+                return;
+            }
+
+            if (state instanceof RegisterViewModel.UiState.Error) {
+                btnSendOtp.setEnabled(true);
+                String message = ((RegisterViewModel.UiState.Error) state).getMessage();
+                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+            }
+        });
 
         viewModel.onEmailChanged(etEmail.getText().toString());
         viewModel.onOtpChanged(etOtp.getText().toString());

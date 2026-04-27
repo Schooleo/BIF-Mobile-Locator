@@ -6,6 +6,15 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 
+import com.bif.app.data.repository.AuthRepository;
+
+import javax.inject.Inject;
+
+import dagger.hilt.android.lifecycle.HiltViewModel;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+@HiltViewModel
 public class RegisterViewModel extends ViewModel {
 
     private static final int OTP_LENGTH = 6;
@@ -15,6 +24,10 @@ public class RegisterViewModel extends ViewModel {
     private final MutableLiveData<Boolean> otpEnabled = new MutableLiveData<>(false);
     private final MutableLiveData<Boolean> credentialsEnabled = new MutableLiveData<>(false);
     private final MutableLiveData<Boolean> registerEnabled = new MutableLiveData<>(false);
+    private final MutableLiveData<UiState> requestOtpState = new MutableLiveData<>(new UiState.Idle());
+
+    private final AuthRepository authRepository;
+    private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
 
     private String email = "";
     private String otp = "";
@@ -22,6 +35,11 @@ public class RegisterViewModel extends ViewModel {
     private String password = "";
     private String confirmPassword = "";
     private boolean otpRequested = false;
+
+    @Inject
+    public RegisterViewModel(AuthRepository authRepository) {
+        this.authRepository = authRepository;
+    }
 
     public LiveData<Boolean> getSendOtpEnabled() {
         return sendOtpEnabled;
@@ -37,6 +55,10 @@ public class RegisterViewModel extends ViewModel {
 
     public LiveData<Boolean> getRegisterEnabled() {
         return registerEnabled;
+    }
+
+    public LiveData<UiState> getRequestOtpState() {
+        return requestOtpState;
     }
 
     public void onEmailChanged(String value) {
@@ -69,6 +91,25 @@ public class RegisterViewModel extends ViewModel {
         updateState();
     }
 
+    public void requestOtp(String email) {
+        String resolvedEmail = email == null ? "" : email.trim();
+        if (!isEmailValid(resolvedEmail)) {
+            requestOtpState.setValue(new UiState.Error("Invalid email"));
+            return;
+        }
+
+        requestOtpState.setValue(new UiState.Loading());
+        ioExecutor.execute(() -> {
+            AuthRepository.Result<?> result = authRepository.requestOtp(resolvedEmail);
+            if (result instanceof AuthRepository.Result.Success) {
+                requestOtpState.postValue(new UiState.Success());
+                return;
+            }
+            AuthRepository.Result.Error<?> error = (AuthRepository.Result.Error<?>) result;
+            requestOtpState.postValue(new UiState.Error(error.message));
+        });
+    }
+
     private void updateState() {
         boolean emailValid = isEmailValid(email);
         if (!emailValid) {
@@ -95,5 +136,37 @@ public class RegisterViewModel extends ViewModel {
 
     private boolean isOtpValid(String value) {
         return value != null && value.length() == OTP_LENGTH && value.matches("\\d+");
+    }
+
+    @Override
+    protected void onCleared() {
+        super.onCleared();
+        ioExecutor.shutdownNow();
+    }
+
+    public abstract static class UiState {
+        private UiState() {
+        }
+
+        public static final class Idle extends UiState {
+        }
+
+        public static final class Loading extends UiState {
+        }
+
+        public static final class Success extends UiState {
+        }
+
+        public static final class Error extends UiState {
+            private final String message;
+
+            public Error(String message) {
+                this.message = message;
+            }
+
+            public String getMessage() {
+                return message;
+            }
+        }
     }
 }
