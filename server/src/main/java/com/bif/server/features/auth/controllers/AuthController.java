@@ -12,6 +12,10 @@ import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpResponse;
 import com.bif.server.features.auth.dto.rest.LoginRequest;
 import com.bif.server.features.auth.dto.rest.RefreshTokenRequest;
 import com.bif.server.features.auth.dto.rest.RegisterRequest;
+import com.bif.server.features.auth.dto.rest.RegisterOtpRequest;
+import com.bif.server.features.auth.dto.rest.RegisterOtpResponse;
+import com.bif.server.features.auth.dto.rest.RegisterVerifyOtpRequest;
+import com.bif.server.features.auth.dto.rest.RegisterVerifyOtpResponse;
 import com.bif.server.features.auth.exceptions.EmailAlreadyUsedException;
 import com.bif.server.features.auth.exceptions.InvalidCredentialsException;
 import com.bif.server.features.auth.exceptions.InvalidRefreshTokenException;
@@ -51,6 +55,24 @@ public class AuthController {
         } catch (EmailAlreadyUsedException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
         }
+    }
+
+    @PostMapping("/register/request-otp")
+    public ResponseEntity<RegisterOtpResponse> requestRegisterOtp(@RequestBody RegisterOtpRequest request) {
+        RegisterOtpResponse response = authService.requestRegisterOtp(request);
+        if (response.success()) {
+            return ResponseEntity.ok(response);
+        }
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    @PostMapping("/register/verify-otp")
+    public ResponseEntity<RegisterVerifyOtpResponse> verifyRegisterOtp(@RequestBody RegisterVerifyOtpRequest request) {
+        RegisterVerifyOtpResponse response = authService.verifyRegisterOtp(request);
+        if (response.success()) {
+            return ResponseEntity.ok(response);
+        }
+        return ResponseEntity.badRequest().body(response);
     }
 
     @PostMapping("/login")

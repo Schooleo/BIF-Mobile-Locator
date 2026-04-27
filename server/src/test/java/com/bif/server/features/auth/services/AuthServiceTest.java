@@ -15,8 +15,10 @@ import com.bif.server.features.auth.exceptions.EmailAlreadyUsedException;
 import com.bif.server.features.auth.exceptions.InvalidCredentialsException;
 import com.bif.server.features.auth.exceptions.InvalidRefreshTokenException;
 import com.bif.server.features.auth.exceptions.InvalidRegistrationException;
+import com.bif.server.features.auth.models.EmailVerificationOtp;
 import com.bif.server.features.auth.models.PasswordResetOtp;
 import com.bif.server.features.auth.models.RefreshToken;
+import com.bif.server.features.auth.repositories.EmailVerificationOtpRepository;
 import com.bif.server.features.auth.repositories.PasswordResetOtpRepository;
 import com.bif.server.features.auth.repositories.RefreshTokenRepository;
 import com.bif.server.features.auth.security.AccessTokenBlacklistService;
@@ -55,6 +57,9 @@ class AuthServiceTest {
     private PasswordResetOtpRepository passwordResetOtpRepository;
 
     @Mock
+    private EmailVerificationOtpRepository emailVerificationOtpRepository;
+
+    @Mock
     private JwtService jwtService;
 
     @Mock
@@ -71,6 +76,7 @@ class AuthServiceTest {
                 userRepository,
                 refreshTokenRepository,
                 passwordResetOtpRepository,
+                emailVerificationOtpRepository,
                 passwordEncoder,
                 jwtService,
                 accessTokenBlacklistService,
@@ -100,6 +106,10 @@ class AuthServiceTest {
     void register_WhenValid_ReturnsTokenAndUser() {
         RegisterRequest request = new RegisterRequest("alex", "alex@bif.local", "Password123!", "Password123!");
         when(userRepository.existsByEmailIgnoreCase("alex@bif.local")).thenReturn(false);
+        EmailVerificationOtp otpRecord = new EmailVerificationOtp();
+        otpRecord.setEmail("alex@bif.local");
+        otpRecord.setVerified(true);
+        when(emailVerificationOtpRepository.findById("alex@bif.local")).thenReturn(Optional.of(otpRecord));
         when(passwordEncoder.encode("Password123!")).thenReturn("hashed");
 
         User saved = new User();

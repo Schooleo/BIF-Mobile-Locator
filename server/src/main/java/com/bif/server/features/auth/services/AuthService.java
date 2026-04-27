@@ -2,23 +2,29 @@ package com.bif.server.features.auth.services;
 
 import com.bif.server.features.auth.dto.rest.AuthResponse;
 import com.bif.server.features.auth.dto.rest.AuthUserResponse;
+import com.bif.server.features.auth.dto.rest.ChangePasswordRequest;
+import com.bif.server.features.auth.dto.rest.ChangePasswordResponse;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpRequest;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpResponse;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordResetRequest;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordResetResponse;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpRequest;
 import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpResponse;
-import com.bif.server.features.auth.dto.rest.ChangePasswordRequest;
-import com.bif.server.features.auth.dto.rest.ChangePasswordResponse;
 import com.bif.server.features.auth.dto.rest.LoginRequest;
 import com.bif.server.features.auth.dto.rest.RefreshTokenRequest;
+import com.bif.server.features.auth.dto.rest.RegisterOtpRequest;
+import com.bif.server.features.auth.dto.rest.RegisterOtpResponse;
 import com.bif.server.features.auth.dto.rest.RegisterRequest;
+import com.bif.server.features.auth.dto.rest.RegisterVerifyOtpRequest;
+import com.bif.server.features.auth.dto.rest.RegisterVerifyOtpResponse;
 import com.bif.server.features.auth.exceptions.EmailAlreadyUsedException;
 import com.bif.server.features.auth.exceptions.InvalidCredentialsException;
 import com.bif.server.features.auth.exceptions.InvalidRefreshTokenException;
 import com.bif.server.features.auth.exceptions.InvalidRegistrationException;
+import com.bif.server.features.auth.models.EmailVerificationOtp;
 import com.bif.server.features.auth.models.PasswordResetOtp;
 import com.bif.server.features.auth.models.RefreshToken;
+import com.bif.server.features.auth.repositories.EmailVerificationOtpRepository;
 import com.bif.server.features.auth.repositories.PasswordResetOtpRepository;
 import com.bif.server.features.auth.repositories.RefreshTokenRepository;
 import com.bif.server.features.auth.security.AccessTokenBlacklistService;
@@ -53,6 +59,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordResetOtpRepository passwordResetOtpRepository;
+    private final EmailVerificationOtpRepository emailVerificationOtpRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AccessTokenBlacklistService accessTokenBlacklistService;
@@ -63,6 +70,7 @@ public class AuthService {
             UserRepository userRepository,
             RefreshTokenRepository refreshTokenRepository,
             PasswordResetOtpRepository passwordResetOtpRepository,
+            EmailVerificationOtpRepository emailVerificationOtpRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             AccessTokenBlacklistService accessTokenBlacklistService,
@@ -72,6 +80,7 @@ public class AuthService {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.passwordResetOtpRepository = passwordResetOtpRepository;
+        this.emailVerificationOtpRepository = emailVerificationOtpRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.accessTokenBlacklistService = accessTokenBlacklistService;
@@ -103,6 +112,71 @@ public class AuthService {
 
         emailService.sendOtpEmail(email, otp);
         return new ForgotPasswordOtpResponse(true, GENERIC_OTP_REQUEST_MESSAGE);
+    }
+
+    public RegisterOtpResponse requestRegisterOtp(RegisterOtpRequest request) {
+        String email = normalizedEmail(request.email());
+
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            return new RegisterOtpResponse(false, "Email is already in use");
+        }
+
+        String otp = generateOtp();
+        Instant now = Instant.now();
+        EmailVerificationOtp emailVerificationOtp = new EmailVerificationOtp();
+        emailVerificationOtp.setEmail(email);
+        emailVerificationOtp.setOtp(otp);
+        emailVerificationOtp.setCreatedAt(now);
+        emailVerificationOtp.setExpiresAt(now.plus(OTP_EXPIRATION_MINUTES, ChronoUnit.MINUTES));
+        emailVerificationOtp.setAttemptCount(0);
+        emailVerificationOtp.setLastAttemptAt(null);
+        emailVerificationOtp.setVerified(false);
+        emailVerificationOtp.setVerifiedAt(null);
+        emailVerificationOtpRepository.save(emailVerificationOtp);
+
+        emailService.sendRegisterOtpEmail(email, otp);
+        return new RegisterOtpResponse(true, "OTP sent to email");
+    }
+
+    public RegisterVerifyOtpResponse verifyRegisterOtp(RegisterVerifyOtpRequest request) {
+        String email = normalizedEmail(request.email());
+        String otp = requiredTrimmed(request.otp(), "otp");
+        Instant now = Instant.now();
+
+        EmailVerificationOtp emailVerificationOtp = emailVerificationOtpRepository.findById(email)
+                .orElse(null);
+        if (emailVerificationOtp == null || emailVerificationOtp.getOtp() == null) {
+            return new RegisterVerifyOtpResponse(false);
+        }
+        if (emailVerificationOtp.getExpiresAt() == null || emailVerificationOtp.getExpiresAt().isBefore(now)) {
+            return new RegisterVerifyOtpResponse(false);
+        }
+        if (currentAttemptCount(emailVerificationOtp) > MAX_OTP_VERIFY_ATTEMPTS) {
+            invalidateOtpAfterLockout(emailVerificationOtp, now);
+            emailVerificationOtpRepository.save(emailVerificationOtp);
+            return new RegisterVerifyOtpResponse(false);
+        }
+
+        if (!constantTimeEquals(emailVerificationOtp.getOtp(), otp)) {
+            int updatedAttempts = currentAttemptCount(emailVerificationOtp) + 1;
+            emailVerificationOtp.setAttemptCount(updatedAttempts);
+            emailVerificationOtp.setLastAttemptAt(now);
+            if (updatedAttempts > MAX_OTP_VERIFY_ATTEMPTS) {
+                invalidateOtpAfterLockout(emailVerificationOtp, now);
+            }
+            emailVerificationOtpRepository.save(emailVerificationOtp);
+            return new RegisterVerifyOtpResponse(false);
+        }
+
+        emailVerificationOtp.setAttemptCount(0);
+        emailVerificationOtp.setLastAttemptAt(now);
+        emailVerificationOtp.setVerified(true);
+        emailVerificationOtp.setVerifiedAt(now);
+        emailVerificationOtp.setOtp(null);
+        emailVerificationOtp.setExpiresAt(null);
+        emailVerificationOtpRepository.save(emailVerificationOtp);
+
+        return new RegisterVerifyOtpResponse(true);
     }
 
     public ForgotPasswordVerifyOtpResponse verifyForgotPasswordOtp(ForgotPasswordVerifyOtpRequest request) {
@@ -145,8 +219,20 @@ public class AuthService {
         return new ForgotPasswordVerifyOtpResponse(true, resetToken);
     }
 
+    private int currentAttemptCount(EmailVerificationOtp emailVerificationOtp) {
+        return emailVerificationOtp.getAttemptCount() == null ? 0 : emailVerificationOtp.getAttemptCount();
+    }
+
     private int currentAttemptCount(PasswordResetOtp passwordResetOtp) {
         return passwordResetOtp.getAttemptCount() == null ? 0 : passwordResetOtp.getAttemptCount();
+    }
+
+    private void invalidateOtpAfterLockout(EmailVerificationOtp emailVerificationOtp, Instant now) {
+        emailVerificationOtp.setOtp(null);
+        emailVerificationOtp.setExpiresAt(null);
+        emailVerificationOtp.setVerified(false);
+        emailVerificationOtp.setVerifiedAt(null);
+        emailVerificationOtp.setLastAttemptAt(now);
     }
 
     private void invalidateOtpAfterLockout(PasswordResetOtp passwordResetOtp, Instant now) {
@@ -216,6 +302,11 @@ public class AuthService {
         }
         if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new EmailAlreadyUsedException("email is already in use");
+        }
+
+        EmailVerificationOtp otpRecord = emailVerificationOtpRepository.findById(email).orElse(null);
+        if (otpRecord == null || otpRecord.getVerified() == null || !otpRecord.getVerified()) {
+            throw new InvalidRegistrationException("email is not verified");
         }
 
         User user = new User();
