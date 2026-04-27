@@ -42,9 +42,11 @@ public class TripService {
     }
 
     public TripPlan save(TripPlan tripPlan) {
-        if (isCreateOperation(tripPlan)
-                && tripPlan.getGroupId() != null
-                && !tripPlan.getGroupId().isBlank()) {
+        if (isCreateOperation(tripPlan)) {
+            if (tripPlan == null || tripPlan.getGroupId() == null || tripPlan.getGroupId().isBlank()) {
+                throw new IllegalArgumentException("Trip groupId is required for create operation");
+            }
+
             long groupTripCount = tripPlanRepository
                     .countByGroupIdAndDeletedFalse(tripPlan.getGroupId());
             if (groupTripCount >= MAX_TRIPS_PER_GROUP) {
@@ -188,7 +190,7 @@ public class TripService {
 
     private void requireGroupMember(String groupId, String actorUserId) {
         if (groupId == null || groupId.isBlank()) {
-            return;
+            throw new TripAccessDeniedException("Trip groupId is required to modify trip stops");
         }
         if (actorUserId == null || actorUserId.isBlank()) {
             throw new TripAccessDeniedException("User must be authenticated to modify trip stops");

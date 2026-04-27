@@ -22,7 +22,7 @@
     <string name="share_place">Share Place</string>
     <string name="navigate_to_place">Route to Place</string>
     <string name="trip_actions">Trip Actions</string>
-    <string name="trip_action_share_to_group">Share to group</string>
+    <string name="trip_action_share_to_group">Send to chat</string>
     <string name="trip_action_add_to_trip">Add to trip</string>
     <string name="trip_action_cancel">Cancel</string>
     <string name="trip_stop_time_choice_title">Add stop time</string>

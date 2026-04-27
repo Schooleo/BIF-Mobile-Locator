@@ -4,6 +4,7 @@ import com.bif.server.features.favorite.dto.rest.FavoriteResponse;
 import com.bif.server.features.favorite.dto.rest.UpsertMyFavoriteRequest;
 import com.bif.server.features.favorite.models.Favorite;
 import com.bif.server.features.favorite.services.FavoriteService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -78,7 +79,7 @@ public class FavoriteRestController {
     @PostMapping("/me")
     public ResponseEntity<FavoriteResponse> upsertMyFavorite(
             Authentication authentication,
-            @RequestBody UpsertMyFavoriteRequest request
+            @Valid @RequestBody UpsertMyFavoriteRequest request
     ) {
         String currentUserId = currentUserId(authentication);
         if (currentUserId == null || currentUserId.isBlank()) {
@@ -87,6 +88,7 @@ public class FavoriteRestController {
 
         Favorite input = new Favorite();
         input.setId(request.id());
+        input.setPlaceId(request.placeId());
         input.setExternalSource(request.externalSource());
         input.setExternalId(request.externalId());
         input.setPlaceName(request.placeName());

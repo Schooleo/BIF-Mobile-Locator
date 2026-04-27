@@ -2,28 +2,31 @@ package com.bif.server.common.migration;
 
 import com.bif.server.common.migration.model.SchemaMigration;
 import com.bif.server.common.migration.repository.SchemaMigrationRepository;
-import com.bif.server.common.models.Location;
-import com.bif.server.features.favorite.models.Favorite;
-import com.bif.server.features.favorite.repositories.FavoriteRepository;
 import com.bif.server.features.place.services.PlaceIdentityService;
+import com.mongodb.client.result.UpdateResult;
+import org.bson.Document;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class FavoriteContractV2MigrationRunnerTest {
 
     @Mock
-    private FavoriteRepository favoriteRepository;
+    private MongoTemplate mongoTemplate;
 
     @Mock
     private PlaceIdentityService placeIdentityService;
@@ -36,7 +39,7 @@ class FavoriteContractV2MigrationRunnerTest {
     @BeforeEach
     void setUp() {
         runner = new FavoriteContractV2MigrationRunner(
-                favoriteRepository,
+                mongoTemplate,
                 placeIdentityService,
                 schemaMigrationRepository);
         ReflectionTestUtils.setField(runner, "migrationEnabled", true);
@@ -48,33 +51,38 @@ class FavoriteContractV2MigrationRunnerTest {
 
         runner.run(null);
 
-        verify(favoriteRepository, never()).findAll();
+        verify(mongoTemplate, never()).findAll(eq(Document.class), anyString());
         verify(schemaMigrationRepository, never()).save(any(SchemaMigration.class));
     }
 
     @Test
     void run_WhenValidFavorite_ResolvesAndPersistsCanonicalPlaceId() throws Exception {
-        Favorite favorite = new Favorite();
-        favorite.setId("f1");
-        favorite.setUserId("u1");
-        favorite.setExternalSource("GOOGLE_MAPS");
-        favorite.setExternalId("gm-1");
-        favorite.setPlaceName("Coffee");
-        favorite.setLocation(new Location(10.0, 20.0));
-        favorite.setPlaceId("legacy-id");
+        Document favorite = new Document("_id", "f1")
+            .append("userId", "u1")
+            .append("externalSource", "GOOGLE_MAPS")
+            .append("externalId", "gm-1")
+            .append("placeName", "Coffee")
+            .append("name", "Coffee")
+            .append("location", new Document("latitude", 10.0).append("longitude", 20.0))
+            .append("placeId", "legacy-id");
 
         when(schemaMigrationRepository.existsById("favorite-contract-v2")).thenReturn(false);
-        when(favoriteRepository.findAll()).thenReturn(List.of(favorite));
+        when(mongoTemplate.findAll(Document.class, "favorites")).thenReturn(List.of(favorite));
         when(placeIdentityService.resolveInternalPlaceId("GOOGLE_MAPS", "gm-1", 10.0, 20.0, "Coffee"))
                 .thenReturn("canonical-1");
+        when(mongoTemplate.updateFirst(any(Query.class), any(Update.class), eq("favorites")))
+            .thenReturn(UpdateResult.acknowledged(1L, 1L, null));
 
         runner.run(null);
 
-        ArgumentCaptor<Favorite> favoriteCaptor = ArgumentCaptor.forClass(Favorite.class);
-        verify(favoriteRepository).save(favoriteCaptor.capture());
-        assertEquals("canonical-1", favoriteCaptor.getValue().getPlaceId());
-        assertEquals(null, favoriteCaptor.getValue().getExternalId());
-        assertEquals(null, favoriteCaptor.getValue().getPlaceName());
+        ArgumentCaptor<Update> updateCaptor = ArgumentCaptor.forClass(Update.class);
+        verify(mongoTemplate).updateFirst(any(Query.class), updateCaptor.capture(), eq("favorites"));
+        String updateJson = updateCaptor.getValue().getUpdateObject().toJson();
+        assertTrue(updateJson.contains("\"placeId\""));
+        assertTrue(updateJson.contains("canonical-1"));
+        assertTrue(updateJson.contains("\"$unset\""));
+        assertTrue(updateJson.contains("\"externalId\""));
+        assertTrue(updateJson.contains("\"placeName\""));
 
         ArgumentCaptor<SchemaMigration> migrationCaptor = ArgumentCaptor.forClass(SchemaMigration.class);
         verify(schemaMigrationRepository).save(migrationCaptor.capture());
@@ -83,23 +91,38 @@ class FavoriteContractV2MigrationRunnerTest {
 
     @Test
     void run_WhenFavoriteSeedInvalid_SkipsFavoriteAndStillWritesMarker() throws Exception {
-        Favorite invalid = new Favorite();
-        invalid.setId("f-bad");
-        invalid.setUserId("u1");
-        invalid.setExternalSource("GOOGLE_MAPS");
-        invalid.setExternalId("gm-bad");
-        invalid.setPlaceName("No location");
+        Document invalid = new Document("_id", "f-bad")
+            .append("userId", "u1")
+            .append("externalSource", "GOOGLE_MAPS")
+            .append("externalId", "gm-bad")
+            .append("placeName", "No location");
 
         when(schemaMigrationRepository.existsById("favorite-contract-v2")).thenReturn(false);
-        when(favoriteRepository.findAll()).thenReturn(List.of(invalid));
+        when(mongoTemplate.findAll(Document.class, "favorites")).thenReturn(List.of(invalid));
 
         runner.run(null);
 
         verify(placeIdentityService, never()).resolveInternalPlaceId(anyString(), anyString(), anyDouble(), anyDouble(), anyString());
-        ArgumentCaptor<Favorite> favoriteCaptor = ArgumentCaptor.forClass(Favorite.class);
-        verify(favoriteRepository).save(favoriteCaptor.capture());
-        assertEquals(null, favoriteCaptor.getValue().getExternalId());
-        assertEquals(null, favoriteCaptor.getValue().getPlaceName());
+        verify(mongoTemplate, never()).updateFirst(any(Query.class), any(Update.class), eq("favorites"));
         verify(schemaMigrationRepository).save(any(SchemaMigration.class));
+    }
+
+    @Test
+    void run_WhenMigrationHasFailures_DoesNotWriteMarker() throws Exception {
+        Document failed = new Document("_id", "f-fail")
+                .append("userId", "u1")
+                .append("externalSource", "GOOGLE_MAPS")
+                .append("externalId", "gm-fail")
+                .append("placeName", "Coffee")
+                .append("location", new Document("latitude", 10.0).append("longitude", 20.0));
+
+        when(schemaMigrationRepository.existsById("favorite-contract-v2")).thenReturn(false);
+        when(mongoTemplate.findAll(Document.class, "favorites")).thenReturn(List.of(failed));
+        when(placeIdentityService.resolveInternalPlaceId("GOOGLE_MAPS", "gm-fail", 10.0, 20.0, "Coffee"))
+                .thenReturn(" ");
+
+        runner.run(null);
+
+        verify(schemaMigrationRepository, never()).save(any(SchemaMigration.class));
     }
 }

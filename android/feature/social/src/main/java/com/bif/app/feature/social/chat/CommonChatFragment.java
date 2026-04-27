@@ -1004,6 +1004,7 @@ public class CommonChatFragment extends Fragment {
         if (placeId.isEmpty() && placeName.isEmpty()) return;
 
         String placeAddress = getArg(args, "sharedPlaceAddress", "");
+        String placeSource = getArg(args, "sharedPlaceSource", "");
         double rating = 0d;
         try {
             rating = Double.parseDouble(getArg(args, "sharedPlaceRating", "0"));
@@ -1021,7 +1022,7 @@ public class CommonChatFragment extends Fragment {
             lng = 0d;
         }
 
-        viewModel.sharePlaceCard(placeId, placeName, placeAddress, lat, lng, rating);
+        viewModel.sharePlaceCard(placeId, placeName, placeAddress, lat, lng, rating, placeSource);
     }
 
     private void handleLocationLinkClick(ChatMessageAdapter.ChatMessage message) {

@@ -182,6 +182,7 @@ class PlaceServiceTest {
         assertEquals("osm_geocoder", result.getPlaceSource());
         assertEquals("canonical-1", result.getId());
         assertEquals("search_discovered", result.getPersistedByAction());
+        assertEquals("system", result.getLastModifiedBy());
         assertEquals("456 Search Rd", result.getAddress());
         assertEquals(5L, result.getServerVersion());
         verify(placeRepository).save(place);

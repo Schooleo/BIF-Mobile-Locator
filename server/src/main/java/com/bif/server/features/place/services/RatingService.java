@@ -158,16 +158,13 @@ public class RatingService {
 
         PlaceReview persistedReview;
         try {
-            LOGGER.info("Saving review candidate userId={} originalPlaceId={} resolvedPlaceId={} stars={} externalSource={} externalId={} lat={} lng={} placeName={}",
+            LOGGER.debug("Saving review candidate userId={} originalPlaceId={} resolvedPlaceId={} stars={} externalSource={} externalId={}",
                     resolvedUserId,
                     normalizedOriginalPlaceId,
                     normalizedResolvedPlaceId,
                     dto.stars(),
                     dto.externalSource(),
-                    dto.externalId(),
-                    dto.lat(),
-                    dto.lng(),
-                    dto.placeName());
+                    dto.externalId());
             persistedReview = ratingRepository.save(review);
         } catch (DuplicateKeyException ex) {
             throw new DuplicateKeyException(

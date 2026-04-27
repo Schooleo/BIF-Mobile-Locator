@@ -1394,12 +1394,21 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                         : buildStablePlaceId(favorite.latitude, favorite.longitude);
             }
 
+            String favoriteSource = !TextUtils.isEmpty(favorite.externalSource)
+                    ? favorite.externalSource
+                    : Place.SOURCE_OSM;
+            Place.SelectionState selectionState = Place.SOURCE_PREVIEW.equalsIgnoreCase(favoriteSource)
+                    ? Place.SelectionState.PREVIEW
+                    : Place.SelectionState.CANONICAL;
+
             Place place = new Place(
                     placeId,
                     favorite.name,
                     favorite.address,
                     favorite.rating,
-                    new Location(favorite.latitude, favorite.longitude));
+                    new Location(favorite.latitude, favorite.longitude),
+                    favoriteSource,
+                    selectionState);
             favoriteFeatures.add(createFeatureForPlace(
                     new LatLng(favorite.latitude, favorite.longitude),
                     place));
@@ -2987,10 +2996,16 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private Place buildInstantTapPlace(@NonNull LatLng latLng, @Nullable String preferredName, @Nullable String externalId) {
         String resolvedName = PlaceDisplayTextResolver.resolveTitle(preferredName, null, null);
         String resolvedAddress = PlaceDisplayTextResolver.resolveAddress(resolvedName, null);
+        boolean hasExternalId = !TextUtils.isEmpty(externalId);
 
-        String placeId = !TextUtils.isEmpty(externalId)
+        String placeId = hasExternalId
                 ? externalId
                 : buildStablePlaceId(latLng.getLatitude(), latLng.getLongitude());
+
+        String placeSource = hasExternalId ? Place.SOURCE_OSM : Place.SOURCE_PREVIEW;
+        Place.SelectionState selectionState = hasExternalId
+            ? Place.SelectionState.CANONICAL
+            : Place.SelectionState.PREVIEW;
 
         return new Place(
                 placeId,
@@ -2998,8 +3013,8 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 resolvedAddress,
                 0.0,
             new Location(latLng.getLatitude(), latLng.getLongitude()),
-            Place.SOURCE_PREVIEW,
-            Place.SelectionState.PREVIEW);
+            placeSource,
+            selectionState);
     }
 
     @NonNull
@@ -3919,6 +3934,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             sharedLat = String.valueOf(place.location.latitude);
             sharedLng = String.valueOf(place.location.longitude);
         }
+        String sharedPlaceSource = resolveSharedPlaceSource(place);
 
         Uri destUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL_CHAT)
                 .buildUpon()
@@ -3936,12 +3952,24 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                         place.name != null ? place.name : "")
                 .appendQueryParameter("sharedPlaceAddress",
                         place.address != null ? place.address : "")
+                .appendQueryParameter("sharedPlaceSource", sharedPlaceSource)
                 .appendQueryParameter("sharedPlaceLat", sharedLat)
                 .appendQueryParameter("sharedPlaceLng", sharedLng)
                 .appendQueryParameter("sharedPlaceRating", String.valueOf(place.rating))
                 .build();
 
         Navigation.findNavController(requireView()).navigate(destUri);
+    }
+
+    @NonNull
+    private String resolveSharedPlaceSource(@Nullable Place place) {
+        if (place != null && !TextUtils.isEmpty(place.placeSource)) {
+            return place.placeSource;
+        }
+        if (place != null && place.isPreviewSelection()) {
+            return "preview";
+        }
+        return "canonical";
     }
 
     private void goToMyLocation() {

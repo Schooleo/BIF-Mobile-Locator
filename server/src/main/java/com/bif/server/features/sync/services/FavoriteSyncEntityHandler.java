@@ -52,7 +52,8 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
             if (payload == null || isBlank(payload.id)) {
                 return SyncPushApplyResult.rejectedValidation("INVALID_FAVORITE_PAYLOAD");
             }
-            if (!canResolveCanonicalPlaceId(payload)) {
+            Favorite existingFavorite = favoriteRepository.findByIdAndUserId(payload.id, userId).orElse(null);
+            if (!canResolveCanonicalPlaceId(payload, existingFavorite != null ? existingFavorite.getLocation() : null)) {
                 return SyncPushApplyResult.rejectedValidation("MISSING_CANONICAL_IDENTITY_SEED");
             }
         }
@@ -119,7 +120,7 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
             favorite.setLocation(null);
         }
 
-        String resolvedPlaceId = resolvePlaceId(payload);
+        String resolvedPlaceId = resolvePlaceId(payload, favorite.getLocation());
         if (isBlank(resolvedPlaceId)) {
             throw new IllegalStateException("Unable to resolve canonical favorite placeId");
         }
@@ -199,14 +200,28 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
         return payload;
     }
 
-    private String resolvePlaceId(FavoritePayload payload) {
+    private String resolvePlaceId(FavoritePayload payload, Location fallbackLocation) {
         if (payload == null || isBlank(payload.externalSource)) {
             return null;
         }
-        if (!Double.isFinite(payload.latitude) || !Double.isFinite(payload.longitude)) {
-            return null;
+
+        Double latitude = null;
+        Double longitude = null;
+
+        if (Double.isFinite(payload.latitude)
+                && Double.isFinite(payload.longitude)
+                && !(payload.latitude == 0.0d && payload.longitude == 0.0d)) {
+            latitude = payload.latitude;
+            longitude = payload.longitude;
+        } else if (fallbackLocation != null
+                && Double.isFinite(fallbackLocation.getLatitude())
+                && Double.isFinite(fallbackLocation.getLongitude())
+                && !(fallbackLocation.getLatitude() == 0.0d && fallbackLocation.getLongitude() == 0.0d)) {
+            latitude = fallbackLocation.getLatitude();
+            longitude = fallbackLocation.getLongitude();
         }
-        if (payload.latitude == 0.0d && payload.longitude == 0.0d) {
+
+        if (latitude == null || longitude == null) {
             return null;
         }
 
@@ -219,28 +234,34 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
             return placeIdentityService.resolveInternalPlaceId(
                     payload.externalSource.trim(),
                     payload.externalId != null ? payload.externalId.trim() : null,
-                    payload.latitude,
-                    payload.longitude,
+                    latitude,
+                    longitude,
                     placeName);
         } catch (DataAccessException ex) {
             LOGGER.error("Failed to resolve favorite placeId for payload externalSource={}, externalId={}, placeName={}, lat={}, lng={}",
                     payload.externalSource,
                     payload.externalId,
                     placeName,
-                    payload.latitude,
-                    payload.longitude,
+                    latitude,
+                    longitude,
                     ex);
             return null;
         }
     }
 
-    private boolean canResolveCanonicalPlaceId(FavoritePayload payload) {
-        if (payload == null
-                || isBlank(payload.externalSource)
-                || !Double.isFinite(payload.latitude)
-                || !Double.isFinite(payload.longitude)
-                || payload.latitude == 0.0d
-                || payload.longitude == 0.0d) {
+    private boolean canResolveCanonicalPlaceId(FavoritePayload payload, Location fallbackLocation) {
+        if (payload == null || isBlank(payload.externalSource)) {
+            return false;
+        }
+
+        boolean hasPayloadLocation = Double.isFinite(payload.latitude)
+                && Double.isFinite(payload.longitude)
+                && !(payload.latitude == 0.0d && payload.longitude == 0.0d);
+        boolean hasFallbackLocation = fallbackLocation != null
+                && Double.isFinite(fallbackLocation.getLatitude())
+                && Double.isFinite(fallbackLocation.getLongitude())
+                && !(fallbackLocation.getLatitude() == 0.0d && fallbackLocation.getLongitude() == 0.0d);
+        if (!hasPayloadLocation && !hasFallbackLocation) {
             return false;
         }
         return !isBlank(resolvePlaceName(payload));

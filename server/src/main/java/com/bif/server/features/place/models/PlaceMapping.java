@@ -14,11 +14,10 @@ import java.time.Instant;
 @Data
 @Document(collection = "place_mappings")
 @CompoundIndexes({
-    @CompoundIndex(name = "uk_source_extid",
+    @CompoundIndex(name = "uk_source_extid_v2",
         def = "{'externalSource': 1, 'externalId': 1}",
         unique = true,
-        partialFilter = "{'externalSource': {'$exists': true, '$type': 'string', '$ne': ''}, "
-            + "'externalId': {'$exists': true, '$type': 'string', '$ne': ''}}"),
+        partialFilter = "{'externalSource': {'$gt': ''}, 'externalId': {'$gt': ''}}"),
     @CompoundIndex(name = "idx_internal_place_id", def = "{'internalPlaceId': 1}")
 })
 public class PlaceMapping {

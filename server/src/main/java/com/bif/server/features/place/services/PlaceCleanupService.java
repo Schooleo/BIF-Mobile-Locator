@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -25,8 +26,8 @@ public class PlaceCleanupService {
      *         Nếu matchedCount > 0, Place đang sống khỏe hoặc đã được hồi sinh an toàn.
      */
     public long reviveOrphanedPlace(String placeId) {
-        Query query = new Query(Criteria.where("id").is(placeId)); // Không check isOrphaned ở Query để lấy matchedCount tổng quát
-        org.springframework.data.mongodb.core.query.Update update = new org.springframework.data.mongodb.core.query.Update()
+        Query query = new Query(Criteria.where("_id").is(placeId)); // Không check isOrphaned ở Query để lấy matchedCount tổng quát
+        Update update = new Update()
                 .set("isOrphaned", false)
                 .unset("orphanedAt");
         

@@ -344,6 +344,25 @@ public abstract class AppDatabase extends RoomDatabase {
             if (!hasColumn(database, "favorites", "placeName")) {
                 database.execSQL("ALTER TABLE favorites ADD COLUMN placeName TEXT");
             }
+
+            // Backfill deterministic identity seed for legacy favorites to avoid
+            // sync rejections caused by missing canonical identity metadata.
+            database.execSQL("UPDATE favorites SET externalSource = 'OSM' "
+                    + "WHERE externalSource IS NULL OR TRIM(externalSource) = ''");
+            database.execSQL("UPDATE favorites SET placeName = CASE "
+                    + "WHEN placeName IS NULL OR TRIM(placeName) = '' THEN "
+                    + "CASE "
+                    + "WHEN name IS NOT NULL AND TRIM(name) <> '' THEN TRIM(name) "
+                    + "WHEN address IS NOT NULL AND TRIM(address) <> '' THEN TRIM(address) "
+                    + "ELSE placeName END "
+                    + "ELSE placeName END");
+            database.execSQL("UPDATE favorites SET externalId = CASE "
+                    + "WHEN externalId IS NULL OR TRIM(externalId) = '' THEN "
+                    + "CASE "
+                    + "WHEN placeId IS NOT NULL AND TRIM(placeId) <> '' THEN TRIM(placeId) "
+                    + "WHEN id IS NOT NULL AND TRIM(id) <> '' THEN TRIM(id) "
+                    + "ELSE externalId END "
+                    + "ELSE externalId END");
         }
     };
 

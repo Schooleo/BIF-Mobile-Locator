@@ -130,7 +130,7 @@ public class ChatViewModelTest {
     public void sharePlaceCard_CallsRepositorySendMessage() {
         viewModel.init("group1", "Group 1", "u1");
 
-        viewModel.sharePlaceCard("place123", "Googleplex", "1600 Amphitheatre Pkwy", 37.4220936, -122.083922, 4.5);
+        viewModel.sharePlaceCard("place123", "Googleplex", "1600 Amphitheatre Pkwy", 37.4220936, -122.083922, 4.5, "OSM");
 
         ArgumentCaptor<ChatMessage> captor = ArgumentCaptor.forClass(ChatMessage.class);
         verify(mockChatRepository).sendMessage(captor.capture());
@@ -142,6 +142,7 @@ public class ChatViewModelTest {
         assertTrue(msg.getContent().contains("\"id\":\"place123\""));
         assertTrue(msg.getContent().contains("\"name\":\"Googleplex\""));
         assertTrue(msg.getContent().contains("\"latitude\":37.4220936"));
+        assertTrue(msg.getContent().contains("\"placeSource\":\"OSM\""));
     }
 
     @Test

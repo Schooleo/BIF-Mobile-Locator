@@ -109,6 +109,12 @@ public class FavoriteService {
         if (isBlank(input.getPlaceName()) && !isBlank(existing.getPlaceName())) {
             input.setPlaceName(existing.getPlaceName());
         }
+        if (isBlank(input.getPlaceId()) && !isBlank(existing.getPlaceId())) {
+            input.setPlaceId(existing.getPlaceId());
+        }
+        if (input.getLocation() == null && existing.getLocation() != null) {
+            input.setLocation(existing.getLocation());
+        }
 
         return save(input);
     }
@@ -146,6 +152,13 @@ public class FavoriteService {
             throw new IllegalArgumentException("favorite must not be null");
         }
 
+        String legacyPlaceId = normalizeText(favorite.getPlaceId());
+        String externalSource = normalizeText(favorite.getExternalSource());
+        String externalId = normalizeText(favorite.getExternalId());
+        if (!isBlank(legacyPlaceId) && isBlank(externalSource) && isBlank(externalId)) {
+            return legacyPlaceId;
+        }
+
         Location location = favorite.getLocation();
         if (location == null
                 || !Double.isFinite(location.getLatitude())
@@ -153,8 +166,6 @@ public class FavoriteService {
             throw new IllegalArgumentException("favorite location is required for canonical place resolution");
         }
 
-        String externalSource = normalizeText(favorite.getExternalSource());
-        String externalId = normalizeText(favorite.getExternalId());
         if (isBlank(externalSource)) {
             throw new IllegalArgumentException("externalSource is required for canonical place resolution");
         }

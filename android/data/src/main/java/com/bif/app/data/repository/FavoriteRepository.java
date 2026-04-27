@@ -89,12 +89,12 @@ public class FavoriteRepository implements IFavoriteRepository {
 
         this.activeUserIdLiveData = new MutableLiveData<>(resolveActiveUserId(appContext));
         this.prefListener = (prefs, key) -> {
-            if ("user_id".equals(key)) {
+            if (UserPreferences.KEY_USER_ID.equals(key)) {
                 this.activeUserIdLiveData.postValue(resolveActiveUserId(appContext));
             }
         };
         if (appContext != null) {
-            appContext.getSharedPreferences("USER_PREF", Context.MODE_PRIVATE)
+            appContext.getSharedPreferences(UserPreferences.PREF_NAME, Context.MODE_PRIVATE)
                     .registerOnSharedPreferenceChangeListener(this.prefListener);
         }
     }
@@ -163,6 +163,7 @@ public class FavoriteRepository implements IFavoriteRepository {
             applySyncUserContext(activeUserId);
             appDatabase.runInTransaction(() -> {
                 FavoriteEntity existing = null;
+                String syncAction = "CREATE";
                 if (favorite.placeId != null && !favorite.placeId.trim().isEmpty()) {
                     existing = favoriteDao.findActiveByPlaceId(favorite.placeId.trim(), activeUserId);
                 }
@@ -172,11 +173,14 @@ public class FavoriteRepository implements IFavoriteRepository {
                     // Update existing with new data but keep ID
                     FavoriteEntity updated = FavoriteMapper.toEntity(favorite);
                     updated.id = existing.id; // Keep original ID
+                    updated.serverVersion = existing.serverVersion;
                     updated.userId = activeUserId;
                     updated.pendingSync = true;
                     updated.deleted = false;
                     favoriteDao.update(updated);
                     favorite.id = updated.id;
+                    favorite.serverVersion = existing.serverVersion;
+                    syncAction = "UPDATE";
                 } else {
                     FavoriteEntity entity = FavoriteMapper.toEntity(favorite);
                     entity.userId = activeUserId;
@@ -193,7 +197,7 @@ public class FavoriteRepository implements IFavoriteRepository {
                         activeUserId,
                         ENTITY_TYPE_FAVORITE,
                         favorite.id,
-                        "CREATE",
+                    syncAction,
                         FavoriteMapper.toDto(favorite, activeUserId));
                 syncQueueDao.enqueue(syncEntry);
             });

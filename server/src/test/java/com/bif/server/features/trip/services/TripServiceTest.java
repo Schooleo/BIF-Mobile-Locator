@@ -73,6 +73,7 @@ class TripServiceTest {
     @Test
     void save_ReturnsSavedEntity() {
         TripPlan plan = new TripPlan();
+        plan.setGroupId("g1");
         when(tripPlanRepository.save(plan)).thenReturn(plan);
 
         TripPlan result = tripService.save(plan);
@@ -99,8 +100,10 @@ class TripServiceTest {
     @Test
     void addStop_WhenPlanFound_AddsStopAndSaves() {
         TripPlan plan = new TripPlan();
+        plan.setGroupId("g1");
         plan.setStops(new ArrayList<>());
         when(tripPlanRepository.findById("t1")).thenReturn(Optional.of(plan));
+        when(groupService.getMembers("g1", "user1")).thenReturn(Optional.of(List.of()));
         when(tripPlanRepository.save(any(TripPlan.class))).thenAnswer(i -> i.getArgument(0));
 
         TripStop stop = new TripStop();
@@ -118,8 +121,10 @@ class TripServiceTest {
     @Test
     void addStop_WhenNullStops_InitializesListAndAdds() {
         TripPlan plan = new TripPlan();
+        plan.setGroupId("g1");
         plan.setStops(null);
         when(tripPlanRepository.findById("t1")).thenReturn(Optional.of(plan));
+        when(groupService.getMembers("g1", "user1")).thenReturn(Optional.of(List.of()));
         when(tripPlanRepository.save(any(TripPlan.class))).thenAnswer(i -> i.getArgument(0));
 
         TripStop stop = new TripStop();
@@ -157,8 +162,10 @@ class TripServiceTest {
         stop2.setOrderIndex(2);
 
         TripPlan plan = new TripPlan();
+        plan.setGroupId("g1");
         plan.setStops(new ArrayList<>(List.of(stop0, stop1, stop2)));
         when(tripPlanRepository.findById("t1")).thenReturn(Optional.of(plan));
+        when(groupService.getMembers("g1", "user1")).thenReturn(Optional.of(List.of()));
         when(tripPlanRepository.save(any(TripPlan.class))).thenAnswer(i -> i.getArgument(0));
 
         Optional<TripPlan> result = tripService.removeStop("t1", "user1", "s1");
@@ -183,6 +190,7 @@ class TripServiceTest {
     @Test
     void rearrangeStops_WhenFound_ReordersByIdAndReindex() {
         TripPlan plan = new TripPlan();
+        plan.setGroupId("g1");
         TripStop stopA = new TripStop();
         stopA.setId("s1");
         stopA.setTitle("A");
@@ -193,6 +201,7 @@ class TripServiceTest {
         stopB.setOrderIndex(1);
         plan.setStops(new ArrayList<>(List.of(stopA, stopB)));
         when(tripPlanRepository.findById("t1")).thenReturn(Optional.of(plan));
+        when(groupService.getMembers("g1", "user1")).thenReturn(Optional.of(List.of()));
         when(tripPlanRepository.save(any(TripPlan.class))).thenAnswer(i -> i.getArgument(0));
 
         RearrangeStopInput reorderA = new RearrangeStopInput();

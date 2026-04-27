@@ -124,6 +124,23 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
                 payload.placeName = local.placeName;
             }
 
+            payload.externalSource = coalesceText(
+                    payload.externalSource,
+                    local != null ? local.externalSource : null,
+                    "OSM");
+            payload.placeName = coalesceText(
+                    payload.placeName,
+                    payload.name,
+                    payload.address,
+                    local != null ? local.placeName : null,
+                    local != null ? local.name : null,
+                    local != null ? local.address : null);
+            payload.externalId = coalesceText(
+                    payload.externalId,
+                    local != null ? local.externalId : null,
+                    payload.placeId,
+                    payload.id);
+
             FavoriteEntity mapped = FavoriteMapper.fromDto(payload, resolvedUserId);
             mapped.pendingSync = false;
 
@@ -135,6 +152,19 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private String coalesceText(String... values) {
+        if (values == null) {
+            return null;
+        }
+
+        for (String value : values) {
+            if (!isBlank(value)) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 }
 

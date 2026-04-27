@@ -142,7 +142,7 @@ class FavoriteRestControllerTest {
 
     @Test
     void upsertMyFavorite_WhenHeaderMissing_ReturnsUnauthorized() {
-        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest(null, "GOOGLE_MAPS", "gm-0", "Coffee", "Coffee", null, null, null, null, 5, null);
+        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest(null, null, "GOOGLE_MAPS", "gm-0", "Coffee", "Coffee", null, null, null, null, 5, null);
 
         ResponseEntity<FavoriteResponse> result = controller.upsertMyFavorite(null, request);
 
@@ -153,7 +153,7 @@ class FavoriteRestControllerTest {
     @Test
     void upsertMyFavorite_WhenNotOwner_ReturnsForbidden() {
         Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
-        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", "GOOGLE_MAPS", "gm-1", "Coffee", "Coffee", null, null, null, null, 5, null);
+        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", null, "GOOGLE_MAPS", "gm-1", "Coffee", "Coffee", null, null, null, null, 5, null);
 
         when(favoriteService.saveMyFavorite(eq("u1"), any(Favorite.class))).thenThrow(new SecurityException("forbidden"));
 
@@ -169,7 +169,7 @@ class FavoriteRestControllerTest {
     @Test
     void upsertMyFavorite_WhenTargetMissing_ReturnsNotFound() {
         Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
-        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", "GOOGLE_MAPS", "gm-1", "Coffee", "Coffee", null, null, null, null, 5, null);
+        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", null, "GOOGLE_MAPS", "gm-1", "Coffee", "Coffee", null, null, null, null, 5, null);
 
         when(favoriteService.saveMyFavorite(eq("u1"), any(Favorite.class)))
                 .thenThrow(new NoSuchElementException("missing"));
@@ -185,7 +185,7 @@ class FavoriteRestControllerTest {
     @Test
     void upsertMyFavorite_WhenAuthorized_MapsIdentitySeedWithoutClientPlaceId() {
         Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
-        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", "GOOGLE_MAPS", "gm-1", "Coffee", "Coffee", null, null, null, null, 5, null);
+        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", null, "GOOGLE_MAPS", "gm-1", "Coffee", "Coffee", null, null, null, null, 5, null);
         Favorite saved = new Favorite();
         saved.setId("f1");
         saved.setPlaceId("place-123");

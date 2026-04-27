@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Collections;
 
 @Component
 public class PlaceSyncEntityHandler implements SyncEntityHandler {
@@ -116,11 +117,14 @@ public class PlaceSyncEntityHandler implements SyncEntityHandler {
         place.setLastModifiedBy(userId);
         placeRepository.save(place);
 
-        upsertMappingIfPossible(payload, place);
+        if (!isBlank(canonicalPlaceId) && !isBlank(place.getId())) {
+            upsertMappingIfPossible(payload, place);
+        }
 
         if (!targetPlaceId.equals(payload.id.trim())) {
-            PlacePayload responsePayload = new PlacePayload();
+            PlacePayload responsePayload = toPayload(place);
             responsePayload.id = payload.id;
+            responsePayload.canonicalId = targetPlaceId;
             responsePayload.deleted = true;
             responsePayload.serverVersion = newVersion;
             return writePayload(responsePayload);
@@ -179,7 +183,7 @@ public class PlaceSyncEntityHandler implements SyncEntityHandler {
         }
         payload.tags = place.getTags();
         payload.placeSource = place.getPlaceSource();
-        payload.externalId = place.getId();
+        payload.externalId = resolveExternalIdForPayload(place);
         payload.persistedByAction = place.getPersistedByAction();
         payload.persistedByUserId = place.getPersistedByUserId();
         payload.reviewCount = place.getReviewCount();
@@ -187,6 +191,36 @@ public class PlaceSyncEntityHandler implements SyncEntityHandler {
         payload.serverVersion = place.getServerVersion();
         payload.deleted = place.isDeleted();
         return payload;
+    }
+
+    private String resolveExternalIdForPayload(Place place) {
+        if (place == null) {
+            return null;
+        }
+
+        String placeSource = normalizeText(place.getPlaceSource());
+        if (placeSource == null) {
+            return null;
+        }
+
+        String internalPlaceId = normalizeText(place.getId());
+        if (internalPlaceId == null) {
+            return null;
+        }
+
+        List<PlaceMapping> mappings = placeMappingRepository.findByInternalPlaceId(internalPlaceId);
+        if (mappings == null) {
+            mappings = Collections.emptyList();
+        }
+
+        return mappings
+                .stream()
+                .filter(mapping -> placeSource.equalsIgnoreCase(normalizeText(mapping.getExternalSource())))
+                .map(PlaceMapping::getExternalId)
+                .map(this::normalizeText)
+                .filter(value -> value != null)
+                .findFirst()
+                .orElse(null);
     }
 
     private String resolveCanonicalPlaceId(PlacePayload payload) {
@@ -285,6 +319,7 @@ public class PlaceSyncEntityHandler implements SyncEntityHandler {
         public double latitude;
         public double longitude;
         public String externalId;
+        public String canonicalId;
         public List<String> tags;
         public String placeSource;
         public String persistedByAction;

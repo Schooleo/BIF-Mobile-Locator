@@ -241,6 +241,55 @@ class FavoriteServiceTest {
     }
 
     @Test
+    void saveMyFavorite_WhenUpdateMissingLocation_UsesExistingLocation() {
+        Favorite input = new Favorite();
+        input.setId("f1");
+        input.setExternalSource("GOOGLE_MAPS");
+        input.setExternalId("gm-9");
+        input.setPlaceName("Coffee");
+
+        Favorite existing = new Favorite();
+        existing.setId("f1");
+        existing.setUserId("u1");
+        existing.setLocation(new Location(10.0, 20.0));
+        when(favoriteRepository.findById("f1")).thenReturn(Optional.of(existing));
+
+        when(placeIdentityService.resolveInternalPlaceId("GOOGLE_MAPS", "gm-9", 10.0, 20.0, "Coffee"))
+                .thenReturn("place-9");
+        when(favoriteRepository.save(any(Favorite.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Favorite result = favoriteService.saveMyFavorite("u1", input);
+
+        assertSame(input, result);
+        assertNotNull(input.getLocation());
+        assertEquals(10.0, input.getLocation().getLatitude());
+        assertEquals(20.0, input.getLocation().getLongitude());
+        assertEquals("place-9", input.getPlaceId());
+        verify(favoriteRepository).save(input);
+    }
+
+    @Test
+    void saveMyFavorite_WhenUpdateMissingPlaceId_UsesExistingPlaceId() {
+        Favorite input = new Favorite();
+        input.setId("f2");
+
+        Favorite existing = new Favorite();
+        existing.setId("f2");
+        existing.setUserId("u1");
+        existing.setPlaceId("place-existing");
+        existing.setLocation(new Location(10.0, 20.0));
+        when(favoriteRepository.findById("f2")).thenReturn(Optional.of(existing));
+        when(favoriteRepository.save(any(Favorite.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Favorite result = favoriteService.saveMyFavorite("u1", input);
+
+        assertSame(input, result);
+        assertEquals("place-existing", input.getPlaceId());
+        verify(placeIdentityService, never()).resolveInternalPlaceId(anyString(), anyString(), anyDouble(), anyDouble(), anyString());
+        verify(favoriteRepository).save(input);
+    }
+
+    @Test
     void saveMyFavorite_WhenNotOwner_ThrowsSecurityException() {
         Favorite input = new Favorite();
         input.setId("f1");

@@ -8,6 +8,7 @@ import com.bif.app.domain.model.Favorite;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 public class FavoriteMapper {
@@ -97,9 +98,13 @@ public class FavoriteMapper {
         FavoriteDto dto = new FavoriteDto();
         dto.id = domain.id;
         dto.placeId = null;
-        dto.externalSource = domain.externalSource;
-        dto.externalId = domain.externalId;
-        dto.placeName = domain.placeName;
+        dto.externalSource = firstNonBlank(domain.externalSource, "OSM");
+        dto.externalId = firstNonBlank(
+            domain.externalId,
+            domain.placeId,
+            domain.id,
+            buildLegacyExternalId(domain));
+        dto.placeName = firstNonBlank(domain.placeName, domain.name, domain.address);
         dto.name = domain.name;
         dto.latitude = domain.latitude;
         dto.longitude = domain.longitude;
@@ -111,6 +116,36 @@ public class FavoriteMapper {
         dto.serverVersion = domain.serverVersion;
         dto.deleted = domain.deleted;
         return dto;
+    }
+
+    private static String buildLegacyExternalId(Favorite domain) {
+        if (domain == null) {
+            return null;
+        }
+        if (!Double.isFinite(domain.latitude) || !Double.isFinite(domain.longitude)) {
+            return null;
+        }
+        if (domain.latitude == 0.0d && domain.longitude == 0.0d) {
+            return null;
+        }
+
+        return String.format(Locale.US, "legacy:%.6f:%.6f", domain.latitude, domain.longitude);
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+
+        for (String value : values) {
+            if (value != null) {
+                String trimmed = value.trim();
+                if (!trimmed.isEmpty()) {
+                    return trimmed;
+                }
+            }
+        }
+        return null;
     }
 
     public static List<Favorite> toDomainList(List<FavoriteEntity> entities) {

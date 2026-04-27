@@ -173,16 +173,6 @@ public class PlaceService {
             return explicitLastModifiedBy;
         }
 
-        String existingLastModifiedBy = normalizeText(existing != null ? existing.getLastModifiedBy() : null);
-        if (existingLastModifiedBy != null) {
-            return existingLastModifiedBy;
-        }
-
-        String existingUserId = normalizeText(existing != null ? existing.getPersistedByUserId() : null);
-        if (existingUserId != null) {
-            return existingUserId;
-        }
-
         return "system";
     }
 
@@ -209,14 +199,18 @@ public class PlaceService {
             place.setId(resolvedCanonicalId);
         }
 
-        Optional<Place> existing = placeRepository.findById(place.getId());
-        if (existing.isPresent()) {
-            upsertMappingIfPossible(existing.get(), externalSource, externalId);
-            return existing.get();
+        String targetPlaceId = normalizeText(place != null ? place.getId() : null);
+        if (targetPlaceId != null) {
+            Optional<Place> existing = placeRepository.findById(targetPlaceId);
+            if (existing.isPresent()) {
+                upsertMappingIfPossible(existing.get(), externalSource, externalId);
+                return existing.get();
+            }
         }
 
         enrichPlaceAddress(place);
         place.setPersistedByAction("search_discovered");
+        place.setLastModifiedBy(resolveLastModifiedBy(place, null));
         place.setServerVersion(syncVersionService.nextVersion());
         Place saved = placeRepository.save(place);
         upsertMappingIfPossible(saved, externalSource, externalId);

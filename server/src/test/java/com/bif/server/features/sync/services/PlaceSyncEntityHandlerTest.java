@@ -2,6 +2,7 @@ package com.bif.server.features.sync.services;
 
 import com.bif.server.common.models.Location;
 import com.bif.server.features.place.models.Place;
+import com.bif.server.features.place.models.PlaceMapping;
 import com.bif.server.features.place.repositories.PlaceMappingRepository;
 import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.place.services.PlaceAddressEnrichmentService;
@@ -16,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -101,6 +103,10 @@ class PlaceSyncEntityHandlerTest {
                 .thenReturn("canonical-1");
         when(placeRepository.findById("canonical-1")).thenReturn(Optional.empty());
         when(placeAddressEnrichmentService.enrichAddress(any(), eq(10.0), eq(20.0))).thenReturn("Server Address");
+        PlaceMapping mapping = new PlaceMapping();
+        mapping.setExternalSource("GOOGLE_MAPS");
+        mapping.setExternalId("ext-123");
+        when(placeMappingRepository.findByInternalPlaceId("canonical-1")).thenReturn(List.of(mapping));
 
         String resultPayload = handler.applyPushedChange(pushed, "user-1", 21L);
 
@@ -111,7 +117,29 @@ class PlaceSyncEntityHandlerTest {
         assertEquals("GOOGLE_MAPS", saved.getPlaceSource());
         verify(placeMappingRepository).upsertByExternalKey("GOOGLE_MAPS", "ext-123", "canonical-1", "Cafe", 10.0, 20.0);
         assertTrue(resultPayload.contains("\"id\":\"ext-123\""));
+        assertTrue(resultPayload.contains("\"canonicalId\":\"canonical-1\""));
+        assertTrue(resultPayload.contains("\"externalId\":\"ext-123\""));
         assertTrue(resultPayload.contains("\"deleted\":true"));
         assertTrue(resultPayload.contains("\"serverVersion\":21"));
+    }
+
+    @Test
+    void applyPushedChange_whenCanonicalResolveFails_skipsMappingUpsert() {
+        SyncChange pushed = new SyncChange();
+        pushed.setEntityType("place");
+        pushed.setEntityId("ext-404");
+        pushed.setOperation("UPDATE");
+        pushed.setPayload("{\"id\":\"ext-404\",\"name\":\"Cafe\",\"placeSource\":\"GOOGLE_MAPS\",\"externalId\":\"ext-404\",\"latitude\":10.0,\"longitude\":20.0}");
+
+        when(placeIdentityService.resolveInternalPlaceId("GOOGLE_MAPS", "ext-404", 10.0, 20.0, "Cafe"))
+                .thenReturn(null);
+        when(placeRepository.findById("ext-404")).thenReturn(Optional.empty());
+        when(placeAddressEnrichmentService.enrichAddress(any(), eq(10.0), eq(20.0))).thenReturn("Server Address");
+
+        handler.applyPushedChange(pushed, "user-1", 22L);
+
+        verify(placeRepository).save(any(Place.class));
+        verify(placeMappingRepository, never())
+                .upsertByExternalKey(anyString(), anyString(), anyString(), anyString(), anyDouble(), anyDouble());
     }
 }

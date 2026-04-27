@@ -252,7 +252,13 @@ public class ChatViewModel extends ViewModel {
         aiSuggestPlacesModeEnabledLiveData.setValue(false);
     }
 
-    public void sharePlaceCard(String placeId, String name, String address, double latitude, double longitude, double rating) {
+    public void sharePlaceCard(String placeId,
+                               String name,
+                               String address,
+                               double latitude,
+                               double longitude,
+                               double rating,
+                               String placeSource) {
         if (groupId == null || groupId.trim().isEmpty()) {
             return;
         }
@@ -265,6 +271,7 @@ public class ChatViewModel extends ViewModel {
             payload.put("latitude", latitude);
             payload.put("longitude", longitude);
             payload.put("rating", rating);
+            payload.put("placeSource", placeSource);
             
             String id = UUID.randomUUID().toString();
             String clientMsgId = UUID.randomUUID().toString();

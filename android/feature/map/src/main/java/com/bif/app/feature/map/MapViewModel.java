@@ -323,8 +323,19 @@ public class MapViewModel extends ViewModel {
     public void getCanonicalFavoritePlaceId(@NonNull Place place,
                                             @NonNull java.util.function.Consumer<String> onResult) {
         reviewExecutor.execute(() -> {
-            String canonicalId = resolveCanonicalFavoritePlaceId(place);
-            onResult.accept(canonicalId != null ? canonicalId : "");
+            final String canonicalId = resolveCanonicalFavoritePlaceId(place);
+            final String result = canonicalId != null ? canonicalId : "";
+            android.os.Handler mainHandler;
+            try {
+                mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+            } catch (RuntimeException ignored) {
+                mainHandler = null;
+            }
+            if (mainHandler != null) {
+                mainHandler.post(() -> onResult.accept(result));
+                return;
+            }
+            onResult.accept(result);
         });
     }
 
