@@ -26,7 +26,7 @@
     <string name="trip_create_failed">Unable to create trip</string>
     <string name="trip_title_required">Please enter a trip title</string>
     <string name="trip_dates_required">Please select start and end dates</string>
-    <string name="trip_dates_invalid">End date must be after start date</string>
+    <string name="trip_dates_invalid">End date must be on or after start date</string>
     <string name="trip_itinerary_empty">No stops yet for this trip.</string>
     <string name="trip_collab_empty">No collaborators yet for this trip.</string>
     <string name="trip_collab_role_owner">Owner</string>
@@ -101,6 +101,7 @@
     <string name="chat_add_to_trip">Add to Trip</string>
     <string name="chat_added">Added</string>
     <string name="chat_view_place">Map View</string>
+    <string name="chat_view_on_map">View on map</string>
     <string name="chat_ai_draft_trip">Draft a Trip</string>
     <string name="chat_ai_suggest_places">Suggest Places</string>
     <string name="chat_ai_drafter_prefix">AI Trip Drafter</string>
@@ -108,6 +109,7 @@
     <string name="chat_ai_draft_hint">Describe the trip…</string>
     <string name="chat_ai_suggest_hint">Describe the places…</string>
     <string name="chat_ai_offline">AI tools are unavailable while offline.</string>
+    <string name="unavailable_offline">Unavailable offline</string>
     <string name="chat_ai_draft_failed">AI drafmat failed (%1$s)</string>
     <string name="chat_ai_suggest_failed">AI place suggestions failed (%1$s)</string>
     <string name="chat_add_stop_no_trip">No trip is available to add this stop.</string>
@@ -115,6 +117,10 @@
     <string name="trip_ai_drafter_fab">Open AI Trip Drafter</string>
     <string name="trip_ai_drafter_title">AI Trip Drafter</string>
     <string name="trip_ai_drafter_hint">Ask for a trip idea…</string>
+    <string name="trip_ai_start_date_not_set">Start date, not set</string>
+    <string name="trip_ai_end_date_not_set">End date, not set</string>
+    <string name="trip_ai_start_date_selected">Start date, %1$s</string>
+    <string name="trip_ai_end_date_selected">End date, %1$s</string>
     <string name="trip_ai_drafter_result">Drafted Trip</string>
     <string name="trip_ai_loading_drafter">AI is drafting your trip…</string>
     <string name="trip_ai_retry">Retry</string>
@@ -158,6 +164,9 @@
     <string name="friend_plan_trip">Plan a Trip</string>
     <string name="social_loading">Loading…</string>
     <string name="social_empty_friends">No friends yet.</string>
+    <string name="social_login_required_collaboration">Please log in to start collaborating</string>
+    <string name="social_login_required_ai">Please log in to use AI features</string>
+    <string name="social_login_button">Log in</string>
     <string name="social_empty_groups">No groups yet.</string>
     <string name="social_error_friends">Unable to load friends.</string>
     <string name="social_error_groups">Unable to load groups.</string>
@@ -232,7 +241,7 @@
     <string name="trip_delete_success">Trip deleted</string>
     <string name="trip_delete_failed">Unable to delete trip</string>
     <string name="trip_delete_owner_only">Only the trip owner can delete this trip</string>
-    <string name="trip_stop_address_coordinates">Lat %.5f, Lng %.5f</string>
+    <string name="trip_stop_address_coordinates">Lat %1$.5f, Lng %2$.5f</string>
     <string name="trip_stop_no_address">No address</string>
     <string name="trip_untitled">Untitled Trip</string>
     <string name="trip_no_date">No Date</string>
@@ -243,4 +252,5 @@
     <string name="trip_title_card_cover">Trip title card cover image</string>
     <string name="trip_edit_title_card">Change title card image</string>
     <string name="trip_title_card_update_failed">Unable to update trip title card image</string>
+    <string name="search">Search</string>
 </resources>

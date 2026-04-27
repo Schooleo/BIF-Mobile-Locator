@@ -142,7 +142,7 @@ class FavoriteRestControllerTest {
 
     @Test
     void upsertMyFavorite_WhenHeaderMissing_ReturnsUnauthorized() {
-        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest(null, null, "Coffee", null, null, null, null, 5, null);
+        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest(null, null, "GOOGLE_MAPS", "gm-0", "Coffee", "Coffee", null, null, null, null, 5, null);
 
         ResponseEntity<FavoriteResponse> result = controller.upsertMyFavorite(null, request);
 
@@ -153,7 +153,7 @@ class FavoriteRestControllerTest {
     @Test
     void upsertMyFavorite_WhenNotOwner_ReturnsForbidden() {
         Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
-        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", "place-123", "Coffee", null, null, null, null, 5, null);
+        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", null, "GOOGLE_MAPS", "gm-1", "Coffee", "Coffee", null, null, null, null, 5, null);
 
         when(favoriteService.saveMyFavorite(eq("u1"), any(Favorite.class))).thenThrow(new SecurityException("forbidden"));
 
@@ -162,13 +162,14 @@ class FavoriteRestControllerTest {
         assertEquals(HttpStatus.FORBIDDEN, result.getStatusCode());
         ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
         verify(favoriteService).saveMyFavorite(eq("u1"), captor.capture());
-        assertEquals("place-123", captor.getValue().getPlaceId());
+        assertNull(captor.getValue().getPlaceId());
+        assertEquals("GOOGLE_MAPS", captor.getValue().getExternalSource());
     }
 
     @Test
     void upsertMyFavorite_WhenTargetMissing_ReturnsNotFound() {
         Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
-        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", "place-123", "Coffee", null, null, null, null, 5, null);
+        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", null, "GOOGLE_MAPS", "gm-1", "Coffee", "Coffee", null, null, null, null, 5, null);
 
         when(favoriteService.saveMyFavorite(eq("u1"), any(Favorite.class)))
                 .thenThrow(new NoSuchElementException("missing"));
@@ -178,16 +179,19 @@ class FavoriteRestControllerTest {
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
         ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
         verify(favoriteService).saveMyFavorite(eq("u1"), captor.capture());
-        assertEquals("place-123", captor.getValue().getPlaceId());
+        assertNull(captor.getValue().getPlaceId());
     }
 
     @Test
-    void upsertMyFavorite_WhenAuthorized_MapsPlaceIdThroughRequest() {
+    void upsertMyFavorite_WhenAuthorized_MapsIdentitySeedWithoutClientPlaceId() {
         Authentication auth = new UsernamePasswordAuthenticationToken("u1", null);
-        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", "place-123", "Coffee", null, null, null, null, 5, null);
+        UpsertMyFavoriteRequest request = new UpsertMyFavoriteRequest("f1", null, "GOOGLE_MAPS", "gm-1", "Coffee", "Coffee", null, null, null, null, 5, null);
         Favorite saved = new Favorite();
         saved.setId("f1");
         saved.setPlaceId("place-123");
+        saved.setExternalSource("GOOGLE_MAPS");
+        saved.setExternalId("gm-1");
+        saved.setPlaceName("Coffee");
         when(favoriteService.saveMyFavorite(eq("u1"), any(Favorite.class))).thenReturn(saved);
 
         ResponseEntity<FavoriteResponse> result = controller.upsertMyFavorite(auth, request);
@@ -195,7 +199,8 @@ class FavoriteRestControllerTest {
         assertEquals(HttpStatus.OK, result.getStatusCode());
         ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
         verify(favoriteService).saveMyFavorite(eq("u1"), captor.capture());
-        assertEquals("place-123", captor.getValue().getPlaceId());
+        assertNull(captor.getValue().getPlaceId());
+        assertEquals("GOOGLE_MAPS", captor.getValue().getExternalSource());
     }
 
     @Test

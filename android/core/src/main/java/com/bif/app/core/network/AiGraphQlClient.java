@@ -288,6 +288,9 @@ public class AiGraphQlClient {
                             stop.placeId,
                             stopPlace,
                             stop.durationMinutes != null ? stop.durationMinutes : 0,
+                            stop.startTime,
+                            stop.endTime,
+                            stop.duration,
                             stop.note,
                             stop.plannedDateTime
                     ));

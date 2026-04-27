@@ -21,6 +21,7 @@ import com.bif.app.data.source.local.entity.PlaceEntity;
 import com.bif.app.data.source.local.entity.ReviewEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 import com.bif.app.data.sync.core.SyncManager;
+import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.PlaceIdentityContext;
 import com.bif.app.domain.model.Review;
 import com.bif.app.domain.repository.IReviewRepository;
@@ -57,7 +58,7 @@ public class ReviewRepository implements IReviewRepository {
     private final Context appContext;
     private final androidx.lifecycle.MutableLiveData<String> activeUserIdLiveData = new androidx.lifecycle.MutableLiveData<>();
     private final android.content.SharedPreferences.OnSharedPreferenceChangeListener prefListener = (prefs, key) -> {
-        if ("user_id".equals(key)) {
+        if (UserPreferences.KEY_USER_ID.equals(key)) {
             activeUserIdLiveData.postValue(getActiveUserId());
         }
     };
@@ -81,7 +82,7 @@ public class ReviewRepository implements IReviewRepository {
         this.gson = new Gson();
         this.appContext = appContext;
         this.activeUserIdLiveData.setValue(getActiveUserId());
-        this.appContext.getSharedPreferences("USER_PREF", Context.MODE_PRIVATE)
+        this.appContext.getSharedPreferences(UserPreferences.PREF_NAME, Context.MODE_PRIVATE)
                 .registerOnSharedPreferenceChangeListener(prefListener);
     }
 
@@ -323,7 +324,19 @@ public class ReviewRepository implements IReviewRepository {
 
     @Override
     public String resolveInternalPlaceId(String externalSource, String externalId, double lat, double lng, String name) {
+        if (isBlank(externalSource)
+                || isBlank(externalId)
+                || isBlank(name)
+                || Place.SOURCE_PREVIEW.equalsIgnoreCase(externalSource.trim())) {
+            Log.w(TAG, "resolveInternalPlaceId skipped remote resolve due to invalid or preview metadata"
+                    + " source=" + externalSource
+                    + " externalId=" + externalId
+                    + " name=" + name);
+            return buildDeterministicFallbackPlaceId(externalSource, externalId, lat, lng, name);
+        }
+
         try {
+
             PlaceResolveRequestDto request = new PlaceResolveRequestDto();
             request.externalSource = externalSource;
             request.externalId = externalId;
@@ -332,6 +345,7 @@ public class ReviewRepository implements IReviewRepository {
             request.name = name;
 
             Response<PlaceResolveResponseDto> res = restApiService.resolvePlace(request).execute();
+
             if (res.isSuccessful() && res.body() != null) {
                 String internalId = res.body().internalPlaceId;
                 if (internalId != null && !internalId.trim().isEmpty()) {

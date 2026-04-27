@@ -48,13 +48,8 @@ subprojects {
             force 'org.apache.httpcomponents:httpmime:4.5.14'
             force 'org.java-websocket:Java-WebSocket:1.5.7'
 
-            force 'org.jetbrains.kotlin:kotlin-stdlib:2.1.0'
+            force 'org.jetbrains.kotlin:kotlin-stdlib:2.2.21'
 
-            // Fix Snyk CVEs in bouncycastle transitive dependencies from Android SDK tools
-            // Fixes: SNYK-JAVA-ORGBOUNCYCASTLE-16074612 (Timing Attack)
-            //        SNYK-JAVA-ORGBOUNCYCASTLE-16075254 (LDAP Injection)
-            //        SNYK-JAVA-ORGBOUNCYCASTLE-16075266 (Broken Cryptographic Algorithm)
-            //        SNYK-JAVA-ORGBOUNCYCASTLE-16075260 (Improper Signature Verification)
             force 'org.bouncycastle:bcprov-jdk18on:1.84'
             force 'org.bouncycastle:bcpkix-jdk18on:1.84'
         }

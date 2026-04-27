@@ -1,6 +1,8 @@
 package com.bif.app.feature.map;
 
 import android.Manifest;
+import android.app.DatePickerDialog;
+import android.app.TimePickerDialog;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -37,6 +39,7 @@ import com.bif.app.core.utils.AppSnackbar;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresPermission;
 import androidx.appcompat.content.res.AppCompatResources;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.SearchView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -56,6 +59,7 @@ import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
 import com.bif.app.domain.model.OfflineMapDownloadState;
 import com.bif.app.domain.model.Place;
+import com.bif.app.domain.model.TripPlan;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -85,6 +89,7 @@ import org.maplibre.geojson.Feature;
 import org.maplibre.geojson.FeatureCollection;
 import org.maplibre.geojson.LineString;
 import org.maplibre.geojson.Point;
+import org.maplibre.geojson.Polygon;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -93,6 +98,7 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -129,6 +135,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private static final String TURN_ARROW_ICON_ID = "turn-arrow-icon";
     private static final String USER_ARROW_ICON_ID = "user-arrow-icon";
     private static final String PROP_PLACE_ID = "placeId";
+    private static final String PROP_PLACE_SOURCE = "placeSource";
     private static final String PROP_NAME = "name";
     private static final String PROP_ADDRESS = "address";
     private static final String PROP_RATING = "rating";
@@ -182,6 +189,8 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private com.google.android.material.chip.ChipGroup chipGroupFilters;
     private ReviewAdapter reviewAdapter;
     private List<ReviewItem> allReviews = new ArrayList<>();
+    private List<Group> availableGroups = new ArrayList<>();
+    private List<TripPlan> availableTrips = new ArrayList<>();
     private androidx.recyclerview.widget.LinearSnapHelper snapHelper;
 
     private final MapLibreMap.OnCameraMoveListener onCameraMoveListener = this::onMapCameraChanged;
@@ -293,10 +302,35 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private static final class PoiTap {
         final LatLng point;
         final String name;
+        final String externalId;
 
-        PoiTap(@NonNull LatLng point, @Nullable String name) {
+        PoiTap(@NonNull LatLng point, @Nullable String name, @Nullable String externalId) {
             this.point = point;
             this.name = name;
+            this.externalId = externalId;
+        }
+    }
+
+    private static final class StylePoiCandidate {
+        final LatLng point;
+        final String name;
+        final String externalId;
+        final int renderIndex;
+        final int geometryPriority;
+        final double areaScore;
+
+        StylePoiCandidate(@NonNull LatLng point,
+                          @Nullable String name,
+                          @Nullable String externalId,
+                          int renderIndex,
+                          int geometryPriority,
+                          double areaScore) {
+            this.point = point;
+            this.name = name;
+            this.externalId = externalId;
+            this.renderIndex = renderIndex;
+            this.geometryPriority = geometryPriority;
+            this.areaScore = areaScore;
         }
     }
 
@@ -375,6 +409,10 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         viewModel = new ViewModelProvider(requireActivity()).get(MapViewModel.class);
+        viewModel.allGroups.observe(getViewLifecycleOwner(), groups ->
+            availableGroups = groups != null ? new ArrayList<>(groups) : new ArrayList<>());
+        viewModel.allTrips.observe(getViewLifecycleOwner(), trips ->
+            availableTrips = trips != null ? new ArrayList<>(trips) : new ArrayList<>());
         viewModel.clearPendingStatusText();
         syncSearchUserLocation(lastKnownUserLocation);
         captureNavigationRequest();
@@ -422,6 +460,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         });
 
         viewModel.allFavorites.observe(getViewLifecycleOwner(), favorites -> {
+
             currentFavorites = favorites != null ? favorites : new ArrayList<>();
             refreshFavoriteMarkers();
         });
@@ -597,17 +636,17 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                     animateCameraToSelection(new LatLng(
                             tappedPlace.location.latitude,
                             tappedPlace.location.longitude));
-                    showPlaceBottomSheet(tappedPlace, requireView());
+                    showPlaceBottomSheet(tappedPlace, requireView(), true);
                     return true;
                 }
 
                 PoiTap stylePoi = findStylePoiAt(point);
                 if (stylePoi != null) {
-                    fetchAddressAndShowDetails(stylePoi.point, stylePoi.name);
+                    fetchAddressAndShowDetails(stylePoi.point, stylePoi.name, stylePoi.externalId);
                     return true;
                 }
 
-                fetchAddressAndShowDetails(point, null);
+                fetchAddressAndShowDetails(point, null, null);
                 return true;
             });
 
@@ -784,13 +823,22 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         }
 
         if (pendingNavigationPlace != null && pendingNavigationPlace.location != null) {
-            selectedPlace = pendingNavigationPlace;
-            renderSelectedPlace();
-            animateCameraToSelection(new LatLng(
+            LatLng latLng = new LatLng(
                     pendingNavigationPlace.location.latitude,
-                    pendingNavigationPlace.location.longitude));
-            if (getView() != null) {
-                showPlaceBottomSheet(pendingNavigationPlace, requireView());
+                    pendingNavigationPlace.location.longitude);
+            
+            String nameToPass = pendingNavigationPlace.name;
+            if (nameToPass != null && nameToPass.equals(getString(R.string.default_place_name))) {
+                nameToPass = null;
+            }
+
+            if (pendingNavigationPlace != null && !pendingNavigationPlace.name.isEmpty() && !pendingNavigationPlace.address.isEmpty()) {
+                selectedPlace = pendingNavigationPlace;
+                renderSelectedPlace();
+                animateCameraToSelection(latLng);
+                showPlaceBottomSheet(pendingNavigationPlace, requireView(), true);
+            } else {
+                fetchAddressAndShowDetails(latLng, nameToPass, pendingNavigationPlace != null ? pendingNavigationPlace.id : null);
             }
             pendingNavigationPlace = null;
             pendingNavigationQuery = null;
@@ -1375,14 +1423,37 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             return;
         }
 
+
         List<Feature> favoriteFeatures = new ArrayList<>();
         for (Favorite favorite : currentFavorites) {
+            if (favorite == null) {
+                continue;
+            }
+
+            String placeId = favorite.placeId != null
+                    ? favorite.placeId.trim()
+                    : "";
+            if (TextUtils.isEmpty(placeId)) {
+                placeId = favorite.id != null
+                        ? favorite.id
+                        : buildStablePlaceId(favorite.latitude, favorite.longitude);
+            }
+
+            String favoriteSource = !TextUtils.isEmpty(favorite.externalSource)
+                    ? favorite.externalSource
+                    : Place.SOURCE_OSM;
+            Place.SelectionState selectionState = Place.SOURCE_PREVIEW.equalsIgnoreCase(favoriteSource)
+                    ? Place.SelectionState.PREVIEW
+                    : Place.SelectionState.CANONICAL;
+
             Place place = new Place(
-                    String.valueOf(favorite.id),
+                    placeId,
                     favorite.name,
                     favorite.address,
                     favorite.rating,
-                    new Location(favorite.latitude, favorite.longitude));
+                    new Location(favorite.latitude, favorite.longitude),
+                    favoriteSource,
+                    selectionState);
             favoriteFeatures.add(createFeatureForPlace(
                     new LatLng(favorite.latitude, favorite.longitude),
                     place));
@@ -2639,6 +2710,10 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 place.name != null ? place.name : "Selected Location");
         feature.addStringProperty(PROP_ADDRESS,
             normalizeDisplayAddress(place.name, place.address));
+        feature.addStringProperty(PROP_PLACE_SOURCE,
+            !TextUtils.isEmpty(place.placeSource)
+                ? place.placeSource
+                : Place.SOURCE_OSM);
         feature.addNumberProperty(PROP_RATING, place.rating);
         feature.addNumberProperty(PROP_LAT, latitude);
         feature.addNumberProperty(PROP_LNG, longitude);
@@ -2675,18 +2750,161 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             return null;
         }
 
-        for (Feature feature : features) {
-            if (feature == null || !(feature.geometry() instanceof Point)) {
+        List<StylePoiCandidate> dedupedCandidates = new ArrayList<>();
+        for (int index = 0; index < features.size(); index++) {
+            Feature feature = features.get(index);
+            StylePoiCandidate candidate = toStylePoiCandidate(feature, tapPoint, index);
+            if (candidate == null) {
                 continue;
             }
-            Point poiPoint = (Point) feature.geometry();
-            String poiName = firstNonEmptyProperty(feature);
-            return new PoiTap(
-                    new LatLng(poiPoint.latitude(), poiPoint.longitude()),
-                    poiName);
+            upsertStyleCandidate(dedupedCandidates, candidate);
         }
 
-        return null;
+        if (dedupedCandidates.isEmpty()) {
+            return null;
+        }
+
+        StylePoiCandidate best = dedupedCandidates.get(0);
+        for (int i = 1; i < dedupedCandidates.size(); i++) {
+            StylePoiCandidate current = dedupedCandidates.get(i);
+            if (compareStyleCandidates(current, best) < 0) {
+                best = current;
+            }
+        }
+
+        return new PoiTap(best.point, best.name, best.externalId);
+    }
+
+    @Nullable
+    private StylePoiCandidate toStylePoiCandidate(@Nullable Feature feature,
+                                                  @NonNull LatLng tapPoint,
+                                                  int renderIndex) {
+        if (feature == null || feature.geometry() == null) {
+            return null;
+        }
+
+        LatLng candidatePoint;
+        int geometryPriority;
+        double areaScore;
+
+        if (feature.geometry() instanceof Point) {
+            Point poiPoint = (Point) feature.geometry();
+            candidatePoint = new LatLng(poiPoint.latitude(), poiPoint.longitude());
+            geometryPriority = 0;
+            areaScore = 0.0;
+        } else if (feature.geometry() instanceof Polygon) {
+            candidatePoint = tapPoint;
+            geometryPriority = 1;
+            areaScore = estimatePolygonArea((Polygon) feature.geometry());
+        } else {
+            return null;
+        }
+
+        String externalId = feature.id();
+        if (TextUtils.isEmpty(externalId)) {
+            externalId = feature.getStringProperty("id");
+        }
+
+        String poiName = firstNonEmptyProperty(feature);
+        return new StylePoiCandidate(
+                candidatePoint,
+                poiName,
+                externalId,
+                renderIndex,
+                geometryPriority,
+                areaScore);
+    }
+
+    private void upsertStyleCandidate(@NonNull List<StylePoiCandidate> dedupedCandidates,
+                                      @NonNull StylePoiCandidate candidate) {
+        String candidateKey = buildStyleCandidateKey(candidate);
+        for (int i = 0; i < dedupedCandidates.size(); i++) {
+            StylePoiCandidate existing = dedupedCandidates.get(i);
+            if (!buildStyleCandidateKey(existing).equals(candidateKey)) {
+                continue;
+            }
+            if (compareStyleCandidates(candidate, existing) < 0) {
+                dedupedCandidates.set(i, candidate);
+            }
+            return;
+        }
+        dedupedCandidates.add(candidate);
+    }
+
+    @NonNull
+    private String buildStyleCandidateKey(@NonNull StylePoiCandidate candidate) {
+        if (!TextUtils.isEmpty(candidate.externalId)) {
+            return "id:" + candidate.externalId;
+        }
+
+        String normalizedName = candidate.name == null
+                ? ""
+                : candidate.name.trim().toLowerCase(Locale.ROOT);
+        long latBucket = Math.round(candidate.point.getLatitude() * 10_000.0d);
+        long lngBucket = Math.round(candidate.point.getLongitude() * 10_000.0d);
+        return "name:" + normalizedName + "|" + latBucket + "|" + lngBucket;
+    }
+
+    private int compareStyleCandidates(@NonNull StylePoiCandidate left,
+                                       @NonNull StylePoiCandidate right) {
+        boolean leftHasExternalId = !TextUtils.isEmpty(left.externalId);
+        boolean rightHasExternalId = !TextUtils.isEmpty(right.externalId);
+        if (leftHasExternalId != rightHasExternalId) {
+            return leftHasExternalId ? -1 : 1;
+        }
+
+        if (left.renderIndex != right.renderIndex) {
+            return Integer.compare(left.renderIndex, right.renderIndex);
+        }
+
+        if (left.geometryPriority != right.geometryPriority) {
+            return Integer.compare(left.geometryPriority, right.geometryPriority);
+        }
+
+        if (Double.compare(left.areaScore, right.areaScore) != 0) {
+            return Double.compare(left.areaScore, right.areaScore);
+        }
+
+        boolean leftHasName = !TextUtils.isEmpty(left.name);
+        boolean rightHasName = !TextUtils.isEmpty(right.name);
+        if (leftHasName != rightHasName) {
+            return leftHasName ? -1 : 1;
+        }
+
+        return 0;
+    }
+
+    private double estimatePolygonArea(@Nullable Polygon polygon) {
+        if (polygon == null || polygon.coordinates() == null || polygon.coordinates().isEmpty()) {
+            return Double.MAX_VALUE;
+        }
+
+        List<Point> outerRing = polygon.coordinates().get(0);
+        if (outerRing == null || outerRing.size() < 3) {
+            return Double.MAX_VALUE;
+        }
+
+        double minLat = Double.MAX_VALUE;
+        double maxLat = -Double.MAX_VALUE;
+        double minLng = Double.MAX_VALUE;
+        double maxLng = -Double.MAX_VALUE;
+        for (Point point : outerRing) {
+            if (point == null) {
+                continue;
+            }
+            minLat = Math.min(minLat, point.latitude());
+            maxLat = Math.max(maxLat, point.latitude());
+            minLng = Math.min(minLng, point.longitude());
+            maxLng = Math.max(maxLng, point.longitude());
+        }
+
+        if (minLat == Double.MAX_VALUE || minLng == Double.MAX_VALUE) {
+            return Double.MAX_VALUE;
+        }
+
+        double latSpan = Math.max(0.0d, maxLat - minLat);
+        double lngSpan = Math.max(0.0d, maxLng - minLng);
+        return latSpan * lngSpan;
     }
 
     @Nullable
@@ -2697,8 +2915,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 "name:en",
                 "name:latin",
                 "name:vi",
-                "ref",
-                "class"
+                "ref"
         }) {
             if (!feature.hasProperty(key)) {
                 continue;
@@ -2724,11 +2941,12 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         }
 
         String name = feature.hasProperty(PROP_NAME)
-                ? feature.getStringProperty(PROP_NAME)
-                : "Selected Location";
+            ? feature.getStringProperty(PROP_NAME)
+            : PlaceDisplayTextResolver.FALLBACK_TITLE;
         String address = feature.hasProperty(PROP_ADDRESS)
-                ? feature.getStringProperty(PROP_ADDRESS)
-                : "Address unavailable";
+            ? feature.getStringProperty(PROP_ADDRESS)
+            : PlaceDisplayTextResolver.FALLBACK_ADDRESS;
+        // Mới: Fallback sinh UUID nếu properties không có ID
         String id = feature.hasProperty(PROP_PLACE_ID)
                 ? feature.getStringProperty(PROP_PLACE_ID)
                 : buildStablePlaceId(lat.doubleValue(), lng.doubleValue());
@@ -2736,23 +2954,28 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 ? feature.getNumberProperty(PROP_RATING)
                 : 0.0;
         double rating = ratingNumber != null ? ratingNumber.doubleValue() : 0.0;
+        String placeSource = feature.hasProperty(PROP_PLACE_SOURCE)
+            ? feature.getStringProperty(PROP_PLACE_SOURCE)
+            : Place.SOURCE_OSM;
 
         return new Place(
                 id,
                 name,
             normalizeDisplayAddress(name, address),
                 rating,
-                new Location(lat.doubleValue(), lng.doubleValue()));
+            new Location(lat.doubleValue(), lng.doubleValue()),
+            placeSource);
     }
 
     private void fetchAddressAndShowDetails(LatLng latLng,
-            @Nullable String preferredName) {
-        Place quickPlace = buildInstantTapPlace(latLng, preferredName);
+            @Nullable String preferredName,
+            @Nullable String externalId) {
+        Place quickPlace = buildInstantTapPlace(latLng, preferredName, externalId);
         if (mapLibreMap != null) {
             selectedPlace = quickPlace;
             renderSelectedPlace();
             animateCameraToSelection(latLng);
-            showPlaceBottomSheet(quickPlace, requireView());
+            showPlaceBottomSheet(quickPlace, requireView(), false);
         }
 
         if (!isOnlineNow) {
@@ -2764,32 +2987,36 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 List<Address> addresses = reverseGeocodeWithOsmFirst(
                         latLng.getLatitude(), latLng.getLongitude());
 
-                String finalName = preferredName;
-                String addressText = "Unknown Address";
+                String finalName;
+                String addressText = null;
+                String geocoderName = null;
 
                 if (!addresses.isEmpty()) {
                     Address address = addresses.get(0);
                     addressText = address.getAddressLine(0);
-
-                    if (TextUtils.isEmpty(finalName)) {
-                        finalName = address.getFeatureName();
-                        if (finalName != null && finalName.equals(addressText)) {
-                            finalName = null;
-                        }
-                    }
+                    geocoderName = address.getFeatureName();
                 }
 
-                if (TextUtils.isEmpty(finalName)) {
-                    finalName = quickPlace.name;
-                }
+                finalName = PlaceDisplayTextResolver.resolveTitle(
+                        preferredName,
+                        geocoderName,
+                        addressText);
+
+                String placeId = !TextUtils.isEmpty(externalId)
+                        ? externalId
+                        : buildStablePlaceId(latLng.getLatitude(), latLng.getLongitude());
+
+                final boolean reviewEligible = !TextUtils.isEmpty(externalId)
+                    || PlaceDisplayTextResolver.hasMeaningfulTitle(finalName);
 
                 Place clickedPlace = new Place(
-                        buildStablePlaceId(latLng.getLatitude(), latLng.getLongitude()),
+                        placeId,
                         finalName,
-                    normalizeDisplayAddress(finalName,
-                        addressText != null ? addressText : quickPlace.address),
+                        PlaceDisplayTextResolver.resolveAddress(finalName, addressText),
                         0.0,
-                        new Location(latLng.getLatitude(), latLng.getLongitude()));
+                    new Location(latLng.getLatitude(), latLng.getLongitude()),
+                    reviewEligible ? Place.SOURCE_OSM : Place.SOURCE_PREVIEW,
+                    reviewEligible ? Place.SelectionState.CANONICAL : Place.SelectionState.PREVIEW);
 
                 requireActivity().runOnUiThread(() -> {
                     if (mapLibreMap == null) {
@@ -2802,7 +3029,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
                     selectedPlace = clickedPlace;
                     renderSelectedPlace();
-                    showPlaceBottomSheet(clickedPlace, requireView());
+                    showPlaceBottomSheet(clickedPlace, requireView(), reviewEligible);
                 });
             } catch (Exception e) {
                 Timber.tag(TAG).e(e, "Geocoding failed");
@@ -2811,22 +3038,28 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     }
 
     @NonNull
-    private Place buildInstantTapPlace(@NonNull LatLng latLng, @Nullable String preferredName) {
-        String resolvedName = !TextUtils.isEmpty(preferredName)
-                ? preferredName
-                : "Selected Location";
-        String resolvedAddress = String.format(
-                Locale.getDefault(),
-                "%.5f, %.5f",
-                latLng.getLatitude(),
-                latLng.getLongitude());
+    private Place buildInstantTapPlace(@NonNull LatLng latLng, @Nullable String preferredName, @Nullable String externalId) {
+        String resolvedName = PlaceDisplayTextResolver.resolveTitle(preferredName, null, null);
+        String resolvedAddress = PlaceDisplayTextResolver.resolveAddress(resolvedName, null);
+        boolean hasExternalId = !TextUtils.isEmpty(externalId);
+
+        String placeId = hasExternalId
+                ? externalId
+                : buildStablePlaceId(latLng.getLatitude(), latLng.getLongitude());
+
+        String placeSource = hasExternalId ? Place.SOURCE_OSM : Place.SOURCE_PREVIEW;
+        Place.SelectionState selectionState = hasExternalId
+            ? Place.SelectionState.CANONICAL
+            : Place.SelectionState.PREVIEW;
 
         return new Place(
-                buildStablePlaceId(latLng.getLatitude(), latLng.getLongitude()),
+                placeId,
                 resolvedName,
                 resolvedAddress,
                 0.0,
-                new Location(latLng.getLatitude(), latLng.getLongitude()));
+            new Location(latLng.getLatitude(), latLng.getLongitude()),
+            placeSource,
+            selectionState);
     }
 
     @NonNull
@@ -2930,10 +3163,20 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     }
 
     private void showPlaceBottomSheet(Place place, View root) {
+        showPlaceBottomSheet(place, root, true);
+    }
+
+    private void showPlaceBottomSheet(Place place, View root, boolean allowReviewLoading) {
+        if (place == null || root == null) {
+            return;
+        }
+
         if (viewModel.hasActiveRouteSession()) {
             viewModel.setStatusText(getString(R.string.route_active_place_sheet_blocked));
             return;
         }
+
+
 
         viewModel.cacheViewedPlace(place);
         showPlaceSheetOnly();
@@ -2963,43 +3206,53 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         btnSharePlace.setEnabled(true);
         btnRoutePlace.setEnabled(true);
 
-        updateFavoriteButtonState(btnAddFavorite,
-                findFavoriteForPlace(place) != null);
-
-        btnAddFavorite.setOnClickListener(v -> {
-            Favorite existing = findFavoriteForPlace(place);
-            if (existing != null) {
-                viewModel.removeFromFavorites(existing);
-                viewModel.setStatusText(place.name + " removed from Favorites!");
-                updateFavoriteButtonState(btnAddFavorite, false);
-            } else {
-                viewModel.addToFavorites(place, new MapViewModel.AddFavoriteCallback() {
-                    @Override
-                    public void onSuccess() {
-                        locationHandler.post(() -> {
-                            if (!isAdded()) {
-                                return;
-                            }
-                            viewModel.setStatusText(place.name + " added to Favorites!");
-                            updateFavoriteButtonState(btnAddFavorite, true);
-                        });
-                    }
-
-                    @Override
-                    public void onError(@NonNull String message) {
-                        locationHandler.post(() -> {
-                            if (!isAdded()) {
-                                return;
-                            }
-                            AppSnackbar.show(requireContext(), message);
-                        });
-                    }
-                });
+        findFavoriteForPlaceWithCanonicalMatch(place, favorite -> {
+            if (!isAdded()) {
+                return;
             }
+            locationHandler.post(() -> updateFavoriteButtonState(btnAddFavorite, favorite != null));
         });
 
+        btnAddFavorite.setOnClickListener(v ->
+                findFavoriteForPlaceWithCanonicalMatch(place, existing -> {
+
+                    if (!isAdded()) {
+                        return;
+                    }
+                    if (existing != null) {
+                        viewModel.removeFromFavorites(existing);
+                        viewModel.setStatusText(place.name + " removed from Favorites!");
+                        updateFavoriteButtonState(btnAddFavorite, false);
+                    } else {
+                        viewModel.addToFavorites(place, new MapViewModel.AddFavoriteCallback() {
+                            @Override
+                            public void onSuccess() {
+
+                                locationHandler.post(() -> {
+                                    if (!isAdded()) {
+                                        return;
+                                    }
+                                    viewModel.setStatusText(place.name + " added to Favorites!");
+                                    updateFavoriteButtonState(btnAddFavorite, true);
+                                });
+                            }
+
+                            @Override
+                            public void onError(@NonNull String message) {
+                                Timber.tag(TAG).e("addToFavorites onError: %s", message);
+                                locationHandler.post(() -> {
+                                    if (!isAdded()) {
+                                        return;
+                                    }
+                                    AppSnackbar.show(requireContext(), message);
+                                });
+                            }
+                        });
+                    }
+                }));
+
         btnRoutePlace.setOnClickListener(v -> routeToPlace(place));
-        btnSharePlace.setOnClickListener(v -> showShareToGroupDialog(place));
+        btnSharePlace.setOnClickListener(v -> showTripActionsDialog(place));
 
         setupReviewsRecyclerView(root);
         setupChipFilters(root);
@@ -3015,11 +3268,21 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             shimmerReviews.setVisibility(View.VISIBLE);
             shimmerReviews.startShimmer();
         }
-        if (!TextUtils.isEmpty(place.placeSource)) {
+        if (allowReviewLoading && place.canResolveCanonicalIdentity()) {
+
             viewModel.loadReviews(place);
-        } else if (shimmerReviews != null) {
-            shimmerReviews.stopShimmer();
-            shimmerReviews.setVisibility(View.GONE);
+        } else {
+            Timber.tag(TAG).w("showPlaceBottomSheet: skipping loadReviews (allowReviewLoading=%s, placeSource=%s), placeId=%s name=%s address=%s",
+                    allowReviewLoading,
+                    place.placeSource,
+                    place.id,
+                    place.name,
+                    place.address);
+            viewModel.clearReviewTargetForPreview();
+            if (shimmerReviews != null) {
+                shimmerReviews.stopShimmer();
+                shimmerReviews.setVisibility(View.GONE);
+            }
         }
 
         View layoutContainer = root.findViewById(R.id.layout_container);
@@ -3290,20 +3553,13 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         }
 
         String placeId = place != null && place.id != null ? place.id.trim() : "";
+
         for (Favorite favorite : currentFavorites) {
             String favoritePlaceId = favorite != null && favorite.placeId != null
                     ? favorite.placeId.trim()
                     : "";
             if (!TextUtils.isEmpty(placeId) && placeId.equals(favoritePlaceId)) {
                 Timber.d("Matched favorite by placeId: placeId=%s favoriteId=%s",
-                        placeId,
-                        favorite.id);
-                return favorite;
-            }
-
-            if (place.address != null && !place.address.isEmpty()
-                    && place.address.equals(favorite.address)) {
-                Timber.d("Matched favorite by address fallback: placeId=%s favoriteId=%s",
                         placeId,
                         favorite.id);
                 return favorite;
@@ -3321,6 +3577,49 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             }
         }
         return null;
+    }
+
+    private void findFavoriteForPlaceWithCanonicalMatch(
+            @Nullable Place place,
+            @NonNull java.util.function.Consumer<Favorite> onResult) {
+        if (place == null) {
+            onResult.accept(null);
+            return;
+        }
+
+        Favorite quickMatch = findFavoriteForPlace(place);
+        if (quickMatch != null) {
+            onResult.accept(quickMatch);
+            return;
+        }
+
+        if (!place.canResolveCanonicalIdentity()) {
+            onResult.accept(null);
+            return;
+        }
+
+        viewModel.getCanonicalFavoritePlaceId(place, canonicalId -> {
+            if (!hasText(canonicalId)) {
+                onResult.accept(null);
+                return;
+            }
+
+            Favorite canonicalMatch = null;
+            for (Favorite favorite : currentFavorites) {
+                if (favorite == null || !hasText(favorite.placeId)) {
+                    continue;
+                }
+                if (canonicalId.trim().equals(favorite.placeId.trim())) {
+                    canonicalMatch = favorite;
+                    break;
+                }
+            }
+            onResult.accept(canonicalMatch);
+        });
+    }
+
+    private static boolean hasText(@Nullable String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     private void updateFavoriteButtonState(ImageButton button, boolean isFavorite) {
@@ -3415,8 +3714,45 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     }
 
     private void showShareToGroupDialog(Place place) {
-        List<Group> groups = viewModel.allGroups.getValue();
-        if (groups == null || groups.isEmpty()) {
+        List<Group> groups = new ArrayList<>();
+        if (availableGroups != null) {
+            groups.addAll(availableGroups);
+        }
+
+        // Include Trip group chats if they are not already in the list
+        if (availableTrips != null) {
+            for (TripPlan trip : availableTrips) {
+                if (trip.getGroupId() != null && !trip.getGroupId().trim().isEmpty()) {
+                    boolean alreadyExists = false;
+                    for (Group g : groups) {
+                        if (trip.getGroupId().equals(g.getServerId())) {
+                            alreadyExists = true;
+                            break;
+                        }
+                    }
+                    if (!alreadyExists) {
+                        String title = trip.getTitle();
+                        String groupName = title != null && !title.trim().isEmpty()
+                                ? title
+                                : getString(R.string.trip_title_fallback);
+                        
+                        Group tripGroup = new Group(
+                                0,
+                                trip.getGroupId(),
+                                groupName,
+                                "T",
+                                0xFF03DAC5,
+                                new ArrayList<>(),
+                                false,
+                                new java.util.HashMap<>()
+                        );
+                        groups.add(tripGroup);
+                    }
+                }
+            }
+        }
+
+        if (groups.isEmpty()) {
             viewModel.setStatusText(getString(R.string.no_group_available));
             return;
         }
@@ -3431,12 +3767,219 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 .setItems(groupNames,
                         (dialog, which) -> navigateToGroupChatWithPlace(
                                 groups.get(which), place))
-                .setNegativeButton(android.R.string.cancel, null)
+            .setNegativeButton(R.string.trip_action_cancel, null)
                 .show();
     }
 
+    private void showTripActionsDialog(@Nullable Place place) {
+        if (place == null) {
+            return;
+        }
+
+        String[] actions = new String[] {
+                getString(R.string.trip_action_share_to_group),
+                getString(R.string.trip_action_add_to_trip)
+        };
+
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.trip_actions)
+                .setItems(actions, (dialog, which) -> {
+                    if (which == 0) {
+                        showShareToGroupDialog(place);
+                        return;
+                    }
+                    showAddToTripDialog(place);
+                })
+                .setNegativeButton(R.string.trip_action_cancel, null)
+                .show();
+    }
+
+    private void showAddToTripDialog(@NonNull Place place) {
+        List<TripPlan> trips = availableTrips;
+        if (trips == null || trips.isEmpty()) {
+            viewModel.setStatusText(getString(R.string.no_trip_available));
+            return;
+        }
+
+        List<TripPlan> selectableTrips = new ArrayList<>();
+        List<String> tripTitles = new ArrayList<>();
+        for (TripPlan trip : trips) {
+            if (trip == null || trip.getId() == null || trip.getId().trim().isEmpty()) {
+                continue;
+            }
+            selectableTrips.add(trip);
+            String title = trip.getTitle();
+            tripTitles.add(title != null && !title.trim().isEmpty()
+                    ? title
+                    : getString(R.string.trip_title_fallback));
+        }
+
+        if (selectableTrips.isEmpty()) {
+            viewModel.setStatusText(getString(R.string.no_trip_available));
+            return;
+        }
+
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.select_trip_to_add_place)
+                .setItems(tripTitles.toArray(new String[0]), (dialog, which) -> {
+                    if (which < 0 || which >= selectableTrips.size()) {
+                        return;
+                    }
+                    TripPlan selectedTrip = selectableTrips.get(which);
+                    String selectedTripTitle = tripTitles.get(which);
+                    showAddStopTimeChoiceDialog(selectedTrip, selectedTripTitle, place);
+                })
+                        .setNegativeButton(R.string.trip_action_cancel, null)
+                .show();
+    }
+
+    private void showAddStopTimeChoiceDialog(@NonNull TripPlan trip,
+                                             @NonNull String tripTitle,
+                                             @NonNull Place place) {
+        if (!isAdded()) {
+            return;
+        }
+
+        View content = LayoutInflater.from(requireContext())
+            .inflate(R.layout.dialog_trip_stop_time_choice, null, false);
+        TextView titleView = content.findViewById(R.id.tv_trip_stop_choice_title);
+        TextView messageView = content.findViewById(R.id.tv_trip_stop_choice_message);
+        MaterialButton setTimeButton = content.findViewById(R.id.btn_trip_stop_set_time);
+        MaterialButton skipButton = content.findViewById(R.id.btn_trip_stop_skip_time);
+        MaterialButton cancelButton = content.findViewById(R.id.btn_trip_stop_cancel);
+
+        titleView.setText(R.string.trip_stop_time_choice_title);
+        messageView.setText(getString(R.string.trip_stop_time_choice_message, tripTitle));
+
+        AlertDialog dialog = new MaterialAlertDialogBuilder(requireContext())
+            .setView(content)
+            .create();
+
+        setTimeButton.setOnClickListener(v -> {
+            dialog.dismiss();
+            showTripStopDatePicker(trip, tripTitle, place);
+        });
+        skipButton.setOnClickListener(v -> {
+            dialog.dismiss();
+            addPlaceToTripWithSchedule(trip, tripTitle, place, 0L);
+        });
+        cancelButton.setOnClickListener(v -> dialog.dismiss());
+
+        dialog.show();
+    }
+
+    private void showTripStopDatePicker(@NonNull TripPlan trip,
+                                        @NonNull String tripTitle,
+                                        @NonNull Place place) {
+        Calendar selectedCalendar = Calendar.getInstance();
+        long now = System.currentTimeMillis();
+        long initialMillis = now;
+        if (trip.getStartAt() > 0L && initialMillis < trip.getStartAt()) {
+            initialMillis = trip.getStartAt();
+        }
+        if (trip.getEndAt() > 0L && initialMillis > trip.getEndAt()) {
+            initialMillis = trip.getEndAt();
+        }
+        selectedCalendar.setTimeInMillis(initialMillis);
+
+        DatePickerDialog datePickerDialog = new DatePickerDialog(
+                requireContext(),
+                (view, year, month, dayOfMonth) -> {
+                    selectedCalendar.set(Calendar.YEAR, year);
+                    selectedCalendar.set(Calendar.MONTH, month);
+                    selectedCalendar.set(Calendar.DAY_OF_MONTH, dayOfMonth);
+                    showTripStopTimePicker(trip, tripTitle, place, selectedCalendar);
+                },
+                selectedCalendar.get(Calendar.YEAR),
+                selectedCalendar.get(Calendar.MONTH),
+                selectedCalendar.get(Calendar.DAY_OF_MONTH));
+
+        if (trip.getStartAt() > 0L) {
+            datePickerDialog.getDatePicker().setMinDate(trip.getStartAt());
+        }
+        if (trip.getEndAt() > 0L) {
+            datePickerDialog.getDatePicker().setMaxDate(trip.getEndAt());
+        }
+
+        datePickerDialog.show();
+    }
+
+    private void showTripStopTimePicker(@NonNull TripPlan trip,
+                                        @NonNull String tripTitle,
+                                        @NonNull Place place,
+                                        @NonNull Calendar selectedCalendar) {
+        TimePickerDialog timePickerDialog = new TimePickerDialog(
+                requireContext(),
+                (view, hourOfDay, minute) -> {
+                    selectedCalendar.set(Calendar.HOUR_OF_DAY, hourOfDay);
+                    selectedCalendar.set(Calendar.MINUTE, minute);
+                    selectedCalendar.set(Calendar.SECOND, 0);
+                    selectedCalendar.set(Calendar.MILLISECOND, 0);
+
+                    long selectedMillis = selectedCalendar.getTimeInMillis();
+                    if (!isWithinTripRange(trip, selectedMillis)) {
+                        AppSnackbar.show(requireContext(),
+                                getString(R.string.trip_stop_time_out_of_range));
+                        return;
+                    }
+
+                    addPlaceToTripWithSchedule(trip, tripTitle, place, selectedMillis);
+                },
+                selectedCalendar.get(Calendar.HOUR_OF_DAY),
+                selectedCalendar.get(Calendar.MINUTE),
+                true);
+
+        timePickerDialog.show();
+    }
+
+    private void addPlaceToTripWithSchedule(@NonNull TripPlan trip,
+                                            @NonNull String tripTitle,
+                                            @NonNull Place place,
+                                            long scheduledAtMillis) {
+        viewModel.addPlaceToTrip(trip.getId(), place, scheduledAtMillis,
+                new MapViewModel.AddTripStopCallback() {
+                    @Override
+                    public void onSuccess() {
+                        locationHandler.post(() -> {
+                            if (!isAdded()) {
+                                return;
+                            }
+                            viewModel.setStatusText(getString(
+                                    R.string.trip_stop_added_to_selected_trip,
+                                    tripTitle));
+                        });
+                    }
+
+                    @Override
+                    public void onError(@NonNull String message) {
+                        locationHandler.post(() -> {
+                            if (!isAdded()) {
+                                return;
+                            }
+                            AppSnackbar.show(requireContext(),
+                                    message == null || message.trim().isEmpty()
+                                            ? getString(R.string.trip_stop_add_failed)
+                                            : message);
+                        });
+                    }
+                });
+    }
+
+    private boolean isWithinTripRange(@NonNull TripPlan trip, long timestamp) {
+        if (trip.getStartAt() > 0L && timestamp < trip.getStartAt()) {
+            return false;
+        }
+        return trip.getEndAt() <= 0L || timestamp <= trip.getEndAt();
+    }
+
     private void navigateToGroupChatWithPlace(Group group, Place place) {
-        String mapLink = buildPlaceMapLink(place);
+        String sharedLat = "";
+        String sharedLng = "";
+        if (place != null && place.location != null) {
+            sharedLat = String.valueOf(place.location.latitude);
+            sharedLng = String.valueOf(place.location.longitude);
+        }
+        String sharedPlaceSource = resolveSharedPlaceSource(place);
 
         Uri destUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL_CHAT)
                 .buildUpon()
@@ -3448,21 +3991,30 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                         String.valueOf(group.getAvatarColor()))
                 .appendQueryParameter("memberCount",
                         String.valueOf(group.getMemberCount()))
+                .appendQueryParameter("sharedPlaceId",
+                        place.id != null ? place.id : "")
                 .appendQueryParameter("sharedPlaceName",
                         place.name != null ? place.name : "")
                 .appendQueryParameter("sharedPlaceAddress",
                         place.address != null ? place.address : "")
-                .appendQueryParameter("sharedPlaceLink", mapLink)
+                .appendQueryParameter("sharedPlaceSource", sharedPlaceSource)
+                .appendQueryParameter("sharedPlaceLat", sharedLat)
+                .appendQueryParameter("sharedPlaceLng", sharedLng)
+                .appendQueryParameter("sharedPlaceRating", String.valueOf(place.rating))
                 .build();
 
         Navigation.findNavController(requireView()).navigate(destUri);
     }
 
-    private String buildPlaceMapLink(Place place) {
-        if (place.location != null) {
-            return place.location.latitude + "," + place.location.longitude;
+    @NonNull
+    private String resolveSharedPlaceSource(@Nullable Place place) {
+        if (place != null && !TextUtils.isEmpty(place.placeSource)) {
+            return place.placeSource;
         }
-        return place.address != null ? place.address : "";
+        if (place != null && place.isPreviewSelection()) {
+            return "preview";
+        }
+        return "canonical";
     }
 
     private void goToMyLocation() {
@@ -3846,3 +4398,4 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         super.onDestroyView();
     }
 }
+

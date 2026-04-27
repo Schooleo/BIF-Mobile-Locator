@@ -1,12 +1,17 @@
-package com.bif.app.feature.social;
+package com.bif.app.feature.social.chat;
+
+import com.bif.app.feature.social.R;
 
 import android.annotation.SuppressLint;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.text.format.DateFormat;
 import android.text.format.DateUtils;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
@@ -41,6 +46,7 @@ import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.TripPlan;
 import com.bif.app.domain.model.TripStop;
+import com.bif.app.feature.social.core.SocialViewModel;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 
@@ -55,6 +61,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
 
 import dagger.hilt.android.AndroidEntryPoint;
 
@@ -70,6 +77,10 @@ public class CommonChatFragment extends Fragment {
     private SwipeRefreshLayout swipeRefreshLayout;
     private View layoutInputBar;
     private Drawable defaultInputBarBackground;
+    private View aiBadgesRow;
+    private MaterialCardView btnAiDraftTrip;
+    private MaterialCardView btnAiSuggestPlaces;
+    private boolean supportsAiModes;
     private List<ChatMessage> latestMessages = new ArrayList<>();
     private int previousSoftInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_UNSPECIFIED;
     private boolean applyingMention = false;
@@ -93,7 +104,7 @@ public class CommonChatFragment extends Fragment {
         String chatName = getArg(args, "chatName", getString(R.string.chat_default_name));
         int memberCount = args != null ? args.getInt("memberCount", 0) : 0;
         long friendshipCreatedAt = args != null ? args.getLong("friendshipCreatedAt", 0L) : 0L;
-        boolean supportsAiModes = "group".equalsIgnoreCase(chatType);
+        supportsAiModes = "group".equalsIgnoreCase(chatType);
 
         TextView tvTitle = view.findViewById(R.id.tv_chat_title);
         TextView tvSubtitle = view.findViewById(R.id.tv_chat_subtitle);
@@ -104,9 +115,9 @@ public class CommonChatFragment extends Fragment {
         View composerBar = view.findViewById(R.id.layout_chat_composer);
         layoutInputBar = view.findViewById(R.id.layout_input_bar);
         defaultInputBarBackground = layoutInputBar.getBackground();
-        View aiBadgesRow = view.findViewById(R.id.layout_ai_badges);
-        MaterialCardView btnAiDraftTrip = view.findViewById(R.id.btn_ai_draft_trip);
-        MaterialCardView btnAiSuggestPlaces = view.findViewById(R.id.btn_ai_suggest_places);
+        aiBadgesRow = view.findViewById(R.id.layout_ai_badges);
+        btnAiDraftTrip = view.findViewById(R.id.btn_ai_draft_trip);
+        btnAiSuggestPlaces = view.findViewById(R.id.btn_ai_suggest_places);
         EditText etMessage = view.findViewById(R.id.et_message);
         messageInput = etMessage;
         MaterialButton btnSend = view.findViewById(R.id.btn_send);
@@ -159,6 +170,7 @@ public class CommonChatFragment extends Fragment {
                     return;
                 }
                 viewModel.addSuggestedPlaceToTrip(targetTripId, domainPlace);
+                AppSnackbar.show(requireContext(), R.string.trip_stop_added_to_trip);
             }
 
             @Override
@@ -201,17 +213,7 @@ public class CommonChatFragment extends Fragment {
             }
         });
         viewModel.getAiBadgesEnabled().observe(getViewLifecycleOwner(), enabled -> {
-            boolean isEnabled = supportsAiModes && Boolean.TRUE.equals(enabled);
-            aiBadgesRow.setVisibility(isEnabled ? View.VISIBLE : View.GONE);
-            btnAiDraftTrip.setClickable(true);
-            btnAiSuggestPlaces.setClickable(true);
-            float alpha = isEnabled ? 1f : 0.45f;
-            btnAiDraftTrip.setAlpha(alpha);
-            btnAiSuggestPlaces.setAlpha(alpha);
-            if (!isEnabled) {
-                viewModel.cancelAiDraftMode();
-                viewModel.cancelAiSuggestPlacesMode();
-            }
+            updateAiBadgeAvailability(Boolean.TRUE.equals(enabled));
         });
         viewModel.getAiDraftModeEnabled().observe(getViewLifecycleOwner(), isDraftMode -> {
             boolean enabled = Boolean.TRUE.equals(isDraftMode);
@@ -264,16 +266,24 @@ public class CommonChatFragment extends Fragment {
         });
 
         btnAiDraftTrip.setOnClickListener(v -> {
+            if (!viewModel.isAuthenticated()) {
+                AppSnackbar.show(requireContext(), R.string.social_login_required_ai);
+                return;
+            }
             if (!viewModel.isAiAvailable()) {
-                AppSnackbar.show(requireContext(), R.string.chat_ai_offline);
+                showUnavailableOfflineMessage();
                 return;
             }
             viewModel.enterAiDraftMode();
             focusInputAndShowKeyboard(etMessage);
         });
         btnAiSuggestPlaces.setOnClickListener(v -> {
+            if (!viewModel.isAuthenticated()) {
+                AppSnackbar.show(requireContext(), R.string.social_login_required_ai);
+                return;
+            }
             if (!viewModel.isAiAvailable()) {
-                AppSnackbar.show(requireContext(), R.string.chat_ai_offline);
+                showUnavailableOfflineMessage();
                 return;
             }
             viewModel.enterAiSuggestPlacesMode();
@@ -307,12 +317,38 @@ public class CommonChatFragment extends Fragment {
         if (messageInput != null) {
             messageInput.clearFocus();
         }
+        Boolean aiBadgesEnabled = viewModel != null ? viewModel.getAiBadgesEnabled().getValue() : null;
+        updateAiBadgeAvailability(Boolean.TRUE.equals(aiBadgesEnabled));
     }
 
     @Override
     public void onPause() {
         requireActivity().getWindow().setSoftInputMode(previousSoftInputMode);
         super.onPause();
+    }
+
+    private void updateAiBadgeAvailability(boolean aiBadgesEnabled) {
+        if (aiBadgesRow == null || btnAiDraftTrip == null || btnAiSuggestPlaces == null || viewModel == null) {
+            return;
+        }
+        boolean isEnabled = supportsAiModes && aiBadgesEnabled && viewModel.isAuthenticated();
+        aiBadgesRow.setVisibility(supportsAiModes ? View.VISIBLE : View.GONE);
+        btnAiDraftTrip.setClickable(true);
+        btnAiSuggestPlaces.setClickable(true);
+        float alpha = isEnabled ? 1f : 0.45f;
+        btnAiDraftTrip.setAlpha(alpha);
+        btnAiSuggestPlaces.setAlpha(alpha);
+        if (!isEnabled) {
+            viewModel.cancelAiDraftMode();
+            viewModel.cancelAiSuggestPlacesMode();
+        }
+    }
+
+    private void showUnavailableOfflineMessage() {
+        if (!isAdded()) {
+            return;
+        }
+        AppSnackbar.show(requireContext(), R.string.unavailable_offline);
     }
 
     // ─── LiveData observers ────────────────────────────────────────────────────
@@ -359,6 +395,9 @@ public class CommonChatFragment extends Fragment {
         }
         if (msg.getMessageType() == ChatMessage.MessageType.AI_SUGGESTED_PLACES_CARD) {
             return buildSuggestedPlacesCardMessage(msg, senderDisplay, time);
+        }
+        if (msg.getMessageType() == ChatMessage.MessageType.PLACE_SHARE_CARD) {
+            return buildPlaceShareCardMessage(msg, senderDisplay, time);
         }
 
         if (msg.isLocationMessage()) {
@@ -410,6 +449,40 @@ public class CommonChatFragment extends Fragment {
                 msg.isOutgoing(),
                 card
         );
+    }
+
+    private ChatMessageAdapter.ChatMessage buildPlaceShareCardMessage(ChatMessage msg,
+                                                                      String senderDisplay,
+                                                                      String time) {
+        ChatMessageAdapter.PlaceCard card = parsePlaceShareCard(msg);
+        return ChatMessageAdapter.ChatMessage.placeShareCard(
+                senderDisplay,
+                time,
+                msg.isOutgoing(),
+                card
+        );
+    }
+
+    private ChatMessageAdapter.PlaceCard parsePlaceShareCard(ChatMessage msg) {
+        String payloadJson = msg.getContent() != null ? msg.getContent() : "";
+        if (!payloadJson.trim().startsWith("{")) {
+            return new ChatMessageAdapter.PlaceCard(
+                    UUID.randomUUID().toString(), "Unknown Place", "", 0, 0, 0, false);
+        }
+        try {
+            JSONObject json = new JSONObject(payloadJson);
+            String id = json.optString("id", "");
+            String name = json.optString("name", "Unknown Place");
+            String address = json.optString("address", "");
+            double latitude = json.optDouble("latitude", 0d);
+            double longitude = json.optDouble("longitude", 0d);
+            double rating = json.optDouble("rating", 0d);
+            return new ChatMessageAdapter.PlaceCard(id, name, address, rating, latitude, longitude, false);
+        } catch (JSONException e) {
+            Log.e("CommonChatFragment", "Failed to parse PLACE_SHARE_CARD", e);
+            return new ChatMessageAdapter.PlaceCard(
+                    UUID.randomUUID().toString(), "Unknown Place", "", 0, 0, 0, false);
+        }
     }
 
     private ChatMessageAdapter.TripCreatedCard parseTripCreatedCard(ChatMessage msg) {
@@ -735,7 +808,9 @@ public class CommonChatFragment extends Fragment {
 
             String note = stop.optString("note", "").trim();
             String plannedDateTime = stop.optString("plannedDateTime", "").trim();
-            int durationMinutes = Math.max(0, stop.optInt("durationMinutes", 0));
+            String startTime = stop.optString("startTime", "").trim();
+            String endTime = stop.optString("endTime", "").trim();
+            int durationMinutes = Math.max(0, stop.optInt("duration", stop.optInt("durationMinutes", 0)));
             Double latitude = optNullableDouble(stop, "latitude");
             Double longitude = optNullableDouble(stop, "longitude");
 
@@ -745,6 +820,8 @@ public class CommonChatFragment extends Fragment {
                     address,
                     note,
                     plannedDateTime,
+                    startTime,
+                    endTime,
                     durationMinutes,
                     latitude,
                     longitude
@@ -932,17 +1009,30 @@ public class CommonChatFragment extends Fragment {
     private void appendSharedPlaceMessageIfPresent(Bundle args) {
         if (args == null || !"group".equalsIgnoreCase(chatType)) return;
 
+        String placeId = getArg(args, "sharedPlaceId", "");
         String placeName = getArg(args, "sharedPlaceName", "");
-        if (placeName.isEmpty()) return;
+        if (placeId.isEmpty() && placeName.isEmpty()) return;
 
-        double lat = 0, lng = 0;
-        String address = getArg(args, "sharedPlaceAddress", "");
+        String placeAddress = getArg(args, "sharedPlaceAddress", "");
+        String placeSource = getArg(args, "sharedPlaceSource", "");
+        double rating = 0d;
+        try {
+            rating = Double.parseDouble(getArg(args, "sharedPlaceRating", "0"));
+        } catch (NumberFormatException ignored) {
+            rating = 0d;
+        }
+
+        double lat = 0d;
+        double lng = 0d;
         try {
             lat = Double.parseDouble(getArg(args, "sharedPlaceLat", "0"));
             lng = Double.parseDouble(getArg(args, "sharedPlaceLng", "0"));
-        } catch (NumberFormatException ignored) {}
+        } catch (NumberFormatException ignored) {
+            lat = 0d;
+            lng = 0d;
+        }
 
-        viewModel.shareLocation(lat, lng, placeName);
+        viewModel.sharePlaceCard(placeId, placeName, placeAddress, lat, lng, rating, placeSource);
     }
 
     private void handleLocationLinkClick(ChatMessageAdapter.ChatMessage message) {

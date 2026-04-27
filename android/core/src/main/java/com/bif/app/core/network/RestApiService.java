@@ -97,12 +97,6 @@ public interface RestApiService {
     @GET("favorites/me")
     Call<List<FavoriteResponseDto>> getMyFavorites();
 
-    @POST("favorites/me")
-    Call<FavoriteResponseDto> upsertMyFavorite(@Body FavoriteRequestDto request);
-
-    @DELETE("favorites/me/{id}")
-    Call<Void> deleteMyFavorite(@Path("id") String id);
-
     @GET("users/me/profile-metadata")
     Call<ProfileMetadataResponse> getMyProfileMetadata();
 

@@ -11,6 +11,7 @@ public class ChatMessage {
         SYSTEM,
         TRIP_CREATED_CARD,
         AI_SUGGESTED_PLACES_CARD,
+        PLACE_SHARE_CARD,
         UNKNOWN
     }
 
@@ -99,6 +100,8 @@ public class ChatMessage {
                 return MessageType.TRIP_CREATED_CARD;
             case "AI_SUGGESTED_PLACES_CARD":
                 return MessageType.AI_SUGGESTED_PLACES_CARD;
+            case "PLACE_SHARE_CARD":
+                return MessageType.PLACE_SHARE_CARD;
             default:
                 return MessageType.UNKNOWN;
         }

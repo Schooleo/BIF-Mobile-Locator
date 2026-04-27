@@ -1,4 +1,6 @@
-package com.bif.app.feature.social;
+package com.bif.app.feature.social.core;
+
+import com.bif.app.feature.social.R;
 
 import android.content.Context;
 

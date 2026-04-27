@@ -1,4 +1,6 @@
-package com.bif.app.feature.social;
+package com.bif.app.feature.social.groups;
+
+import com.bif.app.feature.social.R;
 
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
