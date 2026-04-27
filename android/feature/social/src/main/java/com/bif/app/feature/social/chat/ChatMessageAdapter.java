@@ -1,4 +1,6 @@
-package com.bif.app.feature.social;
+package com.bif.app.feature.social.chat;
+
+import com.bif.app.feature.social.R;
 
 import android.view.LayoutInflater;
 import android.view.View;
@@ -10,6 +12,9 @@ import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+import com.bif.app.feature.social.ai.AiTripDraftStopPreviewAdapter;
+import com.bif.app.feature.social.core.SocialViewModel;
 
 import java.util.ArrayList;
 import java.util.Collections;

@@ -1,4 +1,6 @@
-package com.bif.app.feature.social;
+package com.bif.app.feature.social.chat;
+
+import com.bif.app.feature.social.R;
 
 import android.util.Log;
 import android.content.Context;
@@ -23,6 +25,8 @@ import com.bif.app.domain.model.TripStop;
 import com.bif.app.domain.repository.IChatRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.ITripRepository;
+import com.bif.app.feature.social.ai.AiDraftPromptBuilder;
+import com.bif.app.feature.social.ai.AiDraftScheduleResolver;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
