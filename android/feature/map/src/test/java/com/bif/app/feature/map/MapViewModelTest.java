@@ -32,6 +32,7 @@ import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.PlaceIdentityContext;
 import com.bif.app.domain.model.Route;
 import com.bif.app.domain.model.Review;
+import com.bif.app.domain.model.TripStop;
 import com.bif.app.domain.repository.IFavoriteRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.IMapRepository;
@@ -39,6 +40,7 @@ import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.IPlaceRepository.PersistenceCallback;
 import com.bif.app.domain.repository.IReviewRepository;
 import com.bif.app.domain.repository.IRouteRepository;
+import com.bif.app.domain.repository.ITripRepository;
 
 import java.util.Collections;
 import java.util.List;
@@ -77,6 +79,9 @@ public class MapViewModelTest {
 
     @Mock
     private IGroupRepository groupRepository;
+
+    @Mock
+    private ITripRepository tripRepository;
 
     @Mock
     private IRouteRepository routeRepository;
@@ -120,6 +125,8 @@ public class MapViewModelTest {
             .thenReturn(new MutableLiveData<>());
         Mockito.lenient().when(groupRepository.getGroups())
             .thenReturn(new MutableLiveData<>(Collections.emptyList()));
+        Mockito.lenient().when(tripRepository.getAllTrips())
+            .thenReturn(new MutableLiveData<>(Collections.emptyList()));
         Mockito.lenient().when(routeRepository.getRoute(ArgumentMatchers.anyList()))
             .thenReturn(new MutableLiveData<>());
         Mockito.lenient().when(reviewRepository.getReviewsForPlace(ArgumentMatchers.anyString()))
@@ -139,6 +146,7 @@ public class MapViewModelTest {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
+                tripRepository,
                 routeRepository,
                 reviewRepository,
                 directExecutor);
@@ -369,6 +377,88 @@ public class MapViewModelTest {
         Mockito.verify(favoriteRepository).deleteFavorite(fav);
     }
 
+    @Test
+    public void addPlaceToTrip_validInput_callsTripRepositoryAndSuccessCallback() {
+        Place place = new Place("p-1", "Coffee Spot", "District 1", 4.5,
+                new Location(10.775, 106.700));
+
+        AtomicBoolean success = new AtomicBoolean(false);
+        AtomicBoolean error = new AtomicBoolean(false);
+
+        viewModel.addPlaceToTrip("trip-1", place, new MapViewModel.AddTripStopCallback() {
+            @Override
+            public void onSuccess() {
+                success.set(true);
+            }
+
+            @Override
+            public void onError(String message) {
+                error.set(true);
+            }
+        });
+
+        ArgumentCaptor<TripStop> captor = ArgumentCaptor.forClass(TripStop.class);
+        verify(tripRepository).addStopToTrip(eq("trip-1"), captor.capture());
+        TripStop savedStop = captor.getValue();
+        assertNotNull(savedStop);
+        assertEquals("Coffee Spot", savedStop.getTitle());
+        assertEquals("District 1", savedStop.getAddress());
+        assertEquals(10.775, savedStop.getLatitude(), 0.0001);
+        assertEquals(106.700, savedStop.getLongitude(), 0.0001);
+        assertTrue(success.get());
+        assertFalse(error.get());
+    }
+
+    @Test
+    public void addPlaceToTrip_withScheduledTime_persistsScheduledTimestamp() {
+        Place place = new Place("p-3", "Bakery", "District 2", 4.0,
+                new Location(10.780, 106.720));
+        long scheduledAtMillis = 1_713_998_400_000L;
+
+        viewModel.addPlaceToTrip("trip-1", place, scheduledAtMillis,
+                new MapViewModel.AddTripStopCallback() {
+                    @Override
+                    public void onSuccess() {
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        fail("Expected success but got error: " + message);
+                    }
+                });
+
+        ArgumentCaptor<TripStop> captor = ArgumentCaptor.forClass(TripStop.class);
+        verify(tripRepository).addStopToTrip(eq("trip-1"), captor.capture());
+        TripStop savedStop = captor.getValue();
+        assertNotNull(savedStop);
+        assertEquals(scheduledAtMillis, savedStop.getArrivalTime());
+        assertEquals(scheduledAtMillis, savedStop.getDepartureTime());
+    }
+
+    @Test
+    public void addPlaceToTrip_missingLocation_returnsErrorAndSkipsRepository() {
+        Place place = new Place("p-2", "Unknown", "", 0, null);
+
+        AtomicBoolean success = new AtomicBoolean(false);
+        AtomicBoolean error = new AtomicBoolean(false);
+
+        viewModel.addPlaceToTrip("trip-1", place, new MapViewModel.AddTripStopCallback() {
+            @Override
+            public void onSuccess() {
+                success.set(true);
+            }
+
+            @Override
+            public void onError(String message) {
+                error.set(true);
+            }
+        });
+
+        verify(tripRepository, never()).addStopToTrip(anyString(), any());
+        assertFalse(success.get());
+        assertTrue(error.get());
+    }
+
     // searchForPlaces
 
     @Test
@@ -397,6 +487,7 @@ public class MapViewModelTest {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
+                tripRepository,
                 routeRepository,
                 reviewRepository,
                 directExecutor,
@@ -453,6 +544,7 @@ public class MapViewModelTest {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
+                tripRepository,
                 routeRepository,
                 reviewRepository,
                 directExecutor,
@@ -494,6 +586,7 @@ public class MapViewModelTest {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
+                tripRepository,
                 routeRepository,
                 reviewRepository,
                 directExecutor,
@@ -526,6 +619,7 @@ public class MapViewModelTest {
             placeRepository,
             favoriteRepository,
             groupRepository,
+            tripRepository,
             routeRepository,
             reviewRepository,
             directExecutor);
@@ -696,6 +790,7 @@ public class MapViewModelTest {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
+                tripRepository,
                 routeRepository,
             reviewRepository,
             directExecutor);
@@ -714,6 +809,7 @@ public class MapViewModelTest {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
+                tripRepository,
                 routeRepository,
                 reviewRepository,
                 queueExecutor);
@@ -771,6 +867,7 @@ public class MapViewModelTest {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
+                tripRepository,
                 routeRepository,
                 reviewRepository,
                 queueExecutor);
@@ -816,6 +913,7 @@ public class MapViewModelTest {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
+                tripRepository,
                 routeRepository,
                 reviewRepository,
                 queueExecutor);

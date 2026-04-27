@@ -1,6 +1,8 @@
 package com.bif.app.feature.map;
 
 import android.Manifest;
+import android.app.DatePickerDialog;
+import android.app.TimePickerDialog;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -37,6 +39,7 @@ import com.bif.app.core.utils.AppSnackbar;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresPermission;
 import androidx.appcompat.content.res.AppCompatResources;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.SearchView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -56,6 +59,7 @@ import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.MapState;
 import com.bif.app.domain.model.OfflineMapDownloadState;
 import com.bif.app.domain.model.Place;
+import com.bif.app.domain.model.TripPlan;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -94,6 +98,7 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -184,6 +189,8 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private com.google.android.material.chip.ChipGroup chipGroupFilters;
     private ReviewAdapter reviewAdapter;
     private List<ReviewItem> allReviews = new ArrayList<>();
+    private List<Group> availableGroups = new ArrayList<>();
+    private List<TripPlan> availableTrips = new ArrayList<>();
     private androidx.recyclerview.widget.LinearSnapHelper snapHelper;
 
     private final MapLibreMap.OnCameraMoveListener onCameraMoveListener = this::onMapCameraChanged;
@@ -402,6 +409,10 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         viewModel = new ViewModelProvider(requireActivity()).get(MapViewModel.class);
+        viewModel.allGroups.observe(getViewLifecycleOwner(), groups ->
+            availableGroups = groups != null ? new ArrayList<>(groups) : new ArrayList<>());
+        viewModel.allTrips.observe(getViewLifecycleOwner(), trips ->
+            availableTrips = trips != null ? new ArrayList<>(trips) : new ArrayList<>());
         viewModel.clearPendingStatusText();
         syncSearchUserLocation(lastKnownUserLocation);
         captureNavigationRequest();
@@ -767,13 +778,22 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         }
 
         if (pendingNavigationPlace != null && pendingNavigationPlace.location != null) {
-            selectedPlace = pendingNavigationPlace;
-            renderSelectedPlace();
-            animateCameraToSelection(new LatLng(
+            LatLng latLng = new LatLng(
                     pendingNavigationPlace.location.latitude,
-                    pendingNavigationPlace.location.longitude));
-            if (getView() != null) {
-                showPlaceBottomSheet(pendingNavigationPlace, requireView());
+                    pendingNavigationPlace.location.longitude);
+            
+            String nameToPass = pendingNavigationPlace.name;
+            if (nameToPass != null && nameToPass.equals(getString(R.string.default_place_name))) {
+                nameToPass = null;
+            }
+
+            if (pendingNavigationPlace != null && !pendingNavigationPlace.name.isEmpty() && !pendingNavigationPlace.address.isEmpty()) {
+                selectedPlace = pendingNavigationPlace;
+                renderSelectedPlace();
+                animateCameraToSelection(latLng);
+                showPlaceBottomSheet(pendingNavigationPlace, requireView(), true);
+            } else {
+                fetchAddressAndShowDetails(latLng, nameToPass, pendingNavigationPlace != null ? pendingNavigationPlace.id : null);
             }
             pendingNavigationPlace = null;
             pendingNavigationQuery = null;
@@ -3172,7 +3192,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 }));
 
         btnRoutePlace.setOnClickListener(v -> routeToPlace(place));
-        btnSharePlace.setOnClickListener(v -> showShareToGroupDialog(place));
+        btnSharePlace.setOnClickListener(v -> showTripActionsDialog(place));
 
         setupReviewsRecyclerView(root);
         setupChipFilters(root);
@@ -3634,8 +3654,45 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     }
 
     private void showShareToGroupDialog(Place place) {
-        List<Group> groups = viewModel.allGroups.getValue();
-        if (groups == null || groups.isEmpty()) {
+        List<Group> groups = new ArrayList<>();
+        if (availableGroups != null) {
+            groups.addAll(availableGroups);
+        }
+
+        // Include Trip group chats if they are not already in the list
+        if (availableTrips != null) {
+            for (TripPlan trip : availableTrips) {
+                if (trip.getGroupId() != null && !trip.getGroupId().trim().isEmpty()) {
+                    boolean alreadyExists = false;
+                    for (Group g : groups) {
+                        if (trip.getGroupId().equals(g.getServerId())) {
+                            alreadyExists = true;
+                            break;
+                        }
+                    }
+                    if (!alreadyExists) {
+                        String title = trip.getTitle();
+                        String groupName = title != null && !title.trim().isEmpty()
+                                ? title
+                                : getString(R.string.trip_title_fallback);
+                        
+                        Group tripGroup = new Group(
+                                0,
+                                trip.getGroupId(),
+                                groupName,
+                                "T",
+                                0xFF03DAC5,
+                                new ArrayList<>(),
+                                false,
+                                new java.util.HashMap<>()
+                        );
+                        groups.add(tripGroup);
+                    }
+                }
+            }
+        }
+
+        if (groups.isEmpty()) {
             viewModel.setStatusText(getString(R.string.no_group_available));
             return;
         }
@@ -3650,12 +3707,218 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 .setItems(groupNames,
                         (dialog, which) -> navigateToGroupChatWithPlace(
                                 groups.get(which), place))
-                .setNegativeButton(android.R.string.cancel, null)
+            .setNegativeButton(R.string.trip_action_cancel, null)
                 .show();
     }
 
+    private void showTripActionsDialog(@Nullable Place place) {
+        if (place == null) {
+            return;
+        }
+
+        String[] actions = new String[] {
+                getString(R.string.trip_action_share_to_group),
+                getString(R.string.trip_action_add_to_trip)
+        };
+
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.trip_actions)
+                .setItems(actions, (dialog, which) -> {
+                    if (which == 0) {
+                        showShareToGroupDialog(place);
+                        return;
+                    }
+                    showAddToTripDialog(place);
+                })
+                .setNegativeButton(R.string.trip_action_cancel, null)
+                .show();
+    }
+
+    private void showAddToTripDialog(@NonNull Place place) {
+        List<TripPlan> trips = availableTrips;
+        if (trips == null || trips.isEmpty()) {
+            viewModel.setStatusText(getString(R.string.no_trip_available));
+            return;
+        }
+
+        List<TripPlan> selectableTrips = new ArrayList<>();
+        List<String> tripTitles = new ArrayList<>();
+        for (TripPlan trip : trips) {
+            if (trip == null || trip.getId() == null || trip.getId().trim().isEmpty()) {
+                continue;
+            }
+            selectableTrips.add(trip);
+            String title = trip.getTitle();
+            tripTitles.add(title != null && !title.trim().isEmpty()
+                    ? title
+                    : getString(R.string.trip_title_fallback));
+        }
+
+        if (selectableTrips.isEmpty()) {
+            viewModel.setStatusText(getString(R.string.no_trip_available));
+            return;
+        }
+
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.select_trip_to_add_place)
+                .setItems(tripTitles.toArray(new String[0]), (dialog, which) -> {
+                    if (which < 0 || which >= selectableTrips.size()) {
+                        return;
+                    }
+                    TripPlan selectedTrip = selectableTrips.get(which);
+                    String selectedTripTitle = tripTitles.get(which);
+                    showAddStopTimeChoiceDialog(selectedTrip, selectedTripTitle, place);
+                })
+                        .setNegativeButton(R.string.trip_action_cancel, null)
+                .show();
+    }
+
+    private void showAddStopTimeChoiceDialog(@NonNull TripPlan trip,
+                                             @NonNull String tripTitle,
+                                             @NonNull Place place) {
+        if (!isAdded()) {
+            return;
+        }
+
+        View content = LayoutInflater.from(requireContext())
+            .inflate(R.layout.dialog_trip_stop_time_choice, null, false);
+        TextView titleView = content.findViewById(R.id.tv_trip_stop_choice_title);
+        TextView messageView = content.findViewById(R.id.tv_trip_stop_choice_message);
+        MaterialButton setTimeButton = content.findViewById(R.id.btn_trip_stop_set_time);
+        MaterialButton skipButton = content.findViewById(R.id.btn_trip_stop_skip_time);
+        MaterialButton cancelButton = content.findViewById(R.id.btn_trip_stop_cancel);
+
+        titleView.setText(R.string.trip_stop_time_choice_title);
+        messageView.setText(getString(R.string.trip_stop_time_choice_message, tripTitle));
+
+        AlertDialog dialog = new MaterialAlertDialogBuilder(requireContext())
+            .setView(content)
+            .create();
+
+        setTimeButton.setOnClickListener(v -> {
+            dialog.dismiss();
+            showTripStopDatePicker(trip, tripTitle, place);
+        });
+        skipButton.setOnClickListener(v -> {
+            dialog.dismiss();
+            addPlaceToTripWithSchedule(trip, tripTitle, place, 0L);
+        });
+        cancelButton.setOnClickListener(v -> dialog.dismiss());
+
+        dialog.show();
+    }
+
+    private void showTripStopDatePicker(@NonNull TripPlan trip,
+                                        @NonNull String tripTitle,
+                                        @NonNull Place place) {
+        Calendar selectedCalendar = Calendar.getInstance();
+        long now = System.currentTimeMillis();
+        long initialMillis = now;
+        if (trip.getStartAt() > 0L && initialMillis < trip.getStartAt()) {
+            initialMillis = trip.getStartAt();
+        }
+        if (trip.getEndAt() > 0L && initialMillis > trip.getEndAt()) {
+            initialMillis = trip.getEndAt();
+        }
+        selectedCalendar.setTimeInMillis(initialMillis);
+
+        DatePickerDialog datePickerDialog = new DatePickerDialog(
+                requireContext(),
+                (view, year, month, dayOfMonth) -> {
+                    selectedCalendar.set(Calendar.YEAR, year);
+                    selectedCalendar.set(Calendar.MONTH, month);
+                    selectedCalendar.set(Calendar.DAY_OF_MONTH, dayOfMonth);
+                    showTripStopTimePicker(trip, tripTitle, place, selectedCalendar);
+                },
+                selectedCalendar.get(Calendar.YEAR),
+                selectedCalendar.get(Calendar.MONTH),
+                selectedCalendar.get(Calendar.DAY_OF_MONTH));
+
+        if (trip.getStartAt() > 0L) {
+            datePickerDialog.getDatePicker().setMinDate(trip.getStartAt());
+        }
+        if (trip.getEndAt() > 0L) {
+            datePickerDialog.getDatePicker().setMaxDate(trip.getEndAt());
+        }
+
+        datePickerDialog.show();
+    }
+
+    private void showTripStopTimePicker(@NonNull TripPlan trip,
+                                        @NonNull String tripTitle,
+                                        @NonNull Place place,
+                                        @NonNull Calendar selectedCalendar) {
+        TimePickerDialog timePickerDialog = new TimePickerDialog(
+                requireContext(),
+                (view, hourOfDay, minute) -> {
+                    selectedCalendar.set(Calendar.HOUR_OF_DAY, hourOfDay);
+                    selectedCalendar.set(Calendar.MINUTE, minute);
+                    selectedCalendar.set(Calendar.SECOND, 0);
+                    selectedCalendar.set(Calendar.MILLISECOND, 0);
+
+                    long selectedMillis = selectedCalendar.getTimeInMillis();
+                    if (!isWithinTripRange(trip, selectedMillis)) {
+                        AppSnackbar.show(requireContext(),
+                                getString(R.string.trip_stop_time_out_of_range));
+                        return;
+                    }
+
+                    addPlaceToTripWithSchedule(trip, tripTitle, place, selectedMillis);
+                },
+                selectedCalendar.get(Calendar.HOUR_OF_DAY),
+                selectedCalendar.get(Calendar.MINUTE),
+                true);
+
+        timePickerDialog.show();
+    }
+
+    private void addPlaceToTripWithSchedule(@NonNull TripPlan trip,
+                                            @NonNull String tripTitle,
+                                            @NonNull Place place,
+                                            long scheduledAtMillis) {
+        viewModel.addPlaceToTrip(trip.getId(), place, scheduledAtMillis,
+                new MapViewModel.AddTripStopCallback() {
+                    @Override
+                    public void onSuccess() {
+                        locationHandler.post(() -> {
+                            if (!isAdded()) {
+                                return;
+                            }
+                            viewModel.setStatusText(getString(
+                                    R.string.trip_stop_added_to_selected_trip,
+                                    tripTitle));
+                        });
+                    }
+
+                    @Override
+                    public void onError(@NonNull String message) {
+                        locationHandler.post(() -> {
+                            if (!isAdded()) {
+                                return;
+                            }
+                            AppSnackbar.show(requireContext(),
+                                    message == null || message.trim().isEmpty()
+                                            ? getString(R.string.trip_stop_add_failed)
+                                            : message);
+                        });
+                    }
+                });
+    }
+
+    private boolean isWithinTripRange(@NonNull TripPlan trip, long timestamp) {
+        if (trip.getStartAt() > 0L && timestamp < trip.getStartAt()) {
+            return false;
+        }
+        return trip.getEndAt() <= 0L || timestamp <= trip.getEndAt();
+    }
+
     private void navigateToGroupChatWithPlace(Group group, Place place) {
-        String mapLink = buildPlaceMapLink(place);
+        String sharedLat = "";
+        String sharedLng = "";
+        if (place != null && place.location != null) {
+            sharedLat = String.valueOf(place.location.latitude);
+            sharedLng = String.valueOf(place.location.longitude);
+        }
 
         Uri destUri = UriUtils.buildUri(UriUtils.PathTo.SOCIAL_CHAT)
                 .buildUpon()
@@ -3667,21 +3930,18 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                         String.valueOf(group.getAvatarColor()))
                 .appendQueryParameter("memberCount",
                         String.valueOf(group.getMemberCount()))
+                .appendQueryParameter("sharedPlaceId",
+                        place.id != null ? place.id : "")
                 .appendQueryParameter("sharedPlaceName",
                         place.name != null ? place.name : "")
                 .appendQueryParameter("sharedPlaceAddress",
                         place.address != null ? place.address : "")
-                .appendQueryParameter("sharedPlaceLink", mapLink)
+                .appendQueryParameter("sharedPlaceLat", sharedLat)
+                .appendQueryParameter("sharedPlaceLng", sharedLng)
+                .appendQueryParameter("sharedPlaceRating", String.valueOf(place.rating))
                 .build();
 
         Navigation.findNavController(requireView()).navigate(destUri);
-    }
-
-    private String buildPlaceMapLink(Place place) {
-        if (place.location != null) {
-            return place.location.latitude + "," + place.location.longitude;
-        }
-        return place.address != null ? place.address : "";
     }
 
     private void goToMyLocation() {

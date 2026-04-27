@@ -116,11 +116,14 @@
         <argument android:name="avatarColor" app:argType="integer" android:defaultValue="0" />
         <argument android:name="memberCount" app:argType="integer" android:defaultValue="0" />
         <argument android:name="friendshipCreatedAt" app:argType="long" android:defaultValue="0L" />
+        <argument android:name="sharedPlaceId" app:argType="string" android:defaultValue="" />
         <argument android:name="sharedPlaceName" app:argType="string" android:defaultValue="" />
         <argument android:name="sharedPlaceAddress" app:argType="string" android:defaultValue="" />
-        <argument android:name="sharedPlaceLink" app:argType="string" android:defaultValue="" />
+        <argument android:name="sharedPlaceLat" app:argType="string" android:defaultValue="" />
+        <argument android:name="sharedPlaceLng" app:argType="string" android:defaultValue="" />
+        <argument android:name="sharedPlaceRating" app:argType="string" android:defaultValue="" />
 
-        <deepLink app:uri="app://bif.app/social/chat?chatType={chatType}&amp;chatId={chatId}&amp;chatName={chatName}&amp;avatarLetter={avatarLetter}&amp;avatarColor={avatarColor}&amp;memberCount={memberCount}&amp;friendshipCreatedAt={friendshipCreatedAt}&amp;sharedPlaceName={sharedPlaceName}&amp;sharedPlaceAddress={sharedPlaceAddress}&amp;sharedPlaceLink={sharedPlaceLink}" />
+        <deepLink app:uri="app://bif.app/social/chat?chatType={chatType}&amp;chatId={chatId}&amp;chatName={chatName}&amp;avatarLetter={avatarLetter}&amp;avatarColor={avatarColor}&amp;memberCount={memberCount}&amp;friendshipCreatedAt={friendshipCreatedAt}&amp;sharedPlaceId={sharedPlaceId}&amp;sharedPlaceName={sharedPlaceName}&amp;sharedPlaceAddress={sharedPlaceAddress}&amp;sharedPlaceLat={sharedPlaceLat}&amp;sharedPlaceLng={sharedPlaceLng}&amp;sharedPlaceRating={sharedPlaceRating}" />
     </fragment>
 
     <fragment

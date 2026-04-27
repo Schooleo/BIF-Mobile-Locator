@@ -19,12 +19,15 @@ import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.PlaceIdentityContext;
 import com.bif.app.domain.model.Route;
 import com.bif.app.domain.model.Review;
+import com.bif.app.domain.model.TripPlan;
+import com.bif.app.domain.model.TripStop;
 import com.bif.app.domain.repository.IFavoriteRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.IRouteRepository;
 import com.bif.app.domain.repository.IReviewRepository;
+import com.bif.app.domain.repository.ITripRepository;
 import com.bif.app.domain.repository.IPlaceRepository.PersistenceCallback;
 
 import java.util.ArrayList;
@@ -32,6 +35,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.concurrent.Executor;
 
 import javax.inject.Inject;
@@ -52,11 +56,18 @@ public class MapViewModel extends ViewModel {
     private final IPlaceRepository placeRepository;
     private final IFavoriteRepository favoriteRepository;
     private final IGroupRepository groupRepository;
+    private final ITripRepository tripRepository;
     private final IRouteRepository routeRepository;
     private final IReviewRepository reviewRepository;
     private final Executor reviewExecutor;
 
     public interface AddFavoriteCallback {
+        void onSuccess();
+
+        void onError(@NonNull String message);
+    }
+
+    public interface AddTripStopCallback {
         void onSuccess();
 
         void onError(@NonNull String message);
@@ -98,6 +109,7 @@ public class MapViewModel extends ViewModel {
 
     public final LiveData<List<Favorite>> allFavorites;
     public final LiveData<List<Group>> allGroups;
+    public final LiveData<List<TripPlan>> allTrips;
     public final LiveData<List<String>> searchHistory;
 
     @Nullable
@@ -125,6 +137,7 @@ public class MapViewModel extends ViewModel {
             IPlaceRepository placeRepository,
             IFavoriteRepository favoriteRepository,
             IGroupRepository groupRepository,
+            ITripRepository tripRepository,
             IRouteRepository routeRepository,
             IReviewRepository reviewRepository,
             Executor reviewExecutor) {
@@ -132,6 +145,7 @@ public class MapViewModel extends ViewModel {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
+                tripRepository,
                 routeRepository,
                 reviewRepository,
                 reviewExecutor,
@@ -144,6 +158,7 @@ public class MapViewModel extends ViewModel {
             IPlaceRepository placeRepository,
             IFavoriteRepository favoriteRepository,
             IGroupRepository groupRepository,
+            ITripRepository tripRepository,
             IRouteRepository routeRepository,
             IReviewRepository reviewRepository,
             Executor reviewExecutor,
@@ -153,6 +168,7 @@ public class MapViewModel extends ViewModel {
         this.placeRepository = placeRepository;
         this.favoriteRepository = favoriteRepository;
         this.groupRepository = groupRepository;
+        this.tripRepository = tripRepository;
         this.routeRepository = routeRepository;
         this.reviewRepository = reviewRepository;
         this.reviewExecutor = reviewExecutor;
@@ -194,6 +210,7 @@ public class MapViewModel extends ViewModel {
                         }));
         this.allFavorites = favoriteRepository.getAllFavorites();
         this.allGroups = groupRepository.getGroups();
+        this.allTrips = tripRepository.getAllTrips();
         this.searchHistory = placeRepository.getSearchHistory();
 
         this.currentPlaceReviews = Transformations.switchMap(_currentPlaceId, reviewRepository::getReviewsForPlace);
@@ -573,6 +590,63 @@ public class MapViewModel extends ViewModel {
 
     public void removeFromFavorites(Favorite favorite) {
         favoriteRepository.deleteFavorite(favorite);
+    }
+
+    public void addPlaceToTrip(@Nullable String tripId,
+                               @Nullable Place place,
+                               @Nullable AddTripStopCallback callback) {
+        addPlaceToTrip(tripId, place, 0L, callback);
+    }
+
+    public void addPlaceToTrip(@Nullable String tripId,
+                               @Nullable Place place,
+                               long scheduledAtMillis,
+                               @Nullable AddTripStopCallback callback) {
+        if (!hasText(tripId)) {
+            if (callback != null) {
+                callback.onError("No trip selected");
+            }
+            return;
+        }
+        if (place == null || place.location == null
+                || !Double.isFinite(place.location.latitude)
+                || !Double.isFinite(place.location.longitude)) {
+            if (callback != null) {
+                callback.onError("Place location is unavailable");
+            }
+            return;
+        }
+
+        long normalizedSchedule = Math.max(0L, scheduledAtMillis);
+
+        reviewExecutor.execute(() -> {
+            try {
+                TripStop stop = new TripStop(
+                        UUID.randomUUID().toString(),
+                        hasText(place.name) ? place.name.trim() : "Untitled stop",
+                        hasText(place.address) ? place.address.trim() : "",
+                        "",
+                        "",
+                        "",
+                        place.location.latitude,
+                        place.location.longitude,
+                        normalizedSchedule,
+                        normalizedSchedule,
+                        0
+                );
+                tripRepository.addStopToTrip(tripId.trim(), stop);
+                if (callback != null) {
+                    callback.onSuccess();
+                }
+            } catch (RuntimeException ex) {
+                if (callback != null) {
+                    String message = ex.getMessage() != null
+                            ? ex.getMessage()
+                            : "Unable to add place to trip";
+                    callback.onError(message);
+                }
+            }
+        });
     }
 
     public void clearRouteSummary() {
