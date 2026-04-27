@@ -1,5 +1,6 @@
 package com.bif.app.feature.social;
 
+import android.util.Log;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Observer;
@@ -226,11 +227,32 @@ public class ChatViewModel extends ViewModel {
         aiSuggestPlacesModeEnabledLiveData.setValue(false);
     }
 
-    public void shareLocation(double latitude, double longitude, String address) {
+    public void sharePlaceCard(String placeId, String name, String address, double latitude, double longitude, double rating) {
         if (groupId == null || groupId.trim().isEmpty()) {
             return;
         }
-        chatRepository.sendLocationMessage(groupId, currentUserId, latitude, longitude, address);
+        
+        try {
+            org.json.JSONObject payload = new org.json.JSONObject();
+            payload.put("id", placeId);
+            payload.put("name", name);
+            payload.put("address", address);
+            payload.put("latitude", latitude);
+            payload.put("longitude", longitude);
+            payload.put("rating", rating);
+            
+            String id = UUID.randomUUID().toString();
+            String clientMsgId = UUID.randomUUID().toString();
+            ChatMessage message = new ChatMessage(
+                    id, groupId, currentUserId,
+                    null, payload.toString(), "PLACE_SHARE_CARD",
+                    System.currentTimeMillis(), clientMsgId,
+                    latitude, longitude, address, false, true
+            );
+            chatRepository.sendMessage(message);
+        } catch (Exception e) {
+            Log.e("ChatViewModel", "Failed to create place share payload", e);
+        }
     }
 
     public void addSharedLocationToTrip(String tripId, ChatMessage message) {
