@@ -98,6 +98,7 @@ public class SyncManager implements ISyncInitializable {
     private final Context appContext;
     private final ExecutorService enqueueExecutor;
     private final ExecutorService reconnectSyncExecutor;
+    private final AppDatabase appDatabase;
 
     private String userId;
     private String deviceId;
@@ -147,6 +148,7 @@ public class SyncManager implements ISyncInitializable {
             : null;
         this.gson = new Gson();
         this.appContext = appContext;
+        this.appDatabase = appDatabase;
         this.enqueueExecutor = Executors.newSingleThreadExecutor();
         this.handlersByEntityType = new HashMap<>();
         this.reconnectSyncExecutor = Executors.newSingleThreadExecutor();
@@ -321,6 +323,7 @@ public class SyncManager implements ISyncInitializable {
                 applyPulledChanges(syncResponse.pulledChanges);
                 hydrateChatCachesForAllGroups();
 
+                Log.d(TAG, "sync: updating lastPulledVersion to " + syncResponse.currentServerVersion);
                 setLastPulledVersion(syncResponse.currentServerVersion);
 
                 if (syncResponse.conflicts != null) {
@@ -506,22 +509,40 @@ public class SyncManager implements ISyncInitializable {
     }
 
     private void applyPulledChanges(List<SyncChangeDto> pulledChanges) {
+
         if (pulledChanges == null || pulledChanges.isEmpty()) {
             return;
         }
 
-        for (SyncChangeDto change : pulledChanges) {
-            if (change.entityType == null) {
-                continue;
-            }
 
-            SyncEntityHandler handler = handlersByEntityType.get(
-                    change.entityType.toLowerCase(Locale.ROOT));
-            if (handler == null) {
-                continue;
+        if (appDatabase != null) {
+
+            appDatabase.runInTransaction(() -> {
+                for (SyncChangeDto change : pulledChanges) {
+                    applySingleChange(change);
+                }
+            });
+
+        } else {
+            for (SyncChangeDto change : pulledChanges) {
+                applySingleChange(change);
             }
-            handler.applyPulledChange(change, userId);
         }
+    }
+
+    private void applySingleChange(SyncChangeDto change) {
+        if (change.entityType == null) {
+            return;
+        }
+
+        SyncEntityHandler handler = handlersByEntityType.get(
+                change.entityType.toLowerCase(Locale.ROOT));
+        if (handler == null) {
+            Log.w(TAG, "applyPulledChanges: no handler for entityType=" + change.entityType);
+            return;
+        }
+
+        handler.applyPulledChange(change, userId);
     }
 
     private void hydrateChatCachesForAllGroups() {
