@@ -1,6 +1,7 @@
 package com.bif.app.di;
 
 import android.content.Context;
+import android.util.Log;
 
 import androidx.room.Room;
 
@@ -152,15 +153,17 @@ public class AppModule {
 
             @Override
             public void clearLocalUserData(Runnable onComplete) {
+                Log.d(TAG, "clearLocalUserData started");
                 executor.execute(() -> {
                     try {
+                        Log.d(TAG, "clearLocalUserData: calling appDatabase.clearAllTables()");
                         appDatabase.clearAllTables();
+                        Log.d(TAG, "clearLocalUserData: appDatabase.clearAllTables() finished");
                         if (onComplete != null) {
                             new android.os.Handler(android.os.Looper.getMainLooper()).post(onComplete);
                         }
                     } catch (Exception exception) {
-                        Timber.tag(TAG).e(exception,
-                                "Failed to clear local session data");
+                        Log.e(TAG, "Failed to clear local session data", exception);
                     }
                 });
             }
