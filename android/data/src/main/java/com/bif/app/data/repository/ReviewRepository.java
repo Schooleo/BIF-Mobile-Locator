@@ -336,11 +336,7 @@ public class ReviewRepository implements IReviewRepository {
         }
 
         try {
-            Log.d(TAG, "resolveInternalPlaceId request: externalSource=" + externalSource
-                    + ", externalId=" + externalId
-                    + ", name=" + name
-                    + ", lat=" + lat
-                    + ", lng=" + lng);
+
             PlaceResolveRequestDto request = new PlaceResolveRequestDto();
             request.externalSource = externalSource;
             request.externalId = externalId;
@@ -349,9 +345,7 @@ public class ReviewRepository implements IReviewRepository {
             request.name = name;
 
             Response<PlaceResolveResponseDto> res = restApiService.resolvePlace(request).execute();
-            Log.d(TAG, "resolveInternalPlaceId response: code=" + res.code()
-                    + ", successful=" + res.isSuccessful()
-                    + ", body=" + (res.body() != null ? res.body().internalPlaceId : null));
+
             if (res.isSuccessful() && res.body() != null) {
                 String internalId = res.body().internalPlaceId;
                 if (internalId != null && !internalId.trim().isEmpty()) {

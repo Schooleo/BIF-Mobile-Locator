@@ -67,6 +67,10 @@ public class FavoriteRepositoryTest {
     private PlaceDao mockPlaceDao;
     @Mock
     private AndroidGeocodingDataSource mockGeocodingDataSource;
+    @Mock
+    private Context mockContext;
+    @Mock
+    private android.content.SharedPreferences mockPrefs;
 
     private FavoriteRepository repository;
 
@@ -89,6 +93,7 @@ public class FavoriteRepositoryTest {
         }).when(mockExecutorService).execute(any(Runnable.class));
 
         when(mockSyncManager.isOnline()).thenReturn(true);
+        when(mockContext.getSharedPreferences(any(String.class), any(int.class))).thenReturn(mockPrefs);
 
         repository = new FavoriteRepository(
                 mockDao, 
@@ -97,16 +102,15 @@ public class FavoriteRepositoryTest {
             mockRestApiService,
                 mockSyncManager, 
             mockExecutorService,
-            null
+            mockContext
         );
     }
 
     @Test
     public void constructor_withApplicationContext_doesNotSetSyncContextEagerly() {
-        Context appContext = org.mockito.Mockito.mock(Context.class);
         try (MockedStatic<UserPreferences> userPrefs = org.mockito.Mockito
                 .mockStatic(UserPreferences.class)) {
-            userPrefs.when(() -> UserPreferences.getUserId(appContext))
+            userPrefs.when(() -> UserPreferences.getUserId(mockContext))
                     .thenReturn("user-123");
 
             new FavoriteRepository(
@@ -116,7 +120,7 @@ public class FavoriteRepositoryTest {
                     mockRestApiService,
                     mockSyncManager,
                     mockExecutorService,
-                    appContext
+                    mockContext
             );
 
             verify(mockSyncManager, never()).setUserContext(any(), any());
@@ -247,10 +251,9 @@ public class FavoriteRepositoryTest {
 
     @Test
     public void refreshFavorites_CallsRemoteBootstrapWithoutForcedSync() throws Exception {
-        Context appContext = org.mockito.Mockito.mock(Context.class);
         try (MockedStatic<UserPreferences> userPrefs = org.mockito.Mockito
                 .mockStatic(UserPreferences.class)) {
-            userPrefs.when(() -> UserPreferences.getUserId(appContext))
+            userPrefs.when(() -> UserPreferences.getUserId(mockContext))
                     .thenReturn("user-123");
 
             repository = new FavoriteRepository(
@@ -260,7 +263,7 @@ public class FavoriteRepositoryTest {
                     mockRestApiService,
                     mockSyncManager,
                     mockExecutorService,
-                    appContext
+                    mockContext
             );
 
             @SuppressWarnings("unchecked")
@@ -281,10 +284,9 @@ public class FavoriteRepositoryTest {
 
     @Test
     public void refreshFavorites_WhenBootstrapFails_ReportsOfflineError() throws Exception {
-        Context appContext = org.mockito.Mockito.mock(Context.class);
         try (MockedStatic<UserPreferences> userPrefs = org.mockito.Mockito
                 .mockStatic(UserPreferences.class)) {
-            userPrefs.when(() -> UserPreferences.getUserId(appContext))
+            userPrefs.when(() -> UserPreferences.getUserId(mockContext))
                     .thenReturn("user-123");
 
             repository = new FavoriteRepository(
@@ -294,7 +296,7 @@ public class FavoriteRepositoryTest {
                     mockRestApiService,
                     mockSyncManager,
                     mockExecutorService,
-                    appContext
+                    mockContext
             );
 
             // Arrange
@@ -334,10 +336,9 @@ public class FavoriteRepositoryTest {
 
     @Test
     public void refreshFavorites_WhenDeviceOffline_UsesOfflineCallbackWithoutRemoteCall() {
-        Context appContext = org.mockito.Mockito.mock(Context.class);
         try (MockedStatic<UserPreferences> userPrefs = org.mockito.Mockito
                 .mockStatic(UserPreferences.class)) {
-            userPrefs.when(() -> UserPreferences.getUserId(appContext))
+            userPrefs.when(() -> UserPreferences.getUserId(mockContext))
                     .thenReturn("user-123");
 
             repository = new FavoriteRepository(
@@ -347,7 +348,7 @@ public class FavoriteRepositoryTest {
                     mockRestApiService,
                     mockSyncManager,
                     mockExecutorService,
-                    appContext
+                    mockContext
             );
 
             when(mockSyncManager.isOnline()).thenReturn(false);
@@ -408,7 +409,7 @@ public class FavoriteRepositoryTest {
                 mockRestApiService,
                 mockSyncManager,
                 mockExecutorService,
-                null);
+                mockContext);
 
         reconciliatingRepository.refreshFavorites(null);
 

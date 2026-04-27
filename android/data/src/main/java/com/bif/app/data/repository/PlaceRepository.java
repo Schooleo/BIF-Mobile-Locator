@@ -61,7 +61,8 @@ public class PlaceRepository implements IPlaceRepository {
     private final NetworkMonitor networkMonitor;
     private final AiGraphQlClient aiGraphQlClient;
     private final ExecutorService executorService;
-    private final String activeUserId;
+    private final Context appContext;
+    private final String fallbackActiveUserId;
     private volatile Double configuredDefaultLatitude;
     private volatile Double configuredDefaultLongitude;
 
@@ -82,12 +83,13 @@ public class PlaceRepository implements IPlaceRepository {
         this.networkMonitor = networkMonitor;
         this.aiGraphQlClient = aiGraphQlClient;
         this.executorService = Executors.newFixedThreadPool(4);
-        this.activeUserId = resolveActiveUserId(appContext);
+        this.appContext = appContext;
+        this.fallbackActiveUserId = resolveActiveUserId(appContext);
         this.configuredDefaultLatitude = null;
         this.configuredDefaultLongitude = null;
 
-        if (!activeUserId.trim().isEmpty()) {
-            syncManager.setUserContext(activeUserId, null);
+        if (!fallbackActiveUserId.trim().isEmpty()) {
+            syncManager.setUserContext(fallbackActiveUserId, null);
         }
     }
 
@@ -135,7 +137,8 @@ public class PlaceRepository implements IPlaceRepository {
         this.networkMonitor = networkMonitor;
         this.aiGraphQlClient = aiGraphQlClient;
         this.executorService = executorService;
-        this.activeUserId = activeUserId;
+        this.appContext = null;
+        this.fallbackActiveUserId = activeUserId;
         this.configuredDefaultLatitude = null;
         this.configuredDefaultLongitude = null;
     }
@@ -193,6 +196,7 @@ public class PlaceRepository implements IPlaceRepository {
         }
 
         executorService.execute(() -> {
+            String activeUserId = resolveCurrentActiveUserId();
             try {
                 Response<PlaceDto> response = restApiService.getPlaceById(placeId).execute();
                 PlaceDto dto = response.body();
@@ -355,6 +359,7 @@ public class PlaceRepository implements IPlaceRepository {
         }
 
         executorService.execute(() -> {
+            String activeUserId = resolveCurrentActiveUserId();
             Location searchOrigin = resolveSearchOrigin(userLocation);
             List<Place> combinedResults = new ArrayList<>();
             Set<String> seenIds = new HashSet<>();
@@ -479,6 +484,7 @@ public class PlaceRepository implements IPlaceRepository {
     @Override
     public void persistPlace(Place place, String action, @Nullable PersistenceCallback callback) {
         executorService.execute(() -> {
+            String activeUserId = resolveCurrentActiveUserId();
             try {
                 Place normalizedPlace = normalizePlaceForCache(place);
                 if (normalizedPlace == null) {
@@ -553,6 +559,7 @@ public class PlaceRepository implements IPlaceRepository {
 
     @Override
     public LiveData<List<Place>> getAllPersistedPlaces() {
+        String activeUserId = resolveCurrentActiveUserId();
         return Transformations.map(placeDao.getAll(activeUserId),
                 PlaceMapper::toDomainList);
     }
@@ -579,6 +586,7 @@ public class PlaceRepository implements IPlaceRepository {
     }
 
     private void cacheResultsLocally(List<Place> places) {
+        String activeUserId = resolveCurrentActiveUserId();
         List<PlaceEntity> entities = new ArrayList<>();
         for (Place place : places) {
             entities.add(PlaceMapper.toEntity(place, activeUserId));
@@ -590,6 +598,7 @@ public class PlaceRepository implements IPlaceRepository {
     }
 
     private void enforceLocalCacheLimit() {
+        String activeUserId = resolveCurrentActiveUserId();
         int count = placeDao.count(activeUserId);
         if (count > MAX_LOCAL_PLACES) {
             placeDao.evictOldest(count - MAX_LOCAL_PLACES, activeUserId);
@@ -598,6 +607,7 @@ public class PlaceRepository implements IPlaceRepository {
 
     private void autoPersistFromSearch(Place place) {
         executorService.execute(() -> {
+            String activeUserId = resolveCurrentActiveUserId();
             if (!networkMonitor.isOnline()) {
                 return;
             }
@@ -626,6 +636,16 @@ public class PlaceRepository implements IPlaceRepository {
             return "anonymous";
         }
         return userId.trim();
+    }
+
+    private String resolveCurrentActiveUserId() {
+        if (appContext != null) {
+            return resolveActiveUserId(appContext);
+        }
+        if (fallbackActiveUserId == null || fallbackActiveUserId.trim().isEmpty()) {
+            return "anonymous";
+        }
+        return fallbackActiveUserId.trim();
     }
 
     private Place normalizePlaceForCache(Place place) {
