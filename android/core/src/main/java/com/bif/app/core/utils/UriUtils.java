@@ -22,8 +22,7 @@ public class UriUtils {
         GROUP_DETAIL,
         PROFILE,
         LOGIN,
-        REGISTER,
-        PERSONAL_INFO
+        REGISTER
     }
 
     public static Uri buildUri(String scheme, String authority, String path) {
@@ -71,8 +70,6 @@ public class UriUtils {
                 return buildUri("/login");
             case REGISTER:
                 return buildUri("/register");
-            case PERSONAL_INFO:
-                return buildUri("/profile/personal-info");
             case MAP:
             default:
                 return buildUri(defaultPath);

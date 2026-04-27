@@ -16,6 +16,8 @@
         android:background="@android:color/transparent"
         android:contentDescription="@string/app_name"
         android:scaleType="fitCenter"
+        android:scaleX="1.8"
+        android:scaleY="1.8"
         android:src="@drawable/auth_logo_foreground" />
 
 </LinearLayout>

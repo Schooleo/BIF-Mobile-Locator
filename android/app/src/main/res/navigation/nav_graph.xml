@@ -127,16 +127,6 @@
     </fragment>
 
     <fragment
-        android:id="@+id/nav_personal_info"
-        android:name="com.bif.app.feature.profile.PersonalInfoFragment"
-        android:label="Personal Information"
-        app:route="/profile/personal-info"
-        tools:layout="@layout/fragment_personal_info">
-
-        <deepLink app:uri="app://bif.app/profile/personal-info" />
-    </fragment>
-
-    <fragment
         android:id="@+id/nav_change_password"
         android:name="com.bif.app.feature.profile.ChangePasswordFragment"
         android:label="Change Password"
