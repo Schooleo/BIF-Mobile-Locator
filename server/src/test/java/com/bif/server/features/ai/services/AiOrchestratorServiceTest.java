@@ -74,7 +74,8 @@ class AiOrchestratorServiceTest {
                 aiSearchOrchestratorService,
                 aiRequestGuardService,
                 properties,
-                tripScheduleHintExtractor
+                tripScheduleHintExtractor,
+                new VibeHintNormalizer()
         );
         when(aiRequestGuardService.evaluateCurrentRequest())
                 .thenReturn(AiRequestDecision.allowed("user-1"));
@@ -150,8 +151,8 @@ class AiOrchestratorServiceTest {
                 .resolveCandidates(extractionCaptor.capture(), eq(10.780000d), eq(106.700000d));
 
         PlaceSearchExtraction sent = extractionCaptor.getValue();
-        assertEquals("ho chi minh city", sent.locationHint());
-        assertTrue(sent.searchQueries().contains("ho chi minh city"));
+        assertEquals("near 10.780000, 106.700000", sent.locationHint());
+        assertTrue(sent.searchQueries().contains("near 10.780000, 106.700000"));
         assertTrue(sent.searchQueries().stream().anyMatch(
                 query -> query.startsWith("near 10.780000, 106.700000")));
     }
@@ -182,6 +183,8 @@ class AiOrchestratorServiceTest {
         PlaceSearchExtraction sent = extractionCaptor.getValue();
         assertEquals("Hanoi", sent.locationHint());
         assertTrue(sent.searchQueries().stream().noneMatch("ho chi minh city"::equalsIgnoreCase));
+        assertTrue(sent.searchQueries().stream().anyMatch(
+                query -> query.startsWith("near 10.780000, 106.700000")));
     }
 
     @Test
@@ -215,12 +218,12 @@ class AiOrchestratorServiceTest {
         GeneratedItinerary invalidDraft = new GeneratedItinerary(
                 "Bad Draft",
                 null,
-                List.of(new GeneratedStop("missing", 60, null, null))
+                List.of(timedStop("missing", 60, null, null))
         );
         GeneratedItinerary validDraft = new GeneratedItinerary(
                 "Good Draft",
                 "Nice route",
-                List.of(new GeneratedStop("p1", 60, "Start here", "2026-01-01T09:00:00Z"))
+                List.of(timedStop("p1", 60, "Start here", "2026-01-01T09:00:00Z"))
         );
 
         when(placeSuggestionAgent.extract(query)).thenReturn(extraction);
@@ -282,8 +285,8 @@ class AiOrchestratorServiceTest {
                 "Bad Draft",
                 null,
                 List.of(
-                        new GeneratedStop("p1", 60, null, "2026-01-01T09:00:00Z"),
-                        new GeneratedStop("p1", 60, null, "2026-01-01T10:00:00Z")
+                        timedStop("p1", 60, null, "2026-01-01T09:00:00Z"),
+                        timedStop("p1", 60, null, "2026-01-01T10:00:00Z")
                 )
         );
         when(placeSuggestionAgent.extract(query)).thenReturn(extraction);
@@ -312,12 +315,12 @@ class AiOrchestratorServiceTest {
         GeneratedItinerary invalidDraft = new GeneratedItinerary(
                 "Bad Draft",
                 null,
-                List.of(new GeneratedStop("p1", 5, null, null))
+                List.of(timedStop("p1", 5, null, null))
         );
         GeneratedItinerary invalidRetry = new GeneratedItinerary(
                 "Still Bad",
                 null,
-                List.of(new GeneratedStop("p1", 500, null, null))
+                List.of(timedStop("p1", 500, null, null))
         );
 
         when(placeSuggestionAgent.extract(query)).thenReturn(extraction);
@@ -335,6 +338,52 @@ class AiOrchestratorServiceTest {
         assertEquals(AiFailureCode.AI_VALIDATION_FAILURE, result.failureCode());
         assertTrue(result.warnings().stream().anyMatch(
                 warning -> warning.contains("out-of-range durationMinutes")));
+    }
+
+    @Test
+    void draftTripFromQuery_RetriesWhenRequiredTimeFieldsAreMissing() {
+        String query = "make a timed trip";
+        PlaceSearchExtraction extraction = new PlaceSearchExtraction(
+                List.of("timed park route"),
+                List.of("park"),
+                null,
+                null
+        );
+        List<Place> candidates = List.of(place("p1", "Park"));
+        GeneratedItinerary missingTimes = new GeneratedItinerary(
+                "Missing Times",
+                null,
+                List.of(new GeneratedStop("p1", 60, null, null, null, "Start here", null))
+        );
+        GeneratedItinerary validRetry = new GeneratedItinerary(
+                "Timed Trip",
+                null,
+                List.of(new GeneratedStop("p1", 60, "09:00", "10:00", 60, "Start here", null))
+        );
+
+        when(placeSuggestionAgent.extract(query)).thenReturn(extraction);
+        when(aiSearchOrchestratorService.resolveCandidates(extraction)).thenReturn(candidates);
+        when(tripDraftingAgent.draft(eq(query), eq(candidates), any())).thenReturn(missingTimes);
+        when(tripDraftingAgent.retry(
+                eq(query),
+                eq(candidates),
+                contains("missing required time fields"),
+                any()
+        )).thenReturn(validRetry);
+
+        AiTripDraftResult result = aiOrchestratorService.draftTripFromQuery(query);
+
+        assertNull(result.failureCode());
+        assertTrue(result.warnings().stream().anyMatch(
+                warning -> warning.contains("Retried trip drafting")));
+        assertEquals("09:00", result.draft().stops().getFirst().startTime());
+        assertEquals("10:00", result.draft().stops().getFirst().endTime());
+        assertEquals(60, result.draft().stops().getFirst().duration());
+        verify(tripDraftingAgent).retry(
+                eq(query),
+                eq(candidates),
+                contains("missing required time fields"),
+                any());
     }
 
     @Test
@@ -356,9 +405,9 @@ class AiOrchestratorServiceTest {
                 "2 Day Discovery",
                 null,
                 List.of(
-                        new GeneratedStop("p1", 300, "Morning", null),
-                        new GeneratedStop("p2", 300, "Afternoon", null),
-                        new GeneratedStop("p3", 300, "Evening", null)
+                        timedStop("p1", 300, "Morning", null),
+                        timedStop("p2", 300, "Afternoon", null),
+                        timedStop("p3", 300, "Evening", null)
                 )
         );
 
@@ -393,9 +442,9 @@ class AiOrchestratorServiceTest {
                 "Overloaded Day",
                 null,
                 List.of(
-                        new GeneratedStop("p1", 300, null, null),
-                        new GeneratedStop("p2", 300, null, null),
-                        new GeneratedStop("p3", 300, null, null)
+                        timedStop("p1", 300, null, null),
+                        timedStop("p2", 300, null, null),
+                        timedStop("p3", 300, null, null)
                 )
         );
 
@@ -430,7 +479,7 @@ class AiOrchestratorServiceTest {
         GeneratedItinerary invalidDraft = new GeneratedItinerary(
                 "Bad Timing",
                 null,
-                List.of(new GeneratedStop("p1", 60, null, "not-a-datetime"))
+                List.of(timedStop("p1", 60, null, "not-a-datetime"))
         );
 
         when(placeSuggestionAgent.extract(query)).thenReturn(extraction);
@@ -451,6 +500,45 @@ class AiOrchestratorServiceTest {
     }
 
     @Test
+    void draftTripFromQuery_ArrangesDateRangeEvenWhenAgentPlannedDateTimeIsInvalid() {
+        String query = "Da Lat Mountains Trip date range:\n"
+                + "- Start date: 2026-04-27\n"
+                + "- End date: 2026-04-29\n"
+                + "Schedule each stop within this date range.";
+        PlaceSearchExtraction extraction = new PlaceSearchExtraction(
+                List.of("da lat mountain route"),
+                List.of("mountain"),
+                null,
+                null
+        );
+        Place first = place("p1", "Pine Hill");
+        Place second = place("p2", "Valley View");
+        List<Place> candidates = List.of(first, second);
+        GeneratedItinerary draftWithInvalidDateTime = new GeneratedItinerary(
+                "Da Lat",
+                null,
+                List.of(
+                        timedStop("p1", 90, null, "not-a-datetime"),
+                        timedStop("p2", 90, null, "still-not-a-datetime")
+                )
+        );
+
+        when(placeSuggestionAgent.extract(query)).thenReturn(extraction);
+        when(aiSearchOrchestratorService.resolveCandidates(extraction)).thenReturn(candidates);
+        when(aiSearchOrchestratorService.hasLocationFocus(extraction)).thenReturn(false);
+        when(tripDraftingAgent.draft(eq(query), eq(candidates), any())).thenReturn(draftWithInvalidDateTime);
+
+        AiTripDraftResult result = aiOrchestratorService.draftTripFromQuery(query);
+
+        assertNull(result.failureCode());
+        assertEquals(2, result.draft().stops().size());
+        OffsetDateTime firstStop = OffsetDateTime.parse(result.draft().stops().get(0).plannedDateTime());
+        OffsetDateTime secondStop = OffsetDateTime.parse(result.draft().stops().get(1).plannedDateTime());
+        assertEquals(27, firstStop.getDayOfMonth());
+        assertTrue(secondStop.isAfter(firstStop));
+    }
+
+    @Test
     void draftTripFromQuery_ReturnsValidationFailureForNonMonotonicPlannedDateTime() {
         String query = "make a timed trip";
         PlaceSearchExtraction extraction = new PlaceSearchExtraction(
@@ -466,8 +554,8 @@ class AiOrchestratorServiceTest {
                 "Out of order",
                 null,
                 List.of(
-                        new GeneratedStop("p1", 60, null, "2026-01-01T11:00:00Z"),
-                        new GeneratedStop("p2", 60, null, "2026-01-01T10:00:00Z")
+                        timedStop("p1", 60, null, "2026-01-01T11:00:00Z"),
+                        timedStop("p2", 60, null, "2026-01-01T10:00:00Z")
                 )
         );
 
@@ -519,7 +607,7 @@ class AiOrchestratorServiceTest {
         GeneratedItinerary itinerary = new GeneratedItinerary(
                 "   ",
                 "Summary",
-                List.of(new GeneratedStop("p1", 60, null, null))
+                List.of(timedStop("p1", 60, null, null))
         );
         when(placeSuggestionAgent.extract(query)).thenReturn(extraction);
         when(aiSearchOrchestratorService.resolveCandidates(extraction)).thenReturn(candidates);
@@ -544,7 +632,7 @@ class AiOrchestratorServiceTest {
         GeneratedItinerary itinerary = new GeneratedItinerary(
                 "Parks",
                 "   ",
-                List.of(new GeneratedStop("p1", 60, null, null))
+                List.of(timedStop("p1", 60, null, null))
         );
         when(placeSuggestionAgent.extract(query)).thenReturn(extraction);
         when(aiSearchOrchestratorService.resolveCandidates(extraction)).thenReturn(candidates);
@@ -588,8 +676,8 @@ class AiOrchestratorServiceTest {
                 "Good Focus",
                 "Mostly District 1",
                 List.of(
-                        new GeneratedStop("p1", 60, "Breakfast", "2026-01-01T09:00:00Z"),
-                        new GeneratedStop("p2", 60, "Lunch", "2026-01-01T11:00:00Z")
+                        timedStop("p1", 60, "Breakfast", "2026-01-01T09:00:00Z"),
+                        timedStop("p2", 60, "Lunch", "2026-01-01T11:00:00Z")
                 )
         );
 
@@ -650,8 +738,8 @@ class AiOrchestratorServiceTest {
                 "1 Day Plan",
                 null,
                 List.of(
-                        new GeneratedStop("p1", 90, null, null),
-                        new GeneratedStop("p2", 90, null, null)
+                        timedStop("p1", 90, null, null),
+                        timedStop("p2", 90, null, null)
                 )
         );
 
@@ -692,7 +780,7 @@ class AiOrchestratorServiceTest {
         GeneratedItinerary rawDraft = new GeneratedItinerary(
                 "Coffee Day",
                 null,
-                List.of(new GeneratedStop("p1", 90, null, null))
+                List.of(timedStop("p1", 90, null, null))
         );
 
         when(placeSuggestionAgent.extract(query)).thenReturn(extraction);
@@ -707,6 +795,17 @@ class AiOrchestratorServiceTest {
         String note = result.draft().stops().getFirst().note();
         assertTrue(note != null && note.toLowerCase().contains("stop at"));
         assertTrue(note == null || !note.contains("Bu\u1ed5i"));
+    }
+
+    private GeneratedStop timedStop(String placeId, Integer durationMinutes, String note, String plannedDateTime) {
+        return new GeneratedStop(
+                placeId,
+                durationMinutes,
+                "09:00",
+                "10:00",
+                durationMinutes,
+                note,
+                plannedDateTime);
     }
 
     private Place place(String id, String name) {

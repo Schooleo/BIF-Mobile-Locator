@@ -1,11 +1,14 @@
 package com.bif.app.feature.social;
 
+import android.content.Context;
+
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MediatorLiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModel;
 
+import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.domain.model.AiTripDraft;
 import com.bif.app.domain.model.AiTripDraftResult;
 import com.bif.app.domain.model.AiTripDraftStop;
@@ -21,7 +24,6 @@ import com.bif.app.domain.repository.IFriendshipRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.ITripRepository;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -37,6 +39,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.inject.Inject;
 
 import dagger.hilt.android.lifecycle.HiltViewModel;
+import dagger.hilt.android.qualifiers.ApplicationContext;
 
 @HiltViewModel
 public class SocialViewModel extends ViewModel {
@@ -46,11 +49,13 @@ public class SocialViewModel extends ViewModel {
     public static final String AI_DRAFT_INVALID_MESSAGE = "__MSG_AI_DRAFT_INVALID__";
     public static final String AI_DRAFT_SAVE_SUCCESS_MESSAGE = "__MSG_AI_DRAFT_SAVE_SUCCESS__";
     public static final String AI_DRAFT_SAVE_FAILED_MESSAGE = "__MSG_AI_DRAFT_SAVE_FAILED__";
+    public static final String AI_DRAFT_AUTH_REQUIRED_MESSAGE = "__MSG_AI_DRAFT_AUTH_REQUIRED__";
 
     private final IFriendshipRepository friendshipRepository;
     private final IGroupRepository groupRepository;
     private final ITripRepository tripRepository;
     private final IChatRepository chatRepository;
+    private final Context appContext;
     private final LiveData<List<Friend>> friends;
     private final LiveData<List<Friendship>> pendingRequests;
     private final LiveData<List<Group>> groups;
@@ -72,17 +77,21 @@ public class SocialViewModel extends ViewModel {
     private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
 
     private volatile String lastAiDraftQuery = "";
+    private volatile long lastAiDraftStartAt = 0L;
+    private volatile long lastAiDraftEndAt = 0L;
     private volatile AiDraftSnapshot lastAiDraftSnapshot;
 
     @Inject
     public SocialViewModel(IFriendshipRepository friendshipRepository,
                            IGroupRepository groupRepository,
                            ITripRepository tripRepository,
-                           IChatRepository chatRepository) {
+                           IChatRepository chatRepository,
+                           @ApplicationContext Context appContext) {
         this.friendshipRepository = friendshipRepository;
         this.groupRepository = groupRepository;
         this.tripRepository = tripRepository;
         this.chatRepository = chatRepository;
+        this.appContext = appContext;
         this.friends = friendshipRepository.getFriends();
         this.pendingRequests = friendshipRepository.getPendingRequests();
         this.groups = groupRepository.getGroups();
@@ -165,6 +174,11 @@ public class SocialViewModel extends ViewModel {
         return aiTripDrafterUiState;
     }
 
+    public boolean isAuthenticated() {
+        return UserPreferences.isLoggedIn(appContext)
+                && !trimToEmpty(UserPreferences.getAuthToken(appContext)).isEmpty();
+    }
+
     public void openAiTripDrafter() {
         AiTripDrafterUiState current = aiTripDrafterUiState.getValue();
         if (current == null) {
@@ -178,10 +192,23 @@ public class SocialViewModel extends ViewModel {
 
     public void clearAiDraftRequest() {
         lastAiDraftQuery = "";
+        lastAiDraftStartAt = 0L;
+        lastAiDraftEndAt = 0L;
         aiTripDrafterUiState.setValue(AiTripDrafterUiState.input(""));
     }
 
     public void submitAiTripDraftQuery(String rawQuery) {
+        submitAiTripDraftQuery(rawQuery, lastAiDraftStartAt, lastAiDraftEndAt);
+    }
+
+    public void submitAiTripDraftQuery(String rawQuery, long startAt, long endAt) {
+        if (!isAuthenticated()) {
+            aiTripDrafterUiState.setValue(
+                    AiTripDrafterUiState.error(lastAiDraftQuery, AI_DRAFT_AUTH_REQUIRED_MESSAGE, null)
+            );
+            return;
+        }
+
         String query = trimToEmpty(rawQuery);
         if (query.isEmpty()) {
             aiTripDrafterUiState.setValue(
@@ -190,11 +217,15 @@ public class SocialViewModel extends ViewModel {
             return;
         }
 
+        lastAiDraftStartAt = Math.max(0L, startAt);
+        lastAiDraftEndAt = Math.max(0L, endAt);
         lastAiDraftQuery = query;
         aiTripDrafterUiState.setValue(AiTripDrafterUiState.loading(query));
 
         int requestToken = aiDraftRequestToken.incrementAndGet();
-        LiveData<AiTripDraftResult> source = chatRepository.draftTripFromQuery(query);
+        LiveData<AiTripDraftResult> source = chatRepository.draftTripFromQuery(
+                AiDraftPromptBuilder.buildDraftQueryWithDateRange(query, lastAiDraftStartAt, lastAiDraftEndAt)
+        );
         observeOnce(source, result -> {
             if (requestToken != aiDraftRequestToken.get()) {
                 return;
@@ -259,7 +290,7 @@ public class SocialViewModel extends ViewModel {
             return;
         }
 
-        List<TripStop> stops = toTripStops(snapshot.stops);
+        List<TripStop> stops = toTripStops(snapshot.stops, lastAiDraftStartAt, lastAiDraftEndAt);
         if (stops.isEmpty()) {
             tripActionMessage.postValue(AI_DRAFT_SAVE_FAILED_MESSAGE);
             if (callback != null) {
@@ -268,8 +299,15 @@ public class SocialViewModel extends ViewModel {
             return;
         }
 
-        long startAt = resolveStartAt(stops);
-        long endAt = resolveEndAt(stops, startAt);
+        long startAt;
+        long endAt;
+        if (lastAiDraftStartAt > 0L && lastAiDraftEndAt > lastAiDraftStartAt) {
+            startAt = lastAiDraftStartAt;
+            endAt = lastAiDraftEndAt;
+        } else {
+            startAt = resolveStartAt(stops, lastAiDraftStartAt);
+            endAt = resolveEndAt(stops, startAt, lastAiDraftEndAt);
+        }
         String title = trimToEmpty(snapshot.title);
         if (title.isEmpty()) {
             title = "AI Draft Trip";
@@ -300,12 +338,19 @@ public class SocialViewModel extends ViewModel {
     }
 
     public void retryFriends() {
+        if (!isAuthenticated()) {
+            friendUiState.setValue(UiState.empty("Please log in to start collaborating"));
+            return;
+        }
         mapFriendState(friends.getValue());
         friendshipRepository.refreshFriends();
         friendshipRepository.refreshPendingRequests();
     }
 
     public void refreshRequestsOnly() {
+        if (!isAuthenticated()) {
+            return;
+        }
         friendshipRepository.refreshPendingRequests();
     }
 
@@ -467,6 +512,10 @@ public class SocialViewModel extends ViewModel {
     }
 
     private void mapFriendState(List<Friend> friendList) {
+        if (!isAuthenticated()) {
+            friendUiState.setValue(UiState.empty("Please log in to start collaborating"));
+            return;
+        }
         if (friendList == null) {
             friendUiState.setValue(UiState.error("Unable to load friends."));
             return;
@@ -503,6 +552,11 @@ public class SocialViewModel extends ViewModel {
     }
 
     private void runFriendAction(FriendAction action, String fallbackErrorCode) {
+        if (!isAuthenticated()) {
+            friendActionMessage.postValue("__MSG_AUTH_REQUIRED__");
+            friendUiState.postValue(UiState.empty("Please log in to start collaborating"));
+            return;
+        }
         friendActionLoading.postValue(true);
         ioExecutor.execute(() -> {
             try {
@@ -593,7 +647,9 @@ public class SocialViewModel extends ViewModel {
                     place != null ? trimToEmpty(place.address) : "",
                     trimToEmpty(stop.getNote()),
                     trimToEmpty(stop.getPlannedDateTime()),
-                    Math.max(0, stop.getDurationMinutes()),
+                    trimToEmpty(stop.getStartTime()),
+                    trimToEmpty(stop.getEndTime()),
+                    Math.max(0, stop.getDuration() != null ? stop.getDuration() : stop.getDurationMinutes()),
                     latitude,
                     longitude
             ));
@@ -602,12 +658,16 @@ public class SocialViewModel extends ViewModel {
         return previews;
     }
 
-    private List<TripStop> toTripStops(List<AiDraftStopPreview> previews) {
+    private List<TripStop> toTripStops(List<AiDraftStopPreview> previews,
+                                       long fallbackStartAt,
+                                       long fallbackEndAt) {
         List<TripStop> mapped = new ArrayList<>();
         if (previews == null) {
             return mapped;
         }
 
+        AiDraftScheduleResolver.ScheduleCursor cursor =
+                AiDraftScheduleResolver.newCursor(fallbackStartAt, fallbackEndAt);
         int order = 0;
         for (AiDraftStopPreview preview : previews) {
             if (preview == null) {
@@ -619,10 +679,16 @@ public class SocialViewModel extends ViewModel {
 
             double latitude = preview.getLatitude();
             double longitude = preview.getLongitude();
-            long arrivalTime = parsePlannedDateTime(preview.getPlannedDateTime());
-            long departureTime = arrivalTime > 0L
-                    ? arrivalTime + (Math.max(0, preview.getDurationMinutes()) * 60_000L)
-                    : 0L;
+            AiDraftScheduleResolver.ScheduledTime scheduledTime =
+                    AiDraftScheduleResolver.resolveStopTimes(
+                            preview.getPlannedDateTime(),
+                            preview.getStartTime(),
+                            preview.getEndTime(),
+                            preview.getDurationMinutes(),
+                            cursor
+                    );
+            long arrivalTime = scheduledTime.arrivalAt;
+            long departureTime = scheduledTime.departureAt;
 
             mapped.add(new TripStop(
                     UUID.randomUUID().toString(),
@@ -642,6 +708,10 @@ public class SocialViewModel extends ViewModel {
     }
 
     private long resolveStartAt(List<TripStop> stops) {
+        return resolveStartAt(stops, 0L);
+    }
+
+    private long resolveStartAt(List<TripStop> stops, long fallbackStartAt) {
         long minArrival = Long.MAX_VALUE;
         if (stops != null) {
             for (TripStop stop : stops) {
@@ -655,12 +725,16 @@ public class SocialViewModel extends ViewModel {
             }
         }
         if (minArrival == Long.MAX_VALUE) {
-            return System.currentTimeMillis();
+            return fallbackStartAt > 0L ? fallbackStartAt : System.currentTimeMillis();
         }
         return minArrival;
     }
 
     private long resolveEndAt(List<TripStop> stops, long startAt) {
+        return resolveEndAt(stops, startAt, 0L);
+    }
+
+    private long resolveEndAt(List<TripStop> stops, long startAt, long fallbackEndAt) {
         long maxDeparture = 0L;
         if (stops != null) {
             for (TripStop stop : stops) {
@@ -674,21 +748,9 @@ public class SocialViewModel extends ViewModel {
             }
         }
         if (maxDeparture <= 0L) {
-            return startAt;
+            return fallbackEndAt > 0L ? Math.max(startAt, fallbackEndAt) : startAt;
         }
         return Math.max(startAt, maxDeparture);
-    }
-
-    private long parsePlannedDateTime(String value) {
-        String normalized = trimToNull(value);
-        if (normalized == null) {
-            return 0L;
-        }
-        try {
-            return Instant.parse(normalized).toEpochMilli();
-        } catch (Exception ignored) {
-            return 0L;
-        }
     }
 
     private String trimToEmpty(String value) {
@@ -779,6 +841,8 @@ public class SocialViewModel extends ViewModel {
         private final String address;
         private final String note;
         private final String plannedDateTime;
+        private final String startTime;
+        private final String endTime;
         private final int durationMinutes;
         private final Double latitude;
         private final Double longitude;
@@ -791,11 +855,27 @@ public class SocialViewModel extends ViewModel {
                                   int durationMinutes,
                                   Double latitude,
                                   Double longitude) {
+            this(placeId, name, address, note, plannedDateTime, null, null,
+                    durationMinutes, latitude, longitude);
+        }
+
+        public AiDraftStopPreview(String placeId,
+                                  String name,
+                                  String address,
+                                  String note,
+                                  String plannedDateTime,
+                                  String startTime,
+                                  String endTime,
+                                  int durationMinutes,
+                                  Double latitude,
+                                  Double longitude) {
             this.placeId = placeId;
             this.name = name;
             this.address = address;
             this.note = note;
             this.plannedDateTime = plannedDateTime;
+            this.startTime = startTime;
+            this.endTime = endTime;
             this.durationMinutes = durationMinutes;
             this.latitude = latitude;
             this.longitude = longitude;
@@ -819,6 +899,14 @@ public class SocialViewModel extends ViewModel {
 
         public String getPlannedDateTime() {
             return plannedDateTime;
+        }
+
+        public String getStartTime() {
+            return startTime;
+        }
+
+        public String getEndTime() {
+            return endTime;
         }
 
         public int getDurationMinutes() {

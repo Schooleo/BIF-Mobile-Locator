@@ -103,6 +103,7 @@ type Favorite {
   description: String
   notes: String
   rating: Int
+  imagePath: String
   userId: ID
 }
 
@@ -168,8 +169,11 @@ type AiTripDraft {
 
 type AiTripDraftStop {
   placeId: ID!
-  place: Place
+  place: Place!
   durationMinutes: Int!
+  startTime: String
+  endTime: String
+  duration: Int
   note: String
   plannedDateTime: String
 }
@@ -275,6 +279,7 @@ input FavoriteInput {
   description: String
   notes: String
   rating: Int
+  imagePath: String
   userId: ID
 }
 
@@ -360,6 +365,6 @@ input SyncChangeInput {
   serverVersion: Int
   operation: String
   clientChangeId: String
-  payload: String
   timestamp: String
+  payload: String
 }

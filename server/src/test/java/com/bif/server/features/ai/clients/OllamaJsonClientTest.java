@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 import static org.mockito.ArgumentMatchers.any;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import static org.mockito.Mockito.when;
 
@@ -80,6 +81,7 @@ class OllamaJsonClientTest {
     @Test
     void generateJson_ThrowsOnNon2xxResponse() throws Exception {
         OllamaProperties properties = new OllamaProperties();
+        properties.setBaseUrl("https://example.com/api");
         HttpClient httpClient = Mockito.mock(HttpClient.class);
         @SuppressWarnings("unchecked")
         HttpResponse<String> response = Mockito.mock(HttpResponse.class);
@@ -94,6 +96,83 @@ class OllamaJsonClientTest {
             () -> client.generateJson("sys", "user")
         );
         assertTrue(exception.getMessage().contains("status 503"));
+        assertTrue(exception.getMessage().contains("https://example.com/api/generate"));
+    }
+
+    @Test
+    void generateJson_UsesSingleApiGeneratePathWhenBaseUrlAlreadyEndsWithApi() throws Exception {
+        OllamaProperties properties = new OllamaProperties();
+        properties.setBaseUrl("https://example.com/api");
+        HttpClient httpClient = Mockito.mock(HttpClient.class);
+        @SuppressWarnings("unchecked")
+        HttpResponse<String> response = Mockito.mock(HttpResponse.class);
+        when(response.statusCode()).thenReturn(200);
+        when(response.body()).thenReturn("{\"response\":\"{\\\"ok\\\":true}\"}");
+        when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                .thenReturn(response);
+
+        OllamaJsonClient client = new OllamaJsonClient(httpClient, new ObjectMapper(), properties);
+
+        client.generateJson("sys", "user");
+
+        ArgumentCaptor<HttpRequest> requestCaptor = ArgumentCaptor.forClass(HttpRequest.class);
+        Mockito.verify(httpClient).send(requestCaptor.capture(), any(HttpResponse.BodyHandler.class));
+        assertEquals(
+                "https://example.com/api/generate",
+                requestCaptor.getValue().uri().toString()
+        );
+    }
+
+    @Test
+    void generateJson_RespectsFullGenerateEndpointWhenConfiguredInBaseUrl() throws Exception {
+        OllamaProperties properties = new OllamaProperties();
+        properties.setBaseUrl("https://example.com/api/generate");
+        HttpClient httpClient = Mockito.mock(HttpClient.class);
+        @SuppressWarnings("unchecked")
+        HttpResponse<String> response = Mockito.mock(HttpResponse.class);
+        when(response.statusCode()).thenReturn(200);
+        when(response.body()).thenReturn("{\"response\":\"{\\\"ok\\\":true}\"}");
+        when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                .thenReturn(response);
+
+        OllamaJsonClient client = new OllamaJsonClient(httpClient, new ObjectMapper(), properties);
+
+        client.generateJson("sys", "user");
+
+        ArgumentCaptor<HttpRequest> requestCaptor = ArgumentCaptor.forClass(HttpRequest.class);
+        Mockito.verify(httpClient).send(requestCaptor.capture(), any(HttpResponse.BodyHandler.class));
+        assertEquals(
+                "https://example.com/api/generate",
+                requestCaptor.getValue().uri().toString()
+        );
+    }
+
+    @Test
+    void generateJson_FallsBackToGenerateEndpointWhenApiGenerateReturnsNotFound() throws Exception {
+        OllamaProperties properties = new OllamaProperties();
+        properties.setBaseUrl("https://example.com");
+        HttpClient httpClient = Mockito.mock(HttpClient.class);
+        @SuppressWarnings("unchecked")
+        HttpResponse<String> notFoundResponse = Mockito.mock(HttpResponse.class);
+        @SuppressWarnings("unchecked")
+        HttpResponse<String> okResponse = Mockito.mock(HttpResponse.class);
+
+        when(notFoundResponse.statusCode()).thenReturn(404);
+        when(notFoundResponse.body()).thenReturn("{\"error\":\"Not found\"}");
+        when(okResponse.statusCode()).thenReturn(200);
+        when(okResponse.body()).thenReturn("{\"response\":\"{\\\"ok\\\":true}\"}");
+        when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                .thenReturn(notFoundResponse, okResponse);
+
+        OllamaJsonClient client = new OllamaJsonClient(httpClient, new ObjectMapper(), properties);
+
+        assertEquals("{\"ok\":true}", client.generateJson("sys", "user"));
+
+        ArgumentCaptor<HttpRequest> requestCaptor = ArgumentCaptor.forClass(HttpRequest.class);
+        Mockito.verify(httpClient, Mockito.times(2))
+                .send(requestCaptor.capture(), any(HttpResponse.BodyHandler.class));
+        assertTrue(requestCaptor.getAllValues().get(0).uri().getPath().endsWith("/api/generate"));
+        assertTrue(requestCaptor.getAllValues().get(1).uri().getPath().endsWith("/generate"));
     }
 
     @Test

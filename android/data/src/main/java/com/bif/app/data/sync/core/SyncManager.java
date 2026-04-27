@@ -304,6 +304,7 @@ public class SyncManager implements ISyncInitializable {
             change.serverVersion = lastPulledVersion;
             change.operation = entry.operation;
             change.clientChangeId = entry.clientChangeId;
+            change.timestamp = String.valueOf(entry.createdAt);
             change.payload = entry.payload;
             pushedChanges.add(change);
             pushedEntries.add(entry);

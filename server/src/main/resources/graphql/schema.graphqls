@@ -171,6 +171,10 @@ type AiTripDraftStop {
   placeId: ID!
   place: Place!
   durationMinutes: Int!
+  startTime: String
+  endTime: String
+  """AI-provided stop duration in minutes; prefer duration when present, otherwise use durationMinutes as the normalized fallback."""
+  duration: Int
   note: String
   plannedDateTime: String
 }
@@ -206,6 +210,7 @@ type SyncChange {
   operation: String
   clientChangeId: String
   timestamp: String
+  payload: String
 }
 
 type SyncConflict {
@@ -364,4 +369,6 @@ input SyncChangeInput {
   serverVersion: Int
   operation: String
   clientChangeId: String
+  timestamp: String
+  payload: String
 }
