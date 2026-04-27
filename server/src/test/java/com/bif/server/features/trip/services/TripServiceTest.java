@@ -1,5 +1,7 @@
 package com.bif.server.features.trip.services;
 
+import com.bif.server.features.group.services.GroupService;
+
 import com.bif.server.features.trip.exceptions.TripLimitExceededException;
 import com.bif.server.features.trip.models.RearrangeStopInput;
 import com.bif.server.features.trip.models.TripPlan;
@@ -25,11 +27,14 @@ class TripServiceTest {
     @Mock
     private TripPlanRepository tripPlanRepository;
 
+    @Mock
+    private GroupService groupService;
+
     private TripService tripService;
 
     @BeforeEach
     void setUp() {
-        tripService = new TripService(tripPlanRepository);
+        tripService = new TripService(tripPlanRepository, groupService);
     }
 
     @Test
@@ -68,6 +73,7 @@ class TripServiceTest {
     @Test
     void save_ReturnsSavedEntity() {
         TripPlan plan = new TripPlan();
+        plan.setGroupId("g1");
         when(tripPlanRepository.save(plan)).thenReturn(plan);
 
         TripPlan result = tripService.save(plan);
@@ -94,14 +100,16 @@ class TripServiceTest {
     @Test
     void addStop_WhenPlanFound_AddsStopAndSaves() {
         TripPlan plan = new TripPlan();
+        plan.setGroupId("g1");
         plan.setStops(new ArrayList<>());
         when(tripPlanRepository.findById("t1")).thenReturn(Optional.of(plan));
+        when(groupService.getMembers("g1", "user1")).thenReturn(Optional.of(List.of()));
         when(tripPlanRepository.save(any(TripPlan.class))).thenAnswer(i -> i.getArgument(0));
 
         TripStop stop = new TripStop();
         stop.setTitle("Central Park");
 
-        Optional<TripPlan> result = tripService.addStop("t1", stop);
+        Optional<TripPlan> result = tripService.addStop("t1", "user1", stop);
 
         assertTrue(result.isPresent());
         assertEquals(1, result.get().getStops().size());
@@ -113,14 +121,16 @@ class TripServiceTest {
     @Test
     void addStop_WhenNullStops_InitializesListAndAdds() {
         TripPlan plan = new TripPlan();
+        plan.setGroupId("g1");
         plan.setStops(null);
         when(tripPlanRepository.findById("t1")).thenReturn(Optional.of(plan));
+        when(groupService.getMembers("g1", "user1")).thenReturn(Optional.of(List.of()));
         when(tripPlanRepository.save(any(TripPlan.class))).thenAnswer(i -> i.getArgument(0));
 
         TripStop stop = new TripStop();
         stop.setTitle("First Stop");
 
-        Optional<TripPlan> result = tripService.addStop("t1", stop);
+        Optional<TripPlan> result = tripService.addStop("t1", "user1", stop);
 
         assertTrue(result.isPresent());
         assertEquals(1, result.get().getStops().size());
@@ -130,7 +140,7 @@ class TripServiceTest {
     void addStop_WhenPlanMissing_ReturnsEmpty() {
         when(tripPlanRepository.findById("t1")).thenReturn(Optional.empty());
 
-        Optional<TripPlan> result = tripService.addStop("t1", new TripStop());
+        Optional<TripPlan> result = tripService.addStop("t1", "user1", new TripStop());
 
         assertTrue(result.isEmpty());
         verify(tripPlanRepository, never()).save(any());
@@ -152,11 +162,13 @@ class TripServiceTest {
         stop2.setOrderIndex(2);
 
         TripPlan plan = new TripPlan();
+        plan.setGroupId("g1");
         plan.setStops(new ArrayList<>(List.of(stop0, stop1, stop2)));
         when(tripPlanRepository.findById("t1")).thenReturn(Optional.of(plan));
+        when(groupService.getMembers("g1", "user1")).thenReturn(Optional.of(List.of()));
         when(tripPlanRepository.save(any(TripPlan.class))).thenAnswer(i -> i.getArgument(0));
 
-        Optional<TripPlan> result = tripService.removeStop("t1", "s1");
+        Optional<TripPlan> result = tripService.removeStop("t1", "user1", "s1");
 
         assertTrue(result.isPresent());
         assertEquals(2, result.get().getStops().size());
@@ -170,7 +182,7 @@ class TripServiceTest {
     void removeStop_WhenPlanMissing_ReturnsEmpty() {
         when(tripPlanRepository.findById("t1")).thenReturn(Optional.empty());
 
-        Optional<TripPlan> result = tripService.removeStop("t1", "s1");
+        Optional<TripPlan> result = tripService.removeStop("t1", "user1", "s1");
 
         assertTrue(result.isEmpty());
     }
@@ -178,6 +190,7 @@ class TripServiceTest {
     @Test
     void rearrangeStops_WhenFound_ReordersByIdAndReindex() {
         TripPlan plan = new TripPlan();
+        plan.setGroupId("g1");
         TripStop stopA = new TripStop();
         stopA.setId("s1");
         stopA.setTitle("A");
@@ -188,6 +201,7 @@ class TripServiceTest {
         stopB.setOrderIndex(1);
         plan.setStops(new ArrayList<>(List.of(stopA, stopB)));
         when(tripPlanRepository.findById("t1")).thenReturn(Optional.of(plan));
+        when(groupService.getMembers("g1", "user1")).thenReturn(Optional.of(List.of()));
         when(tripPlanRepository.save(any(TripPlan.class))).thenAnswer(i -> i.getArgument(0));
 
         RearrangeStopInput reorderA = new RearrangeStopInput();
@@ -197,7 +211,7 @@ class TripServiceTest {
         reorderB.setId("s2");
         reorderB.setOrderIndex(0);
 
-        Optional<TripPlan> result = tripService.rearrangeStops("t1",
+        Optional<TripPlan> result = tripService.rearrangeStops("t1", "user1",
                 new ArrayList<>(List.of(reorderA, reorderB)));
 
         assertTrue(result.isPresent());
@@ -212,7 +226,7 @@ class TripServiceTest {
     void rearrangeStops_WhenPlanMissing_ReturnsEmpty() {
         when(tripPlanRepository.findById("t1")).thenReturn(Optional.empty());
 
-        Optional<TripPlan> result = tripService.rearrangeStops("t1", List.of());
+        Optional<TripPlan> result = tripService.rearrangeStops("t1", "user1", List.of());
 
         assertTrue(result.isEmpty());
     }

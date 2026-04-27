@@ -22,6 +22,7 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.bif.app.core.utils.UriUtils;
 import com.bif.app.domain.model.Favorite;
+import com.bif.app.domain.repository.IFavoriteRepository;
 
 import dagger.hilt.android.AndroidEntryPoint;
 
@@ -87,6 +88,10 @@ public class FavoritesFragment extends Fragment
 
         viewModel.syncMessage.observe(getViewLifecycleOwner(), message -> {
             if (message != null && !message.trim().isEmpty()) {
+                if (IFavoriteRepository.ERROR_REFRESH_FAILED.equals(message)) {
+                    AppSnackbar.show(requireContext(), R.string.favorite_refresh_failed);
+                    return;
+                }
                 AppSnackbar.show(requireContext(), message);
             }
         });

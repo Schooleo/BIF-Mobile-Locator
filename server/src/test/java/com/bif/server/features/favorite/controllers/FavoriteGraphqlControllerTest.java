@@ -1,6 +1,7 @@
 package com.bif.server.features.favorite.controllers;
 
 import com.bif.server.features.favorite.dto.graphql.DeleteMyFavoriteResult;
+import com.bif.server.features.favorite.dto.graphql.UpsertFavoriteInput;
 import com.bif.server.features.favorite.models.Favorite;
 import com.bif.server.features.favorite.services.FavoriteService;
 import org.junit.jupiter.api.BeforeEach;
@@ -67,12 +68,27 @@ class FavoriteGraphqlControllerTest {
 
     @Test
     void upsertFavorite_DelegatesToService() {
-        Favorite input = new Favorite();
-        when(favoriteService.save(input)).thenReturn(input);
+        UpsertFavoriteInput input = new UpsertFavoriteInput(
+            "f1",
+            "GOOGLE_MAPS",
+            "gm-1",
+            "Coffee",
+            "Coffee",
+            null,
+            "Address",
+            "Desc",
+            "Note",
+            5,
+            null,
+            "u1");
+        Favorite saved = new Favorite();
+        saved.setId("f1");
+        when(favoriteService.save(any(Favorite.class))).thenReturn(saved);
 
         Favorite result = controller.upsertFavorite(input);
 
-        assertSame(input, result);
+        assertSame(saved, result);
+        verify(favoriteService).save(any(Favorite.class));
     }
 
     @Test
@@ -101,13 +117,27 @@ class FavoriteGraphqlControllerTest {
 
     @Test
     void upsertMyFavorite_DelegatesToService() {
-        Favorite input = new Favorite();
-        when(favoriteService.saveMyFavorite("u1", input)).thenReturn(input);
+        UpsertFavoriteInput input = new UpsertFavoriteInput(
+                "f1",
+                "GOOGLE_MAPS",
+                "gm-1",
+                "Coffee",
+                "Coffee",
+                null,
+                "Address",
+                "Desc",
+                "Note",
+                5,
+                null,
+                null);
+        Favorite saved = new Favorite();
+        saved.setId("f1");
+        when(favoriteService.saveMyFavorite(eq("u1"), any(Favorite.class))).thenReturn(saved);
 
         Favorite result = controller.upsertMyFavorite("u1", input);
 
-        assertSame(input, result);
-        verify(favoriteService).saveMyFavorite("u1", input);
+        assertSame(saved, result);
+        verify(favoriteService).saveMyFavorite(eq("u1"), any(Favorite.class));
     }
 
     @Test
