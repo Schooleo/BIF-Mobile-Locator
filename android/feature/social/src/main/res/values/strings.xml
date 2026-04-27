@@ -108,6 +108,7 @@
     <string name="chat_ai_draft_hint">Describe the trip…</string>
     <string name="chat_ai_suggest_hint">Describe the places…</string>
     <string name="chat_ai_offline">AI tools are unavailable while offline.</string>
+    <string name="unavailable_offline">Unavailable offline</string>
     <string name="chat_ai_draft_failed">AI drafmat failed (%1$s)</string>
     <string name="chat_ai_suggest_failed">AI place suggestions failed (%1$s)</string>
     <string name="chat_add_stop_no_trip">No trip is available to add this stop.</string>

@@ -1,4 +1,6 @@
-package com.bif.app.feature.social;
+package com.bif.app.feature.social.groups;
+
+import com.bif.app.feature.social.R;
 
 import android.content.res.ColorStateList;
 import android.os.Bundle;

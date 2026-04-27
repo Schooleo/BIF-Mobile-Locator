@@ -1,4 +1,6 @@
-package com.bif.app.feature.social;
+package com.bif.app.feature.social.trips;
+
+import com.bif.app.feature.social.R;
 
 import android.view.LayoutInflater;
 import android.view.View;

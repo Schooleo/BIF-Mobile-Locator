@@ -32,6 +32,7 @@ import com.bif.app.domain.model.TripStop;
 import com.bif.app.domain.repository.IChatRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.ITripRepository;
+import com.bif.app.feature.social.chat.ChatViewModel;
 
 import org.junit.Before;
 import org.junit.Rule;

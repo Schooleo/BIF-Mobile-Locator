@@ -1,4 +1,6 @@
-package com.bif.app.feature.social;
+package com.bif.app.feature.social.chat;
+
+import com.bif.app.feature.social.R;
 
 import android.annotation.SuppressLint;
 import android.graphics.drawable.Drawable;
@@ -41,6 +43,7 @@ import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.TripPlan;
 import com.bif.app.domain.model.TripStop;
+import com.bif.app.feature.social.core.SocialViewModel;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 
@@ -263,7 +266,7 @@ public class CommonChatFragment extends Fragment {
                 return;
             }
             if (!viewModel.isAiAvailable()) {
-                AppSnackbar.show(requireContext(), R.string.chat_ai_offline);
+                showUnavailableOfflineMessage();
                 return;
             }
             viewModel.enterAiDraftMode();
@@ -275,7 +278,7 @@ public class CommonChatFragment extends Fragment {
                 return;
             }
             if (!viewModel.isAiAvailable()) {
-                AppSnackbar.show(requireContext(), R.string.chat_ai_offline);
+                showUnavailableOfflineMessage();
                 return;
             }
             viewModel.enterAiSuggestPlacesMode();
@@ -334,6 +337,13 @@ public class CommonChatFragment extends Fragment {
             viewModel.cancelAiDraftMode();
             viewModel.cancelAiSuggestPlacesMode();
         }
+    }
+
+    private void showUnavailableOfflineMessage() {
+        if (!isAdded()) {
+            return;
+        }
+        AppSnackbar.show(requireContext(), R.string.unavailable_offline);
     }
 
     // ─── LiveData observers ────────────────────────────────────────────────────

@@ -1,4 +1,6 @@
-package com.bif.app.feature.social;
+package com.bif.app.feature.social.trips;
+
+import com.bif.app.feature.social.R;
 
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
@@ -34,8 +36,10 @@ import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.bif.app.feature.social.BuildConfig;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.TripPlan;
+import com.bif.app.feature.social.core.SocialMapStyleUtils;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.button.MaterialButton;
 
@@ -218,6 +222,10 @@ public class AddTripStopFragment extends Fragment {
                 AppSnackbar.show(requireContext(), R.string.social_login_required_ai);
                 return;
             }
+            if (!isAiOnline()) {
+                showUnavailableOfflineMessage();
+                return;
+            }
             viewModel.toggleAiMode();
         });
         btnClearSearch.setOnClickListener(v -> etSearch.setText(""));
@@ -236,6 +244,10 @@ public class AddTripStopFragment extends Fragment {
             if (submit) {
                 if (Boolean.TRUE.equals(viewModel.getAiModeEnabled().getValue()) && !isAuthenticated()) {
                     AppSnackbar.show(requireContext(), R.string.social_login_required_ai);
+                    return true;
+                }
+                if (Boolean.TRUE.equals(viewModel.getAiModeEnabled().getValue()) && !isAiOnline()) {
+                    showUnavailableOfflineMessage();
                     return true;
                 }
                 updateAiSearchBiasFromMapCenter();
@@ -391,6 +403,17 @@ public class AddTripStopFragment extends Fragment {
         if (!isAvailable) {
             styleSearchBarForAi(false);
         }
+    }
+
+    private boolean isAiOnline() {
+        return Boolean.TRUE.equals(viewModel.getAiToggleEnabled().getValue());
+    }
+
+    private void showUnavailableOfflineMessage() {
+        if (!isAdded()) {
+            return;
+        }
+        AppSnackbar.show(requireContext(), R.string.unavailable_offline);
     }
 
     private void updateAiSearchBiasFromMapCenter() {

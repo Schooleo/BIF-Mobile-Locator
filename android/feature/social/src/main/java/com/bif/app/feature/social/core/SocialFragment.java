@@ -1,4 +1,6 @@
-package com.bif.app.feature.social;
+package com.bif.app.feature.social.core;
+
+import com.bif.app.feature.social.R;
 
 import android.annotation.SuppressLint;
 import android.net.Uri;
@@ -8,6 +10,7 @@ import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -29,9 +32,13 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.bif.app.core.utils.DialogUtils;
 import com.bif.app.core.utils.UriUtils;
 import com.bif.app.core.utils.UserPreferences;
+import com.bif.app.data.sync.core.NetworkMonitor;
 import com.bif.app.domain.model.Friend;
 import com.bif.app.domain.model.Friendship;
 import com.bif.app.domain.model.TripPlan;
+import com.bif.app.feature.social.ai.AiTripDraftStopPreviewAdapter;
+import com.bif.app.feature.social.friends.FriendsAdapter;
+import com.bif.app.feature.social.trips.TripListAdapter;
 import com.google.android.material.datepicker.MaterialDatePicker;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.tabs.TabLayout;
@@ -46,10 +53,15 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
+import javax.inject.Inject;
+
 import dagger.hilt.android.AndroidEntryPoint;
 
 @AndroidEntryPoint
 public class SocialFragment extends Fragment {
+
+    @Inject
+    NetworkMonitor networkMonitor;
 
     private TabLayout tabLayout;
     private RecyclerView recyclerView;
@@ -83,6 +95,7 @@ public class SocialFragment extends Fragment {
     private long aiDraftStartMillis = 0L;
     private long aiDraftEndMillis = 0L;
     private boolean authenticated = false;
+    private boolean aiOnline = false;
 
     @Nullable
     @Override
@@ -142,6 +155,11 @@ public class SocialFragment extends Fragment {
         fabAiTripDrafter.setOnClickListener(v -> showAiTripDrafterDialog());
 
         setupRecyclerView();
+        aiOnline = networkMonitor.isOnline();
+        networkMonitor.observeConnectivity().observe(getViewLifecycleOwner(), isOnline -> {
+            aiOnline = Boolean.TRUE.equals(isOnline);
+            updateAiTripDrafterFabVisibility();
+        });
         updateAuthenticationUi();
         setupTabs();
         observeViewModel();
@@ -494,6 +512,7 @@ public class SocialFragment extends Fragment {
         authenticated = UserPreferences.isLoggedIn(requireContext())
                 && token != null
                 && !token.trim().isEmpty();
+        aiOnline = networkMonitor.isOnline();
         updateAiTripDrafterFabVisibility();
     }
 
@@ -506,16 +525,21 @@ public class SocialFragment extends Fragment {
             return;
         }
         boolean onTripsTab = tabLayout.getSelectedTabPosition() == 0;
+        boolean isAvailable = authenticated && aiOnline;
         fabAiTripDrafter.setVisibility(onTripsTab ? View.VISIBLE : View.GONE);
         fabAiTripDrafter.setEnabled(true);
         fabAiTripDrafter.setClickable(true);
-        fabAiTripDrafter.setAlpha(authenticated ? 1f : 0.45f);
+        fabAiTripDrafter.setAlpha(isAvailable ? 1f : 0.45f);
     }
 
     private void showAiTripDrafterDialog() {
         updateAuthenticationUi();
         if (!isAuthenticated()) {
             AppSnackbar.show(requireContext(), R.string.social_login_required_ai);
+            return;
+        }
+        if (!aiOnline) {
+            AppSnackbar.show(requireContext(), R.string.unavailable_offline);
             return;
         }
         if (aiTripDrafterDialog != null && aiTripDrafterDialog.isShowing()) {
@@ -572,6 +596,7 @@ public class SocialFragment extends Fragment {
         Button btnErrorSend = dialogView.findViewById(R.id.btn_ai_error_send);
 
         btnSend.setOnClickListener(v -> {
+            clearAiDraftInputFocusAndHideKeyboard();
             if (!hasValidAiDraftDateRange()) {
                 return;
             }
@@ -600,9 +625,13 @@ public class SocialFragment extends Fragment {
         btnErrorClear.setOnClickListener(v -> {
             etAiErrorRequest.setText("");
             etAiRequest.setText("");
+            aiDraftStartMillis = 0L;
+            aiDraftEndMillis = 0L;
+            updateAiDraftDateLabels();
             viewModel.clearAiDraftRequest();
         });
         btnErrorSend.setOnClickListener(v -> {
+            clearAiDraftInputFocusAndHideKeyboard();
             if (!hasValidAiDraftDateRange()) {
                 return;
             }
@@ -762,17 +791,41 @@ public class SocialFragment extends Fragment {
         if (target == null) {
             return;
         }
-        target.setOnClickListener(v -> showAiDraftDatePicker(titleRes,
-                isStartDate ? aiDraftStartMillis : aiDraftEndMillis,
-                selection -> {
-                    if (isStartDate) {
-                        aiDraftStartMillis = normalizePickerSelection(selection);
-                    } else {
-                        aiDraftEndMillis = normalizePickerSelection(selection);
-                    }
-                    updateAiDraftDateLabels();
-                },
-                tag));
+        target.setOnClickListener(v -> {
+            clearAiDraftInputFocusAndHideKeyboard();
+            showAiDraftDatePicker(titleRes,
+                    isStartDate ? aiDraftStartMillis : aiDraftEndMillis,
+                    selection -> {
+                        if (isStartDate) {
+                            aiDraftStartMillis = normalizePickerSelection(selection);
+                        } else {
+                            aiDraftEndMillis = normalizePickerSelection(selection);
+                        }
+                        updateAiDraftDateLabels();
+                    },
+                    tag);
+        });
+    }
+
+    private void clearAiDraftInputFocusAndHideKeyboard() {
+        if (!isAdded()) {
+            return;
+        }
+        if (etAiRequest != null) {
+            etAiRequest.clearFocus();
+        }
+        if (etAiErrorRequest != null) {
+            etAiErrorRequest.clearFocus();
+        }
+        View root = aiTripDrafterDialog != null ? aiTripDrafterDialog.getCurrentFocus() : null;
+        if (root == null && getView() != null) {
+            root = getView();
+        }
+        InputMethodManager imm = (InputMethodManager)
+                requireContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+        if (imm != null && root != null && root.getWindowToken() != null) {
+            imm.hideSoftInputFromWindow(root.getWindowToken(), 0);
+        }
     }
 
     private String resolveAiDraftErrorMessage(SocialViewModel.AiTripDrafterUiState.Error errorState) {
