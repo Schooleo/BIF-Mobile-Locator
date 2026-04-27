@@ -68,8 +68,8 @@ import dagger.hilt.android.AndroidEntryPoint;
 @AndroidEntryPoint
 public class CommonChatFragment extends Fragment {
 
-    private com.bif.app.feature.social.ChatMessageAdapter adapter;
-    private com.bif.app.feature.social.ChatViewModel viewModel;
+    private ChatMessageAdapter adapter;
+    private ChatViewModel viewModel;
     private String chatType;
     private String chatId;
     private EditText messageInput;
