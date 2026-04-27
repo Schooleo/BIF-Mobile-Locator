@@ -1,4 +1,4 @@
-package com.bif.app.feature.social;
+package com.bif.app.feature.social.trips;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;

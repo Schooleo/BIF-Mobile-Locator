@@ -1,4 +1,4 @@
-package com.bif.app.feature.social;
+package com.bif.app.feature.social.groups;
 
 import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.any;
