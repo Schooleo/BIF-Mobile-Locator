@@ -21,6 +21,7 @@ public class FavoritesViewModel extends ViewModel {
 
     private static final long AUTO_REFRESH_STALE_MS = 30_000L;
     private static final String TAG = "FavoritesViewModel";
+    private static final String GENERIC_REFRESH_ERROR_MESSAGE = IFavoriteRepository.ERROR_REFRESH_FAILED;
 
     private final IFavoriteRepository favoriteRepository;
     private final MutableLiveData<String> searchQuery = new MutableLiveData<>("");
@@ -51,7 +52,6 @@ public class FavoritesViewModel extends ViewModel {
         );
 
         _favorites.addSource(searchResultsLiveData, _favorites::setValue);
-        refreshFavorites();
     }
 
     public void removeFavoriteItem(Favorite favorite) {
@@ -80,18 +80,26 @@ public class FavoritesViewModel extends ViewModel {
                 }
 
                 @Override
+                public void onOffline() {
+                    refreshInProgress = false;
+                    _isSyncing.postValue(false);
+                    _syncMessage.postValue("");
+                }
+
+                @Override
                 public void onError(String message) {
                     refreshInProgress = false;
                     _isSyncing.postValue(false);
-                    _syncMessage.postValue(message);
+                    _syncMessage.postValue(hasText(message)
+                            ? message.trim()
+                            : GENERIC_REFRESH_ERROR_MESSAGE);
                 }
             });
         } catch (RuntimeException ex) {
             refreshInProgress = false;
-            String message = ex.getMessage() != null ? ex.getMessage() : "Failed to refresh favorites";
             Log.e(TAG, "Synchronous favorite refresh failure", ex);
             _isSyncing.postValue(false);
-            _syncMessage.postValue(message);
+            _syncMessage.postValue(GENERIC_REFRESH_ERROR_MESSAGE);
         }
     }
 
@@ -107,6 +115,10 @@ public class FavoritesViewModel extends ViewModel {
         }
 
         refreshFavorites();
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
 }

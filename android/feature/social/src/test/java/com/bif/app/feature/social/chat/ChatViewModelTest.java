@@ -127,14 +127,22 @@ public class ChatViewModelTest {
     }
 
     @Test
-    public void shareLocation_CallsRepositorySendLocationMessage() {
+    public void sharePlaceCard_CallsRepositorySendMessage() {
         viewModel.init("group1", "Group 1", "u1");
 
-        viewModel.shareLocation(37.4220936, -122.083922, "Googleplex");
+        viewModel.sharePlaceCard("place123", "Googleplex", "1600 Amphitheatre Pkwy", 37.4220936, -122.083922, 4.5, "OSM");
 
-        verify(mockChatRepository).sendLocationMessage(
-                eq("group1"), eq("u1"), eq(37.4220936), eq(-122.083922), eq("Googleplex")
-        );
+        ArgumentCaptor<ChatMessage> captor = ArgumentCaptor.forClass(ChatMessage.class);
+        verify(mockChatRepository).sendMessage(captor.capture());
+
+        ChatMessage msg = captor.getValue();
+        assertEquals("group1", msg.getGroupId());
+        assertEquals("u1", msg.getSenderUserId());
+        assertEquals("PLACE_SHARE_CARD", msg.getType());
+        assertTrue(msg.getContent().contains("\"id\":\"place123\""));
+        assertTrue(msg.getContent().contains("\"name\":\"Googleplex\""));
+        assertTrue(msg.getContent().contains("\"latitude\":37.4220936"));
+        assertTrue(msg.getContent().contains("\"placeSource\":\"OSM\""));
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.bif.app.di;
 
 import android.content.Context;
+import android.util.Log;
 import android.os.Handler;
 import android.os.Looper;
 
@@ -66,7 +67,9 @@ public class AppModule {
                 AppDatabase.MIGRATION_18_19,
                 AppDatabase.MIGRATION_19_20,
                 AppDatabase.MIGRATION_20_21,
-                AppDatabase.MIGRATION_21_22)
+                AppDatabase.MIGRATION_21_22,
+                AppDatabase.MIGRATION_22_23,
+                AppDatabase.MIGRATION_23_24)
             // Legacy schemas (v13/v14) have no safe forward chain to v17 in code.
             // Recreate DB for those versions instead of crashing at startup.
             .fallbackToDestructiveMigrationFrom(13, 14)
@@ -153,8 +156,10 @@ public class AppModule {
 
             @Override
             public void clearLocalUserData(Runnable onComplete) {
+                Log.d(TAG, "clearLocalUserData started");
                 executor.execute(() -> {
                     try {
+                        Log.d(TAG, "clearLocalUserData: calling appDatabase.clearAllTables()");
                         appDatabase.clearAllTables();
                     } catch (Exception exception) {
                         Timber.tag(TAG).e(exception,

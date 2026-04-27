@@ -2,6 +2,7 @@ package com.bif.app.feature.social.chat;
 
 import com.bif.app.feature.social.R;
 
+import android.util.Log;
 import android.content.Context;
 
 import androidx.lifecycle.LiveData;
@@ -255,11 +256,39 @@ public class ChatViewModel extends ViewModel {
         aiSuggestPlacesModeEnabledLiveData.setValue(false);
     }
 
-    public void shareLocation(double latitude, double longitude, String address) {
+    public void sharePlaceCard(String placeId,
+                               String name,
+                               String address,
+                               double latitude,
+                               double longitude,
+                               double rating,
+                               String placeSource) {
         if (groupId == null || groupId.trim().isEmpty()) {
             return;
         }
-        chatRepository.sendLocationMessage(groupId, currentUserId, latitude, longitude, address);
+        
+        try {
+            org.json.JSONObject payload = new org.json.JSONObject();
+            payload.put("id", placeId);
+            payload.put("name", name);
+            payload.put("address", address);
+            payload.put("latitude", latitude);
+            payload.put("longitude", longitude);
+            payload.put("rating", rating);
+            payload.put("placeSource", placeSource);
+            
+            String id = UUID.randomUUID().toString();
+            String clientMsgId = UUID.randomUUID().toString();
+            ChatMessage message = new ChatMessage(
+                    id, groupId, currentUserId,
+                    null, payload.toString(), "PLACE_SHARE_CARD",
+                    System.currentTimeMillis(), clientMsgId,
+                    latitude, longitude, address, false, true
+            );
+            chatRepository.sendMessage(message);
+        } catch (Exception e) {
+            Log.e("ChatViewModel", "Failed to create place share payload", e);
+        }
     }
 
     public void addSharedLocationToTrip(String tripId, ChatMessage message) {

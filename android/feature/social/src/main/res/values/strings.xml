@@ -101,6 +101,7 @@
     <string name="chat_add_to_trip">Add to Trip</string>
     <string name="chat_added">Added</string>
     <string name="chat_view_place">Map View</string>
+    <string name="chat_view_on_map">View on map</string>
     <string name="chat_ai_draft_trip">Draft a Trip</string>
     <string name="chat_ai_suggest_places">Suggest Places</string>
     <string name="chat_ai_drafter_prefix">AI Trip Drafter</string>

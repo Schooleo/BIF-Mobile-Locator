@@ -2,16 +2,17 @@ package com.bif.server.features.sync.services;
 
 import com.bif.server.features.favorite.models.Favorite;
 import com.bif.server.features.favorite.repositories.FavoriteRepository;
+import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.place.services.PlaceIdentityService;
 import com.bif.server.features.sync.models.SyncChange;
 import com.bif.server.features.sync.models.SyncChangeEntry;
-import org.springframework.dao.DataAccessResourceFailureException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import java.util.Optional;
 
@@ -27,11 +28,15 @@ class FavoriteSyncEntityHandlerTest {
     @Mock
     private PlaceIdentityService placeIdentityService;
 
+    @Mock
+    private PlaceRepository placeRepository;
+
     private FavoriteSyncEntityHandler handler;
 
     @BeforeEach
     void setUp() {
-        handler = new FavoriteSyncEntityHandler(favoriteRepository, placeIdentityService);
+        handler = new FavoriteSyncEntityHandler(favoriteRepository, placeIdentityService, placeRepository);
+        lenient().when(placeRepository.findById(anyString())).thenReturn(Optional.empty());
     }
 
     @Test
@@ -72,14 +77,14 @@ class FavoriteSyncEntityHandlerTest {
         SyncChange pushed = new SyncChange();
         pushed.setEntityId("fav-2");
         pushed.setOperation("UPDATE");
-        String json = "{\"id\":\"fav-2\",\"name\":\"New Name\",\"latitude\":10.0,\"longitude\":20.0,\"rating\":5}";
+        String json = "{\"id\":\"fav-2\",\"name\":\"New Name\",\"placeName\":\"New Name\",\"externalSource\":\"GOOGLE_MAPS\",\"externalId\":\"gm-2\",\"latitude\":10.0,\"longitude\":20.0,\"rating\":5}";
         pushed.setPayload(json);
 
         Favorite existing = new Favorite();
         existing.setId("fav-2");
         existing.setUserId("user-1");
 
-        when(placeIdentityService.resolveInternalPlaceId("FAVORITE", "fav-2", 10.0, 20.0, "New Name"))
+        when(placeIdentityService.resolveInternalPlaceId("GOOGLE_MAPS", "gm-2", 10.0, 20.0, "New Name"))
             .thenReturn("place-2");
         when(favoriteRepository.findByIdAndUserId("fav-2", "user-1")).thenReturn(Optional.of(existing));
 
@@ -96,17 +101,20 @@ class FavoriteSyncEntityHandlerTest {
         assertEquals(15L, saved.getServerVersion());
         assertEquals("user-1", saved.getLastModifiedBy());
         assertEquals("place-2", saved.getPlaceId());
+        assertEquals("GOOGLE_MAPS", saved.getExternalSource());
+        assertEquals("gm-2", saved.getExternalId());
+        assertEquals("New Name", saved.getPlaceName());
         assertTrue(resultPayload.contains("\"serverVersion\":15"));
         assertTrue(resultPayload.contains("\"name\":\"New Name\""));
-        verify(placeIdentityService).resolveInternalPlaceId("FAVORITE", "fav-2", 10.0, 20.0, "New Name");
+        verify(placeIdentityService).resolveInternalPlaceId("GOOGLE_MAPS", "gm-2", 10.0, 20.0, "New Name");
     }
 
     @Test
-    void applyPushedChange_WhenPlaceResolutionDataAccessFails_StillSavesFavorite() {
+    void applyPushedChange_WhenPlaceResolutionDataAccessFails_ThrowsIllegalStateException() {
         SyncChange pushed = new SyncChange();
         pushed.setEntityId("fav-3");
         pushed.setOperation("UPDATE");
-        String json = "{\"id\":\"fav-3\",\"name\":\"Fallback Name\",\"latitude\":10.0,\"longitude\":20.0,\"rating\":4}";
+        String json = "{\"id\":\"fav-3\",\"name\":\"Fallback Name\",\"placeName\":\"Fallback Name\",\"externalSource\":\"GOOGLE_MAPS\",\"externalId\":\"gm-3\",\"latitude\":10.0,\"longitude\":20.0,\"rating\":4}";
         pushed.setPayload(json);
 
         Favorite existing = new Favorite();
@@ -114,43 +122,29 @@ class FavoriteSyncEntityHandlerTest {
         existing.setUserId("user-1");
 
         when(favoriteRepository.findByIdAndUserId("fav-3", "user-1")).thenReturn(Optional.of(existing));
-        when(placeIdentityService.resolveInternalPlaceId("FAVORITE", "fav-3", 10.0, 20.0, "Fallback Name"))
-                .thenThrow(new DataAccessResourceFailureException("mongo unavailable"));
+        when(placeIdentityService.resolveInternalPlaceId("GOOGLE_MAPS", "gm-3", 10.0, 20.0, "Fallback Name"))
+            .thenThrow(new DataAccessResourceFailureException("mongo unavailable"));
 
-        String resultPayload = handler.applyPushedChange(pushed, "user-1", 25L);
+        assertThrows(IllegalStateException.class,
+            () -> handler.applyPushedChangeResult(pushed, "user-1", () -> 25L));
 
-        ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
-        verify(favoriteRepository).save(captor.capture());
-        Favorite saved = captor.getValue();
-
-        assertEquals("fav-3", saved.getId());
-        assertEquals("Fallback Name", saved.getName());
-        assertEquals(25L, saved.getServerVersion());
-        assertNull(saved.getPlaceId());
-        assertTrue(resultPayload.contains("\"serverVersion\":25"));
-        verify(placeIdentityService).resolveInternalPlaceId("FAVORITE", "fav-3", 10.0, 20.0, "Fallback Name");
+        verify(favoriteRepository, never()).save(any(Favorite.class));
+        verify(placeIdentityService).resolveInternalPlaceId("GOOGLE_MAPS", "gm-3", 10.0, 20.0, "Fallback Name");
     }
 
     @Test
-    void applyPushedChange_WhenCreate_CreatesNewFavorite() {
+    void applyPushedChange_WhenCreateWithoutIdentitySeed_IsRejectedValidation() {
         SyncChange pushed = new SyncChange();
         pushed.setEntityId("fav-new");
         pushed.setOperation("CREATE");
         String json = "{\"id\":\"fav-new\",\"name\":\"Created\"}";
         pushed.setPayload(json);
 
-        when(favoriteRepository.findByIdAndUserId("fav-new", "user-1")).thenReturn(Optional.empty());
+        SyncPushApplyResult result = handler.applyPushedChangeResult(pushed, "user-1", () -> 20L);
 
-        handler.applyPushedChange(pushed, "user-1", 20L);
-
-        ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
-        verify(favoriteRepository).save(captor.capture());
-        Favorite saved = captor.getValue();
-
-        assertEquals("fav-new", saved.getId());
-        assertEquals("Created", saved.getName());
-        assertEquals("user-1", saved.getUserId());
-        assertEquals(20L, saved.getServerVersion());
+        assertEquals(SyncPushApplyResult.STATUS_REJECTED_VALIDATION, result.getStatus());
+        assertEquals("MISSING_CANONICAL_IDENTITY_SEED", result.getReasonCode());
+        verify(favoriteRepository, never()).save(any(Favorite.class));
         verifyNoInteractions(placeIdentityService);
     }
 

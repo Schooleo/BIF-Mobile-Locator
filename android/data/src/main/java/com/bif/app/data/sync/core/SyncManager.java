@@ -2,16 +2,19 @@ package com.bif.app.data.sync.core;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.location.Address;
 import android.util.Log;
 
 import androidx.lifecycle.LiveData;
 
 import com.bif.app.core.network.RestApiService;
+import com.bif.app.core.network.dto.favorite.FavoriteDto;
 import com.bif.app.core.network.dto.chat.ChatMessageDto;
 import com.bif.app.core.network.dto.sync.SyncChangeDto;
 import com.bif.app.core.network.dto.sync.SyncPushResultDto;
 import com.bif.app.core.network.dto.sync.SyncRequestDto;
 import com.bif.app.core.network.dto.sync.SyncResponseDto;
+import com.bif.app.data.mapper.FavoriteMapper;
 import com.bif.app.data.source.local.dao.ChatMessageDao;
 import com.bif.app.data.source.local.dao.FriendDao;
 import com.bif.app.data.source.local.dao.FriendshipDao;
@@ -24,7 +27,9 @@ import com.bif.app.data.source.local.dao.SyncQueueDao;
 import com.bif.app.data.source.local.dao.TripDao;
 import com.bif.app.data.source.local.database.AppDatabase;
 import com.bif.app.data.source.local.entity.ChatMessageEntity;
+import com.bif.app.data.source.local.entity.FavoriteEntity;
 import com.bif.app.data.source.local.entity.GroupEntity;
+import com.bif.app.data.source.local.entity.PlaceEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 import com.bif.app.data.sync.handler.ChatMessageSyncEntityHandler;
 import com.bif.app.data.sync.handler.FavoriteSyncEntityHandler;
@@ -35,6 +40,7 @@ import com.bif.app.data.sync.handler.ReviewSyncEntityHandler;
 import com.bif.app.data.sync.handler.SyncEntityHandler;
 import com.bif.app.data.sync.handler.TripStopSyncEntityHandler;
 import com.bif.app.data.sync.handler.TripSyncEntityHandler;
+import com.bif.app.data.source.AndroidGeocodingDataSource;
 import com.bif.app.domain.sync.ISyncInitializable;
 import com.google.gson.Gson;
 
@@ -81,15 +87,18 @@ public class SyncManager implements ISyncInitializable {
     private final RestApiService restApiService;
     private final SyncQueueDao syncQueueDao;
     private final FavoriteDao favoriteDao;
+    private final PlaceDao placeDao;
     private final ChatMessageDao chatMessageDao;
     private final GroupDao groupDao;
     private final NetworkMonitor networkMonitor;
+    private final AndroidGeocodingDataSource geocodingDataSource;
     private final SharedPreferences syncPrefs;
     private final Gson gson;
     private final Map<String, SyncEntityHandler> handlersByEntityType;
     private final Context appContext;
     private final ExecutorService enqueueExecutor;
     private final ExecutorService reconnectSyncExecutor;
+    private final AppDatabase appDatabase;
 
     private String userId;
     private String deviceId;
@@ -124,35 +133,54 @@ public class SyncManager implements ISyncInitializable {
             ReviewDao reviewDao,
             AppDatabase appDatabase,
             NetworkMonitor networkMonitor,
+            AndroidGeocodingDataSource geocodingDataSource,
             @ApplicationContext Context appContext) {
         this.restApiService = restApiService;
         this.syncQueueDao = syncQueueDao;
         this.favoriteDao = favoriteDao;
+        this.placeDao = placeDao;
         this.chatMessageDao = chatMessageDao;
         this.groupDao = groupDao;
         this.networkMonitor = networkMonitor;
-        this.syncPrefs = appContext.getSharedPreferences(PREF_NAME,
-                Context.MODE_PRIVATE);
+        this.geocodingDataSource = geocodingDataSource;
+        this.syncPrefs = appContext != null
+            ? appContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            : null;
         this.gson = new Gson();
         this.appContext = appContext;
+        this.appDatabase = appDatabase;
         this.enqueueExecutor = Executors.newSingleThreadExecutor();
         this.handlersByEntityType = new HashMap<>();
         this.reconnectSyncExecutor = Executors.newSingleThreadExecutor();
         this.lastObservedOnline = networkMonitor.isOnline();
 
-        registerHandler(new PlaceSyncEntityHandler(placeDao, gson));
-        registerHandler(new TripSyncEntityHandler(tripDao, gson));
-        registerHandler(new TripStopSyncEntityHandler(tripDao, gson));
-        registerHandler(new ChatMessageSyncEntityHandler(chatMessageDao, gson));
-        registerHandler(new GroupSyncEntityHandler(groupDao, gson));
-        registerHandler(new FavoriteSyncEntityHandler(favoriteDao, gson));
-        registerHandler(new ProfileSyncEntityHandler(profileDao, gson, appContext));
-        registerHandler(new ReviewSyncEntityHandler(
-                reviewDao,
-                placeDao,
-                syncQueueDao,
-                appDatabase,
-                gson));
+        if (placeDao != null) {
+            registerHandler(new PlaceSyncEntityHandler(placeDao, gson));
+        }
+        if (tripDao != null) {
+            registerHandler(new TripSyncEntityHandler(tripDao, gson));
+            registerHandler(new TripStopSyncEntityHandler(tripDao, gson));
+        }
+        if (chatMessageDao != null) {
+            registerHandler(new ChatMessageSyncEntityHandler(chatMessageDao, gson));
+        }
+        if (groupDao != null) {
+            registerHandler(new GroupSyncEntityHandler(groupDao, gson));
+        }
+        if (favoriteDao != null) {
+            registerHandler(new FavoriteSyncEntityHandler(favoriteDao, gson));
+        }
+        if (profileDao != null && appContext != null) {
+            registerHandler(new ProfileSyncEntityHandler(profileDao, gson, appContext));
+        }
+        if (reviewDao != null && placeDao != null && syncQueueDao != null && appDatabase != null) {
+            registerHandler(new ReviewSyncEntityHandler(
+                    reviewDao,
+                    placeDao,
+                    syncQueueDao,
+                    appDatabase,
+                    gson));
+        }
 
         loadPersistedSyncState();
         registerReconnectAutoSync();
@@ -161,21 +189,19 @@ public class SyncManager implements ISyncInitializable {
     SyncManager(RestApiService restApiService,
             SyncQueueDao syncQueueDao,
             NetworkMonitor networkMonitor) {
-        this.restApiService = restApiService;
-        this.syncQueueDao = syncQueueDao;
-        this.favoriteDao = null;
-        this.chatMessageDao = null;
-        this.groupDao = null;
-        this.networkMonitor = networkMonitor;
-        this.syncPrefs = null;
-        this.appContext = null;
-        this.gson = new Gson();
-        this.enqueueExecutor = Executors.newSingleThreadExecutor();
-        this.handlersByEntityType = new HashMap<>();
-        this.reconnectSyncExecutor = Executors.newSingleThreadExecutor();
-        this.lastObservedOnline = networkMonitor != null
-                && networkMonitor.isOnline();
-        registerReconnectAutoSync();
+        this(restApiService, syncQueueDao, null, null, null, null, null,
+            null, null, null, null, null, networkMonitor, null, null);
+    }
+
+    SyncManager(RestApiService restApiService,
+                SyncQueueDao syncQueueDao,
+                FavoriteDao favoriteDao,
+                PlaceDao placeDao,
+                AndroidGeocodingDataSource geocodingDataSource,
+                NetworkMonitor networkMonitor) {
+        this(restApiService, syncQueueDao, placeDao, null, null, null,
+            null, null, favoriteDao, null, null, null,
+            networkMonitor, geocodingDataSource, null);
     }
 
     @Override
@@ -257,6 +283,7 @@ public class SyncManager implements ISyncInitializable {
         request.lastPulledVersion = lastPulledVersion;
 
         List<SyncQueueEntity> pending = syncQueueDao.getPendingForUser(userId);
+        promotePreviewFavoritesBeforeSync(pending, userId);
         List<SyncChangeDto> pushedChanges = new ArrayList<>();
         List<SyncQueueEntity> pushedEntries = new ArrayList<>();
         for (SyncQueueEntity entry : pending) {
@@ -297,6 +324,7 @@ public class SyncManager implements ISyncInitializable {
                 applyPulledChanges(syncResponse.pulledChanges);
                 hydrateChatCachesForAllGroups();
 
+                Log.d(TAG, "sync: updating lastPulledVersion to " + syncResponse.currentServerVersion);
                 setLastPulledVersion(syncResponse.currentServerVersion);
 
                 if (syncResponse.conflicts != null) {
@@ -482,22 +510,40 @@ public class SyncManager implements ISyncInitializable {
     }
 
     private void applyPulledChanges(List<SyncChangeDto> pulledChanges) {
+
         if (pulledChanges == null || pulledChanges.isEmpty()) {
             return;
         }
 
-        for (SyncChangeDto change : pulledChanges) {
-            if (change.entityType == null) {
-                continue;
-            }
 
-            SyncEntityHandler handler = handlersByEntityType.get(
-                    change.entityType.toLowerCase(Locale.ROOT));
-            if (handler == null) {
-                continue;
+        if (appDatabase != null) {
+
+            appDatabase.runInTransaction(() -> {
+                for (SyncChangeDto change : pulledChanges) {
+                    applySingleChange(change);
+                }
+            });
+
+        } else {
+            for (SyncChangeDto change : pulledChanges) {
+                applySingleChange(change);
             }
-            handler.applyPulledChange(change, userId);
         }
+    }
+
+    private void applySingleChange(SyncChangeDto change) {
+        if (change.entityType == null) {
+            return;
+        }
+
+        SyncEntityHandler handler = handlersByEntityType.get(
+                change.entityType.toLowerCase(Locale.ROOT));
+        if (handler == null) {
+            Log.w(TAG, "applyPulledChanges: no handler for entityType=" + change.entityType);
+            return;
+        }
+
+        handler.applyPulledChange(change, userId);
     }
 
     private void hydrateChatCachesForAllGroups() {
@@ -745,5 +791,127 @@ public class SyncManager implements ISyncInitializable {
             Log.w(TAG, "Failed to clear pendingSync for favorite entityId="
                     + queueEntry.entityId, exception);
         }
+    }
+
+    private void promotePreviewFavoritesBeforeSync(List<SyncQueueEntity> pending,
+                                                   String activeUserId) {
+        if (pending == null || pending.isEmpty()
+                || favoriteDao == null
+                || geocodingDataSource == null) {
+            return;
+        }
+
+        for (SyncQueueEntity entry : pending) {
+            if (entry == null
+                    || entry.entityType == null
+                    || !"favorite".equalsIgnoreCase(entry.entityType)
+                    || entry.entityId == null
+                    || entry.entityId.trim().isEmpty()) {
+                continue;
+            }
+
+            try {
+                FavoriteEntity localFavorite = favoriteDao.findById(
+                        entry.entityId.trim(), activeUserId);
+                if (localFavorite == null || !isPreviewFavorite(localFavorite)) {
+                    continue;
+                }
+
+                FavoriteEntity promoted = promotePreviewFavorite(localFavorite);
+                if (promoted == null) {
+                    continue;
+                }
+
+                favoriteDao.update(promoted);
+                FavoriteDto dto = FavoriteMapper.toDto(
+                        FavoriteMapper.toDomain(promoted), activeUserId);
+                entry.payload = gson.toJson(dto);
+                syncQueueDao.update(entry);
+            } catch (Exception exception) {
+                Log.w(TAG, "Failed to promote preview favorite before sync. entityId="
+                        + entry.entityId, exception);
+            }
+        }
+    }
+
+    private FavoriteEntity promotePreviewFavorite(FavoriteEntity favorite) {
+        if (favorite == null || favorite.latitude == 0.0d && favorite.longitude == 0.0d) {
+            return null;
+        }
+
+        List<Address> addresses = geocodingDataSource.reverseGeocodeLocation(
+                favorite.latitude,
+                favorite.longitude);
+        if (addresses == null || addresses.isEmpty() || addresses.get(0) == null) {
+            return null;
+        }
+
+        Address address = addresses.get(0);
+        String resolvedName = trimToNull(address.getFeatureName());
+        String resolvedAddress = trimToNull(address.getAddressLine(0));
+        if (resolvedName == null && resolvedAddress == null) {
+            return null;
+        }
+
+        FavoriteEntity promoted = copyFavoriteEntity(favorite);
+        if (resolvedName != null) {
+            promoted.name = resolvedName;
+            promoted.placeName = resolvedName;
+        }
+        if (resolvedAddress != null) {
+            promoted.address = resolvedAddress;
+        }
+        promoted.externalSource = com.bif.app.domain.model.Place.SOURCE_OSM;
+        promoted.externalId = null;
+        return promoted;
+    }
+
+    private FavoriteEntity copyFavoriteEntity(FavoriteEntity source) {
+        if (source == null) {
+            return null;
+        }
+
+        FavoriteEntity copy = new FavoriteEntity();
+        copy.id = source.id;
+        copy.placeId = source.placeId;
+        copy.externalSource = source.externalSource;
+        copy.externalId = source.externalId;
+        copy.placeName = source.placeName;
+        copy.name = source.name;
+        copy.latitude = source.latitude;
+        copy.longitude = source.longitude;
+        copy.address = source.address;
+        copy.description = source.description;
+        copy.notes = source.notes;
+        copy.rating = source.rating;
+        copy.imagePath = source.imagePath;
+        copy.userId = source.userId;
+        copy.serverVersion = source.serverVersion;
+        copy.deleted = source.deleted;
+        copy.pendingSync = source.pendingSync;
+        return copy;
+    }
+
+    private boolean isPreviewFavorite(FavoriteEntity favorite) {
+        return favorite != null
+                && (isPreviewSource(favorite.externalSource)
+                || isBlank(favorite.externalSource));
+    }
+
+    private boolean isPreviewSource(String value) {
+        return value != null
+                && com.bif.app.domain.model.Place.SOURCE_PREVIEW.equalsIgnoreCase(value.trim());
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 }

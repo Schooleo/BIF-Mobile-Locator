@@ -22,7 +22,14 @@ public class ChatMessage extends SyncDocument {
     private Instant sentAt;
     private String clientMessageId;
 
-    private String type = "TEXT";
+    public static final String TYPE_TEXT = "TEXT";
+    public static final String TYPE_LOCATION = "LOCATION";
+    public static final String TYPE_EVENT = "EVENT";
+    public static final String TYPE_TRIP_CREATED_CARD = "TRIP_CREATED_CARD";
+    public static final String TYPE_AI_SUGGESTED_PLACES_CARD = "AI_SUGGESTED_PLACES_CARD";
+    public static final String TYPE_PLACE_SHARE_CARD = "PLACE_SHARE_CARD";
+
+    private String type = TYPE_TEXT;
     private Location sharedLocation;
     private String sharedAddress;
     private boolean confirmed;
