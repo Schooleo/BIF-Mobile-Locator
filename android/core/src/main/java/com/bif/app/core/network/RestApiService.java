@@ -17,7 +17,6 @@ import com.bif.app.core.network.dto.auth.RegisterOtpRequest;
 import com.bif.app.core.network.dto.auth.RegisterOtpResponse;
 import com.bif.app.core.network.dto.auth.RegisterVerifyOtpRequest;
 import com.bif.app.core.network.dto.auth.RegisterVerifyOtpResponse;
-import com.bif.app.core.network.dto.favorite.FavoriteRequestDto;
 import com.bif.app.core.network.dto.favorite.FavoriteResponseDto;
 import com.bif.app.core.network.dto.friendship.CreateFriendRequestDto;
 import com.bif.app.core.network.dto.friendship.FriendshipApiModel;

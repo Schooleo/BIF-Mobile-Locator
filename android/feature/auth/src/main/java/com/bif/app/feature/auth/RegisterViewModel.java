@@ -18,7 +18,7 @@ import java.util.concurrent.Executors;
 public class RegisterViewModel extends ViewModel {
 
     private static final int OTP_LENGTH = 6;
-    private static final int MIN_PASSWORD_LENGTH = 6;
+    private static final int MIN_PASSWORD_LENGTH = 8;
 
     private final MutableLiveData<Boolean> sendOtpEnabled = new MutableLiveData<>(false);
     private final MutableLiveData<Boolean> otpEnabled = new MutableLiveData<>(false);
@@ -64,6 +64,20 @@ public class RegisterViewModel extends ViewModel {
 
     public LiveData<UiState> getRegisterState() {
         return registerState;
+    }
+
+    public void clearRequestOtpState() {
+        UiState current = requestOtpState.getValue();
+        if (current instanceof UiState.Success || current instanceof UiState.Error) {
+            requestOtpState.setValue(new UiState.Idle());
+        }
+    }
+
+    public void clearRegisterState() {
+        UiState current = registerState.getValue();
+        if (current instanceof UiState.Success || current instanceof UiState.Error) {
+            registerState.setValue(new UiState.Idle());
+        }
     }
 
     public void onEmailChanged(String value) {
@@ -124,6 +138,7 @@ public class RegisterViewModel extends ViewModel {
         String resolvedEmail = this.email;
         String resolvedOtp = otp == null ? "" : otp.trim();
         String resolvedUsername = this.username;
+        String resolvedConfirm = confirmPassword == null ? "" : confirmPassword;
 
         ioExecutor.execute(() -> {
             AuthRepository.Result<?> verifyResult = authRepository.verifyRegisterOtp(resolvedEmail, resolvedOtp);
@@ -136,7 +151,7 @@ public class RegisterViewModel extends ViewModel {
                     resolvedUsername,
                     resolvedEmail,
                     password,
-                    confirmPassword);
+                    resolvedConfirm);
             if (registerResult instanceof AuthRepository.Result.Success) {
                 registerState.postValue(new UiState.Success());
                 return;

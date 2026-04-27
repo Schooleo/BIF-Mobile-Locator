@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -31,61 +32,41 @@ public class EmailService {
         this.restTemplate = restTemplate;
     }
 
+    @Async("emailTaskExecutor")
     public void sendOtpEmail(String toEmail, String otp) {
-        String maskedToEmail = maskEmail(toEmail);
-        if (apiKey == null || apiKey.isBlank()) {
-            log.warn("brevo.api.key is not configured. Email will not be sent (recipient={})", maskedToEmail);
-            return;
-        }
-
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("api-key", apiKey);
-
-            Map<String, Object> body = new HashMap<>();
-
-            // Sender
-            body.put("sender", Map.of("name", "BIF Mobile Locator", "email", senderEmail));
-
-            // To
-            body.put("to", List.of(Map.of("email", toEmail)));
-
-            // Subject
-            body.put("subject", "Reset Password OTP");
-
-            // Content
-            String textContent = String.format("Your OTP is %s. This OTP will expire in 5 minutes.", otp);
-            body.put("textContent", textContent);
-            
-            // HTML content (optional, added for better UX)
-            String htmlContent = String.format(
-                    "<h2>Your OTP Code</h2>" +
-                    "<p>Your OTP is: <b>%s</b></p>" +
-                    "<p>This code expires in 5 minutes.</p>", otp);
-            body.put("htmlContent", htmlContent);
-
-            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(body, headers);
-
-            ResponseEntity<String> response = restTemplate.postForEntity(BREVO_API_URL, requestEntity, String.class);
-
-            if (response.getStatusCode().is2xxSuccessful()) {
-                log.info("OTP email sent (recipient={}, status={})", maskedToEmail, response.getStatusCode());
-            } else {
-                String responseSummary = summarizeResponseBody(response.getBody());
-                log.error("Failed to send email (recipient={}, status={}, reason={})",
-                        maskedToEmail, response.getStatusCode(), responseSummary);
-                if (log.isDebugEnabled()) {
-                    log.debug("Brevo failure response body (recipient={}): {}", maskedToEmail, response.getBody());
-                }
-            }
-
-        } catch (Exception e) {
-            log.error("Exception occurred while sending email (recipient={})", maskedToEmail, e);
-        }
+        String textContent = String.format("Your OTP is %s. This OTP will expire in 5 minutes.", otp);
+        String htmlContent = String.format(
+                "<h2>Your OTP Code</h2>" +
+                "<p>Your OTP is: <b>%s</b></p>" +
+                "<p>This code expires in 5 minutes.</p>", otp);
+        sendEmailWithTemplate(
+                toEmail,
+                "Reset Password OTP",
+                textContent,
+                htmlContent,
+                "OTP email sent");
     }
 
+    @Async("emailTaskExecutor")
     public void sendRegisterOtpEmail(String toEmail, String otp) {
+        String textContent = String.format("Your registration OTP is %s. This OTP will expire in 5 minutes.", otp);
+        String htmlContent = String.format(
+                "<h2>Your Registration OTP</h2>" +
+                "<p>Your OTP is: <b>%s</b></p>" +
+                "<p>This code expires in 5 minutes.</p>", otp);
+        sendEmailWithTemplate(
+                toEmail,
+                "Registration OTP",
+                textContent,
+                htmlContent,
+                "Registration OTP email sent");
+    }
+
+    private void sendEmailWithTemplate(String toEmail,
+                                       String subject,
+                                       String textContent,
+                                       String htmlContent,
+                                       String successLogMessage) {
         String maskedToEmail = maskEmail(toEmail);
         if (apiKey == null || apiKey.isBlank()) {
             log.warn("brevo.api.key is not configured. Email will not be sent (recipient={})", maskedToEmail);
@@ -106,17 +87,10 @@ public class EmailService {
             body.put("to", List.of(Map.of("email", toEmail)));
 
             // Subject
-            body.put("subject", "Registration OTP");
+            body.put("subject", subject);
 
             // Content
-            String textContent = String.format("Your registration OTP is %s. This OTP will expire in 5 minutes.", otp);
             body.put("textContent", textContent);
-            
-            // HTML content (optional, added for better UX)
-            String htmlContent = String.format(
-                    "<h2>Your Registration OTP</h2>" +
-                    "<p>Your OTP is: <b>%s</b></p>" +
-                    "<p>This code expires in 5 minutes.</p>", otp);
             body.put("htmlContent", htmlContent);
 
             HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(body, headers);
@@ -124,7 +98,7 @@ public class EmailService {
             ResponseEntity<String> response = restTemplate.postForEntity(BREVO_API_URL, requestEntity, String.class);
 
             if (response.getStatusCode().is2xxSuccessful()) {
-                log.info("Registration OTP email sent (recipient={}, status={})", maskedToEmail, response.getStatusCode());
+                log.info("{} (recipient={}, status={})", successLogMessage, maskedToEmail, response.getStatusCode());
             } else {
                 String responseSummary = summarizeResponseBody(response.getBody());
                 log.error("Failed to send email (recipient={}, status={}, reason={})",
@@ -147,7 +121,12 @@ public class EmailService {
         if (atIndex <= 0 || atIndex == email.length() - 1) {
             return "***";
         }
-        return email.charAt(0) + "***" + email.substring(atIndex);
+        String localPart = email.substring(0, atIndex);
+        String domain = email.substring(atIndex);
+        if (localPart.length() < 3) {
+            return "***" + domain;
+        }
+        return localPart.charAt(0) + "***" + domain;
     }
 
     private String summarizeResponseBody(String responseBody) {

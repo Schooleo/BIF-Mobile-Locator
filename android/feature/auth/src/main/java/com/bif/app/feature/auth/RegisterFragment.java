@@ -99,6 +99,7 @@ public class RegisterFragment extends Fragment {
                 btnSendOtp.setEnabled(true);
                 Toast.makeText(requireContext(), "OTP sent", Toast.LENGTH_SHORT).show();
                 viewModel.onSendOtpClicked();
+                viewModel.clearRequestOtpState();
                 return;
             }
 
@@ -106,6 +107,7 @@ public class RegisterFragment extends Fragment {
                 btnSendOtp.setEnabled(true);
                 String message = ((RegisterViewModel.UiState.Error) state).getMessage();
                 Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+                viewModel.clearRequestOtpState();
             }
         });
 
@@ -120,6 +122,7 @@ public class RegisterFragment extends Fragment {
             if (state instanceof RegisterViewModel.UiState.Success) {
                 Toast.makeText(requireContext(), "Register success", Toast.LENGTH_SHORT).show();
                 navController.navigate(UriUtils.buildUri("/login"));
+                viewModel.clearRegisterState();
                 return;
             }
 
@@ -130,6 +133,7 @@ public class RegisterFragment extends Fragment {
                     etOtp.requestFocus();
                 }
                 Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+                viewModel.clearRegisterState();
             }
         });
 

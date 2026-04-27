@@ -148,6 +148,9 @@ public class AuthController {
         }
 
         String userId = authentication.getPrincipal().toString();
+        if (userId.isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         
         try {
             ChangePasswordResponse response = authService.changePassword(userId, request);
