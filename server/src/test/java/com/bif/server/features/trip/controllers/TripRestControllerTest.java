@@ -12,6 +12,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import java.security.Principal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -115,9 +116,12 @@ class TripRestControllerTest {
         plan.setStops(new ArrayList<>());
         TripStop stop = new TripStop();
         stop.setTitle("Central Park");
-        when(tripService.addStop("t1", stop)).thenReturn(Optional.of(plan));
+        when(tripService.addStop("t1", "u1", stop)).thenReturn(Optional.of(plan));
 
-        ResponseEntity<TripPlan> result = controller.addStop("t1", stop, "u1");
+        Principal principal = mock(Principal.class);
+        when(principal.getName()).thenReturn("u1");
+
+        ResponseEntity<TripPlan> result = controller.addStop("t1", stop, principal);
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
         verify(tripActivityService).postStopAdded(plan, stop, "u1");
@@ -125,10 +129,13 @@ class TripRestControllerTest {
 
     @Test
     void addStop_WhenMissing_ReturnsNotFound() {
-        when(tripService.addStop(eq("t1"), any())).thenReturn(Optional.empty());
+        when(tripService.addStop(eq("t1"), eq("u1"), any())).thenReturn(Optional.empty());
+
+        Principal principal = mock(Principal.class);
+        when(principal.getName()).thenReturn("u1");
 
         ResponseEntity<TripPlan> result =
-                controller.addStop("t1", new TripStop(), "u1");
+                controller.addStop("t1", new TripStop(), principal);
 
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
     }
@@ -136,9 +143,12 @@ class TripRestControllerTest {
     @Test
     void removeStop_WhenFound_ReturnsOk() {
         TripPlan plan = new TripPlan();
-        when(tripService.removeStop("t1", "s1")).thenReturn(Optional.of(plan));
+        when(tripService.removeStop("t1", "u1", "s1")).thenReturn(Optional.of(plan));
 
-        ResponseEntity<TripPlan> result = controller.removeStop("t1", "s1", "u1");
+        Principal principal = mock(Principal.class);
+        when(principal.getName()).thenReturn("u1");
+
+        ResponseEntity<TripPlan> result = controller.removeStop("t1", "s1", principal);
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
         verify(tripActivityService).postStopRemoved(plan, "s1", "u1");
@@ -146,9 +156,12 @@ class TripRestControllerTest {
 
     @Test
     void removeStop_WhenMissing_ReturnsNotFound() {
-        when(tripService.removeStop("t1", "s1")).thenReturn(Optional.empty());
+        when(tripService.removeStop("t1", "u1", "s1")).thenReturn(Optional.empty());
 
-        ResponseEntity<TripPlan> result = controller.removeStop("t1", "s1", "u1");
+        Principal principal = mock(Principal.class);
+        when(principal.getName()).thenReturn("u1");
+
+        ResponseEntity<TripPlan> result = controller.removeStop("t1", "s1", principal);
 
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
     }
@@ -160,13 +173,16 @@ class TripRestControllerTest {
         stop.setId("s1");
         stop.setOrderIndex(0);
         List<TripStop> stops = List.of(stop);
-        when(tripService.rearrangeStops(eq("t1"), any())).thenReturn(Optional.of(plan));
+        when(tripService.rearrangeStops(eq("t1"), eq("u1"), any())).thenReturn(Optional.of(plan));
+
+        Principal principal = mock(Principal.class);
+        when(principal.getName()).thenReturn("u1");
 
         ResponseEntity<TripPlan> result =
-                controller.rearrangeStops("t1", stops, "u1");
+                controller.rearrangeStops("t1", stops, principal);
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
-        verify(tripService).rearrangeStops(eq("t1"), argThat(inputs ->
+        verify(tripService).rearrangeStops(eq("t1"), eq("u1"), argThat(inputs ->
             inputs != null
                 && inputs.size() == 1
                 && "s1".equals(inputs.get(0).getId())
@@ -176,10 +192,13 @@ class TripRestControllerTest {
 
     @Test
     void rearrangeStops_WhenMissing_ReturnsNotFound() {
-        when(tripService.rearrangeStops(eq("t1"), any())).thenReturn(Optional.empty());
+        when(tripService.rearrangeStops(eq("t1"), eq("u1"), any())).thenReturn(Optional.empty());
+
+        Principal principal = mock(Principal.class);
+        when(principal.getName()).thenReturn("u1");
 
         ResponseEntity<TripPlan> result =
-                controller.rearrangeStops("t1", List.of(), "u1");
+                controller.rearrangeStops("t1", List.of(), principal);
 
         assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
     }

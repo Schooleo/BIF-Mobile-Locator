@@ -8,6 +8,7 @@ import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.stereotype.Controller;
+import java.security.Principal;
 
 import java.util.List;
 
@@ -41,20 +42,26 @@ public class TripGraphqlController {
 
     @MutationMapping
     public TripPlan addTripStop(@Argument String tripId,
-                                @Argument TripStop input) {
-        return tripService.addStop(tripId, input).orElse(null);
+                                @Argument TripStop input,
+                                Principal principal) {
+        String userId = principal != null ? principal.getName() : null;
+        return tripService.addStop(tripId, userId, input).orElse(null);
     }
 
     @MutationMapping
     public TripPlan removeTripStop(@Argument String tripId,
-                                   @Argument String stopId) {
-        return tripService.removeStop(tripId, stopId).orElse(null);
+                                   @Argument String stopId,
+                                   Principal principal) {
+        String userId = principal != null ? principal.getName() : null;
+        return tripService.removeStop(tripId, userId, stopId).orElse(null);
     }
 
     @MutationMapping
     public TripPlan rearrangeTripStops(@Argument String tripId,
-                                       @Argument List<RearrangeStopInput> stops) {
-        return tripService.rearrangeStops(tripId, stops).orElse(null);
+                                       @Argument List<RearrangeStopInput> stops,
+                                       Principal principal) {
+        String userId = principal != null ? principal.getName() : null;
+        return tripService.rearrangeStops(tripId, userId, stops).orElse(null);
     }
 
     @MutationMapping
