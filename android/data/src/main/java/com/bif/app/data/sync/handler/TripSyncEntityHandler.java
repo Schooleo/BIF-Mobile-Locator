@@ -6,6 +6,7 @@ import com.bif.app.core.network.dto.sync.SyncChangeDto;
 import com.bif.app.core.network.dto.trip.TripPlanDto;
 import com.bif.app.data.source.local.dao.TripDao;
 import com.bif.app.data.source.local.entity.TripPlanEntity;
+import com.bif.app.data.source.local.entity.UploadStatus;
 import com.google.gson.Gson;
 
 public class TripSyncEntityHandler implements SyncEntityHandler {
@@ -84,14 +85,37 @@ public class TripSyncEntityHandler implements SyncEntityHandler {
                     || !userIsParticipant;
 
             TripPlanEntity existing = tripDao.getTripByIdSync(payload.id);
+            long incomingVersion = Math.max(payload.serverVersion, change.serverVersion);
+            if (existing != null && existing.serverVersion > incomingVersion) {
+                return;
+            }
             TripPlanEntity entity = existing != null ? existing : new TripPlanEntity();
             entity.id = payload.id;
             entity.groupId = payload.groupId;
             entity.title = payload.title;
             entity.description = payload.description;
-            entity.startAt = parseInstant(payload.startAt);
-            entity.endAt = parseInstant(payload.endAt);
-            entity.serverVersion = Math.max(payload.serverVersion, change.serverVersion);
+
+            // Preserve cover image upload state from local entity
+            if (payload.coverImageUrl != null && !payload.coverImageUrl.trim().isEmpty()) {
+                entity.coverImageUrl = payload.coverImageUrl;
+            }
+            if (entity.coverUploadStatus == null || entity.coverUploadStatus == UploadStatus.SYNCED) {
+                entity.localCoverImagePath = null;
+                entity.coverUploadStatus = UploadStatus.SYNCED;
+            }
+
+            // Merge dates: only overwrite if incoming value is non-zero,
+            // otherwise preserve existing local dates.
+            long incomingStartAt = parseInstant(payload.startAt);
+            long incomingEndAt = parseInstant(payload.endAt);
+            if (incomingStartAt > 0L) {
+                entity.startAt = incomingStartAt;
+            }
+            if (incomingEndAt > 0L) {
+                entity.endAt = incomingEndAt;
+            }
+
+            entity.serverVersion = incomingVersion;
             entity.deleted = shouldMarkDeleted;
             tripDao.upsertTrip(entity);
             if (payload.participantIds != null && userIsParticipant) {
@@ -128,4 +152,3 @@ public class TripSyncEntityHandler implements SyncEntityHandler {
         }
     }
 }
-

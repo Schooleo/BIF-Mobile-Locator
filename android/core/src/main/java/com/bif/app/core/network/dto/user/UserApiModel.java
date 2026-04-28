@@ -11,6 +11,7 @@ public class UserApiModel {
     public String email;
     public String avatarLetter;
     public int avatarColor;
+    @SerializedName(value = "isOnline", alternate = {"online"})
     public boolean isOnline;
 }
 

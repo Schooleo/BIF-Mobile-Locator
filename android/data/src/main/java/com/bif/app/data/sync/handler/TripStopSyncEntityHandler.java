@@ -90,8 +90,18 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
             entity.photoUrl = payload.photoUrl;
             entity.latitude = payload.location != null ? payload.location.latitude : 0d;
             entity.longitude = payload.location != null ? payload.location.longitude : 0d;
-            entity.arrivalTime = parseInstant(payload.arrivalTime);
-            entity.departureTime = parseInstant(payload.departureTime);
+
+            // Merge times: only overwrite if incoming value is non-zero,
+            // otherwise preserve existing local times to avoid 'Unscheduled' flicker.
+            long incomingArrival = parseInstant(payload.arrivalTime);
+            long incomingDeparture = parseInstant(payload.departureTime);
+            if (incomingArrival > 0L) {
+                entity.arrivalTime = incomingArrival;
+            }
+            if (incomingDeparture > 0L) {
+                entity.departureTime = incomingDeparture;
+            }
+
             entity.orderIndex = payload.orderIndex;
             entity.serverVersion = incomingVersion;
             entity.deleted = payload.deleted || "DELETE".equalsIgnoreCase(change.operation);
@@ -149,5 +159,3 @@ public class TripStopSyncEntityHandler implements SyncEntityHandler {
         }
     }
 }
-
-

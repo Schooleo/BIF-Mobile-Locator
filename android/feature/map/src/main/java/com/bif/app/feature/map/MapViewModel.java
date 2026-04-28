@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.inject.Inject;
 
@@ -73,6 +74,45 @@ public class MapViewModel extends ViewModel {
         void onError(@NonNull String message);
     }
 
+    public static final class TripStopOverlay {
+        public final int orderIndex;
+        public final double latitude;
+        public final double longitude;
+        public final String title;
+        public final String address;
+        public final String note;
+        public final long timeMillis;
+
+        public TripStopOverlay(int orderIndex,
+                               double latitude,
+                               double longitude,
+                               @Nullable String title,
+                               @Nullable String address,
+                               @Nullable String note,
+                               long timeMillis) {
+            this.orderIndex = orderIndex;
+            this.latitude = latitude;
+            this.longitude = longitude;
+            this.title = title == null ? "" : title;
+            this.address = address == null ? "" : address;
+            this.note = note == null ? "" : note;
+            this.timeMillis = timeMillis;
+        }
+    }
+
+    public static final class TripLegRoute {
+        public final int fromIndex;
+        public final int toIndex;
+        @Nullable
+        public final String geometryJson;
+
+        public TripLegRoute(int fromIndex, int toIndex, @Nullable String geometryJson) {
+            this.fromIndex = fromIndex;
+            this.toIndex = toIndex;
+            this.geometryJson = geometryJson;
+        }
+    }
+
     private final MutableLiveData<Event<String>> _statusText = new MutableLiveData<>();
     public final LiveData<Event<String>> statusText = _statusText;
 
@@ -84,6 +124,18 @@ public class MapViewModel extends ViewModel {
 
     private final MutableLiveData<RouteSession> _routeSession = new MutableLiveData<>(RouteSession.idle());
     public final LiveData<RouteSession> routeSession = _routeSession;
+
+    private final MutableLiveData<List<TripStopOverlay>> _tripStopOverlay = new MutableLiveData<>(null);
+    public final LiveData<List<TripStopOverlay>> tripStopOverlay = _tripStopOverlay;
+
+    private final MutableLiveData<List<TripLegRoute>> _tripRouteLegs = new MutableLiveData<>(null);
+    public final LiveData<List<TripLegRoute>> tripRouteLegs = _tripRouteLegs;
+
+    private final MutableLiveData<Boolean> _isTripRouteLoading = new MutableLiveData<>(false);
+    public final LiveData<Boolean> isTripRouteLoading = _isTripRouteLoading;
+
+    private final MutableLiveData<Integer> _selectedTripStopIndex = new MutableLiveData<>(-1);
+    public final LiveData<Integer> selectedTripStopIndex = _selectedTripStopIndex;
 
     private final MutableLiveData<String> locationSearchQuery = new MutableLiveData<>();
     public final LiveData<Location> searchResult;
@@ -670,6 +722,60 @@ public class MapViewModel extends ViewModel {
         _routeSession.setValue(RouteSession.idle());
     }
 
+    public void setTripStops(@Nullable List<TripStopOverlay> stops) {
+        if (stops == null || stops.isEmpty()) {
+            clearTripOverlay();
+            return;
+        }
+
+        List<TripStopOverlay> normalized = new ArrayList<>(stops);
+        Collections.sort(normalized, (left, right) -> Integer.compare(left.orderIndex, right.orderIndex));
+        _tripStopOverlay.setValue(normalized);
+        _selectedTripStopIndex.setValue(-1);
+        fetchTripRouteLegs(normalized);
+    }
+
+    public void clearTripOverlay() {
+        _tripStopOverlay.setValue(null);
+        _tripRouteLegs.setValue(null);
+        _isTripRouteLoading.setValue(false);
+        _selectedTripStopIndex.setValue(-1);
+    }
+
+    public void selectTripStop(int index) {
+        List<TripStopOverlay> stops = _tripStopOverlay.getValue();
+        if (stops == null || stops.isEmpty()) {
+            _selectedTripStopIndex.setValue(-1);
+            return;
+        }
+        int clamped = Math.max(0, Math.min(index, stops.size() - 1));
+        _selectedTripStopIndex.setValue(clamped);
+    }
+
+    public void selectNextTripStop() {
+        List<TripStopOverlay> stops = _tripStopOverlay.getValue();
+        if (stops == null || stops.isEmpty()) {
+            _selectedTripStopIndex.setValue(-1);
+            return;
+        }
+        int current = safeSelectedTripStopIndex(stops.size());
+        _selectedTripStopIndex.setValue((current + 1) % stops.size());
+    }
+
+    public void selectPreviousTripStop() {
+        List<TripStopOverlay> stops = _tripStopOverlay.getValue();
+        if (stops == null || stops.isEmpty()) {
+            _selectedTripStopIndex.setValue(-1);
+            return;
+        }
+        int current = safeSelectedTripStopIndex(stops.size());
+        _selectedTripStopIndex.setValue((current - 1 + stops.size()) % stops.size());
+    }
+
+    public void dismissTripStopSelection() {
+        _selectedTripStopIndex.setValue(-1);
+    }
+
     public boolean hasActiveRouteSession() {
         RouteSession current = _routeSession.getValue();
         return current != null && current.isVisible();
@@ -806,6 +912,70 @@ public class MapViewModel extends ViewModel {
         routeLiveData.observeForever(observer);
     }
 
+    private void fetchTripRouteLegs(@NonNull List<TripStopOverlay> stops) {
+        if (stops.size() < 2) {
+            _tripRouteLegs.setValue(Collections.emptyList());
+            _isTripRouteLoading.setValue(false);
+            return;
+        }
+
+        int legCount = stops.size() - 1;
+        List<TripLegRoute> collected = new ArrayList<>(Collections.nCopies(legCount, null));
+        AtomicInteger remaining = new AtomicInteger(legCount);
+
+        _tripRouteLegs.setValue(Collections.emptyList());
+        _isTripRouteLoading.setValue(true);
+
+        for (int i = 0; i < legCount; i++) {
+            TripStopOverlay from = stops.get(i);
+            TripStopOverlay to = stops.get(i + 1);
+            List<Location> waypoints = Arrays.asList(
+                    new Location(from.latitude, from.longitude),
+                    new Location(to.latitude, to.longitude));
+
+            LiveData<Route> routeLiveData = routeRepository.getRoute(waypoints);
+            final int legIndex = i;
+            if (routeLiveData == null) {
+                onTripLegResolved(collected, legIndex, new TripLegRoute(legIndex, legIndex + 1, null), remaining);
+                continue;
+            }
+
+            Observer<Route> observer = new Observer<Route>() {
+                @Override
+                public void onChanged(Route route) {
+                    routeLiveData.removeObserver(this);
+                    String geometry = route != null ? route.getGeometryJson() : null;
+                    if (geometry != null && geometry.trim().isEmpty()) {
+                        geometry = null;
+                    }
+                    TripLegRoute leg = new TripLegRoute(legIndex, legIndex + 1, geometry);
+                    onTripLegResolved(collected, legIndex, leg, remaining);
+                }
+            };
+            routeLiveData.observeForever(observer);
+        }
+    }
+
+    private void onTripLegResolved(@NonNull List<TripLegRoute> collected,
+                                   int legIndex,
+                                   @NonNull TripLegRoute legRoute,
+                                   @NonNull AtomicInteger remaining) {
+        synchronized (collected) {
+            collected.set(legIndex, legRoute);
+            List<TripLegRoute> ready = new ArrayList<>();
+            for (TripLegRoute item : collected) {
+                if (item != null) {
+                    ready.add(item);
+                }
+            }
+            _tripRouteLegs.postValue(ready);
+        }
+
+        if (remaining.decrementAndGet() <= 0) {
+            _isTripRouteLoading.postValue(false);
+        }
+    }
+
     @NonNull
     private RouteSession buildReadySession(@Nullable Place destinationPlace, @NonNull Route route) {
         return RouteSession.ready(
@@ -882,6 +1052,14 @@ public class MapViewModel extends ViewModel {
             normalized += 360f;
         }
         return normalized;
+    }
+
+    private int safeSelectedTripStopIndex(int stopCount) {
+        Integer selected = _selectedTripStopIndex.getValue();
+        if (selected == null || selected < 0 || selected >= stopCount) {
+            return 0;
+        }
+        return selected;
     }
 
     @Override
