@@ -33,6 +33,7 @@ public class TripDetailViewModel extends ViewModel {
     private String currentTripId = "";
     private final MediatorLiveData<Boolean> hasUnreadGroupMessages = new MediatorLiveData<>();
     private final MutableLiveData<Integer> unreadRefreshToken = new MutableLiveData<>(0);
+    private final MutableLiveData<Boolean> isSyncing = new MutableLiveData<>(false);
 
     @Inject
     public TripDetailViewModel(ITripRepository tripRepository,
@@ -67,6 +68,10 @@ public class TripDetailViewModel extends ViewModel {
         return trip;
     }
 
+    public LiveData<Boolean> getIsSyncing() {
+        return isSyncing;
+    }
+
     public String getCurrentTripId() {
         return currentTripId;
     }
@@ -92,6 +97,7 @@ public class TripDetailViewModel extends ViewModel {
         if (currentTripId == null || currentTripId.trim().isEmpty()) {
             return;
         }
+        isSyncing.setValue(true);
         tripRepository.refreshTrips("");
         chatRepository.refreshMessages(currentTripId);
         refreshUnreadState();

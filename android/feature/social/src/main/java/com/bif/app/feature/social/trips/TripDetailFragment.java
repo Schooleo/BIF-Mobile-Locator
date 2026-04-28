@@ -138,6 +138,8 @@ public class TripDetailFragment extends Fragment {
             tripMemberCount = resolveTripMemberCount(trip);
             swipeRefreshLayout.setRefreshing(false);
         });
+        viewModel.getIsSyncing().observe(getViewLifecycleOwner(), syncing ->
+                swipeRefreshLayout.setRefreshing(Boolean.TRUE.equals(syncing)));
         viewModel.getHasUnreadGroupMessages().observe(getViewLifecycleOwner(), hasUnread -> unreadDot.setVisibility(Boolean.TRUE.equals(hasUnread) ? View.VISIBLE : View.GONE));
     }
 
