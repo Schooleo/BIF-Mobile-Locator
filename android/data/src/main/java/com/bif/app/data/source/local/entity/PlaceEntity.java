@@ -1,7 +1,6 @@
 package com.bif.app.data.source.local.entity;
 
 import androidx.annotation.NonNull;
-import androidx.room.ColumnInfo;
 import androidx.room.Entity;
 
 @Entity(tableName = "places", primaryKeys = { "ownerUserId", "id" })
@@ -21,8 +20,6 @@ public class PlaceEntity {
     public long serverVersion;
     public boolean deleted;
     public long lastSyncedAt;
-    @ColumnInfo(defaultValue = "0")
-    public long viewedAt;
 
     public PlaceEntity() {
         ownerUserId = "";

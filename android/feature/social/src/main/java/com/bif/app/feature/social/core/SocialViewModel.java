@@ -1,6 +1,4 @@
-package com.bif.app.feature.social.core;
-
-import com.bif.app.feature.social.R;
+package com.bif.app.feature.social;
 
 import android.content.Context;
 
@@ -25,8 +23,6 @@ import com.bif.app.domain.repository.IChatRepository;
 import com.bif.app.domain.repository.IFriendshipRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.ITripRepository;
-import com.bif.app.feature.social.ai.AiDraftPromptBuilder;
-import com.bif.app.feature.social.ai.AiDraftScheduleResolver;
 
 import java.util.ArrayList;
 import java.util.Collections;

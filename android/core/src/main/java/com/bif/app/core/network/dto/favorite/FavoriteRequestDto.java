@@ -1,18 +1,12 @@
 package com.bif.app.core.network.dto.favorite;
 
-public class FavoriteDto {
+public class FavoriteRequestDto {
     public String id;
     public String placeId;
     public String name;
-    public double latitude;
-    public double longitude;
+    public FavoriteLocationDto location;
     public String address;
     public String description;
     public String notes;
     public int rating;
-    // Sync fields
-    public String userId;
-    public long serverVersion;
-    public boolean deleted;
 }
-

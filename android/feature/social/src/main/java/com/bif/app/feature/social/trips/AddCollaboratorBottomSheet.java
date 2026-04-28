@@ -1,6 +1,4 @@
-package com.bif.app.feature.social.trips;
-
-import com.bif.app.feature.social.R;
+package com.bif.app.feature.social;
 
 import android.content.res.ColorStateList;
 import android.os.Bundle;

@@ -10,7 +10,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.security.Principal;
 import java.util.List;
 import java.util.Optional;
 
@@ -82,47 +81,35 @@ class TripGraphqlControllerTest {
         TripPlan plan = new TripPlan();
         TripStop stop = new TripStop();
         stop.setTitle("Park");
-        when(tripService.addStop("t1", "u1", stop)).thenReturn(Optional.of(plan));
+        when(tripService.addStop("t1", stop)).thenReturn(Optional.of(plan));
 
-        Principal principal = mock(Principal.class);
-        when(principal.getName()).thenReturn("u1");
-
-        TripPlan result = controller.addTripStop("t1", stop, principal);
+        TripPlan result = controller.addTripStop("t1", stop);
 
         assertSame(plan, result);
     }
 
     @Test
     void addTripStop_WhenMissing_ReturnsNull() {
-        when(tripService.addStop(eq("t1"), eq("u1"), any())).thenReturn(Optional.empty());
+        when(tripService.addStop(eq("t1"), any())).thenReturn(Optional.empty());
 
-        Principal principal = mock(Principal.class);
-        when(principal.getName()).thenReturn("u1");
-
-        assertNull(controller.addTripStop("t1", new TripStop(), principal));
+        assertNull(controller.addTripStop("t1", new TripStop()));
     }
 
     @Test
     void removeTripStop_WhenFound_ReturnsResult() {
         TripPlan plan = new TripPlan();
-        when(tripService.removeStop("t1", "u1", "s1")).thenReturn(Optional.of(plan));
+        when(tripService.removeStop("t1", "s1")).thenReturn(Optional.of(plan));
 
-        Principal principal = mock(Principal.class);
-        when(principal.getName()).thenReturn("u1");
-
-        TripPlan result = controller.removeTripStop("t1", "s1", principal);
+        TripPlan result = controller.removeTripStop("t1", "s1");
 
         assertSame(plan, result);
     }
 
     @Test
     void removeTripStop_WhenMissing_ReturnsNull() {
-        when(tripService.removeStop("t1", "u1", "s1")).thenReturn(Optional.empty());
+        when(tripService.removeStop("t1", "s1")).thenReturn(Optional.empty());
 
-        Principal principal = mock(Principal.class);
-        when(principal.getName()).thenReturn("u1");
-
-        assertNull(controller.removeTripStop("t1", "s1", principal));
+        assertNull(controller.removeTripStop("t1", "s1"));
     }
 
     @Test
@@ -132,24 +119,18 @@ class TripGraphqlControllerTest {
         input.setId("s1");
         input.setOrderIndex(0);
         List<RearrangeStopInput> stops = List.of(input);
-        when(tripService.rearrangeStops("t1", "u1", stops)).thenReturn(Optional.of(plan));
+        when(tripService.rearrangeStops("t1", stops)).thenReturn(Optional.of(plan));
 
-        Principal principal = mock(Principal.class);
-        when(principal.getName()).thenReturn("u1");
-
-        TripPlan result = controller.rearrangeTripStops("t1", stops, principal);
+        TripPlan result = controller.rearrangeTripStops("t1", stops);
 
         assertSame(plan, result);
     }
 
     @Test
     void rearrangeTripStops_WhenMissing_ReturnsNull() {
-        when(tripService.rearrangeStops(eq("t1"), eq("u1"), any())).thenReturn(Optional.empty());
+        when(tripService.rearrangeStops(eq("t1"), any())).thenReturn(Optional.empty());
 
-        Principal principal = mock(Principal.class);
-        when(principal.getName()).thenReturn("u1");
-
-        assertNull(controller.rearrangeTripStops("t1", List.of(), principal));
+        assertNull(controller.rearrangeTripStops("t1", List.of()));
     }
 
     @Test

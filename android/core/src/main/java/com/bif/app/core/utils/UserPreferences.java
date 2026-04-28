@@ -4,12 +4,12 @@ import android.content.Context;
 import android.content.SharedPreferences;
 
 public class UserPreferences {
-    public static final String PREF_NAME = "USER_PREF";
+    private static final String PREF_NAME = "USER_PREF";
 
     private static final String KEY_ID = "user_id";
     private static final String KEY_USERNAME = "username";
     private static final String KEY_EMAIL = "email";
-    public static final String KEY_USER_ID = "user_id";
+    private static final String KEY_USER_ID = "user_id";
     private static final String KEY_AVATAR_URI = "avatar_uri";
     private static final String KEY_AUTH_TOKEN = "auth_token";
     private static final String KEY_REFRESH_TOKEN = "refresh_token";

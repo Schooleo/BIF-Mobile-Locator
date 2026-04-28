@@ -1,6 +1,4 @@
-package com.bif.app.feature.social.friends;
-
-import com.bif.app.feature.social.R;
+package com.bif.app.feature.social;
 
 import android.view.LayoutInflater;
 import android.view.View;

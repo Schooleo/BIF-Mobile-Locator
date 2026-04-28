@@ -34,10 +34,4 @@ public class Place extends SyncDocument {
     private String persistedByUserId;
     private int reviewCount;
     private String photoUrl;
-
-    @org.springframework.data.mongodb.core.index.Indexed
-    private boolean isOrphaned = false;
-
-    @org.springframework.data.mongodb.core.index.Indexed(expireAfterSeconds = 86400) // TTL Index: Auto delete after 24 hours
-    private java.time.Instant orphanedAt;
 }

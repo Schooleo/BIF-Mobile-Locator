@@ -1,4 +1,4 @@
-package com.bif.app.feature.social.ai;
+package com.bif.app.feature.social;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -7,12 +7,12 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 
-public final class AiDraftScheduleResolver {
+final class AiDraftScheduleResolver {
 
     private AiDraftScheduleResolver() {
     }
 
-    public static ScheduleCursor newCursor(long tripStartAt, long tripEndAt) {
+    static ScheduleCursor newCursor(long tripStartAt, long tripEndAt) {
         if (tripStartAt <= 0L) {
             return null;
         }
@@ -24,11 +24,11 @@ public final class AiDraftScheduleResolver {
         return new ScheduleCursor(zone, startDate, endDate);
     }
 
-    public static ScheduledTime resolveStopTimes(String plannedDateTime,
-            String startTime,
-            String endTime,
-            int durationMinutes,
-            ScheduleCursor cursor) {
+    static ScheduledTime resolveStopTimes(String plannedDateTime,
+                                          String startTime,
+                                          String endTime,
+                                          int durationMinutes,
+                                          ScheduleCursor cursor) {
         int safeDurationMinutes = Math.max(0, durationMinutes);
         long plannedAt = parseDateTimeMillis(plannedDateTime);
         if (plannedAt > 0L) {
@@ -102,7 +102,7 @@ public final class AiDraftScheduleResolver {
         return new ScheduledTime(arrivalAt, departureAt);
     }
 
-    public static long parseDateTimeMillis(String value) {
+    static long parseDateTimeMillis(String value) {
         String normalized = trimToNull(value);
         if (normalized == null) {
             return 0L;
@@ -158,9 +158,9 @@ public final class AiDraftScheduleResolver {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    public static final class ScheduledTime {
-        public final long arrivalAt;
-        public final long departureAt;
+    static final class ScheduledTime {
+        final long arrivalAt;
+        final long departureAt;
 
         ScheduledTime(long arrivalAt, long departureAt) {
             this.arrivalAt = arrivalAt;
@@ -168,7 +168,7 @@ public final class AiDraftScheduleResolver {
         }
     }
 
-    public static final class ScheduleCursor {
+    static final class ScheduleCursor {
         private final ZoneId zone;
         private final LocalDate endDate;
         private LocalDate currentDate;

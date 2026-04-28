@@ -1,6 +1,4 @@
-package com.bif.app.feature.social.groups;
-
-import com.bif.app.feature.social.R;
+package com.bif.app.feature.social;
 
 import android.annotation.SuppressLint;
 import android.content.res.ColorStateList;

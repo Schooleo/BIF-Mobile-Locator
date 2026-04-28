@@ -25,7 +25,6 @@ public class PlaceMapperTest {
         entity.rating = 4.5;
         entity.latitude = 10.0;
         entity.longitude = 20.0;
-        entity.placeSource = "google_maps";
 
         Place place = PlaceMapper.toDomain(entity);
 
@@ -36,7 +35,6 @@ public class PlaceMapperTest {
         assertNotNull(place.location);
         assertEquals(10.0, place.location.latitude, 0.001);
         assertEquals(20.0, place.location.longitude, 0.001);
-        assertEquals("google_maps", place.placeSource);
     }
 
     @Test
@@ -59,7 +57,7 @@ public class PlaceMapperTest {
     @Test
     public void toEntity_mapsDomainFieldsCorrectly() {
         Place place = new Place("p1", "Test", "Addr", 3.0,
-            new Location(15.0, 25.0), "google_maps");
+                new Location(15.0, 25.0));
 
         PlaceEntity entity = PlaceMapper.toEntity(place);
 
@@ -69,7 +67,6 @@ public class PlaceMapperTest {
         assertEquals(3.0, entity.rating, 0.001);
         assertEquals(15.0, entity.latitude, 0.001);
         assertEquals(25.0, entity.longitude, 0.001);
-        assertEquals("google_maps", entity.placeSource);
         // lastSyncedAt should be populated
         assertNotNull(entity.lastSyncedAt);
     }
@@ -154,7 +151,6 @@ public class PlaceMapperTest {
         dto.rating = 3.5;
         dto.latitude = 10.0;
         dto.longitude = 20.0;
-        dto.placeSource = "google_maps";
 
         Place place = PlaceMapper.fromDto(dto, true);
 
@@ -162,7 +158,6 @@ public class PlaceMapperTest {
         assertEquals("DTO Place", place.name);
         assertEquals(3.5, place.rating, 0.001);
         assertEquals(10.0, place.location.latitude, 0.001);
-        assertEquals("google_maps", place.placeSource);
     }
 
     @Test

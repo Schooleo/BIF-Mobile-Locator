@@ -1,4 +1,4 @@
-package com.bif.app.feature.social.ai;
+package com.bif.app.feature.social;
 
 import static org.junit.Assert.assertEquals;
 

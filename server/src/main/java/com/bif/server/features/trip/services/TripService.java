@@ -1,7 +1,5 @@
 package com.bif.server.features.trip.services;
 
-import com.bif.server.features.group.services.GroupService;
-import com.bif.server.features.trip.exceptions.TripAccessDeniedException;
 import com.bif.server.features.trip.exceptions.TripLimitExceededException;
 import com.bif.server.features.trip.models.RearrangeStopInput;
 import com.bif.server.features.trip.models.TripPlan;
@@ -22,11 +20,9 @@ public class TripService {
     private static final int MAX_TRIPS_PER_GROUP = 30;
 
     private final TripPlanRepository tripPlanRepository;
-    private final GroupService groupService;
 
-    public TripService(TripPlanRepository tripPlanRepository, GroupService groupService) {
+    public TripService(TripPlanRepository tripPlanRepository) {
         this.tripPlanRepository = tripPlanRepository;
-        this.groupService = groupService;
     }
 
     public List<TripPlan> getAll() {
@@ -42,11 +38,9 @@ public class TripService {
     }
 
     public TripPlan save(TripPlan tripPlan) {
-        if (isCreateOperation(tripPlan)) {
-            if (tripPlan == null || tripPlan.getGroupId() == null || tripPlan.getGroupId().isBlank()) {
-                throw new IllegalArgumentException("Trip groupId is required for create operation");
-            }
-
+        if (isCreateOperation(tripPlan)
+                && tripPlan.getGroupId() != null
+                && !tripPlan.getGroupId().isBlank()) {
             long groupTripCount = tripPlanRepository
                     .countByGroupIdAndDeletedFalse(tripPlan.getGroupId());
             if (groupTripCount >= MAX_TRIPS_PER_GROUP) {
@@ -67,7 +61,7 @@ public class TripService {
         return !tripPlanRepository.existsById(tripPlan.getId());
     }
 
-    public Optional<TripPlan> addStop(String tripId, String actorUserId, TripStop stop) {
+    public Optional<TripPlan> addStop(String tripId, TripStop stop) {
         int retries = 0;
         while (retries < 3) {
             try {
@@ -76,8 +70,6 @@ public class TripService {
                     return optPlan;
                 }
                 TripPlan plan = optPlan.get();
-                requireGroupMember(plan.getGroupId(), actorUserId);
-                
                 List<TripStop> stops = plan.getStops() != null ? plan.getStops() : new ArrayList<>();
                 stop.setOrderIndex(stops.size());
                 stops.add(stop);
@@ -93,7 +85,7 @@ public class TripService {
         return Optional.empty();
     }
 
-    public Optional<TripPlan> removeStop(String tripId, String actorUserId, String stopId) {
+    public Optional<TripPlan> removeStop(String tripId, String stopId) {
         int retries = 0;
         while (retries < 3) {
             try {
@@ -102,8 +94,6 @@ public class TripService {
                     return optPlan;
                 }
                 TripPlan plan = optPlan.get();
-                requireGroupMember(plan.getGroupId(), actorUserId);
-
                 List<TripStop> stops = plan.getStops();
                 if (stops != null) {
                     stops.removeIf(s -> s.getId().equals(stopId));
@@ -125,7 +115,6 @@ public class TripService {
     }
 
     public Optional<TripPlan> rearrangeStops(String tripId,
-                                             String actorUserId,
                                              List<RearrangeStopInput> stopOrders) {
         int retries = 0;
         while (retries < 3) {
@@ -135,8 +124,6 @@ public class TripService {
                     return optPlan;
                 }
                 TripPlan plan = optPlan.get();
-                requireGroupMember(plan.getGroupId(), actorUserId);
-
                 List<TripStop> stops = plan.getStops();
                 if (stops == null || stops.isEmpty()) {
                     return optPlan;
@@ -186,22 +173,6 @@ public class TripService {
         }
         tripPlanRepository.deleteById(id);
         return true;
-    }
-
-    private void requireGroupMember(String groupId, String actorUserId) {
-        if (groupId == null || groupId.isBlank()) {
-            throw new TripAccessDeniedException("Trip groupId is required to modify trip stops");
-        }
-        if (actorUserId == null || actorUserId.isBlank()) {
-            throw new TripAccessDeniedException("User must be authenticated to modify trip stops");
-        }
-        
-        try {
-            // GroupService will throw a SecurityException if the user is not a member
-            groupService.getMembers(groupId, actorUserId);
-        } catch (SecurityException e) {
-            throw new TripAccessDeniedException("User must be a member of the group to modify trip stops");
-        }
     }
 }
 

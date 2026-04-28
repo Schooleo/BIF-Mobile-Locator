@@ -25,5 +25,4 @@
     <string name="favorite_note_empty">No note yet.</string>
     <string name="favorite_description_empty">No description yet.</string>
     <string name="favorite_address_unavailable">Address unavailable</string>
-    <string name="favorite_refresh_failed">Unable to refresh favorites right now.</string>
 </resources>

@@ -49,7 +49,6 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
 
         if ("DELETE".equalsIgnoreCase(change.operation)
                 && (change.payload == null || change.payload.isEmpty())) {
-
             FavoriteEntity local = favoriteDao.findById(change.entityId, resolvedUserId);
             if (local != null && local.pendingSync) {
                 return;
@@ -77,94 +76,27 @@ public class FavoriteSyncEntityHandler implements SyncEntityHandler {
             payload.serverVersion = Math.max(payload.serverVersion,
                     change.serverVersion);
             if ("DELETE".equalsIgnoreCase(change.operation)) {
-
                 payload.deleted = true;
             }
 
             FavoriteEntity local = favoriteDao.findById(payload.id, resolvedUserId);
             if (local != null && local.pendingSync) {
-
                 return;
             }
 
-            // Deduplication by placeId
-            if (payload.placeId != null && !payload.placeId.trim().isEmpty()) {
-                FavoriteEntity existingWithSamePlaceId = favoriteDao.findActiveByPlaceId(payload.placeId.trim(), resolvedUserId);
-                if (existingWithSamePlaceId != null && !existingWithSamePlaceId.id.equals(payload.id)) {
-                    if (existingWithSamePlaceId.pendingSync) {
-
-                        return;
-                    } else {
-
-                        favoriteDao.delete(existingWithSamePlaceId);
-                    }
-                }
-            }
-
-            if (payload.placeId == null
+                if (payload.placeId == null
                     && local != null
                     && local.placeId != null
                     && !local.placeId.trim().isEmpty()) {
                 payload.placeId = local.placeId;
             }
 
-            if (isBlank(payload.externalSource)
-                    && local != null
-                    && !isBlank(local.externalSource)) {
-                payload.externalSource = local.externalSource;
-            }
-            if (isBlank(payload.externalId)
-                    && local != null
-                    && !isBlank(local.externalId)) {
-                payload.externalId = local.externalId;
-            }
-            if (isBlank(payload.placeName)
-                    && local != null
-                    && !isBlank(local.placeName)) {
-                payload.placeName = local.placeName;
-            }
-
-            payload.externalSource = coalesceText(
-                    payload.externalSource,
-                    local != null ? local.externalSource : null,
-                    "OSM");
-            payload.placeName = coalesceText(
-                    payload.placeName,
-                    payload.name,
-                    payload.address,
-                    local != null ? local.placeName : null,
-                    local != null ? local.name : null,
-                    local != null ? local.address : null);
-            payload.externalId = coalesceText(
-                    payload.externalId,
-                    local != null ? local.externalId : null,
-                    payload.placeId,
-                    payload.id);
-
             FavoriteEntity mapped = FavoriteMapper.fromDto(payload, resolvedUserId);
             mapped.pendingSync = false;
-
             favoriteDao.upsert(mapped);
         } catch (Exception e) {
             Log.e(TAG, "Failed applying pulled favorite change", e);
         }
-    }
-
-    private boolean isBlank(String value) {
-        return value == null || value.trim().isEmpty();
-    }
-
-    private String coalesceText(String... values) {
-        if (values == null) {
-            return null;
-        }
-
-        for (String value : values) {
-            if (!isBlank(value)) {
-                return value.trim();
-            }
-        }
-        return null;
     }
 }
 

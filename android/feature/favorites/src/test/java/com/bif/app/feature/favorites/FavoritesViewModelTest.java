@@ -3,9 +3,7 @@ package com.bif.app.feature.favorites;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -223,34 +221,6 @@ public class FavoritesViewModelTest {
         // Assert
         verify(favoriteRepository).deleteFavorite(fav1);
         verify(favoriteRepository).deleteFavorite(fav2);
-    }
-
-    @Test
-    public void refreshFavorites_whenRepositoryOffline_clearsSyncMessageAndStopsSyncing() {
-        doAnswer(invocation -> {
-            IFavoriteRepository.SyncCallback callback = invocation.getArgument(0);
-            callback.onOffline();
-            return null;
-        }).when(favoriteRepository).refreshFavorites(any(IFavoriteRepository.SyncCallback.class));
-
-        viewModel.refreshFavorites();
-
-        assertEquals(Boolean.FALSE, viewModel.isSyncing.getValue());
-        assertEquals("", viewModel.syncMessage.getValue());
-    }
-
-    @Test
-    public void refreshFavorites_whenRepositoryError_usesGenericErrorKey() {
-        doAnswer(invocation -> {
-            IFavoriteRepository.SyncCallback callback = invocation.getArgument(0);
-            callback.onError(null);
-            return null;
-        }).when(favoriteRepository).refreshFavorites(any(IFavoriteRepository.SyncCallback.class));
-
-        viewModel.refreshFavorites();
-
-        assertEquals(Boolean.FALSE, viewModel.isSyncing.getValue());
-        assertEquals(IFavoriteRepository.ERROR_REFRESH_FAILED, viewModel.syncMessage.getValue());
     }
 
     // ─── helpers ───────────────────────────────────────────────────────────────

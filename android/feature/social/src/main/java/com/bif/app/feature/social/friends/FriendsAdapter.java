@@ -1,4 +1,4 @@
-package com.bif.app.feature.social.friends;
+package com.bif.app.feature.social;
 
 import android.content.res.ColorStateList;
 import android.view.LayoutInflater;

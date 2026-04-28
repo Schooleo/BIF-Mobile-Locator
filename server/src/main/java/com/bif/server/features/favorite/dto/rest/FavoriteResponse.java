@@ -7,7 +7,6 @@ import java.time.Instant;
 public record FavoriteResponse(
         String id,
         String placeId,
-        String externalSource,
         String name,
         Location location,
         String address,

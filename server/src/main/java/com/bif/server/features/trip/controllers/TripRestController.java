@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import java.security.Principal;
 
 import com.bif.server.features.trip.models.TripPlan;
 import com.bif.server.features.trip.models.RearrangeStopInput;
@@ -65,9 +64,8 @@ public class TripRestController {
     public ResponseEntity<TripPlan> addStop(
             @PathVariable String tripId,
             @RequestBody TripStop stop,
-            Principal principal) {
-        String userId = principal != null ? principal.getName() : null;
-        return tripService.addStop(tripId, userId, stop)
+            @RequestParam(required = false) String userId) {
+        return tripService.addStop(tripId, stop)
                 .map(plan -> {
                     tripActivityService.postStopAdded(plan, stop, userId);
                     return ResponseEntity.ok(plan);
@@ -79,9 +77,8 @@ public class TripRestController {
     public ResponseEntity<TripPlan> removeStop(
             @PathVariable String tripId,
             @PathVariable String stopId,
-            Principal principal) {
-        String userId = principal != null ? principal.getName() : null;
-        return tripService.removeStop(tripId, userId, stopId)
+            @RequestParam(required = false) String userId) {
+        return tripService.removeStop(tripId, stopId)
                 .map(plan -> {
                     tripActivityService.postStopRemoved(plan, stopId, userId);
                     return ResponseEntity.ok(plan);
@@ -93,8 +90,7 @@ public class TripRestController {
     public ResponseEntity<TripPlan> rearrangeStops(
             @PathVariable String tripId,
             @RequestBody List<TripStop> stops,
-            Principal principal) {
-        String userId = principal != null ? principal.getName() : null;
+            @RequestParam(required = false) String userId) {
         List<RearrangeStopInput> reorderInputs = new java.util.ArrayList<>();
         if (stops != null) {
             for (TripStop stop : stops) {
@@ -108,7 +104,7 @@ public class TripRestController {
             }
         }
 
-        return tripService.rearrangeStops(tripId, userId, reorderInputs)
+        return tripService.rearrangeStops(tripId, reorderInputs)
                 .map(plan -> {
                     tripActivityService.postStopsRearranged(plan, userId);
                     return ResponseEntity.ok(plan);

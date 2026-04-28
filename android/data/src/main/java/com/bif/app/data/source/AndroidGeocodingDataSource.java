@@ -46,20 +46,6 @@ public class AndroidGeocodingDataSource {
         return geocoder.getFromLocationName(query, MAX_RESULTS);
     }
 
-    public List<Address> reverseGeocodeLocation(double latitude, double longitude) {
-        List<Address> osmResults = reverseGeocodeWithNominatim(latitude, longitude);
-        if (osmResults != null && !osmResults.isEmpty()) {
-            return osmResults;
-        }
-
-        try {
-            List<Address> fallback = geocoder.getFromLocation(latitude, longitude, 1);
-            return fallback != null ? fallback : new ArrayList<>();
-        } catch (IOException ignored) {
-            return new ArrayList<>();
-        }
-    }
-
     private List<Address> geocodeWithNominatim(String query) {
         HttpURLConnection connection = null;
         try {
@@ -116,61 +102,6 @@ public class AndroidGeocodingDataSource {
                 connection.disconnect();
             }
         }
-    }
-
-    private List<Address> reverseGeocodeWithNominatim(double latitude, double longitude) {
-        HttpURLConnection connection = null;
-        try {
-            String requestUrl = nominatimBaseUrl
-                    + "/reverse?format=jsonv2&addressdetails=1&lat="
-                    + latitude + "&lon=" + longitude;
-
-            connection = (HttpURLConnection) URI.create(requestUrl)
-                    .toURL()
-                    .openConnection();
-            connection.setRequestMethod("GET");
-            connection.setRequestProperty("User-Agent", USER_AGENT);
-            connection.setConnectTimeout(4000);
-            connection.setReadTimeout(5000);
-
-            int code = connection.getResponseCode();
-            if (code < 200 || code >= 300) {
-                return new ArrayList<>();
-            }
-
-            try (InputStream inputStream = connection.getInputStream()) {
-                String json = new String(readAllBytesCompat(inputStream), StandardCharsets.UTF_8);
-                return parseReverseGeocodeAddress(latitude, longitude, json);
-            }
-        } catch (Exception ignored) {
-            return new ArrayList<>();
-        } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
-        }
-    }
-
-    private List<Address> parseReverseGeocodeAddress(double latitude,
-                                                     double longitude,
-                                                     String json) throws Exception {
-        JSONObject obj = new JSONObject(json);
-        String displayName = obj.optString("display_name", "");
-        String name = obj.optString("name", "");
-
-        Address address = new Address(Locale.getDefault());
-        address.setLatitude(latitude);
-        address.setLongitude(longitude);
-        if (!displayName.isBlank()) {
-            address.setAddressLine(0, displayName);
-        }
-        if (!name.isBlank()) {
-            address.setFeatureName(name);
-        }
-
-        List<Address> results = new ArrayList<>();
-        results.add(address);
-        return results;
     }
 
     private byte[] readAllBytesCompat(InputStream inputStream) throws IOException {

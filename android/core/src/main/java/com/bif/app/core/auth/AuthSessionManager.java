@@ -49,9 +49,7 @@ public class AuthSessionManager {
     }
 
     public void saveSessionFromAuth(AuthResponse authResponse, String fallbackUsername, String fallbackEmail) {
-        Log.d(TAG, "saveSessionFromAuth called");
         if (authResponse == null) {
-            Log.d(TAG, "saveSessionFromAuth: authResponse is null");
             return;
         }
 
@@ -76,17 +74,14 @@ public class AuthSessionManager {
         }
 
         if (!userId.isBlank()) {
-            Log.d(TAG, "saveSessionFromAuth: setting userId=" + userId);
             UserPreferences.setUserId(context, userId);
             try {
-                Log.d(TAG, "saveSessionFromAuth: initializing sync for userId=" + userId);
                 syncInitializable.setUserContext(userId, null);
                 syncInitializable.setLastPulledVersion(0L);
                 try {
-                    Log.d(TAG, "saveSessionFromAuth: triggering initial sync");
                     syncInitializable.syncIfOnline();
                 } catch (Exception syncException) {
-                    Log.e(TAG, "Initial sync trigger failed",
+                    Log.e(TAG, "Initial sync trigger failed, retry will happen on next sync cycle",
                             syncException);
                     try {
                         syncInitializable.syncIfOnline();
@@ -112,23 +107,14 @@ public class AuthSessionManager {
     }
 
     public void clearSession(Runnable onComplete) {
-        Log.d(TAG, "clearSession called");
         syncInitializable.resetSyncContext();
         UserPreferences.clearUser(context);
-        Log.d(TAG, "clearSession: user preferences cleared, calling localSessionDataCleaner");
-        localSessionDataCleaner.clearLocalUserData(() -> {
-            Log.d(TAG, "clearSession: localSessionDataCleaner.clearLocalUserData completed");
-            if (onComplete != null) {
-                onComplete.run();
-            }
-        });
+        localSessionDataCleaner.clearLocalUserData(onComplete);
     }
 
     public void logout(@NonNull LogoutCallback callback) {
-        Log.d(TAG, "logout called");
         String refreshToken = UserPreferences.getRefreshToken(context);
         if (refreshToken.isBlank()) {
-            Log.d(TAG, "logout: no refresh token, clearing session locally");
             clearSession(() -> callback.onComplete(false));
             return;
         }

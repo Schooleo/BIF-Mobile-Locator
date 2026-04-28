@@ -1,6 +1,4 @@
-package com.bif.app.feature.social.trips;
-
-import com.bif.app.feature.social.R;
+package com.bif.app.feature.social;
 
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;

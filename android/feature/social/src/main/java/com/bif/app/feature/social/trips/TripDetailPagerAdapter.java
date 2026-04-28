@@ -1,6 +1,4 @@
-package com.bif.app.feature.social.trips;
-
-import com.bif.app.feature.social.R;
+package com.bif.app.feature.social;
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;

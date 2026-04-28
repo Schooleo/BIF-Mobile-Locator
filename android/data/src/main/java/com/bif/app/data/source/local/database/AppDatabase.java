@@ -50,7 +50,7 @@ import com.bif.app.data.source.local.entity.TripStopEntity;
         TripPlanEntity.class,
         TripMemberCrossRef.class,
         TripStopEntity.class
-    }, version = 24, exportSchema = false)
+}, version = 22, exportSchema = false)
 @TypeConverters({ FriendshipStatusConverter.class, UploadStatusConverter.class })
 public abstract class AppDatabase extends RoomDatabase {
     private static boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
@@ -330,49 +330,6 @@ public abstract class AppDatabase extends RoomDatabase {
             }
         }
 
-    };
-
-    public static final Migration MIGRATION_22_23 = new Migration(22, 23) {
-        @Override
-        public void migrate(SupportSQLiteDatabase database) {
-            if (!hasColumn(database, "favorites", "externalSource")) {
-                database.execSQL("ALTER TABLE favorites ADD COLUMN externalSource TEXT");
-            }
-            if (!hasColumn(database, "favorites", "externalId")) {
-                database.execSQL("ALTER TABLE favorites ADD COLUMN externalId TEXT");
-            }
-            if (!hasColumn(database, "favorites", "placeName")) {
-                database.execSQL("ALTER TABLE favorites ADD COLUMN placeName TEXT");
-            }
-
-            // Backfill deterministic identity seed for legacy favorites to avoid
-            // sync rejections caused by missing canonical identity metadata.
-            database.execSQL("UPDATE favorites SET externalSource = 'OSM' "
-                    + "WHERE externalSource IS NULL OR TRIM(externalSource) = ''");
-            database.execSQL("UPDATE favorites SET placeName = CASE "
-                    + "WHEN placeName IS NULL OR TRIM(placeName) = '' THEN "
-                    + "CASE "
-                    + "WHEN name IS NOT NULL AND TRIM(name) <> '' THEN TRIM(name) "
-                    + "WHEN address IS NOT NULL AND TRIM(address) <> '' THEN TRIM(address) "
-                    + "ELSE placeName END "
-                    + "ELSE placeName END");
-            database.execSQL("UPDATE favorites SET externalId = CASE "
-                    + "WHEN externalId IS NULL OR TRIM(externalId) = '' THEN "
-                    + "CASE "
-                    + "WHEN placeId IS NOT NULL AND TRIM(placeId) <> '' THEN TRIM(placeId) "
-                    + "WHEN id IS NOT NULL AND TRIM(id) <> '' THEN TRIM(id) "
-                    + "ELSE externalId END "
-                    + "ELSE externalId END");
-        }
-    };
-
-    public static final Migration MIGRATION_23_24 = new Migration(23, 24) {
-        @Override
-        public void migrate(SupportSQLiteDatabase database) {
-            if (!hasColumn(database, "places", "viewedAt")) {
-                database.execSQL("ALTER TABLE places ADD COLUMN viewedAt INTEGER NOT NULL DEFAULT 0");
-            }
-        }
     };
 
     public abstract FriendDao friendDao();

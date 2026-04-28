@@ -1,7 +1,5 @@
 package com.bif.app.feature.map;
 
-import android.util.Log;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -32,7 +30,6 @@ import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.PlaceIdentityContext;
 import com.bif.app.domain.model.Route;
 import com.bif.app.domain.model.Review;
-import com.bif.app.domain.model.TripStop;
 import com.bif.app.domain.repository.IFavoriteRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.IMapRepository;
@@ -40,7 +37,6 @@ import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.IPlaceRepository.PersistenceCallback;
 import com.bif.app.domain.repository.IReviewRepository;
 import com.bif.app.domain.repository.IRouteRepository;
-import com.bif.app.domain.repository.ITripRepository;
 
 import java.util.Collections;
 import java.util.List;
@@ -49,14 +45,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.Executor;
 
 import org.junit.Before;
-import org.junit.After;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
@@ -81,9 +75,6 @@ public class MapViewModelTest {
     private IGroupRepository groupRepository;
 
     @Mock
-    private ITripRepository tripRepository;
-
-    @Mock
     private IRouteRepository routeRepository;
 
     @Mock
@@ -98,7 +89,6 @@ public class MapViewModelTest {
     private Executor directExecutor;
 
     private MapViewModel viewModel;
-    private MockedStatic<Log> logMock;
 
     private static class QueueExecutor implements Executor {
         final java.util.List<Runnable> tasks = new java.util.ArrayList<>();
@@ -113,19 +103,12 @@ public class MapViewModelTest {
     public void setUp() {
         directExecutor = Runnable::run;
 
-        logMock = Mockito.mockStatic(Log.class);
-        logMock.when(() -> Log.d(anyString(), anyString())).thenReturn(0);
-        logMock.when(() -> Log.w(anyString(), anyString())).thenReturn(0);
-        logMock.when(() -> Log.e(anyString(), anyString())).thenReturn(0);
-
         // Lenient: these guard switchMap setup paths but not every test exercises them.
         Mockito.lenient().when(placeRepository.searchLocation(ArgumentMatchers.anyString()))
             .thenReturn(new MutableLiveData<>());
         Mockito.lenient().when(placeRepository.searchPlacesFromHistory(ArgumentMatchers.anyString()))
             .thenReturn(new MutableLiveData<>());
         Mockito.lenient().when(groupRepository.getGroups())
-            .thenReturn(new MutableLiveData<>(Collections.emptyList()));
-        Mockito.lenient().when(tripRepository.getAllTrips())
             .thenReturn(new MutableLiveData<>(Collections.emptyList()));
         Mockito.lenient().when(routeRepository.getRoute(ArgumentMatchers.anyList()))
             .thenReturn(new MutableLiveData<>());
@@ -146,20 +129,11 @@ public class MapViewModelTest {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
-                tripRepository,
                 routeRepository,
                 reviewRepository,
                 directExecutor);
         viewModel.searchResult.observeForever(searchResultObserver);
         viewModel.statusText.observeForever(statusTextObserver);
-    }
-
-    @After
-    public void tearDown() {
-        if (logMock != null) {
-            logMock.close();
-            logMock = null;
-        }
     }
 
     @Test
@@ -298,32 +272,6 @@ public class MapViewModelTest {
     }
 
     @Test
-    public void getCanonicalFavoritePlaceId_whenPlaceResolvable_returnsResolvedCanonicalId() {
-        Place place = new Place("ext-1", "Central Park", "NY", 4.8, new Location(40.78, -73.96));
-        place.placeSource = "GOOGLE";
-        when(reviewRepository.resolveInternalPlaceId(any(), any(), anyDouble(), anyDouble(), any()))
-                .thenReturn("internal-123");
-
-        final String[] resolved = new String[1];
-        viewModel.getCanonicalFavoritePlaceId(place, id -> resolved[0] = id);
-
-        assertEquals("internal-123", resolved[0]);
-        verify(reviewRepository).resolveInternalPlaceId("GOOGLE", "ext-1", 40.78, -73.96, "Central Park");
-    }
-
-    @Test
-    public void getCanonicalFavoritePlaceId_whenPlaceNotResolvable_returnsTrimmedFallbackId() {
-        Place place = new Place("  tap-id-1  ", "", "Unknown", 0.0, null);
-        place.placeSource = Place.SOURCE_PREVIEW;
-
-        final String[] resolved = new String[1];
-        viewModel.getCanonicalFavoritePlaceId(place, id -> resolved[0] = id);
-
-        assertEquals("tap-id-1", resolved[0]);
-        verify(reviewRepository, never()).resolveInternalPlaceId(any(), any(), anyDouble(), anyDouble(), any());
-    }
-
-    @Test
     public void addToFavorites_placeWithNullLocation_callsRepositoryWithZeroCoordinates() {
         // Arrange: place with no location
         Place place = new Place("id2", "No Loc Place", "789 Unknown St", 3.0, null);
@@ -377,88 +325,6 @@ public class MapViewModelTest {
         Mockito.verify(favoriteRepository).deleteFavorite(fav);
     }
 
-    @Test
-    public void addPlaceToTrip_validInput_callsTripRepositoryAndSuccessCallback() {
-        Place place = new Place("p-1", "Coffee Spot", "District 1", 4.5,
-                new Location(10.775, 106.700));
-
-        AtomicBoolean success = new AtomicBoolean(false);
-        AtomicBoolean error = new AtomicBoolean(false);
-
-        viewModel.addPlaceToTrip("trip-1", place, new MapViewModel.AddTripStopCallback() {
-            @Override
-            public void onSuccess() {
-                success.set(true);
-            }
-
-            @Override
-            public void onError(String message) {
-                error.set(true);
-            }
-        });
-
-        ArgumentCaptor<TripStop> captor = ArgumentCaptor.forClass(TripStop.class);
-        verify(tripRepository).addStopToTrip(eq("trip-1"), captor.capture());
-        TripStop savedStop = captor.getValue();
-        assertNotNull(savedStop);
-        assertEquals("Coffee Spot", savedStop.getTitle());
-        assertEquals("District 1", savedStop.getAddress());
-        assertEquals(10.775, savedStop.getLatitude(), 0.0001);
-        assertEquals(106.700, savedStop.getLongitude(), 0.0001);
-        assertTrue(success.get());
-        assertFalse(error.get());
-    }
-
-    @Test
-    public void addPlaceToTrip_withScheduledTime_persistsScheduledTimestamp() {
-        Place place = new Place("p-3", "Bakery", "District 2", 4.0,
-                new Location(10.780, 106.720));
-        long scheduledAtMillis = 1_713_998_400_000L;
-
-        viewModel.addPlaceToTrip("trip-1", place, scheduledAtMillis,
-                new MapViewModel.AddTripStopCallback() {
-                    @Override
-                    public void onSuccess() {
-                    }
-
-                    @Override
-                    public void onError(String message) {
-                        fail("Expected success but got error: " + message);
-                    }
-                });
-
-        ArgumentCaptor<TripStop> captor = ArgumentCaptor.forClass(TripStop.class);
-        verify(tripRepository).addStopToTrip(eq("trip-1"), captor.capture());
-        TripStop savedStop = captor.getValue();
-        assertNotNull(savedStop);
-        assertEquals(scheduledAtMillis, savedStop.getArrivalTime());
-        assertEquals(scheduledAtMillis, savedStop.getDepartureTime());
-    }
-
-    @Test
-    public void addPlaceToTrip_missingLocation_returnsErrorAndSkipsRepository() {
-        Place place = new Place("p-2", "Unknown", "", 0, null);
-
-        AtomicBoolean success = new AtomicBoolean(false);
-        AtomicBoolean error = new AtomicBoolean(false);
-
-        viewModel.addPlaceToTrip("trip-1", place, new MapViewModel.AddTripStopCallback() {
-            @Override
-            public void onSuccess() {
-                success.set(true);
-            }
-
-            @Override
-            public void onError(String message) {
-                error.set(true);
-            }
-        });
-
-        verify(tripRepository, never()).addStopToTrip(anyString(), any());
-        assertFalse(success.get());
-        assertTrue(error.get());
-    }
-
     // searchForPlaces
 
     @Test
@@ -487,7 +353,6 @@ public class MapViewModelTest {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
-                tripRepository,
                 routeRepository,
                 reviewRepository,
                 directExecutor,
@@ -544,7 +409,6 @@ public class MapViewModelTest {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
-                tripRepository,
                 routeRepository,
                 reviewRepository,
                 directExecutor,
@@ -586,7 +450,6 @@ public class MapViewModelTest {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
-                tripRepository,
                 routeRepository,
                 reviewRepository,
                 directExecutor,
@@ -619,7 +482,6 @@ public class MapViewModelTest {
             placeRepository,
             favoriteRepository,
             groupRepository,
-            tripRepository,
             routeRepository,
             reviewRepository,
             directExecutor);
@@ -790,7 +652,6 @@ public class MapViewModelTest {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
-                tripRepository,
                 routeRepository,
             reviewRepository,
             directExecutor);
@@ -809,7 +670,6 @@ public class MapViewModelTest {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
-                tripRepository,
                 routeRepository,
                 reviewRepository,
                 queueExecutor);
@@ -867,7 +727,6 @@ public class MapViewModelTest {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
-                tripRepository,
                 routeRepository,
                 reviewRepository,
                 queueExecutor);
@@ -913,7 +772,6 @@ public class MapViewModelTest {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
-                tripRepository,
                 routeRepository,
                 reviewRepository,
                 queueExecutor);
@@ -945,64 +803,5 @@ public class MapViewModelTest {
         verify(reviewRepository, never()).refreshReviews(eq("internal-old"), any());
         verify(reviewRepository).refreshReviews(eq("internal-new"), any());
         assertFalse(queuedViewModel.isLoadingReviews.getValue());
-    }
-
-    @Test
-    public void loadReviews_WhenPreviewPlace_SkipsResolveAndRefresh() {
-        Place preview = new Place(
-                "preview-1",
-                "Selected Location",
-                "10.0000, 106.0000",
-                0.0,
-                new Location(10.0, 106.0),
-            Place.SOURCE_PREVIEW,
-            Place.SelectionState.PREVIEW);
-
-        viewModel.loadReviews(preview);
-
-        verify(reviewRepository, never()).resolveInternalPlaceId(any(), any(), anyDouble(), anyDouble(), any());
-        verify(reviewRepository, never()).refreshReviews(anyString(), any());
-        assertFalse(Boolean.TRUE.equals(viewModel.isLoadingReviews.getValue()));
-    }
-
-    @Test
-    public void loadReviews_WhenPreviewPlaceHasMeaningfulName_ResolvesCanonicalWithSyntheticIdentity() {
-        Place preview = new Place(
-                "preview-1",
-                "Bui Vien Street",
-                "10.0000, 106.0000",
-                0.0,
-                new Location(10.0, 106.0),
-                Place.SOURCE_PREVIEW,
-                Place.SelectionState.PREVIEW);
-
-        when(reviewRepository.resolveInternalPlaceId(eq(Place.SOURCE_PREVIEW), isNull(), eq(10.0), eq(106.0), eq("Bui Vien Street")))
-                .thenReturn("internal-preview-123");
-
-        viewModel.loadReviews(preview);
-
-        verify(reviewRepository).resolveInternalPlaceId(eq(Place.SOURCE_PREVIEW), isNull(), eq(10.0), eq(106.0), eq("Bui Vien Street"));
-        verify(reviewRepository).refreshReviews(eq("internal-preview-123"), any());
-        assertFalse(Boolean.TRUE.equals(viewModel.isLoadingReviews.getValue()));
-    }
-
-    @Test
-    public void addToFavorites_WhenPreviewPlace_SkipsCanonicalResolve() {
-        Place preview = new Place(
-                "preview-fav-1",
-                "Selected Location",
-                "10.0000, 106.0000",
-                0.0,
-                new Location(10.0, 106.0),
-            Place.SOURCE_PREVIEW,
-            Place.SelectionState.PREVIEW);
-
-        viewModel.addToFavorites(preview, null);
-
-        verify(reviewRepository, never()).resolveInternalPlaceId(any(), any(), anyDouble(), anyDouble(), any());
-
-        ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
-        verify(favoriteRepository).addFavorite(captor.capture());
-        assertEquals("preview-fav-1", captor.getValue().placeId);
     }
 }

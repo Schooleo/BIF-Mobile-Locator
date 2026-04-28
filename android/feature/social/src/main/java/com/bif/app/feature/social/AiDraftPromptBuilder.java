@@ -1,17 +1,17 @@
-package com.bif.app.feature.social.ai;
+package com.bif.app.feature.social;
 
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
-public final class AiDraftPromptBuilder {
+final class AiDraftPromptBuilder {
 
     private static final DateTimeFormatter AI_DRAFT_DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
 
     private AiDraftPromptBuilder() {
     }
 
-    public static String buildDraftQueryWithDateRange(String rawQuery, long startAt, long endAt) {
+    static String buildDraftQueryWithDateRange(String rawQuery, long startAt, long endAt) {
         String query = rawQuery == null ? "" : rawQuery.trim();
         if (query.isEmpty() || startAt <= 0L || endAt < startAt) {
             return query;
@@ -23,7 +23,7 @@ public final class AiDraftPromptBuilder {
                 + "\nSchedule each stop within this date range and return concrete plannedDateTime values when possible.";
     }
 
-    public static String formatAiDraftDate(long millis) {
+    static String formatAiDraftDate(long millis) {
         return Instant.ofEpochMilli(millis)
                 .atZone(ZoneId.systemDefault())
                 .toLocalDate()

@@ -33,9 +33,6 @@ public interface FavoriteDao {
     @Query("SELECT * FROM favorites WHERE id = :id AND userId = :userId LIMIT 1")
     FavoriteEntity findById(String id, String userId);
 
-    @Query("SELECT * FROM favorites WHERE placeId = :placeId AND userId = :userId AND deleted = 0 LIMIT 1")
-    FavoriteEntity findActiveByPlaceId(String placeId, String userId);
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insertAll(List<FavoriteEntity> favorites);
 

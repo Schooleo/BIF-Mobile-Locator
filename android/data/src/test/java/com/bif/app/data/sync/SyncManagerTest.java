@@ -9,19 +9,13 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import android.location.Address;
-
 import com.bif.app.core.network.RestApiService;
 import com.bif.app.core.network.dto.place.PlaceDto;
 import com.bif.app.core.network.dto.sync.SyncChangeDto;
 import com.bif.app.core.network.dto.sync.SyncPushResultDto;
 import com.bif.app.core.network.dto.sync.SyncRequestDto;
 import com.bif.app.core.network.dto.sync.SyncResponseDto;
-import com.bif.app.data.source.AndroidGeocodingDataSource;
-import com.bif.app.data.source.local.dao.FavoriteDao;
-import com.bif.app.data.source.local.dao.PlaceDao;
 import com.bif.app.data.source.local.dao.SyncQueueDao;
-import com.bif.app.data.source.local.entity.FavoriteEntity;
 import com.bif.app.data.source.local.entity.SyncQueueEntity;
 
 import org.junit.After;
@@ -52,12 +46,6 @@ public class SyncManagerTest {
     private SyncQueueDao mockSyncQueueDao;
     @Mock
     private NetworkMonitor mockNetworkMonitor;
-        @Mock
-        private FavoriteDao mockFavoriteDao;
-        @Mock
-        private PlaceDao mockPlaceDao;
-        @Mock
-        private AndroidGeocodingDataSource mockGeocodingDataSource;
 
     private SyncManager syncManager;
     private AutoCloseable closeable;
@@ -151,87 +139,6 @@ public class SyncManagerTest {
         verify(mockSyncQueueDao).update(entry);
         assertEquals("IN_FLIGHT", entry.status);
         verify(mockSyncQueueDao).remove(42);
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    public void sync_whenPendingFavoriteIsPreview_promotesMetadataBeforePush()
-            throws IOException {
-        when(mockNetworkMonitor.isOnline()).thenReturn(true);
-
-        SyncQueueEntity entry = new SyncQueueEntity();
-        entry.id = 88;
-        entry.entityType = "favorite";
-        entry.entityId = "fav-1";
-        entry.operation = "CREATE";
-        entry.clientChangeId = "client-fav-1";
-        entry.userId = "user1";
-        entry.status = SyncManager.QUEUE_STATUS_PENDING;
-        entry.payload = "{\"id\":\"fav-1\",\"externalSource\":\"PREVIEW\"}";
-        when(mockSyncQueueDao.getPendingForUser("user1"))
-                .thenReturn(Collections.singletonList(entry));
-
-        FavoriteEntity localFavorite = new FavoriteEntity();
-        localFavorite.id = "fav-1";
-        localFavorite.userId = "user1";
-        localFavorite.externalSource = "PREVIEW";
-        localFavorite.name = "Selected Location";
-        localFavorite.placeName = "Selected Location";
-        localFavorite.address = "Address unavailable";
-        localFavorite.latitude = 10.766287085586711;
-        localFavorite.longitude = 106.67628586292267;
-        localFavorite.pendingSync = true;
-        when(mockFavoriteDao.findById("fav-1", "user1")).thenReturn(localFavorite);
-
-        Address address = org.mockito.Mockito.mock(Address.class);
-        when(address.getFeatureName()).thenReturn("Truong Tieu hoc Ho Thi Ky");
-        when(address.getAddressLine(0)).thenReturn("105, Ho Thi Ky, Phuong Vuon Lai, Thu Duc");
-        when(mockGeocodingDataSource.reverseGeocodeLocation(
-                localFavorite.latitude,
-                localFavorite.longitude))
-                .thenReturn(Collections.singletonList(address));
-
-        SyncManager previewAwareSyncManager = new SyncManager(
-                mockRestApiService,
-                mockSyncQueueDao,
-                mockFavoriteDao,
-                mockPlaceDao,
-                mockGeocodingDataSource,
-                mockNetworkMonitor);
-        previewAwareSyncManager.setUserContext("user1", "device1");
-        previewAwareSyncManager.setLastPulledVersion(0);
-
-        SyncResponseDto serverResponse = new SyncResponseDto();
-        serverResponse.currentServerVersion = 11;
-        serverResponse.pulledChanges = new ArrayList<>();
-        serverResponse.pushResults = Collections.singletonList(
-                pushResult("client-fav-1", SyncManager.PUSH_STATUS_APPLIED,
-                        "APPLIED"));
-
-        Call<SyncResponseDto> mockCall =
-                (Call<SyncResponseDto>) org.mockito.Mockito.mock(Call.class);
-        when(mockCall.execute())
-                .thenReturn(Response.success(serverResponse));
-        when(mockRestApiService.sync(any(SyncRequestDto.class)))
-                .thenReturn(mockCall);
-
-        SyncResponseDto result = previewAwareSyncManager.sync();
-
-        assertNotNull(result);
-
-        ArgumentCaptor<SyncRequestDto> requestCaptor =
-                ArgumentCaptor.forClass(SyncRequestDto.class);
-        verify(mockRestApiService).sync(requestCaptor.capture());
-
-        SyncRequestDto sent = requestCaptor.getValue();
-        assertNotNull(sent.pushedChanges);
-        assertEquals(1, sent.pushedChanges.size());
-        String pushedPayload = sent.pushedChanges.get(0).payload;
-        assertNotNull(pushedPayload);
-        org.junit.Assert.assertTrue(pushedPayload.contains("\"externalSource\":\"OSM\""));
-        org.junit.Assert.assertTrue(pushedPayload.contains("Truong Tieu hoc Ho Thi Ky"));
-                verify(mockFavoriteDao, org.mockito.Mockito.atLeast(2)).update(any(FavoriteEntity.class));
-                verify(mockSyncQueueDao, org.mockito.Mockito.atLeast(2)).update(entry);
     }
 
     @Test

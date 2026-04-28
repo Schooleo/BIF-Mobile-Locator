@@ -104,6 +104,7 @@ public class FavoriteDetailFragment extends Fragment {
             tvAddress.setText(defaultText(favorite.address, getString(R.string.favorite_address_unavailable)));
             tvDescription.setText(defaultText(favorite.description, getString(R.string.favorite_description_empty)));
             tvNotes.setText(defaultText(favorite.notes, getString(R.string.favorite_note_empty)));
+            ratingBar.setRating(favorite.rating);
         });
     }
 

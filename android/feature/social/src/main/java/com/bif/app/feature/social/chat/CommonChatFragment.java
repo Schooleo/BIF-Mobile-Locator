@@ -1,17 +1,12 @@
-package com.bif.app.feature.social.chat;
-
-import com.bif.app.feature.social.R;
+package com.bif.app.feature.social;
 
 import android.annotation.SuppressLint;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.text.format.DateFormat;
 import android.text.format.DateUtils;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
@@ -46,7 +41,6 @@ import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.TripPlan;
 import com.bif.app.domain.model.TripStop;
-import com.bif.app.feature.social.core.SocialViewModel;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 
@@ -61,7 +55,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.UUID;
 
 import dagger.hilt.android.AndroidEntryPoint;
 
@@ -170,7 +163,6 @@ public class CommonChatFragment extends Fragment {
                     return;
                 }
                 viewModel.addSuggestedPlaceToTrip(targetTripId, domainPlace);
-                AppSnackbar.show(requireContext(), R.string.trip_stop_added_to_trip);
             }
 
             @Override
@@ -271,7 +263,7 @@ public class CommonChatFragment extends Fragment {
                 return;
             }
             if (!viewModel.isAiAvailable()) {
-                showUnavailableOfflineMessage();
+                AppSnackbar.show(requireContext(), R.string.chat_ai_offline);
                 return;
             }
             viewModel.enterAiDraftMode();
@@ -283,7 +275,7 @@ public class CommonChatFragment extends Fragment {
                 return;
             }
             if (!viewModel.isAiAvailable()) {
-                showUnavailableOfflineMessage();
+                AppSnackbar.show(requireContext(), R.string.chat_ai_offline);
                 return;
             }
             viewModel.enterAiSuggestPlacesMode();
@@ -344,13 +336,6 @@ public class CommonChatFragment extends Fragment {
         }
     }
 
-    private void showUnavailableOfflineMessage() {
-        if (!isAdded()) {
-            return;
-        }
-        AppSnackbar.show(requireContext(), R.string.unavailable_offline);
-    }
-
     // ─── LiveData observers ────────────────────────────────────────────────────
 
     private void onMessagesUpdated(List<ChatMessage> messages) {
@@ -395,9 +380,6 @@ public class CommonChatFragment extends Fragment {
         }
         if (msg.getMessageType() == ChatMessage.MessageType.AI_SUGGESTED_PLACES_CARD) {
             return buildSuggestedPlacesCardMessage(msg, senderDisplay, time);
-        }
-        if (msg.getMessageType() == ChatMessage.MessageType.PLACE_SHARE_CARD) {
-            return buildPlaceShareCardMessage(msg, senderDisplay, time);
         }
 
         if (msg.isLocationMessage()) {
@@ -449,40 +431,6 @@ public class CommonChatFragment extends Fragment {
                 msg.isOutgoing(),
                 card
         );
-    }
-
-    private ChatMessageAdapter.ChatMessage buildPlaceShareCardMessage(ChatMessage msg,
-                                                                      String senderDisplay,
-                                                                      String time) {
-        ChatMessageAdapter.PlaceCard card = parsePlaceShareCard(msg);
-        return ChatMessageAdapter.ChatMessage.placeShareCard(
-                senderDisplay,
-                time,
-                msg.isOutgoing(),
-                card
-        );
-    }
-
-    private ChatMessageAdapter.PlaceCard parsePlaceShareCard(ChatMessage msg) {
-        String payloadJson = msg.getContent() != null ? msg.getContent() : "";
-        if (!payloadJson.trim().startsWith("{")) {
-            return new ChatMessageAdapter.PlaceCard(
-                    UUID.randomUUID().toString(), "Unknown Place", "", 0, 0, 0, false);
-        }
-        try {
-            JSONObject json = new JSONObject(payloadJson);
-            String id = json.optString("id", "");
-            String name = json.optString("name", "Unknown Place");
-            String address = json.optString("address", "");
-            double latitude = json.optDouble("latitude", 0d);
-            double longitude = json.optDouble("longitude", 0d);
-            double rating = json.optDouble("rating", 0d);
-            return new ChatMessageAdapter.PlaceCard(id, name, address, rating, latitude, longitude, false);
-        } catch (JSONException e) {
-            Log.e("CommonChatFragment", "Failed to parse PLACE_SHARE_CARD", e);
-            return new ChatMessageAdapter.PlaceCard(
-                    UUID.randomUUID().toString(), "Unknown Place", "", 0, 0, 0, false);
-        }
     }
 
     private ChatMessageAdapter.TripCreatedCard parseTripCreatedCard(ChatMessage msg) {
@@ -1009,30 +957,17 @@ public class CommonChatFragment extends Fragment {
     private void appendSharedPlaceMessageIfPresent(Bundle args) {
         if (args == null || !"group".equalsIgnoreCase(chatType)) return;
 
-        String placeId = getArg(args, "sharedPlaceId", "");
         String placeName = getArg(args, "sharedPlaceName", "");
-        if (placeId.isEmpty() && placeName.isEmpty()) return;
+        if (placeName.isEmpty()) return;
 
-        String placeAddress = getArg(args, "sharedPlaceAddress", "");
-        String placeSource = getArg(args, "sharedPlaceSource", "");
-        double rating = 0d;
-        try {
-            rating = Double.parseDouble(getArg(args, "sharedPlaceRating", "0"));
-        } catch (NumberFormatException ignored) {
-            rating = 0d;
-        }
-
-        double lat = 0d;
-        double lng = 0d;
+        double lat = 0, lng = 0;
+        String address = getArg(args, "sharedPlaceAddress", "");
         try {
             lat = Double.parseDouble(getArg(args, "sharedPlaceLat", "0"));
             lng = Double.parseDouble(getArg(args, "sharedPlaceLng", "0"));
-        } catch (NumberFormatException ignored) {
-            lat = 0d;
-            lng = 0d;
-        }
+        } catch (NumberFormatException ignored) {}
 
-        viewModel.sharePlaceCard(placeId, placeName, placeAddress, lat, lng, rating, placeSource);
+        viewModel.shareLocation(lat, lng, placeName);
     }
 
     private void handleLocationLinkClick(ChatMessageAdapter.ChatMessage message) {

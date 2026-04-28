@@ -1,6 +1,4 @@
-package com.bif.app.feature.social.core;
-
-import com.bif.app.feature.social.R;
+package com.bif.app.feature.social;
 
 public abstract class UiState<T> {
 

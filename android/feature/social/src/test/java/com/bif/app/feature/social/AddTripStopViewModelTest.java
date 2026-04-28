@@ -1,4 +1,4 @@
-package com.bif.app.feature.social.trips;
+package com.bif.app.feature.social;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
@@ -18,7 +18,6 @@ import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.ITripRepository;
-import com.bif.app.feature.social.trips.AddTripStopViewModel;
 
 import org.junit.Before;
 import org.junit.Rule;

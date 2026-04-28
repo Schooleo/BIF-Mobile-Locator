@@ -11,8 +11,6 @@ import android.widget.FrameLayout;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
 
 import com.google.android.material.color.MaterialColors;
 import com.google.android.material.snackbar.Snackbar;
@@ -79,18 +77,16 @@ public final class AppSnackbar {
             layoutParams.width = ViewGroup.LayoutParams.WRAP_CONTENT;
             layoutParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
             int horizontalMargin = dpToPx(activity, 16);
-            int keyboardInset = getKeyboardInset(anchor);
             layoutParams.leftMargin = horizontalMargin;
             layoutParams.rightMargin = horizontalMargin;
-            layoutParams.bottomMargin = dpToPx(activity, 12) + keyboardInset;
+            layoutParams.bottomMargin = dpToPx(activity, 12);
             snackbarView.setLayoutParams(layoutParams);
         } else if (params instanceof ViewGroup.MarginLayoutParams) {
             ViewGroup.MarginLayoutParams marginParams = (ViewGroup.MarginLayoutParams) params;
             int horizontalMargin = dpToPx(activity, 16);
-            int keyboardInset = getKeyboardInset(anchor);
             marginParams.leftMargin = horizontalMargin;
             marginParams.rightMargin = horizontalMargin;
-            marginParams.bottomMargin = dpToPx(activity, 12) + keyboardInset;
+            marginParams.bottomMargin = dpToPx(activity, 12);
             snackbarView.setLayoutParams(marginParams);
         }
 
@@ -130,13 +126,5 @@ public final class AppSnackbar {
 
     private static int dpToPx(@NonNull Context context, int dp) {
         return Math.round(dp * context.getResources().getDisplayMetrics().density);
-    }
-
-    private static int getKeyboardInset(@NonNull View anchor) {
-        WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(anchor);
-        if (insets == null) {
-            return 0;
-        }
-        return insets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
     }
 }
