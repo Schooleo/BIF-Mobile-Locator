@@ -617,10 +617,7 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             mapLibreMap.addOnMapClickListener(point -> {
                 hideHistory.run();
 
-                if (isTripRouteModeActive()) {
-                    return true;
-                }
-
+                // Allow tapping trip-stop markers even when in trip-route mode.
                 MapViewModel.TripStopOverlay tappedStop = findTripStopAt(point);
                 if (tappedStop != null) {
                     List<MapViewModel.TripStopOverlay> stops = viewModel.tripStopOverlay.getValue();
@@ -634,6 +631,12 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                         }
                         viewModel.selectTripStop(selectedIndex);
                     }
+                    return true;
+                }
+
+                // In trip-route mode, consume taps that are not on trip-stop markers
+                // to prevent accidental selection of arbitrary map locations.
+                if (isTripRouteModeActive()) {
                     return true;
                 }
 
