@@ -60,7 +60,7 @@
 
     <fragment
         android:id="@+id/nav_social"
-        android:name="com.bif.app.feature.social.SocialFragment"
+        android:name="com.bif.app.feature.social.core.SocialFragment"
         android:label="Social"
         app:route="/social"
         tools:layout="@layout/fragment_social">
@@ -109,7 +109,7 @@
     </fragment>
     <fragment
         android:id="@+id/nav_social_chat"
-        android:name="com.bif.app.feature.social.CommonChatFragment"
+        android:name="com.bif.app.feature.social.chat.CommonChatFragment"
         android:label="Chat"
         app:route="/social/chat"
         tools:layout="@layout/fragment_common_chat">
@@ -121,16 +121,19 @@
         <argument android:name="avatarColor" app:argType="integer" android:defaultValue="0" />
         <argument android:name="memberCount" app:argType="integer" android:defaultValue="0" />
         <argument android:name="friendshipCreatedAt" app:argType="long" android:defaultValue="0L" />
+        <argument android:name="sharedPlaceId" app:argType="string" android:defaultValue="" />
         <argument android:name="sharedPlaceName" app:argType="string" android:defaultValue="" />
         <argument android:name="sharedPlaceAddress" app:argType="string" android:defaultValue="" />
-        <argument android:name="sharedPlaceLink" app:argType="string" android:defaultValue="" />
+        <argument android:name="sharedPlaceLat" app:argType="string" android:defaultValue="" />
+        <argument android:name="sharedPlaceLng" app:argType="string" android:defaultValue="" />
+        <argument android:name="sharedPlaceRating" app:argType="string" android:defaultValue="" />
 
-        <deepLink app:uri="app://bif.app/social/chat?chatType={chatType}&amp;chatId={chatId}&amp;chatName={chatName}&amp;avatarLetter={avatarLetter}&amp;avatarColor={avatarColor}&amp;memberCount={memberCount}&amp;friendshipCreatedAt={friendshipCreatedAt}&amp;sharedPlaceName={sharedPlaceName}&amp;sharedPlaceAddress={sharedPlaceAddress}&amp;sharedPlaceLink={sharedPlaceLink}" />
+        <deepLink app:uri="app://bif.app/social/chat?chatType={chatType}&amp;chatId={chatId}&amp;chatName={chatName}&amp;avatarLetter={avatarLetter}&amp;avatarColor={avatarColor}&amp;memberCount={memberCount}&amp;friendshipCreatedAt={friendshipCreatedAt}&amp;sharedPlaceId={sharedPlaceId}&amp;sharedPlaceName={sharedPlaceName}&amp;sharedPlaceAddress={sharedPlaceAddress}&amp;sharedPlaceLat={sharedPlaceLat}&amp;sharedPlaceLng={sharedPlaceLng}&amp;sharedPlaceRating={sharedPlaceRating}" />
     </fragment>
 
     <fragment
         android:id="@+id/nav_friend_settings_locations"
-        android:name="com.bif.app.feature.social.FriendSettingsLocationsFragment"
+        android:name="com.bif.app.feature.social.friends.FriendSettingsLocationsFragment"
         android:label="Friend Shared Locations"
         app:route="/social/friend-settings/locations"
         tools:layout="@layout/fragment_friend_settings_locations">
@@ -144,7 +147,7 @@
 
     <fragment
         android:id="@+id/nav_friend_settings_trips"
-        android:name="com.bif.app.feature.social.FriendSettingsTripsFragment"
+        android:name="com.bif.app.feature.social.friends.FriendSettingsTripsFragment"
         android:label="Friend Trip Plans"
         app:route="/social/friend-settings/trips"
         tools:layout="@layout/fragment_friend_settings_trips">
@@ -158,7 +161,7 @@
 
     <fragment
         android:id="@+id/nav_trip_detail"
-        android:name="com.bif.app.feature.social.TripDetailFragment"
+        android:name="com.bif.app.feature.social.trips.TripDetailFragment"
         android:label="Trip Detail"
         app:route="/social/trip-detail"
         tools:layout="@layout/fragment_trip_detail">
@@ -171,7 +174,7 @@
 
     <fragment
         android:id="@+id/nav_add_trip_stop"
-        android:name="com.bif.app.feature.social.AddTripStopFragment"
+        android:name="com.bif.app.feature.social.trips.AddTripStopFragment"
         android:label="Add Trip Stop"
         app:route="/social/add-trip-stop"
         tools:layout="@layout/fragment_add_trip_stop">
@@ -182,4 +185,3 @@
     </fragment>
 
 </navigation>
-

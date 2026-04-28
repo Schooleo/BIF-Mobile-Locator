@@ -1,4 +1,6 @@
-package com.bif.app.feature.social;
+package com.bif.app.feature.social.chat;
+
+import com.bif.app.feature.social.R;
 
 import android.view.LayoutInflater;
 import android.view.View;
@@ -10,6 +12,9 @@ import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+import com.bif.app.feature.social.ai.AiTripDraftStopPreviewAdapter;
+import com.bif.app.feature.social.core.SocialViewModel;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -37,7 +42,8 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         LOCATION,
         EVENT,
         TRIP_CREATED_CARD,
-        AI_SUGGESTED_PLACES_CARD
+        AI_SUGGESTED_PLACES_CARD,
+        PLACE_SHARE_CARD
     }
 
     public static class ChatMessage {
@@ -52,9 +58,10 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         private final MessageType type;
         private final TripCreatedCard tripCreatedCard;
         private final SuggestedPlacesCard suggestedPlacesCard;
+        private final PlaceCard placeCard;
 
         public ChatMessage(String sender, String title, String subtitle, String linkText, String time, boolean mine, MessageType type) {
-            this(sender, title, subtitle, linkText, "", time, mine, type, null, null);
+            this(sender, title, subtitle, linkText, "", time, mine, type, null, null, null);
         }
 
         public ChatMessage(String sender,
@@ -65,7 +72,7 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                 String time,
                 boolean mine,
                 MessageType type) {
-            this(sender, title, subtitle, linkText, mapQuery, time, mine, type, null, null);
+            this(sender, title, subtitle, linkText, mapQuery, time, mine, type, null, null, null);
         }
 
         public ChatMessage(String sender,
@@ -77,7 +84,8 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                 boolean mine,
                 MessageType type,
                 TripCreatedCard tripCreatedCard,
-                SuggestedPlacesCard suggestedPlacesCard) {
+                SuggestedPlacesCard suggestedPlacesCard,
+                PlaceCard placeCard) {
             this.sender = sender;
             this.title = title;
             this.subtitle = subtitle;
@@ -88,6 +96,7 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             this.type = type;
             this.tripCreatedCard = tripCreatedCard;
             this.suggestedPlacesCard = suggestedPlacesCard;
+            this.placeCard = placeCard;
         }
 
         public static ChatMessage tripCreatedCard(String sender,
@@ -104,6 +113,7 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                     mine,
                     MessageType.TRIP_CREATED_CARD,
                     card,
+                    null,
                     null
             );
         }
@@ -121,6 +131,26 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                     time,
                     mine,
                     MessageType.AI_SUGGESTED_PLACES_CARD,
+                    null,
+                    card,
+                    null
+            );
+        }
+
+        public static ChatMessage placeShareCard(String sender,
+                String time,
+                boolean mine,
+                PlaceCard card) {
+            return new ChatMessage(
+                    sender,
+                    "",
+                    "",
+                    "",
+                    "",
+                    time,
+                    mine,
+                    MessageType.PLACE_SHARE_CARD,
+                    null,
                     null,
                     card
             );
@@ -164,6 +194,10 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
 
         public SuggestedPlacesCard getSuggestedPlacesCard() {
             return suggestedPlacesCard;
+        }
+
+        public PlaceCard getPlaceCard() {
+            return placeCard;
         }
     }
 
@@ -336,6 +370,8 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     private static final int VIEW_TYPE_TEXT_OUTGOING = 2;
     private static final int VIEW_TYPE_TRIP_CREATED_CARD = 3;
     private static final int VIEW_TYPE_SUGGESTED_PLACES_CARD = 4;
+    private static final int VIEW_TYPE_PLACE_SHARE_INCOMING = 5;
+    private static final int VIEW_TYPE_PLACE_SHARE_OUTGOING = 6;
 
     private final List<ChatMessage> messages = new ArrayList<>();
     private final ChatActionCallback actionCallback;
@@ -370,6 +406,9 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         if (message.getType() == MessageType.AI_SUGGESTED_PLACES_CARD) {
             return VIEW_TYPE_SUGGESTED_PLACES_CARD;
         }
+        if (message.getType() == MessageType.PLACE_SHARE_CARD) {
+            return message.isMine() ? VIEW_TYPE_PLACE_SHARE_OUTGOING : VIEW_TYPE_PLACE_SHARE_INCOMING;
+        }
         return message.isMine() ? VIEW_TYPE_TEXT_OUTGOING : VIEW_TYPE_TEXT_INCOMING;
     }
 
@@ -384,6 +423,13 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         if (viewType == VIEW_TYPE_SUGGESTED_PLACES_CARD) {
             View view = inflater.inflate(R.layout.item_chat_suggested_places, parent, false);
             return new SuggestedPlacesMessageViewHolder(view, actionCallback);
+        }
+        if (viewType == VIEW_TYPE_PLACE_SHARE_INCOMING || viewType == VIEW_TYPE_PLACE_SHARE_OUTGOING) {
+            int layout = viewType == VIEW_TYPE_PLACE_SHARE_OUTGOING
+                    ? R.layout.item_chat_place_share_outgoing
+                    : R.layout.item_chat_place_share_incoming;
+            View view = inflater.inflate(layout, parent, false);
+            return new PlaceShareCardViewHolder(view, actionCallback);
         }
 
         int layout = viewType == VIEW_TYPE_TEXT_OUTGOING
@@ -402,6 +448,10 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         }
         if (holder instanceof SuggestedPlacesMessageViewHolder) {
             ((SuggestedPlacesMessageViewHolder) holder).bind(message);
+            return;
+        }
+        if (holder instanceof PlaceShareCardViewHolder) {
+            ((PlaceShareCardViewHolder) holder).bind(message);
             return;
         }
         ((TextMessageViewHolder) holder).bind(message);
@@ -745,6 +795,66 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                 btnViewPlace.setOnClickListener(v -> {
                     if (actionCallback != null) {
                         actionCallback.onViewPlaceClick(place);
+                    }
+                });
+            }
+        }
+    }
+
+    static class PlaceShareCardViewHolder extends RecyclerView.ViewHolder {
+
+        private final TextView tvSender;
+        private final TextView tvTime;
+        private final TextView tvPlaceName;
+        private final TextView tvPlaceAddress;
+        private final TextView tvPlaceRating;
+        private final View btnAddToTrip;
+        private final View btnViewPlace;
+        private final ChatActionCallback actionCallback;
+
+        PlaceShareCardViewHolder(@NonNull View itemView, ChatActionCallback actionCallback) {
+            super(itemView);
+            tvSender = itemView.findViewById(R.id.tv_sender);
+            tvTime = itemView.findViewById(R.id.tv_message_time);
+            tvPlaceName = itemView.findViewById(R.id.tv_place_name);
+            tvPlaceAddress = itemView.findViewById(R.id.tv_place_address);
+            tvPlaceRating = itemView.findViewById(R.id.tv_place_rating);
+            btnAddToTrip = itemView.findViewById(R.id.btn_add_to_trip);
+            btnViewPlace = itemView.findViewById(R.id.btn_view_place);
+            this.actionCallback = actionCallback;
+        }
+
+        void bind(ChatMessage message) {
+            if (message.isMine()) {
+                tvSender.setVisibility(View.GONE);
+            } else {
+                tvSender.setVisibility(View.VISIBLE);
+                tvSender.setText(message.getSender());
+            }
+
+            tvTime.setText(message.getTime());
+
+            PlaceCard card = message.getPlaceCard();
+            if (card != null) {
+                tvPlaceName.setText(card.getName() != null ? card.getName() : "");
+                tvPlaceAddress.setText(card.getAddress() != null ? card.getAddress() : "");
+                
+                if (card.getRating() > 0) {
+                    tvPlaceRating.setVisibility(View.VISIBLE);
+                    tvPlaceRating.setText(itemView.getContext().getString(R.string.trip_stop_rating_format, card.getRating()));
+                } else {
+                    tvPlaceRating.setVisibility(View.GONE);
+                }
+
+                btnViewPlace.setOnClickListener(v -> {
+                    if (actionCallback != null) {
+                        actionCallback.onViewPlaceClick(card);
+                    }
+                });
+
+                btnAddToTrip.setOnClickListener(v -> {
+                    if (actionCallback != null) {
+                        actionCallback.onAddPlaceToTripClick(null, card);
                     }
                 });
             }

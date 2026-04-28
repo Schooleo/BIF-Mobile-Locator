@@ -1,4 +1,4 @@
-package com.bif.app.feature.social;
+package com.bif.app.feature.social.ai;
 
 import android.view.LayoutInflater;
 import android.view.View;
@@ -8,6 +8,9 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.bif.app.feature.social.R;
+import com.bif.app.feature.social.core.SocialViewModel;
+
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -16,7 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-class AiTripDraftStopPreviewAdapter
+public class AiTripDraftStopPreviewAdapter
         extends RecyclerView.Adapter<AiTripDraftStopPreviewAdapter.StopPreviewViewHolder> {
 
     private static final int MAX_TIME_LABEL_LENGTH = 14;
@@ -27,7 +30,10 @@ class AiTripDraftStopPreviewAdapter
 
     private final List<SocialViewModel.AiDraftStopPreview> items = new ArrayList<>();
 
-    void submit(List<SocialViewModel.AiDraftStopPreview> previews) {
+    public AiTripDraftStopPreviewAdapter() {
+    }
+
+    public void submit(List<SocialViewModel.AiDraftStopPreview> previews) {
         items.clear();
         if (previews != null) {
             items.addAll(previews);

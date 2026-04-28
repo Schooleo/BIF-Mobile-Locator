@@ -32,6 +32,7 @@ import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.IPlaceRepository.PersistenceCallback;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -60,7 +61,8 @@ public class PlaceRepository implements IPlaceRepository {
     private final NetworkMonitor networkMonitor;
     private final AiGraphQlClient aiGraphQlClient;
     private final ExecutorService executorService;
-    private final String activeUserId;
+    private final Context appContext;
+    private final String fallbackActiveUserId;
     private volatile Double configuredDefaultLatitude;
     private volatile Double configuredDefaultLongitude;
 
@@ -81,12 +83,13 @@ public class PlaceRepository implements IPlaceRepository {
         this.networkMonitor = networkMonitor;
         this.aiGraphQlClient = aiGraphQlClient;
         this.executorService = Executors.newFixedThreadPool(4);
-        this.activeUserId = resolveActiveUserId(appContext);
+        this.appContext = appContext;
+        this.fallbackActiveUserId = resolveActiveUserId(appContext);
         this.configuredDefaultLatitude = null;
         this.configuredDefaultLongitude = null;
 
-        if (!activeUserId.trim().isEmpty()) {
-            syncManager.setUserContext(activeUserId, null);
+        if (!fallbackActiveUserId.trim().isEmpty()) {
+            syncManager.setUserContext(fallbackActiveUserId, null);
         }
     }
 
@@ -134,7 +137,8 @@ public class PlaceRepository implements IPlaceRepository {
         this.networkMonitor = networkMonitor;
         this.aiGraphQlClient = aiGraphQlClient;
         this.executorService = executorService;
-        this.activeUserId = activeUserId;
+        this.appContext = null;
+        this.fallbackActiveUserId = activeUserId;
         this.configuredDefaultLatitude = null;
         this.configuredDefaultLongitude = null;
     }
@@ -192,6 +196,7 @@ public class PlaceRepository implements IPlaceRepository {
         }
 
         executorService.execute(() -> {
+            String activeUserId = resolveCurrentActiveUserId();
             try {
                 Response<PlaceDto> response = restApiService.getPlaceById(placeId).execute();
                 PlaceDto dto = response.body();
@@ -354,6 +359,7 @@ public class PlaceRepository implements IPlaceRepository {
         }
 
         executorService.execute(() -> {
+            String activeUserId = resolveCurrentActiveUserId();
             Location searchOrigin = resolveSearchOrigin(userLocation);
             List<Place> combinedResults = new ArrayList<>();
             Set<String> seenIds = new HashSet<>();
@@ -478,6 +484,7 @@ public class PlaceRepository implements IPlaceRepository {
     @Override
     public void persistPlace(Place place, String action, @Nullable PersistenceCallback callback) {
         executorService.execute(() -> {
+            String activeUserId = resolveCurrentActiveUserId();
             try {
                 Place normalizedPlace = normalizePlaceForCache(place);
                 if (normalizedPlace == null) {
@@ -495,12 +502,18 @@ public class PlaceRepository implements IPlaceRepository {
                 entity.persistedByAction = action;
                 if (existing != null) {
                     entity.serverVersion = existing.serverVersion;
+                    entity.viewedAt = existing.viewedAt;
                 }
 
                 boolean isDelete = "DELETE".equalsIgnoreCase(action)
                         || "REMOVE".equalsIgnoreCase(action);
+                boolean isViewed = isViewedAction(action);
                 if (isDelete) {
                     entity.deleted = true;
+                }
+
+                if (isViewed) {
+                    entity.viewedAt = System.currentTimeMillis();
                 }
 
                 placeDao.upsert(entity);
@@ -523,7 +536,7 @@ public class PlaceRepository implements IPlaceRepository {
                 payload.serverVersion = entity.serverVersion;
                 payload.deleted = entity.deleted;
 
-                if (shouldEnqueueChange(existing, entity, operation)) {
+                if (!isViewed && shouldEnqueueChange(existing, entity, operation)) {
                     syncManager.enqueueChange(
                             "place",
                             normalizedPlace.id,
@@ -546,6 +559,7 @@ public class PlaceRepository implements IPlaceRepository {
 
     @Override
     public LiveData<List<Place>> getAllPersistedPlaces() {
+        String activeUserId = resolveCurrentActiveUserId();
         return Transformations.map(placeDao.getAll(activeUserId),
                 PlaceMapper::toDomainList);
     }
@@ -572,6 +586,7 @@ public class PlaceRepository implements IPlaceRepository {
     }
 
     private void cacheResultsLocally(List<Place> places) {
+        String activeUserId = resolveCurrentActiveUserId();
         List<PlaceEntity> entities = new ArrayList<>();
         for (Place place : places) {
             entities.add(PlaceMapper.toEntity(place, activeUserId));
@@ -583,6 +598,7 @@ public class PlaceRepository implements IPlaceRepository {
     }
 
     private void enforceLocalCacheLimit() {
+        String activeUserId = resolveCurrentActiveUserId();
         int count = placeDao.count(activeUserId);
         if (count > MAX_LOCAL_PLACES) {
             placeDao.evictOldest(count - MAX_LOCAL_PLACES, activeUserId);
@@ -591,6 +607,7 @@ public class PlaceRepository implements IPlaceRepository {
 
     private void autoPersistFromSearch(Place place) {
         executorService.execute(() -> {
+            String activeUserId = resolveCurrentActiveUserId();
             if (!networkMonitor.isOnline()) {
                 return;
             }
@@ -621,6 +638,16 @@ public class PlaceRepository implements IPlaceRepository {
         return userId.trim();
     }
 
+    private String resolveCurrentActiveUserId() {
+        if (appContext != null) {
+            return resolveActiveUserId(appContext);
+        }
+        if (fallbackActiveUserId == null || fallbackActiveUserId.trim().isEmpty()) {
+            return "anonymous";
+        }
+        return fallbackActiveUserId.trim();
+    }
+
     private Place normalizePlaceForCache(Place place) {
         if (place == null || place.location == null) {
             return null;
@@ -628,7 +655,7 @@ public class PlaceRepository implements IPlaceRepository {
 
         String placeId = place.id;
         if (placeId == null || placeId.trim().isEmpty()) {
-            placeId = UUID.randomUUID().toString();
+            placeId = buildDeterministicPlaceId(place);
         }
 
         String normalizedAddress = place.address;
@@ -642,8 +669,36 @@ public class PlaceRepository implements IPlaceRepository {
                 place.name != null ? place.name : "",
                 normalizedAddress,
                 place.rating,
-                place.location
+            place.location,
+            place.placeSource,
+            place.selectionState
         );
+    }
+
+    private String buildDeterministicPlaceId(Place place) {
+        String source = normalizeKeyComponent(place != null ? place.placeSource : null);
+        String name = normalizeKeyComponent(place != null ? place.name : null);
+        String address = normalizeKeyComponent(place != null ? place.address : null);
+        String latitude = place != null && place.location != null
+                ? String.format(java.util.Locale.US, "%.6f", place.location.latitude)
+                : "0.000000";
+        String longitude = place != null && place.location != null
+                ? String.format(java.util.Locale.US, "%.6f", place.location.longitude)
+                : "0.000000";
+
+        String seed = source + "|" + name + "|" + address + "|" + latitude + "|" + longitude;
+        return UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8)).toString();
+    }
+
+    private String normalizeKeyComponent(@Nullable String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private boolean isViewedAction(@Nullable String action) {
+        return "viewed".equalsIgnoreCase(action);
     }
 
     private boolean shouldEnqueueChange(PlaceEntity existing,

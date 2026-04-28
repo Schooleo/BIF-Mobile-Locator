@@ -1,4 +1,4 @@
-package com.bif.app.feature.social;
+package com.bif.app.feature.social.core;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
@@ -30,6 +30,7 @@ import com.bif.app.domain.repository.IChatRepository;
 import com.bif.app.domain.repository.IFriendshipRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.ITripRepository;
+import com.bif.app.feature.social.core.SocialViewModel;
 
 import org.junit.Before;
 import org.junit.Rule;

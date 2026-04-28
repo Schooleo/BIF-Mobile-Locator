@@ -3,6 +3,7 @@ package com.bif.server.features.favorite.services;
 import com.bif.server.common.models.Location;
 import com.bif.server.features.favorite.models.Favorite;
 import com.bif.server.features.favorite.repositories.FavoriteRepository;
+import com.bif.server.features.place.repositories.PlaceRepository;
 import com.bif.server.features.place.services.PlaceIdentityService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,11 +27,15 @@ class FavoriteServiceTest {
     @Mock
     private PlaceIdentityService placeIdentityService;
 
+    @Mock
+    private PlaceRepository placeRepository;
+
     private FavoriteService favoriteService;
 
     @BeforeEach
     void setUp() {
-        favoriteService = new FavoriteService(favoriteRepository, placeIdentityService);
+        favoriteService = new FavoriteService(favoriteRepository, placeIdentityService, placeRepository);
+        lenient().when(placeRepository.findById(anyString())).thenReturn(Optional.empty());
     }
 
     @Test
@@ -69,12 +74,18 @@ class FavoriteServiceTest {
     @Test
     void save_ReturnsSavedEntity() {
         Favorite item = new Favorite();
-        when(favoriteRepository.save(item)).thenReturn(item);
+        item.setExternalSource("GOOGLE_MAPS");
+        item.setExternalId("gm-0");
+        item.setPlaceName("Coffee");
+        item.setLocation(new Location(10.0, 20.0));
+        when(placeIdentityService.resolveInternalPlaceId("GOOGLE_MAPS", "gm-0", 10.0, 20.0, "Coffee"))
+                .thenReturn("place-0");
+        when(favoriteRepository.save(any(Favorite.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Favorite result = favoriteService.save(item);
 
-        assertSame(item, result);
-        verify(favoriteRepository).save(item);
+        assertEquals("place-0", result.getPlaceId());
+        verify(favoriteRepository).save(any(Favorite.class));
     }
 
     @Test
@@ -83,59 +94,77 @@ class FavoriteServiceTest {
         item.setId("f1");
         item.setUserId("u1");
         item.setName("Cafe");
+        item.setPlaceName("Cafe");
+        item.setExternalSource("GOOGLE_MAPS");
+        item.setExternalId("gm-1");
         item.setLocation(new Location(10.0, 20.0));
 
-        when(placeIdentityService.resolveInternalPlaceId("FAVORITE", "f1", 10.0, 20.0, "Cafe"))
+        when(placeIdentityService.resolveInternalPlaceId("GOOGLE_MAPS", "gm-1", 10.0, 20.0, "Cafe"))
                 .thenReturn("place-123");
         when(favoriteRepository.save(any(Favorite.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Favorite result = favoriteService.save(item);
 
         ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
-        verify(placeIdentityService).resolveInternalPlaceId("FAVORITE", "f1", 10.0, 20.0, "Cafe");
+        verify(placeIdentityService).resolveInternalPlaceId("GOOGLE_MAPS", "gm-1", 10.0, 20.0, "Cafe");
         verify(favoriteRepository).save(captor.capture());
         assertEquals("place-123", captor.getValue().getPlaceId());
         assertEquals("place-123", result.getPlaceId());
     }
 
     @Test
-    void save_WhenPlaceIdExists_DoesNotResolveAndSavesOriginalId() {
+    void save_WhenPlaceIdExists_StillResolvesAndOverwritesCanonicalId() {
         Favorite item = new Favorite();
         item.setId("f2");
         item.setUserId("u1");
         item.setPlaceId("place-xyz");
+        item.setExternalSource("GOOGLE_MAPS");
+        item.setExternalId("gm-2");
+        item.setPlaceName("Cafe");
         item.setName("Cafe");
         item.setLocation(new Location(10.0, 20.0));
 
+        when(placeIdentityService.resolveInternalPlaceId("GOOGLE_MAPS", "gm-2", 10.0, 20.0, "Cafe"))
+                .thenReturn("place-canonical");
         when(favoriteRepository.save(any(Favorite.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Favorite result = favoriteService.save(item);
 
         ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
-        verify(placeIdentityService, never()).resolveInternalPlaceId(anyString(), anyString(), anyDouble(), anyDouble(), anyString());
+        verify(placeIdentityService).resolveInternalPlaceId("GOOGLE_MAPS", "gm-2", 10.0, 20.0, "Cafe");
         verify(favoriteRepository).save(captor.capture());
-        assertEquals("place-xyz", captor.getValue().getPlaceId());
-        assertEquals("place-xyz", result.getPlaceId());
+        assertEquals("place-canonical", captor.getValue().getPlaceId());
+        assertEquals("place-canonical", result.getPlaceId());
     }
 
     @Test
-    void save_WhenResolutionFails_FallsBackToOriginalFavorite() {
+    void save_WhenResolutionFails_ThrowsIllegalStateException() {
         Favorite item = new Favorite();
         item.setId("f3");
         item.setUserId("u1");
         item.setName("Cafe");
+        item.setExternalSource("GOOGLE_MAPS");
+        item.setExternalId("gm-3");
         item.setLocation(new Location(10.0, 20.0));
 
-        when(placeIdentityService.resolveInternalPlaceId("FAVORITE", "f3", 10.0, 20.0, "Cafe"))
+        when(placeIdentityService.resolveInternalPlaceId("GOOGLE_MAPS", "gm-3", 10.0, 20.0, "Cafe"))
                 .thenThrow(new RuntimeException("boom"));
-        when(favoriteRepository.save(any(Favorite.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Favorite result = favoriteService.save(item);
+        assertThrows(IllegalStateException.class, () -> favoriteService.save(item));
+        verify(favoriteRepository, never()).save(any(Favorite.class));
+    }
 
-        ArgumentCaptor<Favorite> captor = ArgumentCaptor.forClass(Favorite.class);
-        verify(favoriteRepository).save(captor.capture());
-        assertNull(captor.getValue().getPlaceId());
-        assertNull(result.getPlaceId());
+    @Test
+    void save_WhenIdentityMetadataMissing_ThrowsIllegalArgumentException() {
+        Favorite item = new Favorite();
+        item.setId("f4");
+        item.setUserId("u1");
+        item.setName("Cafe");
+        item.setLocation(new Location(10.0, 20.0));
+
+        assertThrows(IllegalArgumentException.class, () -> favoriteService.save(item));
+        verify(placeIdentityService, never()).resolveInternalPlaceId(anyString(), anyString(), anyDouble(), anyDouble(), anyString());
+        verify(favoriteRepository, never()).save(any(Favorite.class));
     }
 
     @Test
@@ -194,12 +223,69 @@ class FavoriteServiceTest {
     void saveMyFavorite_WhenCreate_OverwritesUserIdWithCurrentUser() {
         Favorite input = new Favorite();
         input.setUserId("other-user");
-        when(favoriteRepository.save(input)).thenReturn(input);
+        input.setExternalSource("GOOGLE_MAPS");
+        input.setExternalId("gm-5");
+        input.setPlaceName("Coffee");
+        input.setLocation(new Location(10.0, 20.0));
+
+        when(placeIdentityService.resolveInternalPlaceId("GOOGLE_MAPS", "gm-5", 10.0, 20.0, "Coffee"))
+                .thenReturn("place-5");
+        when(favoriteRepository.save(any(Favorite.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Favorite result = favoriteService.saveMyFavorite("u1", input);
 
         assertSame(input, result);
         assertEquals("u1", input.getUserId());
+        assertEquals("place-5", input.getPlaceId());
+        verify(favoriteRepository).save(input);
+    }
+
+    @Test
+    void saveMyFavorite_WhenUpdateMissingLocation_UsesExistingLocation() {
+        Favorite input = new Favorite();
+        input.setId("f1");
+        input.setExternalSource("GOOGLE_MAPS");
+        input.setExternalId("gm-9");
+        input.setPlaceName("Coffee");
+
+        Favorite existing = new Favorite();
+        existing.setId("f1");
+        existing.setUserId("u1");
+        existing.setLocation(new Location(10.0, 20.0));
+        when(favoriteRepository.findById("f1")).thenReturn(Optional.of(existing));
+
+        when(placeIdentityService.resolveInternalPlaceId("GOOGLE_MAPS", "gm-9", 10.0, 20.0, "Coffee"))
+                .thenReturn("place-9");
+        when(favoriteRepository.save(any(Favorite.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Favorite result = favoriteService.saveMyFavorite("u1", input);
+
+        assertSame(input, result);
+        assertNotNull(input.getLocation());
+        assertEquals(10.0, input.getLocation().getLatitude());
+        assertEquals(20.0, input.getLocation().getLongitude());
+        assertEquals("place-9", input.getPlaceId());
+        verify(favoriteRepository).save(input);
+    }
+
+    @Test
+    void saveMyFavorite_WhenUpdateMissingPlaceId_UsesExistingPlaceId() {
+        Favorite input = new Favorite();
+        input.setId("f2");
+
+        Favorite existing = new Favorite();
+        existing.setId("f2");
+        existing.setUserId("u1");
+        existing.setPlaceId("place-existing");
+        existing.setLocation(new Location(10.0, 20.0));
+        when(favoriteRepository.findById("f2")).thenReturn(Optional.of(existing));
+        when(favoriteRepository.save(any(Favorite.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Favorite result = favoriteService.saveMyFavorite("u1", input);
+
+        assertSame(input, result);
+        assertEquals("place-existing", input.getPlaceId());
+        verify(placeIdentityService, never()).resolveInternalPlaceId(anyString(), anyString(), anyDouble(), anyDouble(), anyString());
         verify(favoriteRepository).save(input);
     }
 

@@ -5,7 +5,6 @@ import com.bif.app.core.network.dto.auth.AuthStateResponse;
 import com.bif.app.core.network.dto.auth.LoginRequest;
 import com.bif.app.core.network.dto.auth.RefreshTokenRequest;
 import com.bif.app.core.network.dto.auth.RegisterRequest;
-import com.bif.app.core.network.dto.favorite.FavoriteRequestDto;
 import com.bif.app.core.network.dto.favorite.FavoriteResponseDto;
 import com.bif.app.core.network.dto.friendship.CreateFriendRequestDto;
 import com.bif.app.core.network.dto.friendship.FriendshipApiModel;
@@ -66,12 +65,6 @@ public interface RestApiService {
 
     @GET("favorites/me")
     Call<List<FavoriteResponseDto>> getMyFavorites();
-
-    @POST("favorites/me")
-    Call<FavoriteResponseDto> upsertMyFavorite(@Body FavoriteRequestDto request);
-
-    @DELETE("favorites/me/{id}")
-    Call<Void> deleteMyFavorite(@Path("id") String id);
 
     @GET("users/me/profile-metadata")
     Call<ProfileMetadataResponse> getMyProfileMetadata();
