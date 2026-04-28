@@ -32,6 +32,7 @@ import android.widget.ImageButton;
 import android.widget.RatingBar;
 import android.widget.TextView;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import com.bif.app.core.utils.AppSnackbar;
 import androidx.annotation.Nullable;
@@ -44,6 +45,7 @@ import androidx.core.graphics.drawable.DrawableCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -63,6 +65,7 @@ import com.google.android.material.progressindicator.CircularProgressIndicator;
 import com.google.android.material.progressindicator.LinearProgressIndicator;
 
 import org.json.JSONException;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.JSONTokener;
 import org.maplibre.android.MapLibre;
@@ -94,10 +97,13 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
+import java.text.SimpleDateFormat;
 
 import dagger.hilt.android.AndroidEntryPoint;
 import timber.log.Timber;
@@ -123,6 +129,10 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private static final String ROUTE_TURN_LAYER_ID = "route-turn-layer";
     private static final String USER_ROUTE_SOURCE_ID = "route-user-source";
     private static final String USER_ROUTE_LAYER_ID = "route-user-layer";
+    private static final String TRIP_STOP_SOURCE_ID = "trip-stop-source";
+    private static final String TRIP_STOP_LAYER_ID = "trip-stop-layer";
+    private static final String TRIP_ROUTE_SOURCE_ID = "trip-route-source";
+    private static final String TRIP_ROUTE_LAYER_ID = "trip-route-layer";
     private static final String MARKER_ICON_FAVORITE_ID = "marker-icon-favorite";
     private static final String MARKER_ICON_SEARCH_ID = "marker-icon-search";
     private static final String MARKER_ICON_SELECTED_ID = "marker-icon-selected";
@@ -135,11 +145,17 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private static final String PROP_LAT = "lat";
     private static final String PROP_LNG = "lng";
     private static final String PROP_BEARING = "bearing";
+    private static final String PROP_ICON = "icon";
+    private static final String PROP_ORDER = "order";
+    private static final String PROP_SELECTED = "selected";
     private static final String ARG_LOCATION = "location";
     private static final String ARG_FOCUS_NAME = "focusName";
     private static final String ARG_FOCUS_ADDRESS = "focusAddress";
     private static final String ARG_FOCUS_PLACE_ID = "focusPlaceId";
     private static final String ARG_FOCUS_RATING = "focusRating";
+    private static final String ARG_TRIP_STOPS_JSON = "tripStopsJson";
+    private static final String ARG_SOURCE_TRIP_ID = "sourceTripId";
+    private static final String ARG_SOURCE_TRIP_TITLE = "sourceTripTitle";
     private static final double VIETNAM_MIN_LAT = 8.56;
     private static final double VIETNAM_MAX_LAT = 23.39;
     private static final double VIETNAM_MIN_LON = 102.14;
@@ -175,6 +191,12 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private MaterialButton btnCancelRoute;
     private MaterialButton btnFollowRoute;
     private ImageButton btnMapCompass;
+    @Nullable
+    private View searchContainer;
+    @Nullable
+    private ImageButton btnMyLocation;
+    @Nullable
+    private ImageButton btnTripRouteBack;
 
     // Review and rating related views
     private RecyclerView rvReviews;
@@ -223,6 +245,13 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private Place pendingNavigationPlace;
     @Nullable
     private String pendingNavigationQuery;
+    @Nullable
+    private String pendingTripStopsJson;
+    private boolean tripRouteModeRequested;
+    @Nullable
+    private String sourceTripId;
+    @Nullable
+    private String sourceTripTitle;
     private boolean navigationRequestHandled;
     @Nullable
     private Boolean userIndicatorVisibleForZoom;
@@ -236,6 +265,26 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     private final float[] headingRotationMatrix = new float[9];
     private final float[] headingRemappedMatrix = new float[9];
     private final float[] headingOrientation = new float[3];
+    @Nullable
+    private View layoutTripStopDetail;
+    @Nullable
+    private TextView tvTripStopOrderBadge;
+    @Nullable
+    private TextView tvTripStopTitle;
+    @Nullable
+    private TextView tvTripStopAddress;
+    @Nullable
+    private TextView tvTripStopNote;
+    @Nullable
+    private TextView tvTripStopTime;
+    @Nullable
+    private ImageButton btnTripStopClose;
+    @Nullable
+    private ImageButton btnTripStopPrev;
+    @Nullable
+    private ImageButton btnTripStopNext;
+    @Nullable
+    private View layoutTripStopNavArrows;
 
     private final Handler locationHandler = new Handler(Looper.getMainLooper());
     private final Runnable locationTimeoutRunnable = () -> {
@@ -390,6 +439,19 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         btnCancelRoute = view.findViewById(R.id.btn_cancel_route);
         btnFollowRoute = view.findViewById(R.id.btn_follow_route);
         btnMapCompass = view.findViewById(R.id.btn_map_compass);
+        searchContainer = view.findViewById(R.id.search_container);
+        btnMyLocation = view.findViewById(R.id.btn_my_location);
+        btnTripRouteBack = view.findViewById(R.id.btn_trip_route_back);
+        layoutTripStopDetail = view.findViewById(R.id.layout_trip_stop_detail);
+        tvTripStopOrderBadge = view.findViewById(R.id.tv_trip_stop_order_badge);
+        tvTripStopTitle = view.findViewById(R.id.tv_trip_stop_title);
+        tvTripStopAddress = view.findViewById(R.id.tv_trip_stop_address);
+        tvTripStopNote = view.findViewById(R.id.tv_trip_stop_note);
+        tvTripStopTime = view.findViewById(R.id.tv_trip_stop_time);
+        btnTripStopClose = view.findViewById(R.id.btn_trip_stop_close);
+        btnTripStopPrev = view.findViewById(R.id.btn_trip_stop_prev);
+        btnTripStopNext = view.findViewById(R.id.btn_trip_stop_next);
+        layoutTripStopNavArrows = view.findViewById(R.id.layout_trip_stop_nav_arrows);
 
         if (btnCancelRoute != null) {
             btnCancelRoute.setOnClickListener(v -> stopRouteAndFocusDestination());
@@ -402,6 +464,18 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         }
         if (btnMapCompass != null) {
             btnMapCompass.setOnClickListener(v -> resetMapBearingNorth());
+        }
+        if (btnTripRouteBack != null) {
+            btnTripRouteBack.setOnClickListener(v -> navigateBackFromTripRouteMode());
+        }
+        if (btnTripStopClose != null) {
+            btnTripStopClose.setOnClickListener(v -> viewModel.dismissTripStopSelection());
+        }
+        if (btnTripStopPrev != null) {
+            btnTripStopPrev.setOnClickListener(v -> viewModel.selectPreviousTripStop());
+        }
+        if (btnTripStopNext != null) {
+            btnTripStopNext.setOnClickListener(v -> viewModel.selectNextTripStop());
         }
 
         if (mapView == null) {
@@ -437,8 +511,11 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         });
 
         viewModel.routeSession.observe(getViewLifecycleOwner(), this::renderRouteSession);
+        observeTripOverlayState();
 
         setupSearchUi(view);
+        applyTripRouteModeUi(view);
+        installTripRouteModeBackHandler();
         progressSearchPlaces = view.findViewById(R.id.progress_search_places);
 
         viewModel.isSearchingPlaces.observe(getViewLifecycleOwner(), searching -> {
@@ -450,7 +527,6 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                     : View.GONE);
         });
 
-        ImageButton btnMyLocation = view.findViewById(R.id.btn_my_location);
         if (btnMyLocation != null) {
             btnMyLocation.setOnClickListener(v -> {
                 RouteSession session = viewModel.getCurrentRouteSession();
@@ -540,6 +616,27 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
             mapLibreMap.addOnMapClickListener(point -> {
                 hideHistory.run();
+
+                if (isTripRouteModeActive()) {
+                    return true;
+                }
+
+                MapViewModel.TripStopOverlay tappedStop = findTripStopAt(point);
+                if (tappedStop != null) {
+                    List<MapViewModel.TripStopOverlay> stops = viewModel.tripStopOverlay.getValue();
+                    if (stops != null && !stops.isEmpty()) {
+                        int selectedIndex = 0;
+                        for (int i = 0; i < stops.size(); i++) {
+                            if (stops.get(i).orderIndex == tappedStop.orderIndex) {
+                                selectedIndex = i;
+                                break;
+                            }
+                        }
+                        viewModel.selectTripStop(selectedIndex);
+                    }
+                    return true;
+                }
+
                 if (viewModel.hasActiveRouteSession()) {
                     viewModel.setStatusText(getString(R.string.route_active_place_sheet_blocked));
                     return true;
@@ -663,6 +760,14 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         String focusAddress = args.getString(ARG_FOCUS_ADDRESS, "").trim();
         String focusPlaceId = args.getString(ARG_FOCUS_PLACE_ID, "").trim();
         String focusRatingRaw = args.getString(ARG_FOCUS_RATING, "").trim();
+        String tripStopsJson = args.getString(ARG_TRIP_STOPS_JSON, "").trim();
+        sourceTripId = args.getString(ARG_SOURCE_TRIP_ID, "").trim();
+        sourceTripTitle = args.getString(ARG_SOURCE_TRIP_TITLE, "").trim();
+
+        if (!tripStopsJson.isEmpty()) {
+            pendingTripStopsJson = tripStopsJson;
+            tripRouteModeRequested = true;
+        }
 
         Point coordinatePoint = parseCoordinateQuery(locationQuery);
         if (coordinatePoint != null) {
@@ -738,6 +843,14 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             return;
         }
 
+        if (pendingTripStopsJson != null && !pendingTripStopsJson.trim().isEmpty()) {
+            List<MapViewModel.TripStopOverlay> parsedStops = parseTripStopsJson(pendingTripStopsJson);
+            if (!parsedStops.isEmpty()) {
+                viewModel.setTripStops(parsedStops);
+            }
+            pendingTripStopsJson = null;
+        }
+
         if (pendingNavigationPlace != null && pendingNavigationPlace.location != null) {
             selectedPlace = pendingNavigationPlace;
             renderSelectedPlace();
@@ -758,6 +871,396 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         }
     }
 
+    private void observeTripOverlayState() {
+        viewModel.tripStopOverlay.observe(getViewLifecycleOwner(), stops -> {
+            if (stops == null || stops.isEmpty()) {
+                clearTripStopOverlayUi();
+                return;
+            }
+
+            renderTripStopMarkers(stops);
+            fitCameraToTripStops(stops);
+            showTripStopNavArrows(true, stops.size() > 1);
+        });
+
+        viewModel.tripRouteLegs.observe(getViewLifecycleOwner(), legs -> {
+            if (legs == null || legs.isEmpty()) {
+                setFeatures(TRIP_ROUTE_SOURCE_ID, Collections.emptyList());
+                return;
+            }
+            renderTripRouteLegs(legs);
+        });
+
+        viewModel.selectedTripStopIndex.observe(getViewLifecycleOwner(), index -> {
+            List<MapViewModel.TripStopOverlay> stops = viewModel.tripStopOverlay.getValue();
+            if (stops == null || stops.isEmpty() || index == null || index < 0 || index >= stops.size()) {
+                if (stops != null && !stops.isEmpty()) {
+                    renderTripStopMarkers(stops);
+                }
+                if (layoutTripStopDetail != null) {
+                    layoutTripStopDetail.setVisibility(View.GONE);
+                }
+                return;
+            }
+
+            MapViewModel.TripStopOverlay stop = stops.get(index);
+            renderTripStopMarkers(stops);
+            showTripStopDetailCard(stop);
+            animateCameraToTripStop(stop);
+        });
+    }
+
+    @NonNull
+    private List<MapViewModel.TripStopOverlay> parseTripStopsJson(@NonNull String json) {
+        List<MapViewModel.TripStopOverlay> parsed = new ArrayList<>();
+        try {
+            JSONArray items = new JSONArray(json);
+            for (int i = 0; i < items.length(); i++) {
+                JSONObject item = items.optJSONObject(i);
+                if (item == null) {
+                    continue;
+                }
+
+                double lat = item.optDouble("lat", Double.NaN);
+                double lng = item.optDouble("lng", Double.NaN);
+                if (!Double.isFinite(lat) || !Double.isFinite(lng)) {
+                    continue;
+                }
+                if (Double.compare(lat, 0.0d) == 0 && Double.compare(lng, 0.0d) == 0) {
+                    continue;
+                }
+
+                int order = item.optInt("order", parsed.size() + 1);
+                String title = item.optString("title", "");
+                String address = item.optString("address", "");
+                String note = item.optString("note", "");
+                long time = item.optLong("time", 0L);
+
+                parsed.add(new MapViewModel.TripStopOverlay(order, lat, lng, title, address, note, time));
+            }
+        } catch (JSONException ignored) {
+            return Collections.emptyList();
+        }
+
+        Collections.sort(parsed, Comparator.comparingInt(stop -> stop.orderIndex));
+        List<MapViewModel.TripStopOverlay> normalized = new ArrayList<>();
+        for (int i = 0; i < parsed.size(); i++) {
+            MapViewModel.TripStopOverlay stop = parsed.get(i);
+            normalized.add(new MapViewModel.TripStopOverlay(
+                i + 1,
+                stop.latitude,
+                stop.longitude,
+                stop.title,
+                stop.address,
+                stop.note,
+                stop.timeMillis));
+        }
+        return normalized;
+    }
+
+    private void clearTripStopOverlayUi() {
+        setFeatures(TRIP_STOP_SOURCE_ID, Collections.emptyList());
+        setFeatures(TRIP_ROUTE_SOURCE_ID, Collections.emptyList());
+        showTripStopNavArrows(false, false);
+        if (layoutTripStopDetail != null) {
+            layoutTripStopDetail.setVisibility(View.GONE);
+        }
+    }
+
+    private void applyTripRouteModeUi(@NonNull View root) {
+        if (btnTripRouteBack != null) {
+            btnTripRouteBack.setVisibility(isTripRouteModeActive() ? View.VISIBLE : View.GONE);
+        }
+
+        if (!isTripRouteModeActive()) {
+            return;
+        }
+
+        hideHistory.run();
+
+        if (mapSearchView != null) {
+            suppressQueryTextChange = true;
+            try {
+                mapSearchView.setQuery("", false);
+                mapSearchView.clearFocus();
+            } finally {
+                suppressQueryTextChange = false;
+            }
+        }
+
+        if (searchContainer == null) {
+            searchContainer = root.findViewById(R.id.search_container);
+        }
+
+        if (searchContainer != null) {
+            searchContainer.setVisibility(View.GONE);
+        }
+        if (mapSearchHistoryView != null) {
+            mapSearchHistoryView.setVisibility(View.GONE);
+        }
+        if (btnMyLocation != null) {
+            btnMyLocation.setVisibility(View.GONE);
+        }
+        if (btnMapCompass != null) {
+            btnMapCompass.setVisibility(View.GONE);
+        }
+        if (downloadCityMapLayout != null) {
+            downloadCityMapLayout.setVisibility(View.GONE);
+        }
+        if (followRouteBar != null) {
+            followRouteBar.setVisibility(View.GONE);
+        }
+        if (bottomSheetBehavior != null) {
+            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+        }
+        if (bottomSheetContainer != null) {
+            bottomSheetContainer.setVisibility(View.GONE);
+        }
+    }
+
+    private void installTripRouteModeBackHandler() {
+        if (!isTripRouteModeActive()) {
+            return;
+        }
+
+        requireActivity().getOnBackPressedDispatcher().addCallback(
+                getViewLifecycleOwner(),
+                new OnBackPressedCallback(true) {
+                    @Override
+                    public void handleOnBackPressed() {
+                        navigateBackFromTripRouteMode();
+                    }
+                });
+    }
+
+    private boolean isTripRouteModeActive() {
+        return tripRouteModeRequested;
+    }
+
+    private void navigateBackFromTripRouteMode() {
+        View currentView = getView();
+        if (currentView == null) {
+            return;
+        }
+
+        NavController navController = Navigation.findNavController(currentView);
+        if (navController.popBackStack()) {
+            return;
+        }
+
+        if (sourceTripId != null && !sourceTripId.trim().isEmpty()) {
+            Uri tripDetailUri = UriUtils.buildUri(UriUtils.PathTo.TRIP_DETAIL).buildUpon()
+                    .appendQueryParameter("tripId", sourceTripId)
+                    .appendQueryParameter("tripTitle", sourceTripTitle == null ? "" : sourceTripTitle)
+                    .build();
+            navController.navigate(tripDetailUri);
+            return;
+        }
+
+        navController.navigateUp();
+    }
+
+    private void renderTripStopMarkers(@NonNull List<MapViewModel.TripStopOverlay> stops) {
+        if (!isMapStyleReady()) {
+            return;
+        }
+
+        Style style = mapLibreMap.getStyle();
+        if (style == null) {
+            return;
+        }
+
+        Integer selectedIndexValue = viewModel.selectedTripStopIndex.getValue();
+        int selectedIndex = selectedIndexValue != null ? selectedIndexValue : -1;
+
+        List<Feature> features = new ArrayList<>();
+        for (int i = 0; i < stops.size(); i++) {
+            MapViewModel.TripStopOverlay stop = stops.get(i);
+            boolean isSelected = i == selectedIndex;
+            String iconId = "trip-stop-icon-" + stop.orderIndex + (isSelected ? "-selected" : "");
+            if (style.getImage(iconId) == null) {
+                style.addImage(iconId, createNumberedMarkerBitmap(stop.orderIndex, isSelected));
+            }
+
+            Feature feature = Feature.fromGeometry(Point.fromLngLat(stop.longitude, stop.latitude));
+            feature.addStringProperty(PROP_ICON, iconId);
+            feature.addNumberProperty(PROP_ORDER, stop.orderIndex);
+            feature.addNumberProperty(PROP_LAT, stop.latitude);
+            feature.addNumberProperty(PROP_LNG, stop.longitude);
+            feature.addBooleanProperty(PROP_SELECTED, isSelected);
+            features.add(feature);
+        }
+
+        setFeatures(TRIP_STOP_SOURCE_ID, features);
+    }
+
+    private void renderTripRouteLegs(@NonNull List<MapViewModel.TripLegRoute> legs) {
+        List<Feature> features = new ArrayList<>();
+        for (MapViewModel.TripLegRoute leg : legs) {
+            if (leg == null || leg.geometryJson == null || leg.geometryJson.trim().isEmpty()) {
+                continue;
+            }
+            Feature routeFeature = parseRouteFeature(leg.geometryJson);
+            if (routeFeature != null) {
+                features.add(routeFeature);
+            }
+        }
+        setFeatures(TRIP_ROUTE_SOURCE_ID, features);
+    }
+
+    @NonNull
+    private Bitmap createNumberedMarkerBitmap(int number, boolean isSelected) {
+        Bitmap base = loadMarkerBitmap(R.drawable.ic_marker, "#2ECC71");
+        float markerScale = isSelected ? 1.50f : 1.30f;
+        int width = Math.max(1, Math.round(base.getWidth() * markerScale));
+        int height = Math.max(1, Math.round(base.getHeight() * markerScale));
+        Bitmap mutable = Bitmap.createScaledBitmap(base, width, height, true)
+                .copy(Bitmap.Config.ARGB_8888, true);
+        Canvas canvas = new Canvas(mutable);
+
+        Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        strokePaint.setColor(Color.BLACK);
+        strokePaint.setFakeBoldText(true);
+        strokePaint.setTextAlign(Paint.Align.CENTER);
+        strokePaint.setTextSize(dpToPx(isSelected ? 14f : 12f));
+        strokePaint.setStyle(Paint.Style.STROKE);
+        strokePaint.setStrokeWidth(dpToPx(isSelected ? 3f : 2f));
+
+        Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        textPaint.setColor(Color.WHITE);
+        textPaint.setFakeBoldText(true);
+        textPaint.setTextAlign(Paint.Align.CENTER);
+        textPaint.setTextSize(dpToPx(isSelected ? 14f : 12f));
+
+        String text = String.valueOf(number);
+        float x = mutable.getWidth() / 2f;
+        float y = dpToPx(isSelected ? 22f : 19f);
+        canvas.drawText(text, x, y, strokePaint);
+        canvas.drawText(text, x, y, textPaint);
+        return mutable;
+    }
+
+    private void fitCameraToTripStops(@NonNull List<MapViewModel.TripStopOverlay> stops) {
+        if (!isMapStyleReady() || stops.isEmpty()) {
+            return;
+        }
+
+        LatLngBounds.Builder builder = new LatLngBounds.Builder();
+        for (MapViewModel.TripStopOverlay stop : stops) {
+            builder.include(new LatLng(stop.latitude, stop.longitude));
+        }
+
+        try {
+            mapLibreMap.animateCamera(CameraUpdateFactory.newLatLngBounds(builder.build(), 120));
+        } catch (Exception ignored) {
+            // Ignore bounds errors for nearly-identical points.
+        }
+    }
+
+    private void showTripStopNavArrows(boolean visible, boolean enabled) {
+        if (layoutTripStopNavArrows != null) {
+            layoutTripStopNavArrows.setVisibility(visible ? View.VISIBLE : View.GONE);
+        }
+        if (btnTripStopPrev != null) {
+            btnTripStopPrev.setEnabled(enabled);
+            btnTripStopPrev.setAlpha(enabled ? 1.0f : 0.45f);
+        }
+        if (btnTripStopNext != null) {
+            btnTripStopNext.setEnabled(enabled);
+            btnTripStopNext.setAlpha(enabled ? 1.0f : 0.45f);
+        }
+    }
+
+    private void showTripStopDetailCard(@NonNull MapViewModel.TripStopOverlay stop) {
+        if (layoutTripStopDetail == null
+                || tvTripStopOrderBadge == null
+                || tvTripStopTitle == null
+                || tvTripStopAddress == null
+                || tvTripStopNote == null
+                || tvTripStopTime == null) {
+            return;
+        }
+
+        tvTripStopOrderBadge.setText(String.valueOf(stop.orderIndex));
+        tvTripStopTitle.setText(stop.title == null || stop.title.trim().isEmpty()
+                ? getString(R.string.default_place_name)
+                : stop.title);
+
+        boolean hasAddress = stop.address != null && !stop.address.trim().isEmpty();
+        tvTripStopAddress.setText(hasAddress ? stop.address : "");
+        tvTripStopAddress.setVisibility(hasAddress ? View.VISIBLE : View.GONE);
+
+        boolean hasNote = stop.note != null && !stop.note.trim().isEmpty();
+        tvTripStopNote.setText(hasNote ? stop.note : "");
+        tvTripStopNote.setVisibility(hasNote ? View.VISIBLE : View.GONE);
+
+        if (stop.timeMillis > 0L) {
+            SimpleDateFormat dayFormat = new SimpleDateFormat(
+                    getString(R.string.trip_stop_time_day_pattern),
+                    Locale.getDefault());
+            SimpleDateFormat clockFormat = new SimpleDateFormat(
+                    getString(R.string.trip_stop_time_clock_pattern),
+                    Locale.getDefault());
+            Date date = new Date(stop.timeMillis);
+            tvTripStopTime.setText(getString(
+                    R.string.trip_stop_time_format,
+                    dayFormat.format(date),
+                    clockFormat.format(date)));
+            tvTripStopTime.setVisibility(View.VISIBLE);
+        } else {
+            tvTripStopTime.setVisibility(View.GONE);
+        }
+
+        layoutTripStopDetail.setVisibility(View.VISIBLE);
+    }
+
+    private void animateCameraToTripStop(@NonNull MapViewModel.TripStopOverlay stop) {
+        if (!isMapStyleReady()) {
+            return;
+        }
+        CameraPosition current = mapLibreMap.getCameraPosition();
+        double zoom = current != null ? current.zoom : 15.0;
+        mapLibreMap.animateCamera(CameraUpdateFactory.newLatLngZoom(
+                new LatLng(stop.latitude, stop.longitude),
+                zoom), 450);
+    }
+
+    @Nullable
+    private MapViewModel.TripStopOverlay findTripStopAt(@NonNull LatLng point) {
+        if (mapLibreMap == null) {
+            return null;
+        }
+
+        PointF screenPoint = mapLibreMap.getProjection().toScreenLocation(point);
+        List<Feature> hits = mapLibreMap.queryRenderedFeatures(screenPoint, TRIP_STOP_LAYER_ID);
+        if (hits == null || hits.isEmpty()) {
+            return null;
+        }
+
+        Feature hit = hits.get(0);
+        if (hit == null || !hit.hasProperty(PROP_ORDER)) {
+            return null;
+        }
+
+        Number orderNumber = hit.getNumberProperty(PROP_ORDER);
+        if (orderNumber == null) {
+            return null;
+        }
+
+        int order = orderNumber.intValue();
+        List<MapViewModel.TripStopOverlay> stops = viewModel.tripStopOverlay.getValue();
+        if (stops == null || stops.isEmpty()) {
+            return null;
+        }
+
+        for (MapViewModel.TripStopOverlay stop : stops) {
+            if (stop.orderIndex == order) {
+                return stop;
+            }
+        }
+        return null;
+    }
+
     private void configureCompassAboveMyLocation() {
         if (mapLibreMap == null) {
             return;
@@ -769,6 +1272,12 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         if (mapLibreMap == null || btnMapCompass == null) {
             return;
         }
+
+        if (isTripRouteModeActive()) {
+            btnMapCompass.setVisibility(View.GONE);
+            return;
+        }
+
         double bearing = Math.abs(mapLibreMap.getCameraPosition().bearing);
         boolean show = bearing > 1d && bearing < 359d;
         btnMapCompass.setVisibility(show ? View.VISIBLE : View.GONE);
@@ -1021,6 +1530,11 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             return;
         }
 
+        if (isTripRouteModeActive()) {
+            downloadCityMapLayout.setVisibility(View.GONE);
+            return;
+        }
+
         OfflineMapDownloadState.Status status = state != null
                 ? state.status
                 : OfflineMapDownloadState.Status.IDLE;
@@ -1034,6 +1548,12 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
     private void renderPlaceResults(List<Place> places) {
         if (mapLibreMap == null) {
+            return;
+        }
+
+        if (isTripRouteModeActive()) {
+            updateSearchMarkersSource(Collections.emptyList());
+            viewModel.notifySearchDone(0);
             return;
         }
 
@@ -1325,6 +1845,11 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             return;
         }
 
+        if (isTripRouteModeActive()) {
+            clearFavoriteMarkers();
+            return;
+        }
+
         if (viewModel != null && viewModel.hasActiveRouteSession()) {
             clearFavoriteMarkers();
             return;
@@ -1376,10 +1901,13 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         addSourceIfMissing(style, ROUTE_PASSED_SOURCE_ID);
         addSourceIfMissing(style, ROUTE_TURN_SOURCE_ID);
         addSourceIfMissing(style, USER_ROUTE_SOURCE_ID);
+        addSourceIfMissing(style, TRIP_STOP_SOURCE_ID);
+        addSourceIfMissing(style, TRIP_ROUTE_SOURCE_ID);
 
         addMarkerImages(style);
 
         addRouteLayersIfMissing(style);
+        addTripOverlayLayersIfMissing(style);
 
         addSymbolLayerIfMissing(style, FAVORITE_LAYER_ID, FAVORITE_SOURCE_ID,
                 MARKER_ICON_FAVORITE_ID, 0.92f);
@@ -1391,6 +1919,31 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
                 TURN_ARROW_ICON_ID, 0.72f);
         addRotatingSymbolLayerIfMissing(style, USER_ROUTE_LAYER_ID, USER_ROUTE_SOURCE_ID,
                 USER_ARROW_ICON_ID, 0.92f);
+    }
+
+    private void addTripOverlayLayersIfMissing(@NonNull Style style) {
+        if (style.getLayer(TRIP_ROUTE_LAYER_ID) == null) {
+            LineLayer routeLayer = new LineLayer(TRIP_ROUTE_LAYER_ID, TRIP_ROUTE_SOURCE_ID);
+            routeLayer.setProperties(
+                    PropertyFactory.lineColor("#2ECC71"),
+                    PropertyFactory.lineWidth(5.0f),
+                    PropertyFactory.lineOpacity(0.85f),
+                    PropertyFactory.lineDasharray(new Float[] { 2f, 1.5f }),
+                    PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                    PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND));
+            style.addLayer(routeLayer);
+        }
+
+        if (style.getLayer(TRIP_STOP_LAYER_ID) == null) {
+            SymbolLayer stopLayer = new SymbolLayer(TRIP_STOP_LAYER_ID, TRIP_STOP_SOURCE_ID);
+            stopLayer.setProperties(
+                    PropertyFactory.iconImage(Expression.get(PROP_ICON)),
+                    PropertyFactory.iconAnchor(Property.ICON_ANCHOR_BOTTOM),
+                    PropertyFactory.iconAllowOverlap(true),
+                    PropertyFactory.iconIgnorePlacement(true),
+                    PropertyFactory.iconSize(1.0f));
+            style.addLayer(stopLayer);
+        }
     }
 
     private void addSourceIfMissing(@NonNull Style style, @NonNull String sourceId) {
@@ -1902,6 +2455,10 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
     }
 
     private void updateFloatingControlsPosition() {
+        if (isTripRouteModeActive()) {
+            return;
+        }
+
         View root = getView();
         if (root == null) {
             return;
@@ -3728,6 +4285,9 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
 
     @Override
     public void onDestroyView() {
+        if (viewModel != null) {
+            viewModel.clearTripOverlay();
+        }
         stopSingleLocationUpdates();
         stopHeadingSensorUpdates();
         floatingControlsUpdateScheduled = false;
@@ -3798,6 +4358,23 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
         progressSearchPlaces = null;
         mapSearchView = null;
         mapSearchHistoryView = null;
+        pendingTripStopsJson = null;
+        tripRouteModeRequested = false;
+        sourceTripId = null;
+        sourceTripTitle = null;
+        searchContainer = null;
+        btnMyLocation = null;
+        btnTripRouteBack = null;
+        layoutTripStopDetail = null;
+        tvTripStopOrderBadge = null;
+        tvTripStopTitle = null;
+        tvTripStopAddress = null;
+        tvTripStopNote = null;
+        tvTripStopTime = null;
+        btnTripStopClose = null;
+        btnTripStopPrev = null;
+        btnTripStopNext = null;
+        layoutTripStopNavArrows = null;
         super.onDestroyView();
     }
 }

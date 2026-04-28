@@ -224,6 +224,22 @@
             app:tint="?attr/colorPrimary" />
     </FrameLayout>
 
+    <ImageButton
+        android:id="@+id/btn_trip_route_back"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:background="@drawable/bg_trip_stop_nav_button"
+        android:contentDescription="@string/trip_route_back_to_trip"
+        android:elevation="9dp"
+        android:padding="10dp"
+        android:src="@drawable/ic_back"
+        android:visibility="gone"
+        app:tint="?attr/colorOnSurface"
+        tools:visibility="visible" />
+
     <FrameLayout
         android:id="@+id/bottom_sheet_container"
         android:layout_width="match_parent"
@@ -241,6 +257,133 @@
             layout="@layout/dialog_route_detail"
             android:layout_width="match_parent"
             android:layout_height="wrap_content" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/layout_trip_stop_detail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginBottom="24dp"
+        android:background="@drawable/bg_follow_route_bar"
+        android:elevation="10dp"
+        android:orientation="vertical"
+        android:paddingHorizontal="14dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="14dp"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tv_trip_stop_order_badge"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:background="@drawable/bg_trip_stop_nav_button"
+                android:gravity="center"
+                android:textColor="@color/primary_green"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                tools:text="2" />
+
+            <TextView
+                android:id="@+id/tv_trip_stop_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="10dp"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:textColor="?attr/colorTextPrimary"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                tools:text="Notre Dame Cathedral" />
+
+            <ImageButton
+                android:id="@+id/btn_trip_stop_close"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/trip_stop_close_detail"
+                android:src="@drawable/ic_close"
+                app:tint="?attr/colorTextSecondary" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tv_trip_stop_address"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textColor="?attr/colorTextSecondary"
+            android:textSize="13sp"
+            tools:text="District 1, Ho Chi Minh City" />
+
+        <TextView
+            android:id="@+id/tv_trip_stop_note"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:ellipsize="end"
+            android:maxLines="3"
+            android:textColor="?attr/colorTextPrimary"
+            android:textSize="13sp"
+            tools:text="Buy tickets before arrival." />
+
+        <TextView
+            android:id="@+id/tv_trip_stop_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:drawablePadding="6dp"
+            android:textColor="?attr/colorTextSecondary"
+            android:textSize="12sp"
+            tools:text="Fri, Apr 25 · 09:30" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/layout_trip_stop_nav_arrows"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginTop="80dp"
+        android:layout_marginBottom="200dp"
+        android:clickable="false"
+        android:focusable="false"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <ImageButton
+            android:id="@+id/btn_trip_stop_prev"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_gravity="start|center_vertical"
+            android:background="@drawable/bg_trip_stop_nav_button"
+            android:contentDescription="@string/trip_previous_place"
+            android:elevation="8dp"
+            android:padding="10dp"
+            android:src="@drawable/ic_back"
+            app:tint="@color/primary_green" />
+
+        <ImageButton
+            android:id="@+id/btn_trip_stop_next"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_gravity="end|center_vertical"
+            android:background="@drawable/bg_trip_stop_nav_button"
+            android:contentDescription="@string/trip_next_place"
+            android:elevation="8dp"
+            android:padding="10dp"
+            android:rotation="180"
+            android:src="@drawable/ic_back"
+            app:tint="@color/primary_green" />
     </FrameLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

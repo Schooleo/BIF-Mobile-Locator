@@ -36,10 +36,6 @@ import com.google.android.material.datepicker.MaterialDatePicker;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.tabs.TabLayout;
 
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -57,7 +53,6 @@ public class SocialFragment extends Fragment {
     private LinearLayout stateLayout;
     private TextView tvStateMessage;
     private Button btnRetry;
-    private Button btnLogin;
     private SwipeRefreshLayout swipeRefreshLayout;
     private FriendsAdapter friendsAdapter;
     private TripListAdapter tripListAdapter;
@@ -71,18 +66,11 @@ public class SocialFragment extends Fragment {
     private LinearLayout aiLayoutError;
     private EditText etAiRequest;
     private EditText etAiErrorRequest;
-    private TextView tvAiStartDate;
-    private TextView tvAiEndDate;
-    private TextView tvAiErrorStartDate;
-    private TextView tvAiErrorEndDate;
     private TextView tvAiResultTitle;
     private TextView tvAiResultDescription;
     private TextView tvAiResultStopCount;
     private TextView tvAiErrorMessage;
     private AiTripDraftStopPreviewAdapter aiTripDraftStopPreviewAdapter;
-    private long aiDraftStartMillis = 0L;
-    private long aiDraftEndMillis = 0L;
-    private boolean authenticated = false;
 
     @Nullable
     @Override
@@ -96,7 +84,6 @@ public class SocialFragment extends Fragment {
     public void onResume() {
         super.onResume();
         if (viewModel != null) {
-            updateAuthenticationUi();
             viewModel.retryTrips();
             viewModel.retryFriends();
             viewModel.refreshRequestsOnly();
@@ -107,7 +94,6 @@ public class SocialFragment extends Fragment {
     public void onHiddenChanged(boolean hidden) {
         super.onHiddenChanged(hidden);
         if (!hidden && viewModel != null) {
-            updateAuthenticationUi();
             viewModel.retryTrips();
             viewModel.retryFriends();
             viewModel.refreshRequestsOnly();
@@ -133,16 +119,13 @@ public class SocialFragment extends Fragment {
         stateLayout = view.findViewById(R.id.layout_state);
         tvStateMessage = view.findViewById(R.id.tv_state_message);
         btnRetry = view.findViewById(R.id.btn_retry);
-        btnLogin = view.findViewById(R.id.btn_login);
         fabAiTripDrafter = view.findViewById(R.id.fab_ai_trip_drafter);
 
         swipeRefreshLayout.setOnRefreshListener(this::refreshCurrentTab);
         btnRetry.setOnClickListener(v -> refreshCurrentTab());
-        btnLogin.setOnClickListener(v -> navigateToLogin());
         fabAiTripDrafter.setOnClickListener(v -> showAiTripDrafterDialog());
 
         setupRecyclerView();
-        updateAuthenticationUi();
         setupTabs();
         observeViewModel();
         updateAiTripDrafterFabVisibility();
@@ -265,9 +248,6 @@ public class SocialFragment extends Fragment {
                     case "__MSG_FRIEND_REQUEST_SEND_FAILED__":
                         toastMessage = getString(R.string.friend_request_send_failed);
                         break;
-                    case "__MSG_AUTH_REQUIRED__":
-                        toastMessage = getString(R.string.social_login_required_collaboration);
-                        break;
                     case "__MSG_FRIEND_REQUEST_REQUIRES_ONLINE__":
                         toastMessage = getString(R.string.friend_request_requires_online);
                         break;
@@ -354,7 +334,6 @@ public class SocialFragment extends Fragment {
     }
 
     private void renderCurrentTabState() {
-        updateAuthenticationUi();
         if (tabLayout.getSelectedTabPosition() == 0) {
             renderTripState(viewModel.getTripUiState().getValue());
         } else {
@@ -393,14 +372,7 @@ public class SocialFragment extends Fragment {
         stopRefreshing();
         if (state instanceof UiState.Empty) {
             friendsAdapter.setFriends(new ArrayList<>());
-            UiState.Empty<List<Friend>> empty = (UiState.Empty<List<Friend>>) state;
-            if (!isAuthenticated()) {
-                showState(empty.getMessage());
-                btnRetry.setVisibility(View.GONE);
-                btnLogin.setVisibility(View.VISIBLE);
-            } else {
-                showList(friendsAdapter);
-            }
+            showList(friendsAdapter);
             return;
         }
         if (state instanceof UiState.Error) {
@@ -430,9 +402,6 @@ public class SocialFragment extends Fragment {
         stateLayout.setVisibility(View.VISIBLE);
         tvStateMessage.setText(message);
         btnRetry.setVisibility(View.VISIBLE);
-        if (btnLogin != null) {
-            btnLogin.setVisibility(View.GONE);
-        }
         recyclerView.setOnTouchListener(null);
         recyclerView.setAlpha(1f);
     }
@@ -450,14 +419,11 @@ public class SocialFragment extends Fragment {
             stopRefreshing();
             return;
         }
-        updateAuthenticationUi();
         if (tabLayout.getSelectedTabPosition() == 0) {
             viewModel.retryTrips();
-        } else if (isAuthenticated()) {
+        } else {
             viewModel.retryFriends();
             viewModel.refreshRequestsOnly();
-        } else {
-            renderFriendState(viewModel.getFriendUiState().getValue());
         }
         renderCurrentTabState();
         swipeRefreshLayout.postDelayed(this::stopRefreshing, 1000L);
@@ -488,36 +454,16 @@ public class SocialFragment extends Fragment {
         }
     }
 
-
-    private void updateAuthenticationUi() {
-        String token = UserPreferences.getAuthToken(requireContext());
-        authenticated = UserPreferences.isLoggedIn(requireContext())
-                && token != null
-                && !token.trim().isEmpty();
-        updateAiTripDrafterFabVisibility();
-    }
-
-    private boolean isAuthenticated() {
-        return authenticated;
-    }
-
     private void updateAiTripDrafterFabVisibility() {
         if (fabAiTripDrafter == null || tabLayout == null) {
             return;
         }
-        boolean onTripsTab = tabLayout.getSelectedTabPosition() == 0;
-        fabAiTripDrafter.setVisibility(onTripsTab ? View.VISIBLE : View.GONE);
-        fabAiTripDrafter.setEnabled(true);
-        fabAiTripDrafter.setClickable(true);
-        fabAiTripDrafter.setAlpha(authenticated ? 1f : 0.45f);
+        fabAiTripDrafter.setVisibility(
+                tabLayout.getSelectedTabPosition() == 0 ? View.VISIBLE : View.GONE
+        );
     }
 
     private void showAiTripDrafterDialog() {
-        updateAuthenticationUi();
-        if (!isAuthenticated()) {
-            AppSnackbar.show(requireContext(), R.string.social_login_required_ai);
-            return;
-        }
         if (aiTripDrafterDialog != null && aiTripDrafterDialog.isShowing()) {
             return;
         }
@@ -543,20 +489,10 @@ public class SocialFragment extends Fragment {
         aiLayoutError = dialogView.findViewById(R.id.layout_ai_error);
         etAiRequest = dialogView.findViewById(R.id.et_ai_request);
         etAiErrorRequest = dialogView.findViewById(R.id.et_ai_error_request);
-        tvAiStartDate = dialogView.findViewById(R.id.tv_ai_start_date);
-        tvAiEndDate = dialogView.findViewById(R.id.tv_ai_end_date);
-        tvAiErrorStartDate = dialogView.findViewById(R.id.tv_ai_error_start_date);
-        tvAiErrorEndDate = dialogView.findViewById(R.id.tv_ai_error_end_date);
         tvAiResultTitle = dialogView.findViewById(R.id.tv_ai_result_title);
         tvAiResultDescription = dialogView.findViewById(R.id.tv_ai_result_description);
         tvAiResultStopCount = dialogView.findViewById(R.id.tv_ai_result_stop_count);
         tvAiErrorMessage = dialogView.findViewById(R.id.tv_ai_error_message);
-
-        updateAiDraftDateLabels();
-        bindAiDraftDatePicker(tvAiStartDate, R.string.start_date, "ai_draft_start_date_picker", true);
-        bindAiDraftDatePicker(tvAiEndDate, R.string.end_date, "ai_draft_end_date_picker", false);
-        bindAiDraftDatePicker(tvAiErrorStartDate, R.string.start_date, "ai_draft_error_start_date_picker", true);
-        bindAiDraftDatePicker(tvAiErrorEndDate, R.string.end_date, "ai_draft_error_end_date_picker", false);
 
         RecyclerView rvStops = dialogView.findViewById(R.id.rv_ai_result_stops);
         rvStops.setLayoutManager(new LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false));
@@ -571,21 +507,11 @@ public class SocialFragment extends Fragment {
         Button btnErrorClear = dialogView.findViewById(R.id.btn_ai_error_clear);
         Button btnErrorSend = dialogView.findViewById(R.id.btn_ai_error_send);
 
-        btnSend.setOnClickListener(v -> {
-            if (!hasValidAiDraftDateRange()) {
-                return;
-            }
-            viewModel.submitAiTripDraftQuery(
-                    etAiRequest.getText().toString(),
-                    aiDraftStartMillis,
-                    aiDraftEndMillis
-            );
-        });
+        btnSend.setOnClickListener(v ->
+                viewModel.submitAiTripDraftQuery(etAiRequest.getText().toString())
+        );
         btnClear.setOnClickListener(v -> {
             etAiRequest.setText("");
-            aiDraftStartMillis = 0L;
-            aiDraftEndMillis = 0L;
-            updateAiDraftDateLabels();
             viewModel.clearAiDraftRequest();
         });
         btnLoadingBack.setOnClickListener(v -> viewModel.backToAiInput());
@@ -602,16 +528,9 @@ public class SocialFragment extends Fragment {
             etAiRequest.setText("");
             viewModel.clearAiDraftRequest();
         });
-        btnErrorSend.setOnClickListener(v -> {
-            if (!hasValidAiDraftDateRange()) {
-                return;
-            }
-            viewModel.submitAiTripDraftQuery(
-                    etAiErrorRequest.getText().toString(),
-                    aiDraftStartMillis,
-                    aiDraftEndMillis
-            );
-        });
+        btnErrorSend.setOnClickListener(v ->
+                viewModel.submitAiTripDraftQuery(etAiErrorRequest.getText().toString())
+        );
     }
 
     private void clearAiTripDrafterDialogBindings() {
@@ -622,10 +541,6 @@ public class SocialFragment extends Fragment {
         aiLayoutError = null;
         etAiRequest = null;
         etAiErrorRequest = null;
-        tvAiStartDate = null;
-        tvAiEndDate = null;
-        tvAiErrorStartDate = null;
-        tvAiErrorEndDate = null;
         tvAiResultTitle = null;
         tvAiResultDescription = null;
         tvAiResultStopCount = null;
@@ -648,7 +563,6 @@ public class SocialFragment extends Fragment {
         if (aiLayoutInput == null || aiLayoutLoading == null || aiLayoutResult == null || aiLayoutError == null) {
             return;
         }
-        updateAiDraftDateLabels();
 
         if (state instanceof SocialViewModel.AiTripDrafterUiState.Input) {
             SocialViewModel.AiTripDrafterUiState.Input inputState =
@@ -726,63 +640,11 @@ public class SocialFragment extends Fragment {
         editText.setSelection(nextValue.length());
     }
 
-    private void updateAiDraftDateLabels() {
-        String startText = formatDate(aiDraftStartMillis);
-        String endText = formatDate(aiDraftEndMillis);
-        if (tvAiStartDate != null) {
-            tvAiStartDate.setText(startText);
-            tvAiStartDate.setContentDescription(aiDraftStartMillis > 0L
-                    ? getString(R.string.trip_ai_start_date_selected, startText)
-                    : getString(R.string.trip_ai_start_date_not_set));
-        }
-        if (tvAiEndDate != null) {
-            tvAiEndDate.setText(endText);
-            tvAiEndDate.setContentDescription(aiDraftEndMillis > 0L
-                    ? getString(R.string.trip_ai_end_date_selected, endText)
-                    : getString(R.string.trip_ai_end_date_not_set));
-        }
-        if (tvAiErrorStartDate != null) {
-            tvAiErrorStartDate.setText(startText);
-            tvAiErrorStartDate.setContentDescription(aiDraftStartMillis > 0L
-                    ? getString(R.string.trip_ai_start_date_selected, startText)
-                    : getString(R.string.trip_ai_start_date_not_set));
-        }
-        if (tvAiErrorEndDate != null) {
-            tvAiErrorEndDate.setText(endText);
-            tvAiErrorEndDate.setContentDescription(aiDraftEndMillis > 0L
-                    ? getString(R.string.trip_ai_end_date_selected, endText)
-                    : getString(R.string.trip_ai_end_date_not_set));
-        }
-    }
-
-    private void bindAiDraftDatePicker(TextView target,
-                                       int titleRes,
-                                       String tag,
-                                       boolean isStartDate) {
-        if (target == null) {
-            return;
-        }
-        target.setOnClickListener(v -> showAiDraftDatePicker(titleRes,
-                isStartDate ? aiDraftStartMillis : aiDraftEndMillis,
-                selection -> {
-                    if (isStartDate) {
-                        aiDraftStartMillis = normalizePickerSelection(selection);
-                    } else {
-                        aiDraftEndMillis = normalizePickerSelection(selection);
-                    }
-                    updateAiDraftDateLabels();
-                },
-                tag));
-    }
-
     private String resolveAiDraftErrorMessage(SocialViewModel.AiTripDrafterUiState.Error errorState) {
         if (errorState == null) {
             return getString(R.string.trip_ai_error_fallback);
         }
         String code = errorState.getErrorCode();
-        if (SocialViewModel.AI_DRAFT_AUTH_REQUIRED_MESSAGE.equals(code)) {
-            return getString(R.string.social_login_required_ai);
-        }
         if (SocialViewModel.AI_DRAFT_EMPTY_QUERY_MESSAGE.equals(code)) {
             return getString(R.string.trip_ai_empty_query);
         }
@@ -798,46 +660,7 @@ public class SocialFragment extends Fragment {
         return getString(R.string.trip_ai_error_fallback);
     }
 
-    private boolean hasValidAiDraftDateRange() {
-        if (aiDraftStartMillis <= 0L || aiDraftEndMillis <= 0L) {
-            AppSnackbar.show(requireContext(), R.string.trip_dates_required);
-            return false;
-        }
-        if (aiDraftEndMillis < aiDraftStartMillis) {
-            AppSnackbar.show(requireContext(), R.string.trip_dates_invalid);
-            return false;
-        }
-        return true;
-    }
-
-    private void showAiDraftDatePicker(int titleRes,
-                                       long selection,
-                                       DateSelectionCallback callback,
-                                       String tag) {
-        MaterialDatePicker.Builder<Long> builder = MaterialDatePicker.Builder.datePicker()
-                .setTitleText(titleRes);
-        if (selection > 0L) {
-            builder.setSelection(toPickerSelectionUtc(selection));
-        }
-        MaterialDatePicker<Long> picker = builder.build();
-        picker.addOnPositiveButtonClickListener(chosen -> {
-            long resolved = chosen != null ? chosen : 0L;
-            if (callback != null) {
-                callback.onDateSelected(resolved);
-            }
-        });
-        picker.show(getParentFragmentManager(), tag);
-    }
-
-    private void navigateToLogin() {
-        Navigation.findNavController(requireView()).navigate(UriUtils.buildUri("/login"));
-    }
-
     private void showAddFriendDialog() {
-        if (!isAuthenticated()) {
-            AppSnackbar.show(requireContext(), R.string.social_login_required_collaboration);
-            return;
-        }
         DialogUtils.showCustomInputDialog(
                 requireContext(),
                 R.layout.dialog_add_friend,
@@ -904,7 +727,7 @@ public class SocialFragment extends Fragment {
                             AppSnackbar.show(requireContext(), R.string.trip_dates_required);
                             return;
                         }
-                        if (endMillis[0] <= startMillis[0]) {
+                        if (endMillis[0] < startMillis[0]) {
                             AppSnackbar.show(requireContext(), R.string.trip_dates_invalid);
                             return;
                         }
@@ -1006,7 +829,7 @@ public class SocialFragment extends Fragment {
                             AppSnackbar.show(requireContext(), R.string.trip_dates_required);
                             return;
                         }
-                        if (endMillis[0] <= startMillis[0]) {
+                        if (endMillis[0] < startMillis[0]) {
                             AppSnackbar.show(requireContext(), R.string.trip_dates_invalid);
                             return;
                         }
@@ -1064,30 +887,6 @@ public class SocialFragment extends Fragment {
             return "";
         }
         return new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(new Date(millis));
-    }
-
-    private long normalizePickerSelection(long selectionUtcMillis) {
-        if (selectionUtcMillis <= 0L) {
-            return 0L;
-        }
-        LocalDate selectedDate = Instant.ofEpochMilli(selectionUtcMillis)
-                .atZone(ZoneOffset.UTC)
-                .toLocalDate();
-        return selectedDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
-    }
-
-    private long toPickerSelectionUtc(long localDateMillis) {
-        if (localDateMillis <= 0L) {
-            return 0L;
-        }
-        LocalDate selectedDate = Instant.ofEpochMilli(localDateMillis)
-                .atZone(ZoneId.systemDefault())
-                .toLocalDate();
-        return selectedDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
-    }
-
-    private interface DateSelectionCallback {
-        void onDateSelected(long selection);
     }
 
     private void navigateToFriendSettingsTrips(Friend friend) {
