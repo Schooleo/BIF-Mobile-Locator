@@ -35,7 +35,7 @@ public class RegisterViewModel extends ViewModel {
     private String username = "";
     private String password = "";
     private String confirmPassword = "";
-    private boolean otpRequested = false;
+    private String requestedEmail;
 
     @Inject
     public RegisterViewModel(AuthRepository authRepository) {
@@ -81,7 +81,11 @@ public class RegisterViewModel extends ViewModel {
     }
 
     public void onEmailChanged(String value) {
-        email = value == null ? "" : value.trim();
+        String resolvedEmail = value == null ? "" : value.trim();
+        if (requestedEmail != null && !requestedEmail.equals(resolvedEmail)) {
+            requestedEmail = null;
+        }
+        email = resolvedEmail;
         updateState();
     }
 
@@ -106,7 +110,9 @@ public class RegisterViewModel extends ViewModel {
     }
 
     public void onSendOtpClicked() {
-        otpRequested = isEmailValid(email);
+        if (isEmailValid(email)) {
+            requestedEmail = email;
+        }
         updateState();
     }
 
@@ -117,6 +123,8 @@ public class RegisterViewModel extends ViewModel {
             return;
         }
 
+        requestedEmail = resolvedEmail;
+        updateState();
         requestOtpState.setValue(new UiState.Loading());
         ioExecutor.execute(() -> {
             AuthRepository.Result<?> result = authRepository.requestRegisterOtp(resolvedEmail);
@@ -143,7 +151,12 @@ public class RegisterViewModel extends ViewModel {
         ioExecutor.execute(() -> {
             AuthRepository.Result<?> verifyResult = authRepository.verifyRegisterOtp(resolvedEmail, resolvedOtp);
             if (!(verifyResult instanceof AuthRepository.Result.Success)) {
-                registerState.postValue(new UiState.Error("Invalid OTP"));
+                String message = "Invalid OTP";
+                if (verifyResult instanceof AuthRepository.Result.Error) {
+                    AuthRepository.Result.Error<?> error = (AuthRepository.Result.Error<?>) verifyResult;
+                    message = error.message;
+                }
+                registerState.postValue(new UiState.Error(message));
                 return;
             }
 
@@ -163,11 +176,7 @@ public class RegisterViewModel extends ViewModel {
 
     private void updateState() {
         boolean emailValid = isEmailValid(email);
-        if (!emailValid) {
-            otpRequested = false;
-        }
-
-        boolean otpEnabledValue = otpRequested;
+        boolean otpEnabledValue = emailValid && requestedEmail != null && requestedEmail.equals(email);
         boolean otpValid = otpEnabledValue && isOtpValid(otp);
         boolean credentialsEnabledValue = otpValid;
 

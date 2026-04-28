@@ -1,6 +1,7 @@
 package com.bif.server.features.auth.dto.rest;
 
 public record RegisterVerifyOtpResponse(
-        boolean success
+        boolean success,
+        String message
 ) {
 }

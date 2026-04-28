@@ -96,7 +96,8 @@ public class RegisterFragment extends Fragment {
             }
 
             if (state instanceof RegisterViewModel.UiState.Success) {
-                btnSendOtp.setEnabled(true);
+                boolean enabled = Boolean.TRUE.equals(viewModel.getSendOtpEnabled().getValue());
+                btnSendOtp.setEnabled(enabled);
                 Toast.makeText(requireContext(), "OTP sent", Toast.LENGTH_SHORT).show();
                 viewModel.onSendOtpClicked();
                 viewModel.clearRequestOtpState();
@@ -104,7 +105,8 @@ public class RegisterFragment extends Fragment {
             }
 
             if (state instanceof RegisterViewModel.UiState.Error) {
-                btnSendOtp.setEnabled(true);
+                boolean enabled = Boolean.TRUE.equals(viewModel.getSendOtpEnabled().getValue());
+                btnSendOtp.setEnabled(enabled);
                 String message = ((RegisterViewModel.UiState.Error) state).getMessage();
                 Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
                 viewModel.clearRequestOtpState();
@@ -117,9 +119,9 @@ public class RegisterFragment extends Fragment {
                 return;
             }
 
-            btnRegister.setEnabled(true);
-
             if (state instanceof RegisterViewModel.UiState.Success) {
+                boolean enabled = Boolean.TRUE.equals(viewModel.getRegisterEnabled().getValue());
+                btnRegister.setEnabled(enabled);
                 Toast.makeText(requireContext(), "Register success", Toast.LENGTH_SHORT).show();
                 navController.navigate(UriUtils.buildUri("/login"));
                 viewModel.clearRegisterState();
@@ -127,6 +129,8 @@ public class RegisterFragment extends Fragment {
             }
 
             if (state instanceof RegisterViewModel.UiState.Error) {
+                boolean enabled = Boolean.TRUE.equals(viewModel.getRegisterEnabled().getValue());
+                btnRegister.setEnabled(enabled);
                 String message = ((RegisterViewModel.UiState.Error) state).getMessage();
                 if ("Invalid OTP".equalsIgnoreCase(message)) {
                     etOtp.setError("Invalid OTP");

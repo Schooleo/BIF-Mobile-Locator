@@ -8,6 +8,9 @@ import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.core.env.Environment;
+
+import jakarta.annotation.PostConstruct;
 
 import java.util.HashMap;
 import java.util.List;
@@ -22,14 +25,24 @@ public class EmailService {
     private final String apiKey;
     private final String senderEmail;
     private final RestTemplate restTemplate;
+    private final boolean localOrDevProfile;
 
     public EmailService(
             @Qualifier("emailRestTemplate") RestTemplate restTemplate,
             @Value("${brevo.api.key:}") String apiKey,
-            @Value("${brevo.sender.email:noreply@bifapp.com}") String senderEmail) {
+            @Value("${brevo.sender.email:noreply@bifapp.com}") String senderEmail,
+            Environment environment) {
         this.apiKey = apiKey;
         this.senderEmail = senderEmail;
         this.restTemplate = restTemplate;
+        this.localOrDevProfile = isLocalOrDevProfile(environment);
+    }
+
+    @PostConstruct
+    void validateConfigurationOnStartup() {
+        if (!localOrDevProfile) {
+            ensureApiKeyConfigured();
+        }
     }
 
     @Async("emailTaskExecutor")
@@ -68,10 +81,7 @@ public class EmailService {
                                        String htmlContent,
                                        String successLogMessage) {
         String maskedToEmail = maskEmail(toEmail);
-        if (apiKey == null || apiKey.isBlank()) {
-            log.warn("brevo.api.key is not configured. Email will not be sent (recipient={})", maskedToEmail);
-            return;
-        }
+        ensureApiKeyConfigured();
 
         try {
             HttpHeaders headers = new HttpHeaders();
@@ -111,6 +121,26 @@ public class EmailService {
         } catch (Exception e) {
             log.error("Exception occurred while sending email (recipient={})", maskedToEmail, e);
         }
+    }
+
+    private void ensureApiKeyConfigured() {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException("brevo.api.key is not configured");
+        }
+    }
+
+    private boolean isLocalOrDevProfile(Environment environment) {
+        if (environment == null) {
+            return false;
+        }
+        for (String profile : environment.getActiveProfiles()) {
+            if ("local".equalsIgnoreCase(profile)
+                    || "dev".equalsIgnoreCase(profile)
+                    || "test".equalsIgnoreCase(profile)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String maskEmail(String email) {

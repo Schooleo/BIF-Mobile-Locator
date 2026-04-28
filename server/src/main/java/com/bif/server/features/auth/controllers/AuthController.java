@@ -59,20 +59,28 @@ public class AuthController {
 
     @PostMapping("/register/request-otp")
     public ResponseEntity<RegisterOtpResponse> requestRegisterOtp(@RequestBody RegisterOtpRequest request) {
-        RegisterOtpResponse response = authService.requestRegisterOtp(request);
-        if (response.success()) {
-            return ResponseEntity.ok(response);
+        try {
+            RegisterOtpResponse response = authService.requestRegisterOtp(request);
+            if (response.success()) {
+                return ResponseEntity.ok(response);
+            }
+            return ResponseEntity.badRequest().body(response);
+        } catch (InvalidRegistrationException e) {
+            return ResponseEntity.badRequest().body(new RegisterOtpResponse(false, e.getMessage()));
         }
-        return ResponseEntity.badRequest().body(response);
     }
 
     @PostMapping("/register/verify-otp")
     public ResponseEntity<RegisterVerifyOtpResponse> verifyRegisterOtp(@RequestBody RegisterVerifyOtpRequest request) {
-        RegisterVerifyOtpResponse response = authService.verifyRegisterOtp(request);
-        if (response.success()) {
-            return ResponseEntity.ok(response);
+        try {
+            RegisterVerifyOtpResponse response = authService.verifyRegisterOtp(request);
+            if (response.success()) {
+                return ResponseEntity.ok(response);
+            }
+            return ResponseEntity.badRequest().body(response);
+        } catch (InvalidRegistrationException e) {
+            return ResponseEntity.badRequest().body(new RegisterVerifyOtpResponse(false, e.getMessage()));
         }
-        return ResponseEntity.badRequest().body(response);
     }
 
     @PostMapping("/login")

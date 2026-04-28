@@ -146,15 +146,15 @@ public class AuthService {
         EmailVerificationOtp emailVerificationOtp = emailVerificationOtpRepository.findById(email)
                 .orElse(null);
         if (emailVerificationOtp == null || emailVerificationOtp.getOtp() == null) {
-            return new RegisterVerifyOtpResponse(false);
+            return new RegisterVerifyOtpResponse(false, null);
         }
         if (emailVerificationOtp.getExpiresAt() == null || emailVerificationOtp.getExpiresAt().isBefore(now)) {
-            return new RegisterVerifyOtpResponse(false);
+            return new RegisterVerifyOtpResponse(false, null);
         }
         if (currentAttemptCount(emailVerificationOtp) > MAX_OTP_VERIFY_ATTEMPTS) {
             invalidateOtpAfterLockout(emailVerificationOtp, now);
             emailVerificationOtpRepository.save(emailVerificationOtp);
-            return new RegisterVerifyOtpResponse(false);
+            return new RegisterVerifyOtpResponse(false, null);
         }
 
         if (!constantTimeEquals(emailVerificationOtp.getOtp(), otp)) {
@@ -165,7 +165,7 @@ public class AuthService {
                 invalidateOtpAfterLockout(emailVerificationOtp, now);
             }
             emailVerificationOtpRepository.save(emailVerificationOtp);
-            return new RegisterVerifyOtpResponse(false);
+            return new RegisterVerifyOtpResponse(false, null);
         }
 
         emailVerificationOtp.setAttemptCount(0);
@@ -176,7 +176,7 @@ public class AuthService {
         emailVerificationOtp.setExpiresAt(null);
         emailVerificationOtpRepository.save(emailVerificationOtp);
 
-        return new RegisterVerifyOtpResponse(true);
+        return new RegisterVerifyOtpResponse(true, null);
     }
 
     public ForgotPasswordVerifyOtpResponse verifyForgotPasswordOtp(ForgotPasswordVerifyOtpRequest request) {
