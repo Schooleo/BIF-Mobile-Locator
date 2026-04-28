@@ -184,25 +184,21 @@ public class RouteRepository implements IRouteRepository {
         String onlineProfile = DistanceUtils.determineProfile(totalDistanceKm);
         String offlineProfile = mapOfflineProfile(onlineProfile);
 
+        // Online-first: prefer OSRM when internet is available for better accuracy
+        if (networkMonitor.isOnline()) {
+            Route onlineRoute = fetchOnlineRoute(waypoints, onlineProfile);
+            if (onlineRoute != null) {
+                return onlineRoute;
+            }
+        }
+
+        // Fallback to offline BRouter engine when online is unavailable or failed
         boolean offlineReady = hasOfflineCityMap();
         if (offlineReady) {
             Route offlineRoute = fetchEmbeddedOfflineRoute(waypoints, offlineProfile);
             if (offlineRoute != null) {
                 return offlineRoute;
             }
-        }
-
-        if (!networkMonitor.isOnline()) {
-            return null;
-        }
-
-        Route onlineRoute = fetchOnlineRoute(waypoints, onlineProfile);
-        if (onlineRoute != null) {
-            return onlineRoute;
-        }
-
-        if (!offlineReady && hasOfflineCityMap()) {
-            return fetchEmbeddedOfflineRoute(waypoints, offlineProfile);
         }
 
         return null;
