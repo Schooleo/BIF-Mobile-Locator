@@ -1,6 +1,7 @@
 package com.bif.app;
 
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.MenuItem;
 import android.view.View;
 
@@ -48,7 +49,11 @@ public class MainActivity extends AppCompatActivity {
 
         navController.addOnDestinationChangedListener((controller, destination, arguments) -> {
             int destId = destination.getId();
-            if (destId == R.id.nav_login
+            boolean isTripRouteMapMode = destId == R.id.nav_map
+                && arguments != null
+                && !TextUtils.isEmpty(arguments.getString("tripStopsJson", "").trim());
+            if (isTripRouteMapMode
+                || destId == R.id.nav_login
                     || destId == R.id.nav_register
                     || destId == R.id.nav_social_chat
                     || destId == R.id.nav_trip_detail

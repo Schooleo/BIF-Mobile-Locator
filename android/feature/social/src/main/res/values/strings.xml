@@ -253,4 +253,6 @@
     <string name="trip_edit_title_card">Change title card image</string>
     <string name="trip_title_card_update_failed">Unable to update trip title card image</string>
     <string name="search">Search</string>
+    <string name="trip_stop_no_stops_to_show">No stops to display on map</string>
+    <string name="show_trip_on_map">Show trip on map</string>
 </resources>

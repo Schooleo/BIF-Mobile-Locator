@@ -643,8 +643,16 @@ public class TripRepository implements ITripRepository {
             entity.localCoverImagePath = null;
             entity.coverUploadStatus = UploadStatus.SYNCED;
         }
-        entity.startAt = parseInstant(dto.startAt);
-        entity.endAt = parseInstant(dto.endAt);
+        // Merge dates: only overwrite if incoming value is non-zero,
+        // otherwise preserve existing local dates.
+        long incomingStartAt = parseInstant(dto.startAt);
+        long incomingEndAt = parseInstant(dto.endAt);
+        if (incomingStartAt > 0L) {
+            entity.startAt = incomingStartAt;
+        }
+        if (incomingEndAt > 0L) {
+            entity.endAt = incomingEndAt;
+        }
         entity.serverVersion = Math.max(entity.serverVersion, dto.serverVersion);
         entity.deleted = dto.deleted;
         tripDao.upsertTrip(entity);
@@ -688,8 +696,15 @@ public class TripRepository implements ITripRepository {
                 }
                 stopEntity.latitude = stopDto.location != null ? stopDto.location.latitude : 0d;
                 stopEntity.longitude = stopDto.location != null ? stopDto.location.longitude : 0d;
-                stopEntity.arrivalTime = parseInstant(stopDto.arrivalTime);
-                stopEntity.departureTime = parseInstant(stopDto.departureTime);
+                // Merge times: only overwrite if incoming value is non-zero.
+                long incomingArrival = parseInstant(stopDto.arrivalTime);
+                long incomingDeparture = parseInstant(stopDto.departureTime);
+                if (incomingArrival > 0L) {
+                    stopEntity.arrivalTime = incomingArrival;
+                }
+                if (incomingDeparture > 0L) {
+                    stopEntity.departureTime = incomingDeparture;
+                }
                 stopEntity.orderIndex = stopDto.orderIndex;
                 stopEntity.serverVersion = Math.max(stopEntity.serverVersion, incomingVersion);
                 stopEntity.deleted = stopDto.deleted;

@@ -16,10 +16,15 @@
         <argument android:name="location" app:argType="string" android:defaultValue="" />
         <argument android:name="focusName" app:argType="string" android:defaultValue="" />
         <argument android:name="focusAddress" app:argType="string" android:defaultValue="" />
+        <argument android:name="tripStopsJson" app:argType="string" android:defaultValue="" />
+        <argument android:name="sourceTripId" app:argType="string" android:defaultValue="" />
+        <argument android:name="sourceTripTitle" app:argType="string" android:defaultValue="" />
 
         <deepLink app:uri="app://bif.app/map" />
         <deepLink app:uri="app://bif.app/map?location={location}" />
         <deepLink app:uri="app://bif.app/map?location={location}&amp;focusName={focusName}&amp;focusAddress={focusAddress}" />
+        <deepLink app:uri="app://bif.app/map?tripStopsJson={tripStopsJson}" />
+        <deepLink app:uri="app://bif.app/map?tripStopsJson={tripStopsJson}&amp;sourceTripId={sourceTripId}&amp;sourceTripTitle={sourceTripTitle}" />
     </fragment>
 
     <fragment

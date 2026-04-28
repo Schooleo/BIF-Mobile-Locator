@@ -89,6 +89,13 @@
     <string name="trip_completed_unknown_duration">--</string>
     <string name="trip_completed_unknown_distance">--</string>
     <string name="trip_completed_unknown_time">--:--</string>
+    <string name="trip_previous_place">Previous place</string>
+    <string name="trip_next_place">Next place</string>
+    <string name="trip_route_back_to_trip">Back to trip</string>
+    <string name="trip_stop_close_detail">Close trip stop detail</string>
+    <string name="trip_stop_time_format">%1$s · %2$s</string>
+    <string name="trip_stop_time_day_pattern">EEE, MMM dd</string>
+    <string name="trip_stop_time_clock_pattern">HH:mm</string>
     <string-array name="search_area_patterns">
         <item>phan thiet|Phan Thiet</item>
         <item>da lat|Da Lat</item>
