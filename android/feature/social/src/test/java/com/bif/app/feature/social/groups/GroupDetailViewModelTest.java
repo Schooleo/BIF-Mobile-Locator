@@ -1,4 +1,4 @@
-package com.bif.app.feature.social;
+package com.bif.app.feature.social.groups;
 
 import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -15,6 +15,7 @@ import com.bif.app.domain.model.Friend;
 import com.bif.app.domain.model.Group;
 import com.bif.app.domain.repository.IFriendshipRepository;
 import com.bif.app.domain.repository.IGroupRepository;
+import com.bif.app.feature.social.groups.GroupDetailViewModel;
 
 import org.junit.Before;
 import org.junit.Rule;

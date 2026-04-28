@@ -101,6 +101,7 @@
     <string name="chat_add_to_trip">Add to Trip</string>
     <string name="chat_added">Added</string>
     <string name="chat_view_place">Map View</string>
+    <string name="chat_view_on_map">View on map</string>
     <string name="chat_ai_draft_trip">Draft a Trip</string>
     <string name="chat_ai_suggest_places">Suggest Places</string>
     <string name="chat_ai_drafter_prefix">AI Trip Drafter</string>
@@ -108,6 +109,7 @@
     <string name="chat_ai_draft_hint">Describe the trip…</string>
     <string name="chat_ai_suggest_hint">Describe the places…</string>
     <string name="chat_ai_offline">AI tools are unavailable while offline.</string>
+    <string name="unavailable_offline">Unavailable offline</string>
     <string name="chat_ai_draft_failed">AI drafmat failed (%1$s)</string>
     <string name="chat_ai_suggest_failed">AI place suggestions failed (%1$s)</string>
     <string name="chat_add_stop_no_trip">No trip is available to add this stop.</string>

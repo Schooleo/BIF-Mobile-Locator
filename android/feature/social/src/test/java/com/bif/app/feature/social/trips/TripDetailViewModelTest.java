@@ -1,4 +1,4 @@
-package com.bif.app.feature.social;
+package com.bif.app.feature.social.trips;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -20,6 +20,7 @@ import com.bif.app.domain.model.ChatMessage;
 import com.bif.app.domain.model.TripPlan;
 import com.bif.app.domain.repository.IChatRepository;
 import com.bif.app.domain.repository.ITripRepository;
+import com.bif.app.feature.social.trips.TripDetailViewModel;
 
 import org.junit.Before;
 import org.junit.Rule;

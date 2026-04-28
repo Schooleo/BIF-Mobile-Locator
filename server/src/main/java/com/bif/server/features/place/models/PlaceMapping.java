@@ -3,6 +3,7 @@ package com.bif.server.features.place.models;
 import lombok.Data;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.GeoSpatialIndexType;
 import org.springframework.data.mongodb.core.index.GeoSpatialIndexed;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -12,7 +13,13 @@ import java.time.Instant;
 
 @Data
 @Document(collection = "place_mappings")
-@CompoundIndex(name = "uk_source_extid", def = "{'externalSource': 1, 'externalId': 1}", unique = true)
+@CompoundIndexes({
+    @CompoundIndex(name = "uk_source_extid_v2",
+        def = "{'externalSource': 1, 'externalId': 1}",
+        unique = true,
+        partialFilter = "{'externalSource': {'$gt': ''}, 'externalId': {'$gt': ''}}"),
+    @CompoundIndex(name = "idx_internal_place_id", def = "{'internalPlaceId': 1}")
+})
 public class PlaceMapping {
     @Id
     private String id;

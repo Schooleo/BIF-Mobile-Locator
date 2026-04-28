@@ -2,13 +2,13 @@ package com.bif.app.data.mapper;
 
 import com.bif.app.core.network.dto.favorite.FavoriteDto;
 import com.bif.app.core.network.dto.favorite.FavoriteLocationDto;
-import com.bif.app.core.network.dto.favorite.FavoriteRequestDto;
 import com.bif.app.core.network.dto.favorite.FavoriteResponseDto;
 import com.bif.app.data.source.local.entity.FavoriteEntity;
 import com.bif.app.domain.model.Favorite;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 public class FavoriteMapper {
@@ -19,6 +19,9 @@ public class FavoriteMapper {
         Favorite domain = new Favorite();
         domain.id = entity.id;
         domain.placeId = entity.placeId;
+        domain.externalSource = entity.externalSource;
+        domain.externalId = entity.externalId;
+        domain.placeName = entity.placeName;
         domain.name = entity.name;
         domain.latitude = entity.latitude;
         domain.longitude = entity.longitude;
@@ -40,6 +43,9 @@ public class FavoriteMapper {
             ? UUID.randomUUID().toString()
             : domain.id;
         entity.placeId = domain.placeId;
+        entity.externalSource = domain.externalSource;
+        entity.externalId = domain.externalId;
+        entity.placeName = domain.placeName;
         entity.name = domain.name;
         entity.latitude = domain.latitude;
         entity.longitude = domain.longitude;
@@ -67,6 +73,9 @@ public class FavoriteMapper {
         entity.userId = owner != null ? owner : "anonymous";
         entity.id = dto.id;
         entity.placeId = dto.placeId;
+        entity.externalSource = dto.externalSource;
+        entity.externalId = dto.externalId;
+        entity.placeName = dto.placeName;
         entity.name = dto.name;
         entity.latitude = dto.latitude;
         entity.longitude = dto.longitude;
@@ -88,7 +97,14 @@ public class FavoriteMapper {
     public static FavoriteDto toDto(Favorite domain, String userId) {
         FavoriteDto dto = new FavoriteDto();
         dto.id = domain.id;
-        dto.placeId = domain.placeId;
+        dto.placeId = null;
+        dto.externalSource = firstNonBlank(domain.externalSource, "OSM");
+        dto.externalId = firstNonBlank(
+            domain.externalId,
+            domain.placeId,
+            domain.id,
+            buildLegacyExternalId(domain));
+        dto.placeName = firstNonBlank(domain.placeName, domain.name, domain.address);
         dto.name = domain.name;
         dto.latitude = domain.latitude;
         dto.longitude = domain.longitude;
@@ -100,6 +116,36 @@ public class FavoriteMapper {
         dto.serverVersion = domain.serverVersion;
         dto.deleted = domain.deleted;
         return dto;
+    }
+
+    private static String buildLegacyExternalId(Favorite domain) {
+        if (domain == null) {
+            return null;
+        }
+        if (!Double.isFinite(domain.latitude) || !Double.isFinite(domain.longitude)) {
+            return null;
+        }
+        if (domain.latitude == 0.0d && domain.longitude == 0.0d) {
+            return null;
+        }
+
+        return String.format(Locale.US, "legacy:%.6f:%.6f", domain.latitude, domain.longitude);
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+
+        for (String value : values) {
+            if (value != null) {
+                String trimmed = value.trim();
+                if (!trimmed.isEmpty()) {
+                    return trimmed;
+                }
+            }
+        }
+        return null;
     }
 
     public static List<Favorite> toDomainList(List<FavoriteEntity> entities) {
@@ -122,25 +168,14 @@ public class FavoriteMapper {
         return list;
     }
 
-    public static FavoriteRequestDto toRequestDto(Favorite domain) {
-        if (domain == null) return null;
-        FavoriteRequestDto dto = new FavoriteRequestDto();
-        dto.id = domain.id;
-        dto.placeId = domain.placeId;
-        dto.name = domain.name;
-        dto.location = new FavoriteLocationDto(domain.latitude, domain.longitude);
-        dto.address = domain.address;
-        dto.description = domain.description;
-        dto.notes = domain.notes;
-        dto.rating = domain.rating;
-        return dto;
-    }
-
     public static Favorite toDomain(FavoriteResponseDto dto) {
         if (dto == null) return null;
         Favorite favorite = new Favorite();
         favorite.id = dto.id;
         favorite.placeId = dto.placeId;
+        favorite.externalSource = dto.externalSource;
+        favorite.externalId = dto.externalId;
+        favorite.placeName = dto.placeName;
         favorite.name = dto.name;
         favorite.latitude = dto.location != null ? dto.location.latitude : 0;
         favorite.longitude = dto.location != null ? dto.location.longitude : 0;

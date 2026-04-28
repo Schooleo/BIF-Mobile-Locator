@@ -7,8 +7,11 @@ import com.bif.app.domain.model.Favorite;
 import java.util.List;
 
 public interface IFavoriteRepository {
+    String ERROR_REFRESH_FAILED = "favorite_refresh_failed";
+
     interface SyncCallback {
         void onSuccess();
+        void onOffline();
         void onError(String message);
     }
 

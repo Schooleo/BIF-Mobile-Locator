@@ -1,5 +1,7 @@
 package com.bif.app.feature.map;
 
+import android.util.Log;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.lifecycle.LiveData;
@@ -17,12 +19,15 @@ import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.PlaceIdentityContext;
 import com.bif.app.domain.model.Route;
 import com.bif.app.domain.model.Review;
+import com.bif.app.domain.model.TripPlan;
+import com.bif.app.domain.model.TripStop;
 import com.bif.app.domain.repository.IFavoriteRepository;
 import com.bif.app.domain.repository.IGroupRepository;
 import com.bif.app.domain.repository.IMapRepository;
 import com.bif.app.domain.repository.IPlaceRepository;
 import com.bif.app.domain.repository.IRouteRepository;
 import com.bif.app.domain.repository.IReviewRepository;
+import com.bif.app.domain.repository.ITripRepository;
 import com.bif.app.domain.repository.IPlaceRepository.PersistenceCallback;
 
 import java.util.ArrayList;
@@ -30,6 +35,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -40,6 +46,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel;
 
 @HiltViewModel
 public class MapViewModel extends ViewModel {
+    private static final String TAG = "MapViewModel";
     private static final String NO_MAP_DATA_DOWNLOADED = "No map data downloaded";
     private static final String OFFLINE_ENGINE_UNAVAILABLE = "Offline routing engine unavailable";
     private static final String ROUTE_ESTIMATING = "Estimating route...";
@@ -50,11 +57,18 @@ public class MapViewModel extends ViewModel {
     private final IPlaceRepository placeRepository;
     private final IFavoriteRepository favoriteRepository;
     private final IGroupRepository groupRepository;
+    private final ITripRepository tripRepository;
     private final IRouteRepository routeRepository;
     private final IReviewRepository reviewRepository;
     private final Executor reviewExecutor;
 
     public interface AddFavoriteCallback {
+        void onSuccess();
+
+        void onError(@NonNull String message);
+    }
+
+    public interface AddTripStopCallback {
         void onSuccess();
 
         void onError(@NonNull String message);
@@ -147,6 +161,7 @@ public class MapViewModel extends ViewModel {
 
     public final LiveData<List<Favorite>> allFavorites;
     public final LiveData<List<Group>> allGroups;
+    public final LiveData<List<TripPlan>> allTrips;
     public final LiveData<List<String>> searchHistory;
 
     @Nullable
@@ -174,6 +189,7 @@ public class MapViewModel extends ViewModel {
             IPlaceRepository placeRepository,
             IFavoriteRepository favoriteRepository,
             IGroupRepository groupRepository,
+            ITripRepository tripRepository,
             IRouteRepository routeRepository,
             IReviewRepository reviewRepository,
             Executor reviewExecutor) {
@@ -181,6 +197,7 @@ public class MapViewModel extends ViewModel {
                 placeRepository,
                 favoriteRepository,
                 groupRepository,
+                tripRepository,
                 routeRepository,
                 reviewRepository,
                 reviewExecutor,
@@ -193,6 +210,7 @@ public class MapViewModel extends ViewModel {
             IPlaceRepository placeRepository,
             IFavoriteRepository favoriteRepository,
             IGroupRepository groupRepository,
+            ITripRepository tripRepository,
             IRouteRepository routeRepository,
             IReviewRepository reviewRepository,
             Executor reviewExecutor,
@@ -202,6 +220,7 @@ public class MapViewModel extends ViewModel {
         this.placeRepository = placeRepository;
         this.favoriteRepository = favoriteRepository;
         this.groupRepository = groupRepository;
+        this.tripRepository = tripRepository;
         this.routeRepository = routeRepository;
         this.reviewRepository = reviewRepository;
         this.reviewExecutor = reviewExecutor;
@@ -243,6 +262,7 @@ public class MapViewModel extends ViewModel {
                         }));
         this.allFavorites = favoriteRepository.getAllFavorites();
         this.allGroups = groupRepository.getGroups();
+        this.allTrips = tripRepository.getAllTrips();
         this.searchHistory = placeRepository.getSearchHistory();
 
         this.currentPlaceReviews = Transformations.switchMap(_currentPlaceId, reviewRepository::getReviewsForPlace);
@@ -352,6 +372,25 @@ public class MapViewModel extends ViewModel {
         addToFavorites(place, null);
     }
 
+    public void getCanonicalFavoritePlaceId(@NonNull Place place,
+                                            @NonNull java.util.function.Consumer<String> onResult) {
+        reviewExecutor.execute(() -> {
+            final String canonicalId = resolveCanonicalFavoritePlaceId(place);
+            final String result = canonicalId != null ? canonicalId : "";
+            android.os.Handler mainHandler;
+            try {
+                mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+            } catch (RuntimeException ignored) {
+                mainHandler = null;
+            }
+            if (mainHandler != null) {
+                mainHandler.post(() -> onResult.accept(result));
+                return;
+            }
+            onResult.accept(result);
+        });
+    }
+
     public void addToFavorites(Place place, @Nullable AddFavoriteCallback callback) {
         if (place == null) {
             return;
@@ -361,6 +400,11 @@ public class MapViewModel extends ViewModel {
             try {
                 Favorite favorite = new Favorite();
                 favorite.placeId = resolveCanonicalFavoritePlaceId(place);
+                favorite.externalSource = hasText(place.placeSource) ? place.placeSource.trim() : null;
+                favorite.externalId = place.hasCanonicalExternalIdentity() && hasText(place.id)
+                        ? place.id.trim()
+                        : null;
+                favorite.placeName = hasText(place.name) ? place.name.trim() : null;
                 favorite.name = place.name;
                 favorite.address = place.address;
                 favorite.rating = (int) place.rating;
@@ -403,18 +447,33 @@ public class MapViewModel extends ViewModel {
         placeRepository.persistPlace(place, "viewed");
     }
 
+    public void clearReviewTargetForPreview() {
+        reviewLoadRequestId.incrementAndGet();
+        _currentPlaceId.setValue(null);
+        _isLoadingReviews.setValue(false);
+        updateCurrentReviewMetadata(null);
+
+    }
+
     public void loadReviews(Place place) {
         if (place == null || place.location == null) {
             return;
         }
 
-        boolean canResolveWithMetadata = hasText(place.placeSource)
-            && hasText(place.id)
-            && hasText(place.name);
+        if (place.isPreviewSelection() && !place.canResolveCanonicalIdentity()) {
+            clearReviewTargetForPreview();
+
+            return;
+        }
+
+        boolean canResolveWithMetadata = place.canResolveCanonicalIdentity();
+        boolean canUseExternalIdentity = place.hasCanonicalExternalIdentity();
+
+
 
         final PlaceIdentityContext placeIdentityContext = new PlaceIdentityContext();
         placeIdentityContext.externalSource = canResolveWithMetadata ? place.placeSource : null;
-        placeIdentityContext.externalId = canResolveWithMetadata ? place.id : null;
+        placeIdentityContext.externalId = canResolveWithMetadata && canUseExternalIdentity ? place.id : null;
         placeIdentityContext.lat = place.location != null ? place.location.latitude : null;
         placeIdentityContext.lng = place.location != null ? place.location.longitude : null;
         placeIdentityContext.placeName = place.name;
@@ -434,6 +493,8 @@ public class MapViewModel extends ViewModel {
             } else {
                 internalId = place.id != null ? place.id.trim() : null;
             }
+
+
 
             if (requestId != reviewLoadRequestId.get()) {
                 return;
@@ -457,19 +518,20 @@ public class MapViewModel extends ViewModel {
     private String resolveCanonicalFavoritePlaceId(@NonNull Place place) {
         String fallbackPlaceId = place.id != null ? place.id.trim() : "";
 
-        if (!hasText(place.placeSource)
-                || !hasText(place.id)
-                || !hasText(place.name)
-                || place.location == null) {
+
+
+        if (!place.canResolveCanonicalIdentity()) {
             return fallbackPlaceId;
         }
 
         String resolved = reviewRepository.resolveInternalPlaceId(
                 place.placeSource,
-                place.id,
+                place.hasCanonicalExternalIdentity() ? place.id : null,
                 place.location.latitude,
                 place.location.longitude,
                 place.name);
+
+
 
         if (!hasText(resolved)) {
             return fallbackPlaceId;
@@ -591,6 +653,63 @@ public class MapViewModel extends ViewModel {
 
     public void removeFromFavorites(Favorite favorite) {
         favoriteRepository.deleteFavorite(favorite);
+    }
+
+    public void addPlaceToTrip(@Nullable String tripId,
+                               @Nullable Place place,
+                               @Nullable AddTripStopCallback callback) {
+        addPlaceToTrip(tripId, place, 0L, callback);
+    }
+
+    public void addPlaceToTrip(@Nullable String tripId,
+                               @Nullable Place place,
+                               long scheduledAtMillis,
+                               @Nullable AddTripStopCallback callback) {
+        if (!hasText(tripId)) {
+            if (callback != null) {
+                callback.onError("No trip selected");
+            }
+            return;
+        }
+        if (place == null || place.location == null
+                || !Double.isFinite(place.location.latitude)
+                || !Double.isFinite(place.location.longitude)) {
+            if (callback != null) {
+                callback.onError("Place location is unavailable");
+            }
+            return;
+        }
+
+        long normalizedSchedule = Math.max(0L, scheduledAtMillis);
+
+        reviewExecutor.execute(() -> {
+            try {
+                TripStop stop = new TripStop(
+                        UUID.randomUUID().toString(),
+                        hasText(place.name) ? place.name.trim() : "Untitled stop",
+                        hasText(place.address) ? place.address.trim() : "",
+                        "",
+                        "",
+                        "",
+                        place.location.latitude,
+                        place.location.longitude,
+                        normalizedSchedule,
+                        normalizedSchedule,
+                        0
+                );
+                tripRepository.addStopToTrip(tripId.trim(), stop);
+                if (callback != null) {
+                    callback.onSuccess();
+                }
+            } catch (RuntimeException ex) {
+                if (callback != null) {
+                    String message = ex.getMessage() != null
+                            ? ex.getMessage()
+                            : "Unable to add place to trip";
+                    callback.onError(message);
+                }
+            }
+        });
     }
 
     public void clearRouteSummary() {

@@ -30,22 +30,23 @@ public class PlaceRatingCacheUpdater {
             Query snapshotQuery = Query.query(
                 Criteria.where("_id").is(placeId)
                     .and("deleted").ne(true));
-            snapshotQuery.fields().include("reviewCount").include("rating");
+            snapshotQuery.fields().include("reviewCount").include("rating").include("serverVersion");
 
             Place snapshot = mongoTemplate.findOne(snapshotQuery, Place.class);
             if (snapshot == null) {
-            throw new NoSuchElementException("Place not found: " + placeId);
+                throw new NoSuchElementException("Place not found: " + placeId);
             }
 
             int oldCount = Math.max(snapshot.getReviewCount(), 0);
             double oldRating = snapshot.getRating();
+            long oldServerVersion = snapshot.getServerVersion();
             int newCount = oldCount + 1;
             double newRating = ((oldRating * oldCount) + stars) / newCount;
 
             Query compareAndSetQuery = Query.query(
                 Criteria.where("_id").is(placeId)
                     .and("deleted").ne(true)
-                    .and("reviewCount").is(oldCount));
+                .and("serverVersion").is(oldServerVersion));
 
             Update update = new Update()
                 .inc("reviewCount", 1)
@@ -61,7 +62,7 @@ public class PlaceRatingCacheUpdater {
                 Place.class);
 
             if (updated != null) {
-            return updated;
+                return updated;
             }
         }
 
@@ -74,7 +75,7 @@ public class PlaceRatingCacheUpdater {
             Query snapshotQuery = Query.query(
                 Criteria.where("_id").is(placeId)
                     .and("deleted").ne(true));
-            snapshotQuery.fields().include("reviewCount").include("rating");
+            snapshotQuery.fields().include("reviewCount").include("rating").include("serverVersion");
 
             Place snapshot = mongoTemplate.findOne(snapshotQuery, Place.class);
             if (snapshot == null) {
@@ -88,6 +89,7 @@ public class PlaceRatingCacheUpdater {
             }
 
             double oldRating = snapshot.getRating();
+            long oldServerVersion = snapshot.getServerVersion();
             int newCount = oldCount - 1;
             double newRating = oldCount > 1
                 ? ((oldRating * oldCount) - deletedStars) / newCount
@@ -96,7 +98,7 @@ public class PlaceRatingCacheUpdater {
             Query compareAndSetQuery = Query.query(
                 Criteria.where("_id").is(placeId)
                     .and("deleted").ne(true)
-                    .and("reviewCount").is(oldCount));
+                    .and("serverVersion").is(oldServerVersion));
 
             Update update = new Update()
                 .inc("reviewCount", -1)
