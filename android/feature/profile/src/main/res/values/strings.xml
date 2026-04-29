@@ -31,4 +31,12 @@
     <string name="profile_sync_failed">Could not sync profile. Showing cached data.</string>
     <string name="profile_update_failed">Could not update profile.</string>
     <string name="image_unavailable_offline">Image unavailable offline. Tap to retry when online.</string>
+    <string name="profile_change_password">Change Password</string>
+    <string name="profile_change_password_subtitle">Enter your current password and choose a new password</string>
+    <string name="profile_current_password_hint">Enter current password</string>
+    <string name="profile_new_password_hint">Enter new password</string>
+    <string name="profile_confirm_new_password_hint">Re-enter new password</string>
+    <string name="profile_current_password_required">Current password is required</string>
+    <string name="profile_password_too_short">Password must be at least 8 characters</string>
+    <string name="profile_passwords_do_not_match">Passwords do not match</string>
 </resources>

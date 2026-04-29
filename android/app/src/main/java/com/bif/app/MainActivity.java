@@ -60,7 +60,9 @@ public class MainActivity extends AppCompatActivity {
                     || destId == R.id.nav_add_trip_stop
                     || destId == R.id.nav_friend_settings_locations
                     || destId == R.id.nav_friend_settings_trips
-                    || destId == R.id.nav_personal_info) {
+                    || destId == R.id.nav_forgot_password
+                    || destId == R.id.nav_forgot_password_otp
+                    || destId == R.id.nav_reset_password) {
                 bottomNav.setVisibility(View.GONE);
             } else {
                 bottomNav.setVisibility(View.VISIBLE);

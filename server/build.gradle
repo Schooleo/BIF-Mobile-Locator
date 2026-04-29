@@ -10,6 +10,27 @@ ext {
     set('tomcat.version', '11.0.21')
 }
 
+configurations.all {
+    resolutionStrategy {
+        // Fix bouncycastle CVEs from Android SDK tools (if inherited)
+        force 'org.bouncycastle:bcprov-jdk18on:1.84'
+        force 'org.bouncycastle:bcpkix-jdk18on:1.84'
+        
+        // Snyk vulnerability remediation (13 CVEs fixed):
+        // Spring Boot 4.0.6: Fixes PRNG, Symlink, Insecure Temp File, Certificate validation (10 CVEs)
+        // Spring Security 7.0.5: Fixes TOCTOU, Information Exposure, Access Control Bypass, User Impersonation (4 CVEs)
+        // Spring Framework 7.0.7: Fixes HTTP Request Smuggling (1 CVE)
+        force 'org.springframework.security:spring-security-core:7.0.5'
+        force 'org.springframework.security:spring-security-config:7.0.5'
+        force 'org.springframework.security:spring-security-web:7.0.5'
+        force 'org.springframework:spring-webmvc:7.0.7'
+        force 'org.springframework:spring-context:7.0.7'
+        force 'org.springframework:spring-core:7.0.7'
+        force 'org.springframework:spring-beans:7.0.7'
+        force 'org.springframework:spring-web:7.0.7'
+    }
+}
+
 group = 'com.bif'
 version = project.hasProperty('appVersion') ? project.property('appVersion') : 'latest'
 

@@ -52,6 +52,7 @@ public class MapViewModel extends ViewModel {
     private static final String ROUTE_ESTIMATING = "Estimating route...";
     private static final double FOLLOWING_LOCATION_MIN_DELTA_METERS = 1.0d;
     private static final float FOLLOWING_BEARING_MIN_DELTA_DEGREES = 2.0f;
+    private static final double NAVIGATION_FINISH_RADIUS_METERS = 25.0d;
 
     private final IMapRepository mapRepository;
     private final IPlaceRepository placeRepository;
@@ -125,6 +126,8 @@ public class MapViewModel extends ViewModel {
     private final MutableLiveData<RouteSession> _routeSession = new MutableLiveData<>(RouteSession.idle());
     public final LiveData<RouteSession> routeSession = _routeSession;
 
+    private final MutableLiveData<Event<TripSummary>> _navigationFinishedEvent = new MutableLiveData<>();
+    public final LiveData<Event<TripSummary>> navigationFinishedEvent = _navigationFinishedEvent;
     private final MutableLiveData<List<TripStopOverlay>> _tripStopOverlay = new MutableLiveData<>(null);
     public final LiveData<List<TripStopOverlay>> tripStopOverlay = _tripStopOverlay;
 
@@ -182,6 +185,14 @@ public class MapViewModel extends ViewModel {
 
     @Nullable
     private volatile PlaceIdentityContext currentPlaceIdentityContext;
+
+    @Nullable
+    private Long activeTripStartTimeMillis;
+
+    @Nullable
+    private Location activeRouteDestination;
+
+    private boolean navigationFinishedDispatched;
 
     @Inject
     public MapViewModel(
@@ -720,6 +731,7 @@ public class MapViewModel extends ViewModel {
         _routeSummary.setValue(null);
         _routeGeometryJson.setValue(null);
         _routeSession.setValue(RouteSession.idle());
+        resetNavigationTracking();
     }
 
     public void setTripStops(@Nullable List<TripStopOverlay> stops) {
@@ -802,6 +814,8 @@ public class MapViewModel extends ViewModel {
     public void beginRoutePreview(@Nullable Place destinationPlace,
                                   @NonNull Location origin,
                                   @NonNull Location destinationLocation) {
+        resetNavigationTracking();
+        activeRouteDestination = cloneLocation(destinationLocation);
         _routeSummary.setValue(ROUTE_ESTIMATING);
         _routeGeometryJson.setValue(null);
         _routeSession.setValue(RouteSession.loading(destinationPlace));
@@ -820,6 +834,12 @@ public class MapViewModel extends ViewModel {
         if (!current.hasRoute()) {
             return;
         }
+
+        if (!current.following) {
+            activeTripStartTimeMillis = System.currentTimeMillis();
+            navigationFinishedDispatched = false;
+        }
+
         _routeSession.setValue(current.withFollowing(true));
     }
 
@@ -838,7 +858,67 @@ public class MapViewModel extends ViewModel {
             return;
         }
 
-        _routeSession.setValue(current.withLocation(cloneLocation(location), normalizedBearing));
+        RouteSession updatedSession = current.withLocation(cloneLocation(location), normalizedBearing);
+        _routeSession.setValue(updatedSession);
+        maybeDispatchNavigationFinished(updatedSession);
+    }
+
+    private void maybeDispatchNavigationFinished(@NonNull RouteSession session) {
+        if (navigationFinishedDispatched || !session.following || !session.hasRoute()) {
+            return;
+        }
+
+        Location currentLocation = session.lastKnownLocation;
+        Location destination = resolveNavigationDestination(session);
+        if (currentLocation == null || destination == null) {
+            return;
+        }
+
+        double distanceToDestinationMeters = RouteGeometryUtils.calculateDistance(currentLocation, destination);
+        if (distanceToDestinationMeters >= NAVIGATION_FINISH_RADIUS_METERS) {
+            return;
+        }
+
+        onDestinationReached();
+    }
+
+    private void onDestinationReached() {
+        if (navigationFinishedDispatched) {
+            return;
+        }
+
+        navigationFinishedDispatched = true;
+        RouteSession currentSession = getCurrentRouteSession();
+        _routeSession.setValue(currentSession.stopTracking());
+
+        long endTime = System.currentTimeMillis();
+        long startTime = activeTripStartTimeMillis != null ? activeTripStartTimeMillis : endTime;
+        if (startTime > endTime) {
+            startTime = endTime;
+        }
+
+        String distanceFormatted = currentSession.route != null
+                ? formatDistanceText(currentSession.route)
+                : null;
+        TripSummary tripSummary = new TripSummary(startTime, endTime, distanceFormatted);
+        _navigationFinishedEvent.setValue(new Event<>(tripSummary));
+    }
+
+    @Nullable
+    private Location resolveNavigationDestination(@NonNull RouteSession session) {
+        if (activeRouteDestination != null) {
+            return cloneLocation(activeRouteDestination);
+        }
+        if (session.destinationPlace == null) {
+            return null;
+        }
+        return cloneLocation(session.destinationPlace.location);
+    }
+
+    private void resetNavigationTracking() {
+        activeTripStartTimeMillis = null;
+        activeRouteDestination = null;
+        navigationFinishedDispatched = false;
     }
 
     private boolean isEquivalentFollowingUpdate(@Nullable Location previousLocation,

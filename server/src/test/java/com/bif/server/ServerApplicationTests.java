@@ -2,6 +2,11 @@ package com.bif.server;
 
 import com.bif.server.features.auth.repositories.RefreshTokenRepository;
 import com.bif.server.features.auth.repositories.RevokedAccessTokenRepository;
+import com.bif.server.features.auth.repositories.PasswordResetOtpRepository;
+import com.bif.server.features.auth.repositories.EmailVerificationOtpRepository;
+import com.bif.server.features.auth.security.AccessTokenBlacklistService;
+import com.bif.server.features.auth.security.JwtService;
+import com.bif.server.features.auth.services.EmailService;
 import com.bif.server.features.chat.repositories.ChatMessageRepository;
 import com.bif.server.features.favorite.repositories.FavoriteRepository;
 import com.bif.server.features.friendship.repositories.FriendshipRepository;
@@ -71,6 +76,21 @@ class ServerApplicationTests {
 
     @MockitoBean
     private RefreshTokenRepository refreshTokenRepository;
+
+    @MockitoBean
+    private PasswordResetOtpRepository passwordResetOtpRepository;
+
+    @MockitoBean
+    private EmailVerificationOtpRepository emailVerificationOtpRepository;
+
+    @MockitoBean
+    private EmailService emailService;
+
+    @MockitoBean
+    private JwtService jwtService;
+
+    @MockitoBean
+    private AccessTokenBlacklistService accessTokenBlacklistService;
 
     @MockitoBean
     private RevokedAccessTokenRepository revokedAccessTokenRepository;

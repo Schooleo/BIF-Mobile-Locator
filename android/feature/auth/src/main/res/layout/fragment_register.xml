@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
@@ -7,24 +8,79 @@
     android:gravity="center_horizontal"
     android:padding="32dp">
 
+    <ImageView
+        android:id="@+id/iv_profile"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_gravity="end"
+        android:padding="4dp"
+        android:src="@drawable/ic_person"
+        app:tint="@color/primary_green"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/my_profile" />
+
     <!-- Logo -->
     <include layout="@layout/component_logo" />
 
-    <!-- Username Input -->
-    <include layout="@layout/component_input_username" />
-
     <!-- Email Input -->
-    <include layout="@layout/component_input_email" />
+    <include
+        layout="@layout/component_input_email" />
+
+    <!-- OTP + Send OTP -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="12dp">
+
+        <EditText
+            android:id="@+id/et_otp"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="12dp"
+            android:background="@drawable/bg_input_field"
+            android:hint="@string/otp_hint"
+            android:textColorHint="?attr/colorHintText"
+            android:textColor="?attr/colorInputText"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:inputType="number"
+            android:maxLength="6"
+            android:enabled="false"
+            android:singleLine="true" />
+
+        <Button
+            android:id="@+id/btn_send_otp"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_primary_button"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:text="@string/send_otp"
+            android:textColor="@color/white"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Username Input -->
+    <include
+        layout="@layout/component_input_username"
+        android:enabled="false" />
 
     <!-- Password Input -->
-    <include layout="@layout/component_input_password" />
+    <include
+        layout="@layout/component_input_password"
+        android:enabled="false" />
 
     <!-- Confirm Password Input -->
-    <include layout="@layout/component_input_confirm_password" />
-
-    <!-- Sign up Button -->
     <include
-        android:id="@+id/btn_signup"
+        layout="@layout/component_input_confirm_password"
+        android:enabled="false" />
+
+    <!-- Register Button -->
+    <include
+        android:id="@+id/btn_register"
         layout="@layout/component_primary_button"
         android:layout_width="match_parent"
         android:layout_height="48dp" />
@@ -33,6 +89,7 @@
     <include
         android:id="@+id/tv_signin_link"
         layout="@layout/component_auth_link"
+        android:layout_marginTop="12dp"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content" />
 

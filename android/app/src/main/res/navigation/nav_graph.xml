@@ -99,14 +99,48 @@
     </fragment>
 
     <fragment
-        android:id="@+id/nav_personal_info"
-        android:name="com.bif.app.feature.profile.PersonalInfoFragment"
-        android:label="Personal Information"
-        app:route="/profile/personal-info"
-        tools:layout="@layout/fragment_personal_info">
+        android:id="@+id/nav_forgot_password"
+        android:name="com.bif.app.feature.auth.ForgotPasswordFragment"
+        android:label="Forgot Password"
+        app:route="/forgot-password"
+        tools:layout="@layout/fragment_forgot_password">
 
-        <deepLink app:uri="app://bif.app/profile/personal-info" />
+        <deepLink app:uri="app://bif.app/forgot-password" />
     </fragment>
+
+    <fragment
+        android:id="@+id/nav_forgot_password_otp"
+        android:name="com.bif.app.feature.auth.ForgotPasswordOtpFragment"
+        android:label="OTP Verification"
+        app:route="/forgot-password/otp"
+        tools:layout="@layout/fragment_forgot_password_otp">
+
+        <argument android:name="email" app:argType="string" android:defaultValue="" />
+        <deepLink app:uri="app://bif.app/forgot-password/otp?email={email}" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_reset_password"
+        android:name="com.bif.app.feature.auth.ResetPasswordFragment"
+        android:label="Reset Password"
+        app:route="/forgot-password/reset"
+        tools:layout="@layout/fragment_reset_password">
+
+        <argument android:name="email" app:argType="string" android:defaultValue="" />
+        <argument android:name="resetToken" app:argType="string" android:defaultValue="" />
+        <deepLink app:uri="app://bif.app/forgot-password/reset?email={email}&amp;resetToken={resetToken}" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_change_password"
+        android:name="com.bif.app.feature.profile.ChangePasswordFragment"
+        android:label="Change Password"
+        app:route="/profile/change-password"
+        tools:layout="@layout/fragment_change_password">
+
+        <deepLink app:uri="app://bif.app/profile/change-password" />
+    </fragment>
+
     <fragment
         android:id="@+id/nav_social_chat"
         android:name="com.bif.app.feature.social.chat.CommonChatFragment"

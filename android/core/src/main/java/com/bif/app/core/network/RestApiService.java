@@ -2,9 +2,21 @@ package com.bif.app.core.network;
 
 import com.bif.app.core.network.dto.auth.AuthResponse;
 import com.bif.app.core.network.dto.auth.AuthStateResponse;
+import com.bif.app.core.network.dto.auth.ChangePasswordRequest;
+import com.bif.app.core.network.dto.auth.ChangePasswordResponse;
+import com.bif.app.core.network.dto.auth.ForgotPasswordRequestOtpResponse;
+import com.bif.app.core.network.dto.auth.RequestOtpRequest;
+import com.bif.app.core.network.dto.auth.ResetPasswordRequest;
+import com.bif.app.core.network.dto.auth.ResetPasswordResponse;
+import com.bif.app.core.network.dto.auth.VerifyOtpRequest;
+import com.bif.app.core.network.dto.auth.VerifyOtpResponse;
 import com.bif.app.core.network.dto.auth.LoginRequest;
 import com.bif.app.core.network.dto.auth.RefreshTokenRequest;
 import com.bif.app.core.network.dto.auth.RegisterRequest;
+import com.bif.app.core.network.dto.auth.RegisterOtpRequest;
+import com.bif.app.core.network.dto.auth.RegisterOtpResponse;
+import com.bif.app.core.network.dto.auth.RegisterVerifyOtpRequest;
+import com.bif.app.core.network.dto.auth.RegisterVerifyOtpResponse;
 import com.bif.app.core.network.dto.favorite.FavoriteResponseDto;
 import com.bif.app.core.network.dto.friendship.CreateFriendRequestDto;
 import com.bif.app.core.network.dto.friendship.FriendshipApiModel;
@@ -51,6 +63,12 @@ public interface RestApiService {
     @POST("auth/register")
     Call<AuthResponse> register(@Body RegisterRequest request);
 
+        @POST("auth/register/request-otp")
+        Call<RegisterOtpResponse> requestRegisterOtp(@Body RegisterOtpRequest request);
+
+        @POST("auth/register/verify-otp")
+        Call<RegisterVerifyOtpResponse> verifyRegisterOtp(@Body RegisterVerifyOtpRequest request);
+
     @POST("auth/login")
     Call<AuthResponse> login(@Body LoginRequest request);
 
@@ -60,8 +78,20 @@ public interface RestApiService {
     @POST("auth/logout")
     Call<Void> logout(@Body RefreshTokenRequest request);
 
+        @POST("auth/change-password")
+        Call<ChangePasswordResponse> changePassword(@Body ChangePasswordRequest request);
+
     @GET("auth/me")
     Call<AuthStateResponse> getAuthState();
+
+        @POST("auth/forgot-password/request-otp")
+        Call<ForgotPasswordRequestOtpResponse> requestForgotPasswordOtp(@Body RequestOtpRequest request);
+
+        @POST("auth/forgot-password/verify-otp")
+        Call<VerifyOtpResponse> verifyForgotPasswordOtp(@Body VerifyOtpRequest request);
+
+        @POST("auth/forgot-password/reset")
+        Call<ResetPasswordResponse> resetForgotPassword(@Body ResetPasswordRequest request);
 
     @GET("favorites/me")
     Call<List<FavoriteResponseDto>> getMyFavorites();

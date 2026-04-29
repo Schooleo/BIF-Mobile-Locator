@@ -1,17 +1,29 @@
 package com.bif.server.features.auth.services;
 
 import com.bif.server.features.auth.dto.rest.AuthResponse;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpRequest;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordOtpResponse;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordResetRequest;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordResetResponse;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpRequest;
+import com.bif.server.features.auth.dto.rest.ForgotPasswordVerifyOtpResponse;
 import com.bif.server.features.auth.dto.rest.LoginRequest;
+import com.bif.server.features.auth.dto.rest.ChangePasswordRequest;
 import com.bif.server.features.auth.dto.rest.RefreshTokenRequest;
 import com.bif.server.features.auth.dto.rest.RegisterRequest;
 import com.bif.server.features.auth.exceptions.EmailAlreadyUsedException;
 import com.bif.server.features.auth.exceptions.InvalidCredentialsException;
 import com.bif.server.features.auth.exceptions.InvalidRefreshTokenException;
 import com.bif.server.features.auth.exceptions.InvalidRegistrationException;
+import com.bif.server.features.auth.models.EmailVerificationOtp;
+import com.bif.server.features.auth.models.PasswordResetOtp;
 import com.bif.server.features.auth.models.RefreshToken;
+import com.bif.server.features.auth.repositories.EmailVerificationOtpRepository;
+import com.bif.server.features.auth.repositories.PasswordResetOtpRepository;
 import com.bif.server.features.auth.repositories.RefreshTokenRepository;
 import com.bif.server.features.auth.security.AccessTokenBlacklistService;
 import com.bif.server.features.auth.security.JwtService;
+import com.bif.server.features.auth.services.EmailService;
 import com.bif.server.features.user.models.User;
 import com.bif.server.features.user.repositories.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,7 +37,9 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import org.mockito.ArgumentCaptor;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -40,16 +54,35 @@ class AuthServiceTest {
     private RefreshTokenRepository refreshTokenRepository;
 
     @Mock
+    private PasswordResetOtpRepository passwordResetOtpRepository;
+
+    @Mock
+    private EmailVerificationOtpRepository emailVerificationOtpRepository;
+
+    @Mock
     private JwtService jwtService;
 
     @Mock
     private AccessTokenBlacklistService accessTokenBlacklistService;
 
+    @Mock
+    private EmailService emailService;
+
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, refreshTokenRepository, passwordEncoder, jwtService, accessTokenBlacklistService, 2592000L);
+        authService = new AuthService(
+                userRepository,
+                refreshTokenRepository,
+                passwordResetOtpRepository,
+                emailVerificationOtpRepository,
+                passwordEncoder,
+                jwtService,
+                accessTokenBlacklistService,
+            emailService,
+                2592000L
+        );
     }
 
     @Test
@@ -73,6 +106,10 @@ class AuthServiceTest {
     void register_WhenValid_ReturnsTokenAndUser() {
         RegisterRequest request = new RegisterRequest("alex", "alex@bif.local", "Password123!", "Password123!");
         when(userRepository.existsByEmailIgnoreCase("alex@bif.local")).thenReturn(false);
+        EmailVerificationOtp otpRecord = new EmailVerificationOtp();
+        otpRecord.setEmail("alex@bif.local");
+        otpRecord.setVerified(true);
+        when(emailVerificationOtpRepository.findById("alex@bif.local")).thenReturn(Optional.of(otpRecord));
         when(passwordEncoder.encode("Password123!")).thenReturn("hashed");
 
         User saved = new User();
@@ -210,5 +247,255 @@ class AuthServiceTest {
         assertTrue(existing.isRevoked());
         verify(refreshTokenRepository).save(existing);
         verify(accessTokenBlacklistService).revoke("access-token-value");
+    }
+
+    @Test
+    void changePassword_WhenCurrentPasswordWrong_ThrowsInvalidCredentialsException() {
+        User user = new User();
+        user.setId("u1");
+        user.setPasswordHash("hashed-current");
+        when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("wrong-current", "hashed-current")).thenReturn(false);
+
+        InvalidCredentialsException exception = assertThrows(
+                InvalidCredentialsException.class,
+                () -> authService.changePassword("u1", new ChangePasswordRequest("wrong-current", "NewPassword123!"))
+        );
+
+        assertEquals("Current password is incorrect", exception.getMessage());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void changePassword_WhenNewPasswordBlank_ThrowsInvalidRegistrationException() {
+        User user = new User();
+        user.setId("u1");
+        user.setPasswordHash("hashed-current");
+        when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("current-password", "hashed-current")).thenReturn(true);
+
+        InvalidRegistrationException exception = assertThrows(
+                InvalidRegistrationException.class,
+                () -> authService.changePassword("u1", new ChangePasswordRequest("current-password", "   "))
+        );
+
+        assertEquals("newPassword must not be blank", exception.getMessage());
+        verify(passwordEncoder, never()).encode(any(String.class));
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void changePassword_WhenNewPasswordTooShort_ThrowsInvalidRegistrationException() {
+        User user = new User();
+        user.setId("u1");
+        user.setPasswordHash("hashed-current");
+        when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("current-password", "hashed-current")).thenReturn(true);
+
+        InvalidRegistrationException exception = assertThrows(
+                InvalidRegistrationException.class,
+                () -> authService.changePassword("u1", new ChangePasswordRequest("current-password", "short7"))
+        );
+
+        assertEquals("newPassword must have at least 8 characters", exception.getMessage());
+        verify(passwordEncoder, never()).encode(any(String.class));
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void requestForgotPasswordOtp_WhenEmailMissing_ThrowsInvalidRegistrationException() {
+        assertThrows(InvalidRegistrationException.class, () -> authService.requestForgotPasswordOtp(new ForgotPasswordOtpRequest(null)));
+        verify(passwordResetOtpRepository, never()).save(any(PasswordResetOtp.class));
+    }
+
+    @Test
+    void requestForgotPasswordOtp_WhenEmailNotFound_ReturnsGenericSuccess() {
+        when(userRepository.findByEmailIgnoreCase("unknown@bif.local")).thenReturn(Optional.empty());
+
+        ForgotPasswordOtpResponse result = authService.requestForgotPasswordOtp(new ForgotPasswordOtpRequest("unknown@bif.local"));
+
+        assertTrue(result.success());
+        assertEquals("If this email is registered, an OTP has been sent", result.message());
+        verify(passwordResetOtpRepository, never()).save(any(PasswordResetOtp.class));
+        verify(emailService, never()).sendOtpEmail(any(String.class), any(String.class));
+    }
+
+    @Test
+    void requestForgotPasswordOtp_WhenEmailExists_SavesOtpAndReturnsSuccess() {
+        User user = new User();
+        user.setId("u1");
+        user.setEmail("alex@bif.local");
+        when(userRepository.findByEmailIgnoreCase("alex@bif.local")).thenReturn(Optional.of(user));
+        when(passwordResetOtpRepository.save(any(PasswordResetOtp.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ForgotPasswordOtpResponse result = authService.requestForgotPasswordOtp(new ForgotPasswordOtpRequest("alex@bif.local"));
+
+        assertTrue(result.success());
+        assertEquals("If this email is registered, an OTP has been sent", result.message());
+        
+        // Capture the PasswordResetOtp that was saved
+        ArgumentCaptor<PasswordResetOtp> otpCaptor = ArgumentCaptor.forClass(PasswordResetOtp.class);
+        verify(passwordResetOtpRepository).save(otpCaptor.capture());
+        
+        PasswordResetOtp capturedOtp = otpCaptor.getValue();
+        assertEquals("alex@bif.local", capturedOtp.getEmail());
+        assertNotNull(capturedOtp.getOtp());
+        assertTrue(capturedOtp.getOtp().matches("\\d{6}"));
+        assertNotNull(capturedOtp.getExpiresAt());
+        assertNotNull(capturedOtp.getCreatedAt());
+        assertEquals(0, capturedOtp.getAttemptCount());
+        assertNull(capturedOtp.getLastAttemptAt());
+        
+        // Verify that emailService.sendOtpEmail was called with the correct email and OTP
+        verify(emailService).sendOtpEmail(eq("alex@bif.local"), eq(capturedOtp.getOtp()));
+    }
+
+    @Test
+    void verifyForgotPasswordOtp_WhenOtpMissing_ThrowsInvalidRegistrationException() {
+        assertThrows(InvalidRegistrationException.class, () -> authService.verifyForgotPasswordOtp(new ForgotPasswordVerifyOtpRequest("alex@bif.local", null)));
+    }
+
+    @Test
+    void verifyForgotPasswordOtp_WhenOtpDoesNotMatch_ReturnsFailure() {
+        PasswordResetOtp existing = new PasswordResetOtp();
+        existing.setEmail("alex@bif.local");
+        existing.setOtp("123456");
+        existing.setAttemptCount(0);
+        existing.setExpiresAt(java.time.Instant.now().plusSeconds(300));
+        when(passwordResetOtpRepository.findById("alex@bif.local")).thenReturn(Optional.of(existing));
+        when(passwordResetOtpRepository.save(any(PasswordResetOtp.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ForgotPasswordVerifyOtpResponse result = authService.verifyForgotPasswordOtp(new ForgotPasswordVerifyOtpRequest("alex@bif.local", "000000"));
+
+        assertFalse(result.success());
+        assertNull(result.resetToken());
+        assertEquals(1, existing.getAttemptCount());
+        assertNotNull(existing.getLastAttemptAt());
+        verify(passwordResetOtpRepository).save(existing);
+    }
+
+    @Test
+    void verifyForgotPasswordOtp_WhenAttemptsExceeded_InvalidatesOtpAndReturnsFailure() {
+        PasswordResetOtp existing = new PasswordResetOtp();
+        existing.setEmail("alex@bif.local");
+        existing.setOtp("123456");
+        existing.setAttemptCount(5);
+        existing.setExpiresAt(java.time.Instant.now().plusSeconds(300));
+        when(passwordResetOtpRepository.findById("alex@bif.local")).thenReturn(Optional.of(existing));
+        when(passwordResetOtpRepository.save(any(PasswordResetOtp.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ForgotPasswordVerifyOtpResponse result = authService.verifyForgotPasswordOtp(
+                new ForgotPasswordVerifyOtpRequest("alex@bif.local", "000000")
+        );
+
+        assertFalse(result.success());
+        assertNull(result.resetToken());
+        assertEquals(6, existing.getAttemptCount());
+        assertNotNull(existing.getLastAttemptAt());
+        assertNull(existing.getOtp());
+        assertNull(existing.getExpiresAt());
+        assertNull(existing.getResetToken());
+        assertNull(existing.getResetTokenExpiresAt());
+        verify(passwordResetOtpRepository).save(existing);
+    }
+
+    @Test
+    void verifyForgotPasswordOtp_WhenExpired_ReturnsFailure() {
+        PasswordResetOtp existing = new PasswordResetOtp();
+        existing.setEmail("alex@bif.local");
+        existing.setOtp("123456");
+        existing.setExpiresAt(java.time.Instant.now().minusSeconds(1));
+        when(passwordResetOtpRepository.findById("alex@bif.local")).thenReturn(Optional.of(existing));
+
+        ForgotPasswordVerifyOtpResponse result = authService.verifyForgotPasswordOtp(new ForgotPasswordVerifyOtpRequest("alex@bif.local", "123456"));
+
+        assertFalse(result.success());
+        assertNull(result.resetToken());
+        verify(passwordResetOtpRepository, never()).save(any(PasswordResetOtp.class));
+    }
+
+    @Test
+    void verifyForgotPasswordOtp_WhenValid_ReturnsResetToken() {
+        PasswordResetOtp existing = new PasswordResetOtp();
+        existing.setEmail("alex@bif.local");
+        existing.setOtp("123456");
+        existing.setAttemptCount(2);
+        existing.setExpiresAt(java.time.Instant.now().plusSeconds(300));
+        when(passwordResetOtpRepository.findById("alex@bif.local")).thenReturn(Optional.of(existing));
+        when(passwordResetOtpRepository.save(any(PasswordResetOtp.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ForgotPasswordVerifyOtpResponse result = authService.verifyForgotPasswordOtp(new ForgotPasswordVerifyOtpRequest("alex@bif.local", "123456"));
+
+        assertTrue(result.success());
+        assertNotNull(result.resetToken());
+        verify(passwordResetOtpRepository).save(argThat(otp ->
+                result.resetToken().equals(otp.getResetToken())
+                && Integer.valueOf(0).equals(otp.getAttemptCount())
+                && otp.getLastAttemptAt() != null
+                        && otp.getResetTokenExpiresAt() != null
+        ));
+    }
+
+    @Test
+    void resetForgotPassword_WhenTokenNotFound_ReturnsFailure() {
+        when(passwordResetOtpRepository.findByResetToken("bad-token")).thenReturn(Optional.empty());
+
+        ForgotPasswordResetResponse result = authService.resetForgotPassword(
+                new ForgotPasswordResetRequest("bad-token", "Password123!")
+        );
+
+        assertFalse(result.success());
+        assertEquals("Reset token is invalid or expired", result.message());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void resetForgotPassword_WhenTokenExpired_ReturnsFailure() {
+        PasswordResetOtp existing = new PasswordResetOtp();
+        existing.setEmail("alex@bif.local");
+        existing.setResetToken("expired-token");
+        existing.setResetTokenExpiresAt(java.time.Instant.now().minusSeconds(1));
+        when(passwordResetOtpRepository.findByResetToken("expired-token")).thenReturn(Optional.of(existing));
+
+        ForgotPasswordResetResponse result = authService.resetForgotPassword(
+                new ForgotPasswordResetRequest("expired-token", "Password123!")
+        );
+
+        assertFalse(result.success());
+        assertEquals("Reset token is invalid or expired", result.message());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void resetForgotPassword_WhenValid_UpdatesPasswordAndInvalidatesToken() {
+        PasswordResetOtp existing = new PasswordResetOtp();
+        existing.setEmail("alex@bif.local");
+        existing.setOtp("123456");
+        existing.setExpiresAt(java.time.Instant.now().plusSeconds(300));
+        existing.setResetToken("reset-token");
+        existing.setResetTokenExpiresAt(java.time.Instant.now().plusSeconds(300));
+
+        User user = new User();
+        user.setId("u1");
+        user.setEmail("alex@bif.local");
+
+        when(passwordResetOtpRepository.findByResetToken("reset-token")).thenReturn(Optional.of(existing));
+        when(userRepository.findByEmailIgnoreCase("alex@bif.local")).thenReturn(Optional.of(user));
+        when(passwordEncoder.encode("Password123!")).thenReturn("hashed-new");
+        when(passwordResetOtpRepository.save(any(PasswordResetOtp.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ForgotPasswordResetResponse result = authService.resetForgotPassword(
+                new ForgotPasswordResetRequest("reset-token", "Password123!")
+        );
+
+        assertTrue(result.success());
+        assertEquals("Password has been reset successfully", result.message());
+        verify(userRepository).save(argThat(savedUser -> "hashed-new".equals(savedUser.getPasswordHash())));
+        verify(passwordResetOtpRepository).save(argThat(otp ->
+                otp.getResetToken() == null
+                        && otp.getResetTokenExpiresAt() == null
+                        && otp.getOtp() == null
+                        && otp.getExpiresAt() == null
+        ));
     }
 }

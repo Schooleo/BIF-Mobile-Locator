@@ -215,6 +215,12 @@ final class RouteGeometryUtils {
         return EARTH_RADIUS_METERS * c;
     }
 
+    static double calculateDistance(@NonNull Location from, @NonNull Location to) {
+        return distanceMeters(
+                Point.fromLngLat(from.longitude, from.latitude),
+                Point.fromLngLat(to.longitude, to.latitude));
+    }
+
     static double polylineDistanceMeters(@NonNull List<Point> points) {
         if (points.size() < 2) {
             return 0d;
