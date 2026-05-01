@@ -26,6 +26,8 @@ public class RegisterViewModel extends ViewModel {
     private final MutableLiveData<Boolean> registerEnabled = new MutableLiveData<>(false);
     private final MutableLiveData<UiState> requestOtpState = new MutableLiveData<>(new UiState.Idle());
     private final MutableLiveData<UiState> registerState = new MutableLiveData<>(new UiState.Idle());
+    private final MutableLiveData<Boolean> passwordHintVisible = new MutableLiveData<>(false);
+    private final MutableLiveData<Boolean> confirmPasswordHintVisible = new MutableLiveData<>(false);
 
     private final AuthRepository authRepository;
     private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
@@ -64,6 +66,14 @@ public class RegisterViewModel extends ViewModel {
 
     public LiveData<UiState> getRegisterState() {
         return registerState;
+    }
+
+    public LiveData<Boolean> getPasswordHintVisible() {
+        return passwordHintVisible;
+    }
+
+    public LiveData<Boolean> getConfirmPasswordHintVisible() {
+        return confirmPasswordHintVisible;
     }
 
     public void clearRequestOtpState() {
@@ -188,6 +198,9 @@ public class RegisterViewModel extends ViewModel {
         otpEnabled.setValue(otpEnabledValue);
         credentialsEnabled.setValue(credentialsEnabledValue);
         registerEnabled.setValue(emailValid && otpValid && usernameValid && confirmValid);
+
+        passwordHintVisible.setValue(password != null && !password.isEmpty() && !passwordValid);
+        confirmPasswordHintVisible.setValue(confirmPassword != null && !confirmPassword.isEmpty() && !confirmValid && passwordValid);
     }
 
     private boolean isEmailValid(String value) {

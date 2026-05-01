@@ -51,6 +51,9 @@ public class RegisterFragment extends Fragment {
         EditText etPassword = view.findViewById(com.bif.app.core.R.id.et_password);
         EditText etConfirmPassword = view.findViewById(com.bif.app.core.R.id.et_confirm_password);
 
+        TextView tvPasswordHint = view.findViewById(R.id.tv_password_hint);
+        TextView tvConfirmPasswordHint = view.findViewById(R.id.tv_confirm_password_hint);
+
         Button btnSendOtp = view.findViewById(R.id.btn_send_otp);
         Button btnRegister = view.findViewById(R.id.btn_register);
 
@@ -88,6 +91,11 @@ public class RegisterFragment extends Fragment {
         });
         viewModel.getRegisterEnabled().observe(getViewLifecycleOwner(), enabled ->
                 btnRegister.setEnabled(Boolean.TRUE.equals(enabled)));
+
+        viewModel.getPasswordHintVisible().observe(getViewLifecycleOwner(), visible ->
+                tvPasswordHint.setVisibility(Boolean.TRUE.equals(visible) ? View.VISIBLE : View.GONE));
+        viewModel.getConfirmPasswordHintVisible().observe(getViewLifecycleOwner(), visible ->
+                tvConfirmPasswordHint.setVisibility(Boolean.TRUE.equals(visible) ? View.VISIBLE : View.GONE));
 
         viewModel.getRequestOtpState().observe(getViewLifecycleOwner(), state -> {
             if (state instanceof RegisterViewModel.UiState.Loading) {
