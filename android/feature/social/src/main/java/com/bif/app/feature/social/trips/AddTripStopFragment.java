@@ -236,6 +236,16 @@ public class AddTripStopFragment extends Fragment {
         tvSelectedTime.setOnClickListener(v -> showTimePicker());
         btnAddToTrip.setOnClickListener(v -> addSelectedPlaceToTrip());
 
+        viewModel.getSelectedPlaceDetail().observe(getViewLifecycleOwner(), place -> {
+            if (place != null) {
+                if (selectedItem != null) {
+                    selectedItem = new AddTripStopViewModel.StopSearchResultItem(place, selectedItem.addedToTripCount);
+                }
+                bindSelectedPlace(place);
+                renderSelectedPlace(place);
+            }
+        });
+
         etSearch.addTextChangedListener(queryWatcher);
         etSearch.setOnEditorActionListener((v, actionId, event) -> {
             boolean submit = actionId == EditorInfo.IME_ACTION_SEARCH
@@ -465,8 +475,7 @@ public class AddTripStopFragment extends Fragment {
     private void onResultItemSelected(@NonNull AddTripStopViewModel.StopSearchResultItem item,
                                       boolean focusCamera) {
         selectedItem = item;
-        bindSelectedPlace(item);
-        renderSelectedPlace(item);
+        viewModel.resolveSelectedPlace(item.place);
         if (focusCamera && mapLibreMap != null && item.place != null && item.place.location != null) {
             animateSelectedPlaceCamera(new LatLng(
                     item.place.location.latitude,
@@ -539,8 +548,8 @@ public class AddTripStopFragment extends Fragment {
         btnNextPlace.setAlpha(buttonAlpha);
     }
 
-    private void bindSelectedPlace(@Nullable AddTripStopViewModel.StopSearchResultItem item) {
-        if (item == null || item.place == null) {
+    private void bindSelectedPlace(@Nullable Place place) {
+        if (place == null) {
             tvSelectedPlaceName.setText(R.string.trip_select_place);
             tvSelectedPlaceAddress.setText("");
             tvSelectedPlaceRating.setText("");
@@ -548,7 +557,6 @@ public class AddTripStopFragment extends Fragment {
             return;
         }
 
-        Place place = item.place;
         tvSelectedPlaceName.setText(place.name == null || place.name.trim().isEmpty()
                 ? getString(R.string.trip_stop_untitled)
                 : place.name);
@@ -761,15 +769,15 @@ public class AddTripStopFragment extends Fragment {
         return candidates;
     }
 
-    private void renderSelectedPlace(@Nullable AddTripStopViewModel.StopSearchResultItem item) {
-        if (item == null || item.place == null || item.place.location == null) {
+    private void renderSelectedPlace(@Nullable Place place) {
+        if (place == null || place.location == null) {
             setFeatures(SELECTED_SOURCE_ID, Collections.emptyList());
             return;
         }
 
         Feature feature = Feature.fromGeometry(
-                Point.fromLngLat(item.place.location.longitude, item.place.location.latitude));
-        feature.addStringProperty(PROP_PLACE_ID, item.place.id == null ? "" : item.place.id);
+                Point.fromLngLat(place.location.longitude, place.location.latitude));
+        feature.addStringProperty(PROP_PLACE_ID, place.id == null ? "" : place.id);
         setFeatures(SELECTED_SOURCE_ID, Collections.singletonList(feature));
     }
 

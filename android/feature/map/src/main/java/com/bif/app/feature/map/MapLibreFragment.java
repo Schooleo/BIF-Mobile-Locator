@@ -1038,7 +1038,17 @@ public class MapLibreFragment extends Fragment implements OnMapReadyCallback {
             return Collections.emptyList();
         }
 
-        Collections.sort(parsed, Comparator.comparingInt(stop -> stop.orderIndex));
+        Collections.sort(parsed, (left, right) -> {
+            if (left.timeMillis > 0 && right.timeMillis > 0) {
+                int timeCompare = Long.compare(left.timeMillis, right.timeMillis);
+                if (timeCompare != 0) return timeCompare;
+            } else if (left.timeMillis > 0) {
+                return -1;
+            } else if (right.timeMillis > 0) {
+                return 1;
+            }
+            return Integer.compare(left.orderIndex, right.orderIndex);
+        });
         List<MapViewModel.TripStopOverlay> normalized = new ArrayList<>();
         for (int i = 0; i < parsed.size(); i++) {
             MapViewModel.TripStopOverlay stop = parsed.get(i);

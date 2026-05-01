@@ -706,6 +706,7 @@ public class TripRepository implements ITripRepository {
                     stopEntity.departureTime = incomingDeparture;
                 }
                 stopEntity.orderIndex = stopDto.orderIndex;
+                stopEntity.rating = stopDto.rating;
                 stopEntity.serverVersion = Math.max(stopEntity.serverVersion, incomingVersion);
                 stopEntity.deleted = stopDto.deleted;
                 mappedStops.add(stopEntity);
@@ -734,9 +735,19 @@ public class TripRepository implements ITripRepository {
             List<TripStop> stops = new ArrayList<>();
             if (item.stops != null) {
                 List<TripStopEntity> stopEntities = new ArrayList<>(item.stops);
-                stopEntities.sort((left, right) -> Integer.compare(
-                        left != null ? left.orderIndex : Integer.MAX_VALUE,
-                        right != null ? right.orderIndex : Integer.MAX_VALUE));
+                stopEntities.sort((left, right) -> {
+                    if (left == null) return 1;
+                    if (right == null) return -1;
+                    if (left.arrivalTime > 0 && right.arrivalTime > 0) {
+                        int timeCompare = Long.compare(left.arrivalTime, right.arrivalTime);
+                        if (timeCompare != 0) return timeCompare;
+                    } else if (left.arrivalTime > 0) {
+                        return -1;
+                    } else if (right.arrivalTime > 0) {
+                        return 1;
+                    }
+                    return Integer.compare(left.orderIndex, right.orderIndex);
+                });
                 for (TripStopEntity stop : stopEntities) {
                     if (stop == null || stop.deleted) {
                         continue;
@@ -756,7 +767,8 @@ public class TripRepository implements ITripRepository {
                             stop.addedByUserId,
                             stop.addedByName,
                             stop.addedByAvatarLetter,
-                            stop.addedByAvatarColor
+                            stop.addedByAvatarColor,
+                            stop.rating
                     ));
                 }
             }
@@ -968,6 +980,7 @@ public class TripRepository implements ITripRepository {
         entity.arrivalTime = stop.getArrivalTime();
         entity.departureTime = stop.getDepartureTime();
         entity.orderIndex = stop.getOrderIndex();
+        entity.rating = stop.getRating();
         if (existing == null) {
             entity.serverVersion = 0L;
             entity.deleted = false;
@@ -1078,6 +1091,7 @@ public class TripRepository implements ITripRepository {
         dto.addedByAvatarLetter = entity.addedByAvatarLetter;
         dto.addedByAvatarColor = entity.addedByAvatarColor;
         dto.orderIndex = entity.orderIndex;
+        dto.rating = entity.rating;
         dto.arrivalTime = formatInstant(entity.arrivalTime);
         dto.departureTime = formatInstant(entity.departureTime);
         dto.serverVersion = entity.serverVersion;

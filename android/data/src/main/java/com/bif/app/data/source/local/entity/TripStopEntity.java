@@ -33,6 +33,7 @@ public class TripStopEntity {
     public long arrivalTime;
     public long departureTime;
     public int orderIndex;
+    public double rating;
     public long serverVersion;
     public boolean deleted;
 

@@ -19,6 +19,7 @@ public class TripStopDto {
     public String arrivalTime;
     public String departureTime;
     public int orderIndex;
+    public double rating;
     public long serverVersion;
     public boolean deleted;
 }

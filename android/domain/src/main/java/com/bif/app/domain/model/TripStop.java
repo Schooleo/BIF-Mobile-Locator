@@ -16,18 +16,19 @@ public class TripStop {
     private final long arrivalTime;
     private final long departureTime;
     private final int orderIndex;
+    private final double rating;
 
     public TripStop(String id, String title, String note, double latitude, double longitude,
                     long arrivalTime, long departureTime, int orderIndex) {
         this(id, title, "", note, null, null, latitude, longitude,
-            arrivalTime, departureTime, orderIndex, null, null, null, 0);
+            arrivalTime, departureTime, orderIndex, null, null, null, 0, 0.0);
         }
 
         public TripStop(String id, String title, String address, String note,
                 double latitude, double longitude,
                 long arrivalTime, long departureTime, int orderIndex) {
         this(id, title, address, note, null, null, latitude, longitude,
-            arrivalTime, departureTime, orderIndex, null, null, null, 0);
+            arrivalTime, departureTime, orderIndex, null, null, null, 0, 0.0);
     }
 
     public TripStop(String id, String title, String note,
@@ -37,7 +38,7 @@ public class TripStop {
                     int orderIndex) {
         this(id, title, "", note, photoUrl, localImagePath,
             latitude, longitude, arrivalTime, departureTime, orderIndex,
-            null, null, null, 0);
+            null, null, null, 0, 0.0);
         }
 
         public TripStop(String id, String title, String address, String note,
@@ -47,7 +48,7 @@ public class TripStop {
                 int orderIndex) {
         this(id, title, address, note, photoUrl, localImagePath,
             latitude, longitude, arrivalTime, departureTime, orderIndex,
-            null, null, null, 0);
+            null, null, null, 0, 0.0);
         }
 
         public TripStop(String id, String title, String address, String note,
@@ -59,6 +60,21 @@ public class TripStop {
                 String addedByName,
                 String addedByAvatarLetter,
                 int addedByAvatarColor) {
+            this(id, title, address, note, photoUrl, localImagePath,
+                latitude, longitude, arrivalTime, departureTime, orderIndex,
+                addedByUserId, addedByName, addedByAvatarLetter, addedByAvatarColor, 0.0);
+        }
+
+        public TripStop(String id, String title, String address, String note,
+                String photoUrl, String localImagePath,
+                double latitude, double longitude,
+                long arrivalTime, long departureTime,
+                int orderIndex,
+                String addedByUserId,
+                String addedByName,
+                String addedByAvatarLetter,
+                int addedByAvatarColor,
+                double rating) {
         this.id = id;
         this.title = title;
         this.address = address;
@@ -74,6 +90,7 @@ public class TripStop {
         this.arrivalTime = arrivalTime;
         this.departureTime = departureTime;
         this.orderIndex = orderIndex;
+        this.rating = rating;
     }
 
     public String getId() { return id; }
@@ -91,4 +108,5 @@ public class TripStop {
     public long getArrivalTime() { return arrivalTime; }
     public long getDepartureTime() { return departureTime; }
     public int getOrderIndex() { return orderIndex; }
+    public double getRating() { return rating; }
 }
