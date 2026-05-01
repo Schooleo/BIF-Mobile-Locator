@@ -5,6 +5,7 @@ import com.bif.server.features.place.services.PlaceIdentityService;
 import com.bif.server.features.place.services.RatingService;
 import com.bif.server.features.sync.models.SyncChange;
 import com.bif.server.features.sync.models.SyncChangeEntry;
+import com.bif.server.features.place.repositories.RatingRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,13 +22,16 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
     private final RatingService ratingService;
     private final PlaceIdentityService placeIdentityService;
     private final ObjectMapper objectMapper;
+    private final RatingRepository ratingRepository;
 
     public ReviewSyncEntityHandler(RatingService ratingService,
                                    PlaceIdentityService placeIdentityService,
-                                   ObjectMapper objectMapper) {
+                                   ObjectMapper objectMapper,
+                                   RatingRepository ratingRepository) {
         this.ratingService = ratingService;
         this.placeIdentityService = placeIdentityService;
         this.objectMapper = objectMapper;
+        this.ratingRepository = ratingRepository;
     }
 
     @Override
@@ -49,15 +53,39 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
             throw new IllegalArgumentException("Review sync: unsupported operation '" + operation + "'");
         }
 
-        String[] parts = pushed.getEntityId() != null
-                ? pushed.getEntityId().split(":")
-                : new String[0];
-        if (parts.length < 2) {
-            throw new IllegalArgumentException("Review sync: malformed entityId '" + pushed.getEntityId() + "'");
+        String originalPlaceId = null;
+        String entityUserId = null;
+        String incomingEntityId = pushed.getEntityId();
+        boolean parsedFromCompound = false;
+
+        if (incomingEntityId != null && (incomingEntityId.contains(":") || incomingEntityId.contains("|"))) {
+            String[] parts = incomingEntityId.split("[:|]");
+            if (parts.length >= 2) {
+                originalPlaceId = parts[0];
+                entityUserId = parts[1];
+                parsedFromCompound = true;
+            }
         }
 
-        String originalPlaceId = parts[0];
-        String entityUserId = parts[1];
+        if (!parsedFromCompound) {
+            // Try payload first
+            ReviewPayload payloadFromBody = parsePayload(pushed.getPayload());
+            if (payloadFromBody != null && !isBlank(payloadFromBody.placeId) && !isBlank(payloadFromBody.userId)) {
+                originalPlaceId = payloadFromBody.placeId;
+                entityUserId = payloadFromBody.userId;
+            } else if (incomingEntityId != null && ratingRepository != null) {
+                // Last resort: lookup review by id in DB
+                try {
+                    var opt = ratingRepository.findById(incomingEntityId);
+                    if (opt.isPresent()) {
+                        var review = opt.get();
+                        originalPlaceId = review.getPlaceId();
+                        entityUserId = review.getUserId();
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+        }
 
         if (originalPlaceId == null || originalPlaceId.isBlank()) {
             throw new IllegalArgumentException("Review sync: blank placeId in entityId");
@@ -72,10 +100,24 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
         String reviewUserId = userId;
 
         if ("DELETE".equals(operation)) {
-            Optional<ReviewResponseDTO> existing = ratingService.getUserReviewWithUser(reviewUserId, originalPlaceId);
-            if (existing.isPresent()) {
-                ratingService.deleteReview(reviewUserId, originalPlaceId);
-                LOGGER.debug("Review sync: deleted review for place={}", originalPlaceId);
+            // Prefer delete by user+place, but if incoming entityId was a review id, resolve by id then delete
+            if (!isBlank(incomingEntityId) && ratingRepository != null && !parsedFromCompound) {
+                try {
+                    var opt = ratingRepository.findById(incomingEntityId);
+                    if (opt.isPresent()) {
+                        var review = opt.get();
+                        ratingService.deleteReview(review.getUserId(), review.getPlaceId());
+                        LOGGER.debug("Review sync: deleted review by id={}", incomingEntityId);
+                    }
+                } catch (Exception ex) {
+                    LOGGER.warn("Review sync: delete by id failed, falling back to user+place delete", ex);
+                }
+            } else {
+                Optional<ReviewResponseDTO> existing = ratingService.getUserReviewWithUser(reviewUserId, originalPlaceId);
+                if (existing.isPresent()) {
+                    ratingService.deleteReview(reviewUserId, originalPlaceId);
+                    LOGGER.debug("Review sync: deleted review for place={}", originalPlaceId);
+                }
             }
 
             ReviewPayload response = new ReviewPayload();
@@ -112,9 +154,9 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
                 payload.placeName);
 
         LOGGER.debug("Review sync: saved review for place={} resolvedPlace={} stars={}",
-                originalPlaceId,
-                resolvedPlaceId,
-                stars);
+            originalPlaceId,
+            resolvedPlaceId,
+            stars);
 
         ReviewPayload responsePayload = toPayload(savedReview);
         responsePayload.placeId = resolvedPlaceId;
@@ -128,27 +170,55 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
             return entry.getPayload();
         }
 
-        String[] parts = entry.getEntityId() != null
-                ? entry.getEntityId().split(":")
-                : new String[0];
-        if (parts.length < 2) {
+        String incomingEntityId = entry.getEntityId();
+        if (incomingEntityId == null || incomingEntityId.isBlank()) {
             return null;
         }
 
-        String placeId = parts[0].trim();
-        String reviewUserId = parts[1].trim();
-        if (placeId.isEmpty() || reviewUserId.isEmpty()) {
-            return null;
+        // Legacy place:user entityId
+        if (incomingEntityId.contains(":" ) || incomingEntityId.contains("|")) {
+            String[] parts = incomingEntityId.split("[:|]");
+            if (parts.length < 2) {
+                return null;
+            }
+            String placeId = parts[0].trim();
+            String reviewUserId = parts[1].trim();
+            if (placeId.isEmpty() || reviewUserId.isEmpty()) {
+                return null;
+            }
+            Optional<ReviewResponseDTO> reviewOpt = ratingService.getUserReviewWithUser(reviewUserId, placeId);
+            if (reviewOpt.isEmpty()) {
+                return null;
+            }
+            ReviewPayload payload = toPayload(reviewOpt.get());
+            payload.serverVersion = entry.getServerVersion();
+            return writePayload(payload);
         }
 
-        Optional<ReviewResponseDTO> reviewOpt = ratingService.getUserReviewWithUser(reviewUserId, placeId);
-        if (reviewOpt.isEmpty()) {
-            return null;
+        // New style: review id
+        if (ratingRepository != null) {
+            try {
+                var opt = ratingRepository.findById(incomingEntityId);
+                if (opt.isPresent()) {
+                    var r = opt.get();
+                    ReviewResponseDTO dto = new ReviewResponseDTO(
+                            r.getId(),
+                            r.getPlaceId(),
+                            r.getUserId(),
+                            null,
+                            r.getStars(),
+                            r.getComment(),
+                            r.getCreatedAt() != null ? r.getCreatedAt().toEpochMilli() : 0L
+                    );
+                    ReviewPayload payload = toPayload(dto);
+                    payload.serverVersion = entry.getServerVersion();
+                    return writePayload(payload);
+                }
+            } catch (Exception ignored) {
+            }
         }
 
-        ReviewPayload payload = toPayload(reviewOpt.get());
-        payload.serverVersion = entry.getServerVersion();
-        return writePayload(payload);
+        return null;
     }
 
     private String resolvePlaceIdWithFallback(String originalPlaceId, ReviewPayload payload) {
