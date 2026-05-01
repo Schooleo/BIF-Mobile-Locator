@@ -110,7 +110,16 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
                         LOGGER.debug("Review sync: deleted review by id={}", incomingEntityId);
                     }
                 } catch (Exception ex) {
-                    LOGGER.warn("Review sync: delete by id failed, falling back to user+place delete", ex);
+                    LOGGER.warn("Review sync: delete by id failed, attempting fallback to user+place delete", ex);
+                    try {
+                        Optional<ReviewResponseDTO> existing = ratingService.getUserReviewWithUser(reviewUserId, originalPlaceId);
+                        if (existing.isPresent()) {
+                            ratingService.deleteReview(reviewUserId, originalPlaceId);
+                            LOGGER.debug("Review sync: deleted review for place={} via fallback", originalPlaceId);
+                        }
+                    } catch (Exception ex2) {
+                        LOGGER.warn("Review sync: fallback delete by user+place also failed", ex2);
+                    }
                 }
             } else {
                 Optional<ReviewResponseDTO> existing = ratingService.getUserReviewWithUser(reviewUserId, originalPlaceId);

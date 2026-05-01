@@ -274,7 +274,8 @@ public class FriendsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 com.bif.app.core.R.color.avatar_pink,
                 com.bif.app.core.R.color.avatar_cyan
         };
-        int colorRes = colors[Math.abs(seed) % colors.length];
+        int index = (seed & Integer.MAX_VALUE) % colors.length;
+        int colorRes = colors[index];
         return view.getContext().getResources().getColor(colorRes, null);
     }
 }

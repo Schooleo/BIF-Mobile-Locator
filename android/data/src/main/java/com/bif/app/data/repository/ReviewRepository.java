@@ -301,16 +301,25 @@ public class ReviewRepository implements IReviewRepository {
                             affectedPlaceIds.add(resolvedPlaceId);
 
                             ReviewEntity entity = ReviewMapper.fromDto(dto, resolvedPlaceId);
-                            // Avoid overwriting a locally modified pending item
-                            ReviewEntity local = reviewDao.getReviewSync(resolvedPlaceId, serverUserId);
-                            String reviewId = local != null ? local.id : entity.id;
+                            // Avoid overwriting a locally modified pending item.
+                            // When identity correction occurs, a local review might exist under
+                            // either the resolvedPlaceId or the legacy placeId; prefer an existing
+                            // local as the authoritative id and migrate legacy rows when needed.
+                            ReviewEntity localResolved = reviewDao.getReviewSync(resolvedPlaceId, serverUserId);
+                            ReviewEntity localLegacy = identityCorrected ? reviewDao.getReviewSync(placeId, serverUserId) : null;
+                            ReviewEntity chosenLocal = localResolved != null ? localResolved : localLegacy;
+                            String reviewId = chosenLocal != null ? chosenLocal.id : entity.id;
                             entity.id = reviewId;
-                            
-                            if (identityCorrected && local != null) {
+
+                            // If the chosen local came from the legacy placeId, migrate it by
+                            // removing the legacy row and any pending sync queue entry, so the
+                            // upsert below stores the row under the resolvedPlaceId id.
+                            if (identityCorrected && localLegacy != null && chosenLocal == localLegacy) {
                                 reviewDao.deleteByPlaceAndUserId(placeId, serverUserId);
-                                syncQueueDao.removeByEntity("review", local.id);
+                                syncQueueDao.removeByEntity("review", localLegacy.id);
                             }
-                            if (local == null || !local.pendingSync) {
+
+                            if (chosenLocal == null || !chosenLocal.pendingSync) {
                                 reviewDao.upsert(entity);
                             }
                         }

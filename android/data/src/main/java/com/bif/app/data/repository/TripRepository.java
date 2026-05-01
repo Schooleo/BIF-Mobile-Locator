@@ -736,6 +736,7 @@ public class TripRepository implements ITripRepository {
             if (item.stops != null) {
                 List<TripStopEntity> stopEntities = new ArrayList<>(item.stops);
                 stopEntities.sort((left, right) -> {
+                    if (left == null && right == null) return 0;
                     if (left == null) return 1;
                     if (right == null) return -1;
                     if (left.arrivalTime > 0 && right.arrivalTime > 0) {

@@ -25,6 +25,8 @@ import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.inject.Inject;
 
@@ -54,6 +56,8 @@ public class AddTripStopViewModel extends ViewModel {
     private volatile String aiCityBias;
 
     private String currentTripId = "";
+
+    private final Map<LiveData<?>, Observer<?>> foreverObservers = new HashMap<>();
 
     private final Observer<Boolean> networkObserver = isOnline -> {
         boolean online = Boolean.TRUE.equals(isOnline);
@@ -181,10 +185,12 @@ public class AddTripStopViewModel extends ViewModel {
                 android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
                 mainHandler.post(() -> {
                     LiveData<Place> source = placeRepository.getPlaceById(serverId);
-                    source.observeForever(new Observer<Place>() {
+                    Observer<Place> placeResolveObserver = new Observer<Place>() {
                         @Override
                         public void onChanged(Place detailedPlace) {
+                            // remove observer immediately when value arrives to avoid leaks
                             source.removeObserver(this);
+                            foreverObservers.remove(source);
                             if (requestId == currentResolveRequestId.get() && detailedPlace != null) {
                                 Place current = selectedPlaceDetail.getValue();
                                 if (current != null) {
@@ -207,7 +213,9 @@ public class AddTripStopViewModel extends ViewModel {
                                 }
                             }
                         }
-                    });
+                    };
+                    foreverObservers.put(source, placeResolveObserver);
+                    source.observeForever(placeResolveObserver);
                 });
             }
         });
@@ -328,6 +336,15 @@ public class AddTripStopViewModel extends ViewModel {
     protected void onCleared() {
         super.onCleared();
         networkMonitor.observeConnectivity().removeObserver(networkObserver);
+        if (!foreverObservers.isEmpty()) {
+            for (Map.Entry<LiveData<?>, Observer<?>> e : foreverObservers.entrySet()) {
+                try {
+                    e.getKey().removeObserver((Observer) e.getValue());
+                } catch (Exception ignored) {
+                }
+            }
+            foreverObservers.clear();
+        }
     }
 
     public static class StopSearchResultItem {
