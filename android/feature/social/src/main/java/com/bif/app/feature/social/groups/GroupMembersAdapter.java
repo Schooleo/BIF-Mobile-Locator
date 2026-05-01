@@ -67,8 +67,6 @@ public class GroupMembersAdapter extends RecyclerView.Adapter<GroupMembersAdapte
             super(itemView);
             tvAvatar = itemView.findViewById(com.bif.app.core.R.id.tv_avatar);
             tvFriendName = itemView.findViewById(com.bif.app.core.R.id.tv_friend_name);
-            tvStatus = itemView.findViewById(com.bif.app.core.R.id.tv_status);
-            viewStatus = itemView.findViewById(com.bif.app.core.R.id.view_status);
             btnDelete = itemView.findViewById(com.bif.app.core.R.id.btn_delete);
         }
 

@@ -35,7 +35,6 @@ public class FriendsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         void onAddFriendClick();
         void onAcceptRequestClick(Friendship friendship);
         void onRejectRequestClick(Friendship friendship);
-        void onFriendClick(Friend friend);
         void onDeleteFriendClick(Friend friend, int position);
     }
 
@@ -221,9 +220,7 @@ public class FriendsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             String avatarLetter = displayName.substring(0, 1).toUpperCase(Locale.ROOT);
 
             tvAvatar.setText(avatarLetter);
-            tvAvatar.setBackgroundTintList(ColorStateList.valueOf(
-                    itemView.getResources().getColor(com.bif.app.core.R.color.avatar_red, null)
-            ));
+            tvAvatar.setBackgroundTintList(ColorStateList.valueOf(getVibrantColor(itemView, displayName.hashCode())));
             tvRequestLabel.setText(R.string.friend_request_from);
             tvRequestName.setText(displayName);
 
@@ -242,31 +239,20 @@ public class FriendsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     }
 
     class FriendViewHolder extends RecyclerView.ViewHolder {
-        TextView tvAvatar, tvFriendName, tvStatus;
-        View viewStatus;
+        TextView tvAvatar, tvFriendName;
         ImageButton btnDelete;
 
         FriendViewHolder(View itemView) {
             super(itemView);
             tvAvatar = itemView.findViewById(com.bif.app.core.R.id.tv_avatar);
             tvFriendName = itemView.findViewById(com.bif.app.core.R.id.tv_friend_name);
-            tvStatus = itemView.findViewById(com.bif.app.core.R.id.tv_status);
-            viewStatus = itemView.findViewById(com.bif.app.core.R.id.view_status);
             btnDelete = itemView.findViewById(com.bif.app.core.R.id.btn_delete);
         }
 
         void bind(Friend friend, int position) {
             tvAvatar.setText(friend.getAvatarLetter());
-            tvAvatar.setBackgroundTintList(ColorStateList.valueOf(friend.getAvatarColor()));
+            tvAvatar.setBackgroundTintList(ColorStateList.valueOf(getVibrantColor(itemView, friend.getName().hashCode())));
             tvFriendName.setText(friend.getName());
-            tvStatus.setText(friend.isOnline() ? R.string.online : R.string.offline);
-            viewStatus.setVisibility(friend.isOnline() ? View.VISIBLE : View.GONE);
-
-            itemView.setOnClickListener(v -> {
-                if (listener != null) {
-                    listener.onFriendClick(friend);
-                }
-            });
 
             btnDelete.setOnClickListener(v -> {
                 if (listener != null) {
@@ -274,5 +260,21 @@ public class FriendsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 }
             });
         }
+    }
+
+    private int getVibrantColor(View view, int seed) {
+        int[] colors = {
+                com.bif.app.core.R.color.avatar_red,
+                com.bif.app.core.R.color.avatar_blue,
+                com.bif.app.core.R.color.avatar_yellow,
+                com.bif.app.core.R.color.avatar_purple,
+                com.bif.app.core.R.color.avatar_orange,
+                com.bif.app.core.R.color.avatar_teal,
+                com.bif.app.core.R.color.avatar_indigo,
+                com.bif.app.core.R.color.avatar_pink,
+                com.bif.app.core.R.color.avatar_cyan
+        };
+        int colorRes = colors[Math.abs(seed) % colors.length];
+        return view.getContext().getResources().getColor(colorRes, null);
     }
 }

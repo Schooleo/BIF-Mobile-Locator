@@ -31,6 +31,11 @@
     <color name="avatar_blue">#4DABF7</color>
     <color name="avatar_yellow">#FFD43B</color>
     <color name="avatar_purple">#CC5DE8</color>
+    <color name="avatar_orange">#FD7E14</color>
+    <color name="avatar_teal">#12B886</color>
+    <color name="avatar_indigo">#4C6EF5</color>
+    <color name="avatar_pink">#E64980</color>
+    <color name="avatar_cyan">#15AABF</color>
     <color name="item_background">#F5F5F5</color>
     <color name="text_secondary">#757575</color>
 

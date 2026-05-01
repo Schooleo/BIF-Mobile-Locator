@@ -33,7 +33,6 @@ public class FavoriteDetailFragment extends Fragment {
     private FavoriteDetailViewModel viewModel;
     private TextView tvName;
     private TextView tvAddress;
-    private TextView tvDescription;
     private TextView tvNotes;
     private RatingBar ratingBar;
 
@@ -68,7 +67,6 @@ public class FavoriteDetailFragment extends Fragment {
     private void bindViews(@NonNull View view) {
         tvName = view.findViewById(R.id.tv_detail_name);
         tvAddress = view.findViewById(R.id.tv_detail_address);
-        tvDescription = view.findViewById(R.id.tv_detail_description);
         tvNotes = view.findViewById(R.id.tv_detail_notes);
         ratingBar = view.findViewById(R.id.rating_bar);
     }
@@ -102,7 +100,6 @@ public class FavoriteDetailFragment extends Fragment {
             }
             tvName.setText(favorite.name);
             tvAddress.setText(defaultText(favorite.address, getString(R.string.favorite_address_unavailable)));
-            tvDescription.setText(defaultText(favorite.description, getString(R.string.favorite_description_empty)));
             tvNotes.setText(defaultText(favorite.notes, getString(R.string.favorite_note_empty)));
         });
     }

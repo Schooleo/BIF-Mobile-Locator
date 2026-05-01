@@ -40,7 +40,6 @@ public class FavoriteDetailBottomSheet extends BottomSheetDialogFragment {
     private FavoriteDetailViewModel viewModel;
     private TextView tvName;
     private TextView tvAddress;
-    private TextView tvDescription;
     private TextView tvNotes;
     private RatingBar ratingBar;
 
@@ -51,7 +50,6 @@ public class FavoriteDetailBottomSheet extends BottomSheetDialogFragment {
         args.putString("favPlaceId", favorite.placeId != null ? favorite.placeId : "");
         args.putString("favName", favorite.name != null ? favorite.name : "");
         args.putString("favAddress", favorite.address != null ? favorite.address : "");
-        args.putString("favDescription", favorite.description != null ? favorite.description : "");
         args.putString("favNotes", favorite.notes != null ? favorite.notes : "");
         args.putInt("favRating", favorite.rating);
         args.putString("favLatitude", String.valueOf(favorite.latitude));
@@ -164,7 +162,6 @@ public class FavoriteDetailBottomSheet extends BottomSheetDialogFragment {
     private void bindViews(@NonNull View view) {
         tvName = view.findViewById(R.id.tv_detail_name);
         tvAddress = view.findViewById(R.id.tv_detail_address);
-        tvDescription = view.findViewById(R.id.tv_detail_description);
         tvNotes = view.findViewById(R.id.tv_detail_notes);
         ratingBar = view.findViewById(R.id.rating_bar);
     }
@@ -198,7 +195,6 @@ public class FavoriteDetailBottomSheet extends BottomSheetDialogFragment {
             }
             tvName.setText(favorite.name);
             tvAddress.setText(defaultText(favorite.address, getString(R.string.favorite_address_unavailable)));
-            tvDescription.setText(defaultText(favorite.description, getString(R.string.favorite_description_empty)));
             tvNotes.setText(defaultText(favorite.notes, getString(R.string.favorite_note_empty)));
         });
     }
@@ -224,7 +220,6 @@ public class FavoriteDetailBottomSheet extends BottomSheetDialogFragment {
         favorite.placeId = args.getString("favPlaceId", "");
         favorite.name = args.getString("favName", "");
         favorite.address = args.getString("favAddress", "");
-        favorite.description = args.getString("favDescription", "");
         favorite.notes = args.getString("favNotes", "");
         favorite.rating = args.getInt("favRating", 0);
         favorite.latitude = parseDouble(args.getString("favLatitude", ""));

@@ -204,10 +204,6 @@ public class SocialFragment extends Fragment {
                 viewModel.rejectFriendRequest(friendship.getId());
             }
 
-            @Override
-            public void onFriendClick(Friend friend) {
-                navigateToFriendSettingsTrips(friend);
-            }
 
             @Override
             public void onDeleteFriendClick(Friend friend, int position) {
