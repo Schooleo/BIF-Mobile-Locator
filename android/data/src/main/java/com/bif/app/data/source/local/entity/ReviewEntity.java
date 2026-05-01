@@ -3,13 +3,19 @@ package com.bif.app.data.source.local.entity;
 import androidx.annotation.NonNull;
 import androidx.room.Entity;
 import androidx.room.Index;
+import androidx.room.PrimaryKey;
 
 @Entity(
     tableName = "reviews",
-    primaryKeys = {"placeId", "userId"},
-    indices = {@Index("createdAt")}
+    indices = {
+        @Index(value = {"placeId", "userId"}, unique = true),
+        @Index("createdAt")
+    }
 )
 public class ReviewEntity {
+    @NonNull
+    @PrimaryKey
+    public String id;
     @NonNull public String placeId;
     @NonNull public String userId;
     public String userName;
@@ -31,6 +37,7 @@ public class ReviewEntity {
     public boolean pendingSync;
 
     public ReviewEntity() {
+        this.id = "";
         this.placeId = "";
         this.userId = "";
     }

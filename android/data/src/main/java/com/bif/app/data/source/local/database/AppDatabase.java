@@ -50,7 +50,7 @@ import com.bif.app.data.source.local.entity.TripStopEntity;
         TripPlanEntity.class,
         TripMemberCrossRef.class,
         TripStopEntity.class
-    }, version = 24, exportSchema = false)
+    }, version = 26, exportSchema = false)
 @TypeConverters({ FriendshipStatusConverter.class, UploadStatusConverter.class })
 public abstract class AppDatabase extends RoomDatabase {
     private static boolean hasColumn(SupportSQLiteDatabase database, String tableName, String columnName) {
@@ -371,6 +371,72 @@ public abstract class AppDatabase extends RoomDatabase {
         public void migrate(SupportSQLiteDatabase database) {
             if (!hasColumn(database, "places", "viewedAt")) {
                 database.execSQL("ALTER TABLE places ADD COLUMN viewedAt INTEGER NOT NULL DEFAULT 0");
+            }
+        }
+    };
+
+    public static final Migration MIGRATION_24_25 = new Migration(24, 25) {
+        @Override
+        public void migrate(SupportSQLiteDatabase database) {
+            if (!hasColumn(database, "trip_stops", "rating")) {
+                database.execSQL("ALTER TABLE trip_stops ADD COLUMN rating REAL NOT NULL DEFAULT 0.0");
+            }
+        }
+    };
+
+    public static final Migration MIGRATION_25_26 = new Migration(25, 26) {
+        @Override
+        public void migrate(SupportSQLiteDatabase database) {
+                // Recreate reviews table to add id as primary key.
+                // Keep a named unique index on (placeId, userId) so Room schema validation matches.
+            database.execSQL("CREATE TABLE reviews_new ("
+                    + "id TEXT PRIMARY KEY NOT NULL, "
+                    + "placeId TEXT NOT NULL, "
+                    + "userId TEXT NOT NULL, "
+                    + "userName TEXT, "
+                    + "stars INTEGER NOT NULL, "
+                    + "comment TEXT, "
+                    + "createdAt INTEGER NOT NULL, "
+                    + "externalSource TEXT, "
+                    + "externalId TEXT, "
+                    + "lat REAL, "
+                    + "lng REAL, "
+                    + "placeName TEXT, "
+                    + "serverVersion INTEGER NOT NULL, "
+                    + "deleted INTEGER NOT NULL, "
+                    + "lastSyncedAt INTEGER NOT NULL, "
+                    + "pendingSync INTEGER NOT NULL"
+                    + ")");
+
+            // Copy data from old table, generating deterministic IDs
+            database.execSQL("INSERT INTO reviews_new SELECT "
+                    + "lower(hex(randomblob(16))), placeId, userId, userName, stars, comment, "
+                    + "createdAt, externalSource, externalId, lat, lng, placeName, "
+                    + "serverVersion, deleted, lastSyncedAt, pendingSync "
+                    + "FROM reviews");
+
+            // Drop old table
+            database.execSQL("DROP TABLE reviews");
+
+            // Rename new table
+            database.execSQL("ALTER TABLE reviews_new RENAME TO reviews");
+
+            // Recreate indices
+            if (!hasIndex(database, "index_reviews_placeId_userId")) {
+                database.execSQL("CREATE UNIQUE INDEX index_reviews_placeId_userId ON reviews(placeId, userId)");
+            }
+            if (!hasIndex(database, "index_reviews_createdAt")) {
+                database.execSQL("CREATE INDEX index_reviews_createdAt ON reviews(createdAt)");
+            }
+        }
+
+        private boolean hasIndex(SupportSQLiteDatabase database, String indexName) {
+            Cursor cursor = database.query("SELECT name FROM sqlite_master "
+                    + "WHERE type='index' AND name=?", new Object[]{indexName});
+            try {
+                return cursor.moveToFirst();
+            } finally {
+                cursor.close();
             }
         }
     };

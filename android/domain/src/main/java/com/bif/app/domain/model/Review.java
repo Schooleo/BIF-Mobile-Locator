@@ -1,6 +1,7 @@
 package com.bif.app.domain.model;
 
 public class Review {
+    public String id;
     public String placeId;
     public String userId;
     public String userName;
@@ -32,6 +33,7 @@ public class Review {
                 deleted == review.deleted &&
                 lastSyncedAt == review.lastSyncedAt &&
                 pendingSync == review.pendingSync &&
+                java.util.Objects.equals(id, review.id) &&
                 java.util.Objects.equals(placeId, review.placeId) &&
                 java.util.Objects.equals(userId, review.userId) &&
                 java.util.Objects.equals(userName, review.userName) &&
@@ -46,6 +48,7 @@ public class Review {
     @Override
     public int hashCode() {
         return java.util.Objects.hash(
+            id,
             placeId,
             userId,
             userName,

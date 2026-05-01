@@ -50,22 +50,20 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
     @Override
     public void applyPulledChange(SyncChangeDto change, String activeUserId) {
         try {
-            String localPlaceId = extractPlaceIdFromEntityId(change.entityId);
-            String localUserId = extractUserIdFromEntityId(change.entityId);
+            String reviewId = change.entityId;
 
             if ("DELETE".equalsIgnoreCase(change.operation)) {
-                if (!isBlank(localPlaceId) && !isBlank(localUserId)) {
-                    String entityId = localPlaceId + ":" + localUserId;
+                if (!isBlank(reviewId)) {
                     appDatabase.runInTransaction(() -> {
-                        ReviewEntity existing = reviewDao.getReviewSync(localPlaceId, localUserId);
+                        ReviewEntity existing = reviewDao.getById(reviewId);
                         if (existing != null) {
                             existing.deleted = true;
                             existing.serverVersion = change.serverVersion;
                             existing.pendingSync = false;
                             reviewDao.upsert(existing);
+                            updateCachedPlaceRating(existing.placeId, activeUserId);
                         }
-                        syncQueueDao.removeByEntity("review", entityId);
-                        updateCachedPlaceRating(localPlaceId, activeUserId);
+                        syncQueueDao.removeByEntity("review", reviewId);
                     });
                 }
                 return;
@@ -82,35 +80,33 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
 
             String resolvedPlaceId = !isBlank(dto.placeId)
                     ? dto.placeId.trim()
-                    : localPlaceId;
+                    : null;
             String reviewUserId = !isBlank(dto.userId)
                     ? dto.userId.trim()
-                    : localUserId;
+                    : null;
 
             if (isBlank(resolvedPlaceId) || isBlank(reviewUserId)) {
                 return;
             }
 
-            String originalPlaceId = localPlaceId;
-            if (isBlank(originalPlaceId)) {
-                originalPlaceId = resolvedPlaceId;
-            }
+            ReviewEntity existing = reviewDao.getById(reviewId);
+            String originalPlaceId = existing != null ? existing.placeId : resolvedPlaceId;
             boolean identityCorrected = !resolvedPlaceId.equals(originalPlaceId);
-            String oldEntityId = originalPlaceId + ":" + reviewUserId;
 
             String finalOriginalPlaceId = originalPlaceId;
             appDatabase.runInTransaction(() -> {
-                if (identityCorrected) {
+                if (identityCorrected && existing != null) {
                     reviewDao.deleteByPlaceAndUserId(finalOriginalPlaceId, reviewUserId);
                 }
 
                 ReviewEntity entity = ReviewMapper.fromDto(dto, resolvedPlaceId);
+                entity.id = reviewId;
                 entity.serverVersion = change.serverVersion;
                 entity.deleted = false;
                 entity.pendingSync = false;
                 reviewDao.upsert(entity);
 
-                syncQueueDao.removeByEntity("review", oldEntityId);
+                syncQueueDao.removeByEntity("review", reviewId);
 
                 if (identityCorrected) {
                     Log.w(TAG, "Identity correction from sync pull. oldPlaceId="
@@ -152,28 +148,6 @@ public class ReviewSyncEntityHandler implements SyncEntityHandler {
 
         place.rating = count > 0 ? (double) totalStars / count : 0.0;
         placeDao.upsert(place);
-    }
-
-    private String extractPlaceIdFromEntityId(String entityId) {
-        if (isBlank(entityId)) {
-            return null;
-        }
-        String[] parts = entityId.split(":");
-        if (parts.length < 2 || isBlank(parts[0])) {
-            return null;
-        }
-        return parts[0].trim();
-    }
-
-    private String extractUserIdFromEntityId(String entityId) {
-        if (isBlank(entityId)) {
-            return null;
-        }
-        String[] parts = entityId.split(":");
-        if (parts.length < 2 || isBlank(parts[1])) {
-            return null;
-        }
-        return parts[1].trim();
     }
 
     private boolean isBlank(String value) {

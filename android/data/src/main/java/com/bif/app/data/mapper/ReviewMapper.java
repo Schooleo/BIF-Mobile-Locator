@@ -8,12 +8,14 @@ import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 public class ReviewMapper {
 
     public static ReviewEntity toEntity(Review review) {
         if (review == null) return null;
         ReviewEntity entity = new ReviewEntity();
+        entity.id = review.id != null && !review.id.isEmpty() ? review.id : UUID.randomUUID().toString();
         entity.placeId = review.placeId;
         entity.userId = review.userId;
         entity.userName = review.userName;
@@ -35,6 +37,7 @@ public class ReviewMapper {
     public static Review toDomain(ReviewEntity entity) {
         if (entity == null) return null;
         Review review = new Review();
+        review.id = entity.id;
         review.placeId = entity.placeId;
         review.userId = entity.userId;
         review.userName = entity.userName;
@@ -65,6 +68,7 @@ public class ReviewMapper {
     public static ReviewEntity fromDto(PlaceReviewDto dto, String placeId) {
         if (dto == null) return null;
         ReviewEntity entity = new ReviewEntity();
+        entity.id = UUID.randomUUID().toString();
         entity.placeId = placeId;
         entity.userId = dto.userId;
         entity.userName = dto.userName;

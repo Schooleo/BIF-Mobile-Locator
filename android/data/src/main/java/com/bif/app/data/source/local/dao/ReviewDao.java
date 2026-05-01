@@ -12,6 +12,9 @@ import java.util.List;
 
 @Dao
 public interface ReviewDao {
+    @Query("SELECT * FROM reviews WHERE id = :id LIMIT 1")
+    ReviewEntity getById(String id);
+
     @Query("SELECT * FROM reviews WHERE placeId = :placeId AND deleted = 0 ORDER BY createdAt DESC")
     LiveData<List<ReviewEntity>> getByPlaceId(String placeId);
 
@@ -36,6 +39,6 @@ public interface ReviewDao {
     @Query("SELECT * FROM reviews WHERE pendingSync = 1")
     List<ReviewEntity> getPendingSync();
 
-    @Query("UPDATE reviews SET serverVersion = :version, lastSyncedAt = :timestamp, pendingSync = 0 WHERE placeId = :placeId AND userId = :userId")
-    void markSynced(String placeId, String userId, long version, long timestamp);
+    @Query("UPDATE reviews SET serverVersion = :version, lastSyncedAt = :timestamp, pendingSync = 0 WHERE id = :id")
+    void markSynced(String id, long version, long timestamp);
 }
