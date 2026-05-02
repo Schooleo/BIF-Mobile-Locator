@@ -59,6 +59,7 @@ public interface ITripRepository {
                          String avatarLetter,
                          int avatarColor);
     void removeCollaborator(String tripId, String userId);
+    void removeCollaborator(String tripId, String userId, OperationCallback callback);
     void rearrangeStopsInTrip(String tripId, List<TripStop> newStops);
     void refreshTrips(String groupId);
 }

@@ -40,7 +40,6 @@ public class FavoritesViewModel extends ViewModel {
         this.favoriteRepository = favoriteRepository;
 
         // Set up the mediator to switch between all favorites and search results
-        LiveData<List<Favorite>> allFavoritesLiveData = favoriteRepository.getAllFavorites();
         LiveData<List<Favorite>> searchResultsLiveData = Transformations.switchMap(
                 searchQuery,
                 query -> {
@@ -65,12 +64,6 @@ public class FavoritesViewModel extends ViewModel {
 
     public void refreshFavorites() {
         if (refreshInProgress) {
-            return;
-        }
-        if (!favoriteRepository.isOnline()) {
-            _isSyncing.setValue(false);
-            _syncMessage.setValue("");
-            lastRefreshAttemptAtMs = System.currentTimeMillis();
             return;
         }
 
@@ -114,9 +107,6 @@ public class FavoritesViewModel extends ViewModel {
 
     public void refreshFavoritesIfStale() {
         if (refreshInProgress || Boolean.TRUE.equals(_isSyncing.getValue())) {
-            return;
-        }
-        if (!favoriteRepository.isOnline()) {
             return;
         }
 

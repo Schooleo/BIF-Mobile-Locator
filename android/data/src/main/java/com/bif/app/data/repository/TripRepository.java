@@ -508,24 +508,44 @@ public class TripRepository implements ITripRepository {
         });
     }
 
-    @Override
     public void removeCollaborator(String tripId, String userId) {
+        removeCollaborator(tripId, userId, null);
+    }
+
+    @Override
+    public void removeCollaborator(String tripId, String userId, ITripRepository.OperationCallback callback) {
         executorService.execute(() -> {
-            String safeTripId = normalize(tripId);
-            String safeUserId = normalize(userId);
-            if (safeTripId.isEmpty() || safeUserId.isEmpty()) {
-                return;
+            boolean success = false;
+            try {
+                String safeTripId = normalize(tripId);
+                String safeUserId = normalize(userId);
+                if (safeTripId.isEmpty() || safeUserId.isEmpty()) {
+                    if (callback != null) {
+                        callback.onComplete(false);
+                    }
+                    return;
+                }
+
+                TripMemberCrossRef existingMember = tripDao.getTripMemberSync(safeTripId, safeUserId);
+                if (existingMember != null && "OWNER".equalsIgnoreCase(existingMember.role)) {
+                    if (callback != null) {
+                        callback.onComplete(false);
+                    }
+                    return;
+                }
+
+                tripDao.deleteTripMember(safeTripId, safeUserId);
+
+                enqueueTripPlanChange(safeTripId, "UPDATE");
+                syncAndReconcileTrip(safeTripId);
+                success = true;
+            } catch (Exception ignored) {
+                success = false;
             }
 
-            TripMemberCrossRef existingMember = tripDao.getTripMemberSync(safeTripId, safeUserId);
-            if (existingMember != null && "OWNER".equalsIgnoreCase(existingMember.role)) {
-                return;
+            if (callback != null) {
+                callback.onComplete(success);
             }
-
-            tripDao.deleteTripMember(safeTripId, safeUserId);
-
-            enqueueTripPlanChange(safeTripId, "UPDATE");
-            syncAndReconcileTrip(safeTripId);
         });
     }
 
@@ -637,7 +657,7 @@ public class TripRepository implements ITripRepository {
         }
 
         entity.groupId = normalize(dto.groupId);
-        entity.title = dto.title;
+        entity.title = normalizeTripTitle(dto.title);
         entity.description = dto.description;
         entity.coverImageUrl = dto.coverImageUrl;
         if (entity.coverUploadStatus == null || entity.coverUploadStatus == UploadStatus.SYNCED) {

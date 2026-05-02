@@ -43,6 +43,7 @@
                     android:ellipsize="end"
                     android:gravity="center"
                     android:maxLines="2"
+                    android:paddingEnd="56dp"
                     android:textColor="@color/white"
                     android:textSize="22sp"
                     android:textStyle="bold" />

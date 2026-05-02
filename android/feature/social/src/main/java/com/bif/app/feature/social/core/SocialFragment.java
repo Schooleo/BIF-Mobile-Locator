@@ -1202,7 +1202,7 @@ public class SocialFragment extends Fragment {
     private String resolveCurrentUserIdForTrip() {
         String currentUserId = UserPreferences.getId(requireContext());
         if (currentUserId == null || currentUserId.trim().isEmpty()) {
-            currentUserId = UserPreferences.getUsername(requireContext());
+            return null;
         }
         return currentUserId;
     }

@@ -448,9 +448,6 @@ public class SocialViewModel extends ViewModel {
     public void leaveTrip(String tripId) {
         String normalizedTripId = trimToEmpty(tripId);
         String currentUserId = trimToEmpty(UserPreferences.getId(appContext));
-        if (currentUserId.isEmpty()) {
-            currentUserId = trimToEmpty(UserPreferences.getUsername(appContext));
-        }
         if (normalizedTripId.isEmpty() || currentUserId.isEmpty()) {
             tripActionMessage.postValue("__MSG_TRIP_LEAVE_FAILED__");
             tripActionLoading.postValue(false);
@@ -458,9 +455,12 @@ public class SocialViewModel extends ViewModel {
         }
 
         tripActionLoading.postValue(true);
-        tripRepository.removeCollaborator(normalizedTripId, currentUserId);
-        tripActionMessage.postValue("__MSG_TRIP_LEAVE_SUCCESS__");
-        tripActionLoading.postValue(false);
+        tripRepository.removeCollaborator(normalizedTripId, currentUserId, success -> {
+            tripActionMessage.postValue(success
+                    ? "__MSG_TRIP_LEAVE_SUCCESS__"
+                    : "__MSG_TRIP_LEAVE_FAILED__");
+            tripActionLoading.postValue(false);
+        });
     }
 
     public void createGroup(String groupName, List<Friend> selectedMembers) {
