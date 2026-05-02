@@ -9,7 +9,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -117,7 +116,7 @@ public class ProfileViewModelTest {
         }).when(profileRepository).syncProfileMetadata(any());
 
         ProfileViewModel viewModel = new ProfileViewModel(context, profileRepository);
-        viewModel.refreshProfileFromServer();
+        viewModel.refreshProfileFromServer(true);
 
         awaitTrue(() -> {
             ProfileViewModel.ProfileUiState state = viewModel.getProfileState().getValue();
@@ -139,11 +138,29 @@ public class ProfileViewModelTest {
         }).when(profileRepository).syncProfileMetadata(any());
 
         ProfileViewModel viewModel = new ProfileViewModel(context, profileRepository);
-        viewModel.refreshProfileFromServer();
+        viewModel.refreshProfileFromServer(true);
 
         awaitTrue(() -> Integer.valueOf(R.string.profile_sync_failed)
             .equals(viewModel.getMessageResId().getValue()),
             "sync failure message not emitted");
+    }
+
+    @Test
+    public void refreshProfileFromServer_backgroundFailure_staysSilent() {
+        when(context.getString(R.string.not_available)).thenReturn("Not available");
+        when(profileRepository.readLocalProfile()).thenReturn(
+                new IProfileRepository.LocalProfile(true, "alice", "alice@bif.com", "")
+        );
+        doAnswer(invocation -> {
+            IProfileRepository.ProfileCallback callback = invocation.getArgument(0);
+            callback.onFailure();
+            return null;
+        }).when(profileRepository).syncProfileMetadata(any());
+
+        ProfileViewModel viewModel = new ProfileViewModel(context, profileRepository);
+        viewModel.refreshProfileFromServer(false);
+
+        assertNull(viewModel.getMessageResId().getValue());
     }
 
     @Test
@@ -189,6 +206,24 @@ public class ProfileViewModelTest {
         awaitTrue(() -> Integer.valueOf(R.string.profile_update_failed)
             .equals(viewModel.getMessageResId().getValue()),
             "profile failure message not emitted");
+    }
+
+    @Test
+    public void updateProfile_truncatesUsernameTo15Chars_beforeRepositoryCall() {
+        when(context.getString(R.string.not_available)).thenReturn("Not available");
+        when(profileRepository.readLocalProfile()).thenReturn(
+                new IProfileRepository.LocalProfile(true, "alice", "alice@bif.com", "")
+        );
+        doAnswer(invocation -> {
+            IProfileRepository.ProfileCallback callback = invocation.getArgument(1);
+            callback.onSuccess();
+            return null;
+        }).when(profileRepository).updateProfile(eq("123456789012345"), any());
+
+        ProfileViewModel viewModel = new ProfileViewModel(context, profileRepository);
+        viewModel.updateProfile("12345678901234567890");
+
+        verify(profileRepository).updateProfile(eq("123456789012345"), any());
     }
 
     @Test

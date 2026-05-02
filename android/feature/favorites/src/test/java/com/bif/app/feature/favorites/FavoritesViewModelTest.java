@@ -253,6 +253,36 @@ public class FavoritesViewModelTest {
         assertEquals(IFavoriteRepository.ERROR_REFRESH_FAILED, viewModel.syncMessage.getValue());
     }
 
+    @Test
+    public void refreshFavoritesIfStale_afterOfflineResult_doesNotRetryImmediately() {
+        doAnswer(invocation -> {
+            IFavoriteRepository.SyncCallback callback = invocation.getArgument(0);
+            callback.onOffline();
+            return null;
+        }).when(favoriteRepository).refreshFavorites(any(IFavoriteRepository.SyncCallback.class));
+
+        viewModel.refreshFavorites();
+        viewModel.refreshFavoritesIfStale();
+
+        verify(favoriteRepository, org.mockito.Mockito.times(1))
+                .refreshFavorites(any(IFavoriteRepository.SyncCallback.class));
+    }
+
+    @Test
+    public void refreshFavorites_whenOffline_stillCallsRepository() {
+        doAnswer(invocation -> {
+            IFavoriteRepository.SyncCallback callback = invocation.getArgument(0);
+            callback.onOffline();
+            return null;
+        }).when(favoriteRepository).refreshFavorites(any(IFavoriteRepository.SyncCallback.class));
+
+        viewModel.refreshFavorites();
+
+        verify(favoriteRepository).refreshFavorites(any(IFavoriteRepository.SyncCallback.class));
+        assertEquals(Boolean.FALSE, viewModel.isSyncing.getValue());
+        assertEquals("", viewModel.syncMessage.getValue());
+    }
+
     // ─── helpers ───────────────────────────────────────────────────────────────
 
     private Favorite makeFavorite(String id, String name, String address, int rating) {

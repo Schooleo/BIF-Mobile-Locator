@@ -73,26 +73,7 @@ public final class AppSnackbar {
         }
 
         View snackbarView = snackbar.getView();
-        ViewGroup.LayoutParams params = snackbarView.getLayoutParams();
-        if (params instanceof FrameLayout.LayoutParams) {
-            FrameLayout.LayoutParams layoutParams = (FrameLayout.LayoutParams) params;
-            layoutParams.width = ViewGroup.LayoutParams.WRAP_CONTENT;
-            layoutParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-            int horizontalMargin = dpToPx(activity, 16);
-            int keyboardInset = getKeyboardInset(anchor);
-            layoutParams.leftMargin = horizontalMargin;
-            layoutParams.rightMargin = horizontalMargin;
-            layoutParams.bottomMargin = dpToPx(activity, 12) + keyboardInset;
-            snackbarView.setLayoutParams(layoutParams);
-        } else if (params instanceof ViewGroup.MarginLayoutParams) {
-            ViewGroup.MarginLayoutParams marginParams = (ViewGroup.MarginLayoutParams) params;
-            int horizontalMargin = dpToPx(activity, 16);
-            int keyboardInset = getKeyboardInset(anchor);
-            marginParams.leftMargin = horizontalMargin;
-            marginParams.rightMargin = horizontalMargin;
-            marginParams.bottomMargin = dpToPx(activity, 12) + keyboardInset;
-            snackbarView.setLayoutParams(marginParams);
-        }
+        updateSnackbarMargins(activity, anchor, snackbarView);
 
         snackbar.setAnimationMode(Snackbar.ANIMATION_MODE_SLIDE);
         int backgroundColor = MaterialColors.getColor(anchor,
@@ -101,6 +82,16 @@ public final class AppSnackbar {
                 com.google.android.material.R.attr.colorOnSurface);
         snackbar.setBackgroundTint(backgroundColor);
         snackbar.setTextColor(textColor);
+        snackbar.addCallback(new Snackbar.Callback() {
+            @Override
+            public void onShown(Snackbar transientBottomBar) {
+                snackbarView.post(() -> updateSnackbarMargins(activity, anchor, snackbarView));
+                snackbarView.postDelayed(
+                        () -> updateSnackbarMargins(activity, anchor, snackbarView),
+                        180
+                );
+            }
+        });
         snackbar.show();
     }
 
@@ -138,5 +129,33 @@ public final class AppSnackbar {
             return 0;
         }
         return insets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
+    }
+
+    private static void updateSnackbarMargins(@NonNull Context context,
+            @NonNull View anchor,
+            @NonNull View snackbarView) {
+        ViewGroup.LayoutParams params = snackbarView.getLayoutParams();
+        if (params instanceof FrameLayout.LayoutParams) {
+            FrameLayout.LayoutParams layoutParams = (FrameLayout.LayoutParams) params;
+            layoutParams.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+            layoutParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+            int horizontalMargin = dpToPx(context, 16);
+            int keyboardInset = getKeyboardInset(anchor);
+            layoutParams.leftMargin = horizontalMargin;
+            layoutParams.rightMargin = horizontalMargin;
+            layoutParams.bottomMargin = dpToPx(context, 12) + keyboardInset;
+            snackbarView.setLayoutParams(layoutParams);
+            return;
+        }
+
+        if (params instanceof ViewGroup.MarginLayoutParams) {
+            ViewGroup.MarginLayoutParams marginParams = (ViewGroup.MarginLayoutParams) params;
+            int horizontalMargin = dpToPx(context, 16);
+            int keyboardInset = getKeyboardInset(anchor);
+            marginParams.leftMargin = horizontalMargin;
+            marginParams.rightMargin = horizontalMargin;
+            marginParams.bottomMargin = dpToPx(context, 12) + keyboardInset;
+            snackbarView.setLayoutParams(marginParams);
+        }
     }
 }

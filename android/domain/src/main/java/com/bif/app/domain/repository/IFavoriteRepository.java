@@ -22,4 +22,8 @@ public interface IFavoriteRepository {
     void updateAllFavorites(List<Favorite> favorites);
     void deleteFavorite(Favorite favorite);
     void refreshFavorites(SyncCallback callback);
+
+    default boolean isOnline() {
+        return true;
+    }
 }

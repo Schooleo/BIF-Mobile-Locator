@@ -33,13 +33,13 @@ public class FavoritesViewModel extends ViewModel {
     public final LiveData<String> syncMessage = _syncMessage;
     private volatile boolean refreshInProgress;
     private volatile long lastSuccessfulRefreshAtMs;
+    private volatile long lastRefreshAttemptAtMs;
 
     @Inject
     public FavoritesViewModel(IFavoriteRepository favoriteRepository) {
         this.favoriteRepository = favoriteRepository;
 
         // Set up the mediator to switch between all favorites and search results
-        LiveData<List<Favorite>> allFavoritesLiveData = favoriteRepository.getAllFavorites();
         LiveData<List<Favorite>> searchResultsLiveData = Transformations.switchMap(
                 searchQuery,
                 query -> {
@@ -67,6 +67,7 @@ public class FavoritesViewModel extends ViewModel {
             return;
         }
 
+        lastRefreshAttemptAtMs = System.currentTimeMillis();
         refreshInProgress = true;
         _isSyncing.setValue(true);
         try {
@@ -82,6 +83,7 @@ public class FavoritesViewModel extends ViewModel {
                 @Override
                 public void onOffline() {
                     refreshInProgress = false;
+                    lastRefreshAttemptAtMs = System.currentTimeMillis();
                     _isSyncing.postValue(false);
                     _syncMessage.postValue("");
                 }
@@ -109,12 +111,17 @@ public class FavoritesViewModel extends ViewModel {
         }
 
         long now = System.currentTimeMillis();
-        if (lastSuccessfulRefreshAtMs > 0L
-                && (now - lastSuccessfulRefreshAtMs) < AUTO_REFRESH_STALE_MS) {
+        long lastRefreshAtMs = Math.max(lastSuccessfulRefreshAtMs, lastRefreshAttemptAtMs);
+        if (lastRefreshAtMs > 0L
+                && (now - lastRefreshAtMs) < AUTO_REFRESH_STALE_MS) {
             return;
         }
 
         refreshFavorites();
+    }
+
+    public void consumeSyncMessage() {
+        _syncMessage.setValue(null);
     }
 
     private boolean hasText(String value) {

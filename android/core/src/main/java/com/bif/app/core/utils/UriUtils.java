@@ -16,10 +16,6 @@ public class UriUtils {
         TRIP_DETAIL,
         FRIEND_SETTINGS_LOCATIONS,
         FRIEND_SETTINGS_TRIPS,
-        GROUP_SETTINGS_PLANS,
-        GROUP_SETTINGS_LOCATIONS,
-        GROUP_SETTINGS_MEMBERS,
-        GROUP_DETAIL,
         PROFILE,
         LOGIN,
         REGISTER
@@ -56,14 +52,6 @@ public class UriUtils {
                 return buildUri("/social/friend-settings/locations");
             case FRIEND_SETTINGS_TRIPS:
                 return buildUri("/social/friend-settings/trips");
-            case GROUP_SETTINGS_PLANS:
-                return buildUri("/social/group-settings/plans");
-            case GROUP_SETTINGS_LOCATIONS:
-                return buildUri("/social/group-settings/locations");
-            case GROUP_SETTINGS_MEMBERS:
-                return buildUri("/social/group-settings/members");
-            case GROUP_DETAIL:
-                return buildUri("/social/group-detail");
             case PROFILE:
                 return buildUri("/profile");
             case LOGIN:

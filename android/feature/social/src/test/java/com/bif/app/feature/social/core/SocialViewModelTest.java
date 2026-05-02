@@ -503,4 +503,55 @@ public class SocialViewModelTest {
                 viewModel.getTripActionMessage().getValue()
         );
     }
+
+    @Test
+    public void saveCurrentAiDraftTrip_withLongTitle_truncatesTitleTo50Chars() {
+        String longTitle = "12345678901234567890123456789012345678901234567890-EXTRA";
+        Place place = new Place("place-1", "Museum", "District 1", 4.6, new Location(10.77, 106.70));
+        AiTripDraftStop stop = new AiTripDraftStop(
+                "place-1",
+                place,
+                60,
+                "Visit gallery",
+                "2026-05-01T09:00:00Z"
+        );
+        when(mockChatRepository.draftTripFromQuery("long title plan")).thenReturn(
+                new MutableLiveData<>(
+                        new AiTripDraftResult(
+                                new AiTripDraft(longTitle, "Summary", Collections.singletonList(stop)),
+                                Collections.singletonList(place),
+                                Collections.emptyList(),
+                                null
+                        )
+                )
+        );
+        doAnswer(invocation -> {
+            ITripRepository.OperationCallback callback = invocation.getArgument(7);
+            callback.onComplete(true);
+            return null;
+        }).when(mockTripRepository).saveDraftTrip(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyLong(),
+                anyLong(),
+                anyList(),
+                any()
+        );
+
+        viewModel.submitAiTripDraftQuery("long title plan");
+        viewModel.saveCurrentAiDraftTrip(null);
+
+        verify(mockTripRepository, timeout(1000)).saveDraftTrip(
+                anyString(),
+                anyString(),
+                eq("12345678901234567890123456789012345678901234567890"),
+                anyString(),
+                anyLong(),
+                anyLong(),
+                anyList(),
+                any()
+        );
+    }
 }

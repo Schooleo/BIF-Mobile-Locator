@@ -89,10 +89,10 @@ public class FavoritesFragment extends Fragment
         viewModel.syncMessage.observe(getViewLifecycleOwner(), message -> {
             if (message != null && !message.trim().isEmpty()) {
                 if (IFavoriteRepository.ERROR_REFRESH_FAILED.equals(message)) {
-                    AppSnackbar.show(requireContext(), R.string.favorite_refresh_failed);
                     return;
                 }
                 AppSnackbar.show(requireContext(), message);
+                viewModel.consumeSyncMessage();
             }
         });
 
@@ -115,7 +115,7 @@ public class FavoritesFragment extends Fragment
         Uri detailUri = UriUtils.buildUri(UriUtils.PathTo.FAVORITES_DETAIL)
                 .buildUpon()
                 .appendQueryParameter("favId", safeString(favorite.id))
-            .appendQueryParameter("favPlaceId", safeString(favorite.placeId))
+                .appendQueryParameter("favPlaceId", safeString(favorite.placeId))
                 .appendQueryParameter("favName", safeString(favorite.name))
                 .appendQueryParameter("favAddress", safeString(favorite.address))
                 .appendQueryParameter("favDescription", safeString(favorite.description))

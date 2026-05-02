@@ -10,6 +10,7 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModel;
 
+import com.bif.app.core.utils.InputLimits;
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.domain.model.AiTripDraft;
 import com.bif.app.domain.model.AiTripDraftResult;
@@ -258,7 +259,7 @@ public class SocialViewModel extends ViewModel {
                 return;
             }
 
-            String draftTitle = trimToEmpty(draft.getTitle());
+            String draftTitle = normalizeTripTitle(draft.getTitle());
             String draftDescription = trimToEmpty(draft.getSummary());
             List<AiDraftStopPreview> stopPreviews = mapStopPreviews(draft.getStops());
             if (stopPreviews.isEmpty()) {
@@ -312,7 +313,7 @@ public class SocialViewModel extends ViewModel {
             startAt = resolveStartAt(stops, lastAiDraftStartAt);
             endAt = resolveEndAt(stops, startAt, lastAiDraftEndAt);
         }
-        String title = trimToEmpty(snapshot.title);
+        String title = normalizeTripTitle(snapshot.title);
         if (title.isEmpty()) {
             title = "AI Draft Trip";
         }
@@ -413,8 +414,9 @@ public class SocialViewModel extends ViewModel {
     }
 
     public void createTrip(String title, String description, long startAt, long endAt) {
+        String normalizedTitle = normalizeTripTitle(title);
         tripActionLoading.postValue(true);
-        tripRepository.createTrip(title, description, startAt, endAt, success -> {
+        tripRepository.createTrip(normalizedTitle, description, startAt, endAt, success -> {
             tripActionMessage.postValue(success
                     ? "__MSG_TRIP_CREATE_SUCCESS__"
                     : "__MSG_TRIP_CREATE_FAILED__");
@@ -423,8 +425,9 @@ public class SocialViewModel extends ViewModel {
     }
 
     public void updateTrip(String tripId, String title, String description, long startAt, long endAt) {
+        String normalizedTitle = normalizeTripTitle(title);
         tripActionLoading.postValue(true);
-        tripRepository.updateTrip(tripId, title, description, startAt, endAt, success -> {
+        tripRepository.updateTrip(tripId, normalizedTitle, description, startAt, endAt, success -> {
             tripActionMessage.postValue(success
                     ? "__MSG_TRIP_UPDATE_SUCCESS__"
                     : "__MSG_TRIP_UPDATE_FAILED__");
@@ -438,6 +441,24 @@ public class SocialViewModel extends ViewModel {
             tripActionMessage.postValue(success
                     ? "__MSG_TRIP_DELETE_SUCCESS__"
                     : "__MSG_TRIP_DELETE_FAILED__");
+            tripActionLoading.postValue(false);
+        });
+    }
+
+    public void leaveTrip(String tripId) {
+        String normalizedTripId = trimToEmpty(tripId);
+        String currentUserId = trimToEmpty(UserPreferences.getId(appContext));
+        if (normalizedTripId.isEmpty() || currentUserId.isEmpty()) {
+            tripActionMessage.postValue("__MSG_TRIP_LEAVE_FAILED__");
+            tripActionLoading.postValue(false);
+            return;
+        }
+
+        tripActionLoading.postValue(true);
+        tripRepository.removeCollaborator(normalizedTripId, currentUserId, success -> {
+            tripActionMessage.postValue(success
+                    ? "__MSG_TRIP_LEAVE_SUCCESS__"
+                    : "__MSG_TRIP_LEAVE_FAILED__");
             tripActionLoading.postValue(false);
         });
     }
@@ -759,6 +780,10 @@ public class SocialViewModel extends ViewModel {
 
     private String trimToEmpty(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private String normalizeTripTitle(String value) {
+        return InputLimits.trimAndLimit(value, InputLimits.TRIP_TITLE_MAX_LENGTH);
     }
 
     private String trimToNull(String value) {

@@ -6,7 +6,8 @@
     android:paddingStart="20dp"
     android:paddingTop="8dp"
     android:paddingEnd="20dp"
-    android:paddingBottom="8dp">
+    android:paddingBottom="8dp"
+    android:background="?attr/colorSurface">
 
     <TextView
         android:layout_width="wrap_content"
@@ -34,10 +35,12 @@
 
     <TextView
         android:id="@+id/tvUsernameValue"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:layout_marginBottom="12dp"
+        android:ellipsize="end"
+        android:maxLines="1"
         android:textColor="?attr/colorTextPrimary"
         android:textSize="15sp"
         android:textStyle="bold" />
@@ -51,9 +54,11 @@
 
     <TextView
         android:id="@+id/tvEmailValue"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
+        android:ellipsize="end"
+        android:maxLines="1"
         android:textColor="?attr/colorTextPrimary"
         android:textSize="15sp"
         android:textStyle="bold" />

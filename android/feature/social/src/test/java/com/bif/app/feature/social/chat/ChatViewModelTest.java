@@ -590,4 +590,47 @@ public class ChatViewModelTest {
                 anyList(),
                 any());
     }
+
+    @Test
+    public void onSaveTripCardAsNew_longTitle_truncatesTo50Chars() {
+        TripPlan currentTrip = new TripPlan(
+                "trip-current",
+                "group1",
+                "Current",
+                "",
+                0L,
+                0L,
+                Collections.emptyList(),
+                Arrays.asList("u1", "u2")
+        );
+        viewModel.init("group1", "Group 1", "u1");
+        tripsLiveData.setValue(Collections.singletonList(currentTrip));
+        assertTrue(viewModel.isCurrentUserHostForCurrentTrip());
+
+        doAnswer(invocation -> {
+            ITripRepository.OperationCallback callback = invocation.getArgument(7);
+            callback.onComplete(true);
+            return null;
+        }).when(mockTripRepository).saveDraftTrip(
+                anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyList(), any());
+
+        String payload = "{"
+                + "\"tripId\":\"ai-draft-999\","
+                + "\"title\":\"12345678901234567890123456789012345678901234567890-EXTRA\","
+                + "\"summary\":\"Relaxed trip\","
+                + "\"stops\":[{\"name\":\"Cafe\",\"address\":\"Addr\",\"note\":\"\",\"latitude\":10.0,\"longitude\":20.0}]"
+                + "}";
+
+        viewModel.onSaveTripCardAsNew("ai-draft-999", payload);
+
+        verify(mockTripRepository).saveDraftTrip(
+                eq("ai-draft-999"),
+                eq("group1"),
+                eq("12345678901234567890123456789012345678901234567890"),
+                eq("Relaxed trip"),
+                anyLong(),
+                anyLong(),
+                anyList(),
+                any());
+    }
 }
