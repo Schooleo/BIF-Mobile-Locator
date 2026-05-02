@@ -56,6 +56,8 @@ public class ReviewSyncEntityHandlerTest {
             return place;
         });
 
+        when(mockReviewDao.getById(any())).thenReturn(null);
+
         handler = new ReviewSyncEntityHandler(
                 mockReviewDao,
                 mockPlaceDao,
@@ -74,11 +76,12 @@ public class ReviewSyncEntityHandlerTest {
         // Arrange
         String placeId = "p1";
         String userId = "u1";
+        String reviewId = "review-uuid-1";
         String payload = "{\"placeId\":\"" + placeId + "\", \"userId\":\"" + userId + "\", \"stars\":4, \"comment\":\"Nice\"}";
         
         SyncChangeDto change = new SyncChangeDto();
         change.entityType = "review";
-        change.entityId = placeId + ":" + userId;
+        change.entityId = reviewId;
         change.operation = "CREATE";
         change.payload = payload;
         change.serverVersion = 100L;
@@ -91,6 +94,7 @@ public class ReviewSyncEntityHandlerTest {
         verify(mockReviewDao).upsert(captor.capture());
         
         ReviewEntity saved = captor.getValue();
+        assertEquals(reviewId, saved.id);
         assertEquals(placeId, saved.placeId);
         assertEquals(userId, saved.userId);
         assertEquals(4, saved.stars);
@@ -102,32 +106,45 @@ public class ReviewSyncEntityHandlerTest {
 
     @Test
     public void applyPulledChange_WhenPlaceIdCorrected_HealsOldIdentityAndCleansQueue() {
-        String payload = "{\"placeId\":\"REAL_ID\",\"userId\":\"u1\",\"stars\":5,\"comment\":\"Great\"}";
+        String reviewId = "review-uuid-2";
+        String oldPlaceId = "GHOST_ID";
+        String newPlaceId = "REAL_ID";
+        String userId = "u1";
+        String payload = "{\"placeId\":\"" + newPlaceId + "\",\"userId\":\"" + userId + "\",\"stars\":5,\"comment\":\"Great\"}";
+
+        ReviewEntity existingLocal = new ReviewEntity();
+        existingLocal.id = reviewId;
+        existingLocal.placeId = oldPlaceId;
+        existingLocal.userId = userId;
+        existingLocal.pendingSync = false;
+        
+        when(mockReviewDao.getById(reviewId)).thenReturn(existingLocal);
 
         SyncChangeDto change = new SyncChangeDto();
         change.entityType = "review";
-        change.entityId = "GHOST_ID:u1";
+        change.entityId = reviewId;
         change.operation = "UPDATE";
         change.payload = payload;
         change.serverVersion = 200L;
 
         handler.applyPulledChange(change, "owner-1");
 
-        verify(mockReviewDao).deleteByPlaceAndUserId("GHOST_ID", "u1");
-        verify(mockSyncQueueDao).removeByEntity("review", "GHOST_ID:u1");
-        verify(mockReviewDao, atLeastOnce()).getByPlaceIdSync("GHOST_ID");
-        verify(mockReviewDao, atLeastOnce()).getByPlaceIdSync("REAL_ID");
+        verify(mockReviewDao).deleteByPlaceAndUserId(oldPlaceId, userId);
+        verify(mockSyncQueueDao).removeByEntity("review", reviewId);
+        verify(mockReviewDao, atLeastOnce()).getByPlaceIdSync(oldPlaceId);
+        verify(mockReviewDao, atLeastOnce()).getByPlaceIdSync(newPlaceId);
 
         ArgumentCaptor<ReviewEntity> captor = ArgumentCaptor.forClass(ReviewEntity.class);
         verify(mockReviewDao, atLeastOnce()).upsert(captor.capture());
         ReviewEntity saved = captor.getAllValues().get(captor.getAllValues().size() - 1);
-        assertEquals("REAL_ID", saved.placeId);
-        assertEquals("u1", saved.userId);
+        assertEquals(reviewId, saved.id);
+        assertEquals(newPlaceId, saved.placeId);
+        assertEquals(userId, saved.userId);
         assertEquals(5, saved.stars);
         assertFalse(saved.pendingSync);
         assertFalse(saved.deleted);
 
-        verify(mockPlaceDao, atLeastOnce()).getByIdSync(eq("GHOST_ID"), eq("owner-1"));
-        verify(mockPlaceDao, atLeastOnce()).getByIdSync(eq("REAL_ID"), eq("owner-1"));
+        verify(mockPlaceDao, atLeastOnce()).getByIdSync(eq(oldPlaceId), eq("owner-1"));
+        verify(mockPlaceDao, atLeastOnce()).getByIdSync(eq(newPlaceId), eq("owner-1"));
     }
 }

@@ -73,10 +73,34 @@
         layout="@layout/component_input_password"
         android:enabled="false" />
 
+    <TextView
+        android:id="@+id/tv_password_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="-8dp"
+        android:layout_marginBottom="8dp"
+        android:layout_marginStart="16dp"
+        android:text="@string/password_too_short"
+        android:textColor="@color/red"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
     <!-- Confirm Password Input -->
     <include
         layout="@layout/component_input_confirm_password"
         android:enabled="false" />
+
+    <TextView
+        android:id="@+id/tv_confirm_password_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="-8dp"
+        android:layout_marginBottom="8dp"
+        android:layout_marginStart="16dp"
+        android:text="@string/passwords_do_not_match"
+        android:textColor="@color/red"
+        android:textSize="12sp"
+        android:visibility="gone" />
 
     <!-- Register Button -->
     <include

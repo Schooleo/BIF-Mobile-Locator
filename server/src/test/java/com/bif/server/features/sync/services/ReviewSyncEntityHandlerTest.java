@@ -28,11 +28,14 @@ class ReviewSyncEntityHandlerTest {
     @Mock
     private PlaceIdentityService placeIdentityService;
 
+    @Mock
+    private com.bif.server.features.place.repositories.RatingRepository ratingRepository;
+
     private ReviewSyncEntityHandler handler;
 
     @BeforeEach
     void setUp() {
-        handler = new ReviewSyncEntityHandler(ratingService, placeIdentityService, new ObjectMapper());
+        handler = new ReviewSyncEntityHandler(ratingService, placeIdentityService, new ObjectMapper(), ratingRepository);
     }
 
     @Test

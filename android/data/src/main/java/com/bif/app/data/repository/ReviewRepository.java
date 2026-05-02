@@ -1,6 +1,7 @@
 package com.bif.app.data.repository;
 
 import android.content.Context;
+import android.location.Address;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
@@ -13,6 +14,7 @@ import com.bif.app.core.network.dto.place.PlaceResolveResponseDto;
 import com.bif.app.core.network.dto.place.PlaceReviewDto;
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.ReviewMapper;
+import com.bif.app.data.source.AndroidGeocodingDataSource;
 import com.bif.app.data.source.local.dao.PlaceDao;
 import com.bif.app.data.source.local.dao.ReviewDao;
 import com.bif.app.data.source.local.dao.SyncQueueDao;
@@ -46,6 +48,7 @@ import retrofit2.Response;
 public class ReviewRepository implements IReviewRepository {
 
     private static final String TAG = "ReviewRepository";
+    private static final String SOURCE_OSM = "OSM";
 
     private final ReviewDao reviewDao;
     private final PlaceDao placeDao;
@@ -53,6 +56,7 @@ public class ReviewRepository implements IReviewRepository {
     private final AppDatabase appDatabase;
     private final SyncManager syncManager;
     private final RestApiService restApiService;
+    private final AndroidGeocodingDataSource geocodingDataSource;
     private final ExecutorService executorService;
     private final Gson gson;
     private final Context appContext;
@@ -70,6 +74,7 @@ public class ReviewRepository implements IReviewRepository {
                             AppDatabase appDatabase,
                             SyncManager syncManager,
                             RestApiService restApiService,
+                    AndroidGeocodingDataSource geocodingDataSource,
                             ExecutorService executorService,
                             @ApplicationContext Context appContext) {
         this.reviewDao = reviewDao;
@@ -78,13 +83,33 @@ public class ReviewRepository implements IReviewRepository {
         this.appDatabase = appDatabase;
         this.syncManager = syncManager;
         this.restApiService = restApiService;
+        this.geocodingDataSource = geocodingDataSource;
         this.executorService = executorService;
         this.gson = new Gson();
         this.appContext = appContext;
-        this.activeUserIdLiveData.setValue(getActiveUserId());
+        this.activeUserIdLiveData.postValue(getActiveUserId());
         this.appContext.getSharedPreferences(UserPreferences.PREF_NAME, Context.MODE_PRIVATE)
                 .registerOnSharedPreferenceChangeListener(prefListener);
     }
+
+        public ReviewRepository(ReviewDao reviewDao,
+                    PlaceDao placeDao,
+                    SyncQueueDao syncQueueDao,
+                    AppDatabase appDatabase,
+                    SyncManager syncManager,
+                    RestApiService restApiService,
+                    ExecutorService executorService,
+                    @ApplicationContext Context appContext) {
+        this(reviewDao,
+            placeDao,
+            syncQueueDao,
+            appDatabase,
+            syncManager,
+            restApiService,
+            null,
+            executorService,
+            appContext);
+        }
 
     /** Lấy userId hiện tại động theo từng request, không cache tĩnh */
     private String getActiveUserId() {
@@ -163,16 +188,17 @@ public class ReviewRepository implements IReviewRepository {
             review.pendingSync = true;
             review.deleted = false;
 
-            if (identityContext != null
-                    && ((identityContext.lat != null && identityContext.lat == 0.0d)
-                    || (identityContext.lng != null && identityContext.lng == 0.0d))) {
-                Log.w(TAG, "Review metadata has suspicious coordinates (0.0). placeId=" + placeId);
-            }
-
             ReviewEntity existing = reviewDao.getReviewSync(placeId, userId);
             final long createdAt = existing != null
                     ? existing.createdAt
                     : System.currentTimeMillis();
+            review.createdAt = createdAt;
+            
+            final String reviewId = existing != null
+                    ? existing.id
+                    : UUID.randomUUID().toString();
+            review.id = reviewId;
+
             if (existing != null) {
                 if (review.externalSource == null || review.externalSource.trim().isEmpty()) {
                     review.externalSource = existing.externalSource;
@@ -191,22 +217,24 @@ public class ReviewRepository implements IReviewRepository {
                 }
             }
 
+            reconcileReviewMetadata(userId, review, existing, syncManager.isOnline());
+
             boolean syncedOnline = syncReviewOnline(placeId, review, operation);
             if (!syncedOnline) {
                 appDatabase.runInTransaction(() -> {
-                    review.createdAt = createdAt;
                     ReviewEntity entity = ReviewMapper.toEntity(review);
+                    entity.id = reviewId;
                     reviewDao.upsert(entity);
                     updateCachedPlaceRating(placeId);
 
-                    SyncQueueEntity syncEntry = createSyncEntry(
+                    syncManager.setUserContext(userId, null);
+                    syncManager.enqueueChange(
                             "review",
-                            placeId + ":" + userId,
+                            reviewId,
                             operation,
-                            ReviewMapper.toDto(review),
-                            userId
+                            UUID.randomUUID().toString(),
+                            ReviewMapper.toDto(review)
                     );
-                    syncQueueDao.enqueue(syncEntry);
                 });
                 syncManager.syncIfOnline();
             }
@@ -228,16 +256,16 @@ public class ReviewRepository implements IReviewRepository {
             });
 
             boolean deletedOnline = deleteReviewOnline(placeId, userId);
-            if (!deletedOnline) {
+            if (!deletedOnline && existing != null) {
                 appDatabase.runInTransaction(() -> {
-                    SyncQueueEntity syncEntry = createSyncEntry(
+                    syncManager.setUserContext(userId, null);
+                    syncManager.enqueueChange(
                             "review",
-                            placeId + ":" + userId,
+                            existing.id,
                             "DELETE",
-                            null,
-                            userId
+                            UUID.randomUUID().toString(),
+                            null
                     );
-                    syncQueueDao.enqueue(syncEntry);
                 });
                 syncManager.syncIfOnline();
             }
@@ -273,13 +301,25 @@ public class ReviewRepository implements IReviewRepository {
                             affectedPlaceIds.add(resolvedPlaceId);
 
                             ReviewEntity entity = ReviewMapper.fromDto(dto, resolvedPlaceId);
-                            // Avoid overwriting a locally modified pending item
-                            ReviewEntity local = reviewDao.getReviewSync(resolvedPlaceId, serverUserId);
-                            if (identityCorrected) {
+                            // Avoid overwriting a locally modified pending item.
+                            // When identity correction occurs, a local review might exist under
+                            // either the resolvedPlaceId or the legacy placeId; prefer an existing
+                            // local as the authoritative id and migrate legacy rows when needed.
+                            ReviewEntity localResolved = reviewDao.getReviewSync(resolvedPlaceId, serverUserId);
+                            ReviewEntity localLegacy = identityCorrected ? reviewDao.getReviewSync(placeId, serverUserId) : null;
+                            ReviewEntity chosenLocal = localResolved != null ? localResolved : localLegacy;
+                            String reviewId = chosenLocal != null ? chosenLocal.id : entity.id;
+                            entity.id = reviewId;
+
+                            // If the chosen local came from the legacy placeId, migrate it by
+                            // removing the legacy row and any pending sync queue entry, so the
+                            // upsert below stores the row under the resolvedPlaceId id.
+                            if (identityCorrected && localLegacy != null && chosenLocal == localLegacy) {
                                 reviewDao.deleteByPlaceAndUserId(placeId, serverUserId);
-                                syncQueueDao.removeByEntity("review", placeId + ":" + serverUserId);
+                                syncQueueDao.removeByEntity("review", localLegacy.id);
                             }
-                            if (local == null || !local.pendingSync) {
+
+                            if (chosenLocal == null || !chosenLocal.pendingSync) {
                                 reviewDao.upsert(entity);
                             }
                         }
@@ -337,6 +377,10 @@ public class ReviewRepository implements IReviewRepository {
 
         try {
 
+            if (!syncManager.isOnline()) {
+                return buildDeterministicFallbackPlaceId(externalSource, externalId, lat, lng, name);
+            }
+
             PlaceResolveRequestDto request = new PlaceResolveRequestDto();
             request.externalSource = externalSource;
             request.externalId = externalId;
@@ -384,6 +428,153 @@ public class ReviewRepository implements IReviewRepository {
         return username.trim();
     }
 
+    private void reconcileReviewMetadata(String activeUserId,
+                                         Review target,
+                                         @Nullable ReviewEntity existing,
+                                         boolean online) {
+        if (target == null || isBlank(target.placeId)) {
+            return;
+        }
+
+        if (placeDao != null && !isBlank(activeUserId)) {
+            PlaceEntity cachedPlace = placeDao.getByIdSync(target.placeId, activeUserId);
+            if (cachedPlace != null) {
+                applyLocalPlaceMetadata(target, cachedPlace);
+            }
+        }
+
+        if (existing != null) {
+            if (isBlank(target.externalSource) && !isBlank(existing.externalSource)) {
+                target.externalSource = existing.externalSource.trim();
+            }
+            if (isBlank(target.externalId) && !isBlank(existing.externalId)) {
+                target.externalId = existing.externalId.trim();
+            }
+            if (isBlank(target.placeName) && !isBlank(existing.placeName)) {
+                target.placeName = existing.placeName.trim();
+            }
+            if ((target.lat == null || target.lat == 0.0d) && existing.lat != null) {
+                target.lat = existing.lat;
+            }
+            if ((target.lng == null || target.lng == 0.0d) && existing.lng != null) {
+                target.lng = existing.lng;
+            }
+        }
+
+        if (online && geocodingDataSource != null && needsMetadataRefresh(target)
+                && isValidCoordinate(target.lat, target.lng)) {
+            applyReverseGeocodeMetadata(target);
+        }
+    }
+
+    private void applyLocalPlaceMetadata(Review target, PlaceEntity cachedPlace) {
+        if (target == null || cachedPlace == null) {
+            return;
+        }
+
+        if (isBlank(target.placeName)) {
+            String resolvedName = firstMeaningful(cachedPlace.name, cachedPlace.address);
+            if (!isBlank(resolvedName)) {
+                target.placeName = resolvedName;
+            }
+        }
+
+        if (isPreviewSource(target.externalSource) || isBlank(target.externalSource)) {
+            String source = normalizeSource(cachedPlace.placeSource);
+            if (!isBlank(source)) {
+                target.externalSource = source;
+            }
+        }
+
+        if (isBlank(target.externalId)) {
+            target.externalId = firstMeaningful(target.externalId, target.placeId);
+        }
+
+        if ((target.lat == null || target.lat == 0.0d) && Double.isFinite(cachedPlace.latitude)) {
+            target.lat = cachedPlace.latitude;
+        }
+        if ((target.lng == null || target.lng == 0.0d) && Double.isFinite(cachedPlace.longitude)) {
+            target.lng = cachedPlace.longitude;
+        }
+    }
+
+    private void applyReverseGeocodeMetadata(Review target) {
+        if (target == null || !isValidCoordinate(target.lat, target.lng)) {
+            return;
+        }
+
+        List<Address> addresses = geocodingDataSource.reverseGeocodeLocation(target.lat, target.lng);
+        if (addresses == null || addresses.isEmpty() || addresses.get(0) == null) {
+            return;
+        }
+
+        Address first = addresses.get(0);
+        if (isBlank(target.placeName)) {
+            String resolvedName = firstMeaningful(
+                    trimToNull(first.getFeatureName()),
+                    trimToNull(first.getAddressLine(0)));
+            if (!isBlank(resolvedName)) {
+                target.placeName = resolvedName;
+            }
+        }
+
+        if (isPreviewSource(target.externalSource) || isBlank(target.externalSource)) {
+            target.externalSource = SOURCE_OSM;
+        }
+    }
+
+    private boolean needsMetadataRefresh(Review review) {
+        return review != null
+                && (isBlank(review.placeName)
+                || isBlank(review.externalId)
+                || isBlank(review.externalSource)
+                || isPreviewSource(review.externalSource));
+    }
+
+    private boolean isValidCoordinate(@Nullable Double lat, @Nullable Double lng) {
+        if (lat == null || lng == null) {
+            return false;
+        }
+        return !Double.isNaN(lat)
+                && !Double.isNaN(lng)
+                && Double.isFinite(lat)
+                && Double.isFinite(lng)
+                && lat >= -90d
+                && lat <= 90d
+                && lng >= -180d
+                && lng <= 180d;
+    }
+
+    private boolean isPreviewSource(@Nullable String value) {
+        return value != null && Place.SOURCE_PREVIEW.equalsIgnoreCase(value.trim());
+    }
+
+    private String normalizeSource(@Nullable String source) {
+        String normalized = trimToNull(source);
+        if (isPreviewSource(normalized)) {
+            return null;
+        }
+        return normalized;
+    }
+
+    @Nullable
+    private String firstMeaningful(@Nullable String first, @Nullable String second) {
+        String normalizedFirst = trimToNull(first);
+        if (normalizedFirst != null) {
+            return normalizedFirst;
+        }
+        return trimToNull(second);
+    }
+
+    @Nullable
+    private String trimToNull(@Nullable String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
     private boolean syncReviewOnline(String placeId, Review review, String operation) {
         if (restApiService == null || !syncManager.isOnline()) {
             return false;
@@ -395,6 +586,7 @@ public class ReviewRepository implements IReviewRepository {
             if ("UPDATE".equalsIgnoreCase(operation)) {
                 response = restApiService.updateMyReview(placeId, payload).execute();
             } else {
+                // Handle "INSERT" or other creation operations
                 response = restApiService.addReview(placeId, payload).execute();
                 if (response.code() == 409) {
                     response = restApiService.updateMyReview(placeId, payload).execute();
@@ -416,7 +608,7 @@ public class ReviewRepository implements IReviewRepository {
             if (isBlank(reviewUserId)) {
                 reviewUserId = getActiveUserId();
             }
-            persistServerReviewWithHealing(localPlaceId, reviewUserId, dto);
+            persistServerReviewWithHealing(localPlaceId, reviewUserId, review.id, dto);
             return true;
         } catch (IOException e) {
             Log.e(TAG, "Review write-through failed for place " + placeId, e);
@@ -437,9 +629,12 @@ public class ReviewRepository implements IReviewRepository {
                 return false;
             }
 
+            ReviewEntity existing = reviewDao.getReviewSync(placeId, userId);
             appDatabase.runInTransaction(() -> {
                 reviewDao.deleteByPlaceAndUserId(placeId, userId);
-                syncQueueDao.removeByEntity("review", placeId + ":" + userId);
+                if (existing != null && !isBlank(existing.id)) {
+                    syncQueueDao.removeByEntity("review", existing.id);
+                }
                 updateCachedPlaceRating(placeId);
             });
             return true;
@@ -476,6 +671,7 @@ public class ReviewRepository implements IReviewRepository {
 
     private void persistServerReviewWithHealing(String localPlaceId,
                                                 String userId,
+                                                @Nullable String reviewId,
                                                 PlaceReviewDto dto) {
         String normalizedLocalPlaceId = normalizeServerPlaceId(localPlaceId, localPlaceId);
         String normalizedUserId = userId;
@@ -500,11 +696,16 @@ public class ReviewRepository implements IReviewRepository {
             }
 
             ReviewEntity entity = ReviewMapper.fromDto(dto, finalResolvedPlaceId);
+            if (!isBlank(reviewId)) {
+                entity.id = reviewId.trim();
+            }
             entity.pendingSync = false;
             entity.deleted = false;
             reviewDao.upsert(entity);
 
-            syncQueueDao.removeByEntity("review", finalNormalizedLocalPlaceId + ":" + finalNormalizedUserId);
+            if (!isBlank(reviewId)) {
+                syncQueueDao.removeByEntity("review", reviewId.trim());
+            }
 
             if (finalIdentityCorrected) {
                 updateCachedPlaceRating(finalNormalizedLocalPlaceId);
@@ -529,21 +730,4 @@ public class ReviewRepository implements IReviewRepository {
         return value == null || value.trim().isEmpty();
     }
 
-    private SyncQueueEntity createSyncEntry(String entityType,
-            String entityId,
-            String operation,
-            Object payload,
-            String userId) {
-        SyncQueueEntity entry = new SyncQueueEntity();
-        entry.userId = userId != null ? userId : "";
-        entry.entityType = entityType;
-        entry.entityId = entityId;
-        entry.operation = operation;
-        entry.clientChangeId = UUID.randomUUID().toString();
-        entry.payload = payload != null ? gson.toJson(payload) : null;
-        entry.status = "PENDING";
-        entry.retryCount = 0;
-        entry.createdAt = System.currentTimeMillis();
-        return entry;
-    }
 }

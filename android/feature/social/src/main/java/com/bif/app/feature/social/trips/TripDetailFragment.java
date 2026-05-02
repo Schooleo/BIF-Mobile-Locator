@@ -187,7 +187,17 @@ public class TripDetailFragment extends Fragment {
             return "";
         }
 
-        Collections.sort(validStops, Comparator.comparingInt(TripStop::getOrderIndex));
+        Collections.sort(validStops, (s1, s2) -> {
+            if (s1.getArrivalTime() > 0 && s2.getArrivalTime() > 0) {
+                int timeCompare = Long.compare(s1.getArrivalTime(), s2.getArrivalTime());
+                if (timeCompare != 0) return timeCompare;
+            } else if (s1.getArrivalTime() > 0) {
+                return -1; // Stops with time come first
+            } else if (s2.getArrivalTime() > 0) {
+                return 1;
+            }
+            return Integer.compare(s1.getOrderIndex(), s2.getOrderIndex());
+        });
 
         JSONArray items = new JSONArray();
         for (TripStop stop : validStops) {

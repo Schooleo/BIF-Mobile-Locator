@@ -15,13 +15,18 @@ import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.model.TripStop;
 import com.bif.app.domain.repository.IPlaceRepository;
+import com.bif.app.domain.repository.IReviewRepository;
 import com.bif.app.domain.repository.ITripRepository;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.inject.Inject;
 
@@ -34,18 +39,25 @@ public class AddTripStopViewModel extends ViewModel {
 
     private final IPlaceRepository placeRepository;
     private final ITripRepository tripRepository;
+    private final IReviewRepository reviewRepository;
     private final NetworkMonitor networkMonitor;
+    private final Executor executor;
 
     private final MutableLiveData<Boolean> aiModeEnabled = new MutableLiveData<>(false);
     private final MutableLiveData<Boolean> aiToggleEnabled = new MutableLiveData<>(false);
     private final MutableLiveData<String> searchHint = new MutableLiveData<>("Search places...");
     private final MutableLiveData<SearchState> searchState = new MutableLiveData<>(new SearchState.Idle());
+    private final MutableLiveData<Place> selectedPlaceDetail = new MutableLiveData<>();
+
     private final AtomicInteger currentSearchToken = new AtomicInteger(0);
+    private final AtomicLong currentResolveRequestId = new AtomicLong(0L);
     private volatile Double aiBiasLatitude;
     private volatile Double aiBiasLongitude;
     private volatile String aiCityBias;
 
     private String currentTripId = "";
+
+    private final Map<LiveData<?>, Observer<?>> foreverObservers = new HashMap<>();
 
     private final Observer<Boolean> networkObserver = isOnline -> {
         boolean online = Boolean.TRUE.equals(isOnline);
@@ -59,10 +71,14 @@ public class AddTripStopViewModel extends ViewModel {
     @Inject
     public AddTripStopViewModel(IPlaceRepository placeRepository,
                                 ITripRepository tripRepository,
-                                NetworkMonitor networkMonitor) {
+                                IReviewRepository reviewRepository,
+                                NetworkMonitor networkMonitor,
+                                Executor executor) {
         this.placeRepository = placeRepository;
         this.tripRepository = tripRepository;
+        this.reviewRepository = reviewRepository;
         this.networkMonitor = networkMonitor;
+        this.executor = executor;
 
         aiToggleEnabled.setValue(networkMonitor.isOnline());
         networkMonitor.observeConnectivity().observeForever(networkObserver);
@@ -82,6 +98,10 @@ public class AddTripStopViewModel extends ViewModel {
 
     public LiveData<SearchState> getSearchState() {
         return searchState;
+    }
+
+    public LiveData<Place> getSelectedPlaceDetail() {
+        return selectedPlaceDetail;
     }
 
     public void setTripId(@NonNull String tripId) {
@@ -142,6 +162,65 @@ public class AddTripStopViewModel extends ViewModel {
         });
     }
 
+    public void resolveSelectedPlace(@NonNull Place place) {
+        selectedPlaceDetail.setValue(place);
+        if (place.location == null) {
+            return;
+        }
+
+        final long requestId = currentResolveRequestId.incrementAndGet();
+        executor.execute(() -> {
+            String serverId = reviewRepository.resolveInternalPlaceId(
+                    place.placeSource,
+                    place.id,
+                    place.location.latitude,
+                    place.location.longitude,
+                    place.name);
+
+            if (requestId != currentResolveRequestId.get()) {
+                return;
+            }
+
+            if (serverId != null && !serverId.trim().isEmpty()) {
+                android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+                mainHandler.post(() -> {
+                    LiveData<Place> source = placeRepository.getPlaceById(serverId);
+                    Observer<Place> placeResolveObserver = new Observer<Place>() {
+                        @Override
+                        public void onChanged(Place detailedPlace) {
+                            // remove observer immediately when value arrives to avoid leaks
+                            source.removeObserver(this);
+                            foreverObservers.remove(source);
+                            if (requestId == currentResolveRequestId.get() && detailedPlace != null) {
+                                Place current = selectedPlaceDetail.getValue();
+                                if (current != null) {
+                                    double mergedRating = detailedPlace.rating > 0 ? detailedPlace.rating : current.rating;
+                                    Location mergedLocation = (detailedPlace.location != null && (Math.abs(detailedPlace.location.latitude) > 0.000001 || Math.abs(detailedPlace.location.longitude) > 0.000001))
+                                            ? detailedPlace.location
+                                            : current.location;
+
+                                    Place merged = new Place(
+                                            detailedPlace.id,
+                                            detailedPlace.name != null && !detailedPlace.name.trim().isEmpty() ? detailedPlace.name : current.name,
+                                            detailedPlace.address != null && !detailedPlace.address.trim().isEmpty() ? detailedPlace.address : current.address,
+                                            mergedRating,
+                                            mergedLocation,
+                                            detailedPlace.placeSource != null ? detailedPlace.placeSource : current.placeSource
+                                    );
+                                    selectedPlaceDetail.setValue(merged);
+                                } else {
+                                    selectedPlaceDetail.setValue(detailedPlace);
+                                }
+                            }
+                        }
+                    };
+                    foreverObservers.put(source, placeResolveObserver);
+                    source.observeForever(placeResolveObserver);
+                });
+            }
+        });
+    }
+
     public boolean addStopToTrip(@NonNull StopSearchResultItem item, long scheduledAtMillis) {
         if (currentTripId == null || currentTripId.trim().isEmpty() || item.place == null) {
             return false;
@@ -163,7 +242,12 @@ public class AddTripStopViewModel extends ViewModel {
                 location.longitude,
                 scheduledAtMillis,
                 scheduledAtMillis,
-                0
+                0,
+                "",
+                "",
+                "",
+                0,
+                place.rating
         );
         tripRepository.addStopToTrip(currentTripId, stop);
         return true;
@@ -252,6 +336,15 @@ public class AddTripStopViewModel extends ViewModel {
     protected void onCleared() {
         super.onCleared();
         networkMonitor.observeConnectivity().removeObserver(networkObserver);
+        if (!foreverObservers.isEmpty()) {
+            for (Map.Entry<LiveData<?>, Observer<?>> e : foreverObservers.entrySet()) {
+                try {
+                    e.getKey().removeObserver((Observer) e.getValue());
+                } catch (Exception ignored) {
+                }
+            }
+            foreverObservers.clear();
+        }
     }
 
     public static class StopSearchResultItem {

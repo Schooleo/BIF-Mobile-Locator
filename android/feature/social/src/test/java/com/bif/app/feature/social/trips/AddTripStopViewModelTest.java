@@ -17,6 +17,7 @@ import com.bif.app.domain.model.AiPlaceSuggestionResult;
 import com.bif.app.domain.model.Location;
 import com.bif.app.domain.model.Place;
 import com.bif.app.domain.repository.IPlaceRepository;
+import com.bif.app.domain.repository.IReviewRepository;
 import com.bif.app.domain.repository.ITripRepository;
 import com.bif.app.feature.social.trips.AddTripStopViewModel;
 
@@ -30,6 +31,7 @@ import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.concurrent.Executor;
 
 @RunWith(MockitoJUnitRunner.class)
 public class AddTripStopViewModelTest {
@@ -42,6 +44,9 @@ public class AddTripStopViewModelTest {
 
     @Mock
     private ITripRepository tripRepository;
+
+    @Mock
+    private IReviewRepository reviewRepository;
 
     @Mock
     private NetworkMonitor networkMonitor;
@@ -67,7 +72,13 @@ public class AddTripStopViewModelTest {
                         new ArrayList<>(),
                         null)));
 
-        viewModel = new AddTripStopViewModel(placeRepository, tripRepository, networkMonitor);
+        Executor directExecutor = Runnable::run;
+        viewModel = new AddTripStopViewModel(
+                placeRepository,
+                tripRepository,
+                reviewRepository,
+                networkMonitor,
+                directExecutor);
     }
 
     @Test

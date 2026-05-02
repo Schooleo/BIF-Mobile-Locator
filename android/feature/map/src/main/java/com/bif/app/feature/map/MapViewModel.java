@@ -706,7 +706,12 @@ public class MapViewModel extends ViewModel {
                         place.location.longitude,
                         normalizedSchedule,
                         normalizedSchedule,
-                        0
+                        0,
+                        "",
+                        "",
+                        "",
+                        0,
+                        place.rating
                 );
                 tripRepository.addStopToTrip(tripId.trim(), stop);
                 if (callback != null) {
@@ -741,7 +746,17 @@ public class MapViewModel extends ViewModel {
         }
 
         List<TripStopOverlay> normalized = new ArrayList<>(stops);
-        Collections.sort(normalized, (left, right) -> Integer.compare(left.orderIndex, right.orderIndex));
+        Collections.sort(normalized, (left, right) -> {
+            if (left.timeMillis > 0 && right.timeMillis > 0) {
+                int timeCompare = Long.compare(left.timeMillis, right.timeMillis);
+                if (timeCompare != 0) return timeCompare;
+            } else if (left.timeMillis > 0) {
+                return -1;
+            } else if (right.timeMillis > 0) {
+                return 1;
+            }
+            return Integer.compare(left.orderIndex, right.orderIndex);
+        });
         _tripStopOverlay.setValue(normalized);
         _selectedTripStopIndex.setValue(-1);
         fetchTripRouteLegs(normalized);

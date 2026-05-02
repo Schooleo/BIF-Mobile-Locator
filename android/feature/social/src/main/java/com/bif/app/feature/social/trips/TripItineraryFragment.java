@@ -467,7 +467,12 @@ public class TripItineraryFragment extends Fragment {
             stopHolder.notes.setText(stopHolder.itemView.getContext().getString(
                     R.string.trip_stop_notes_label,
                     noteText));
-            stopHolder.rating.setText(R.string.trip_stop_rating_none);
+            stopHolder.rating.setVisibility(View.VISIBLE);
+            if (stop.getRating() > 0) {
+                stopHolder.rating.setText(stopHolder.itemView.getContext().getString(R.string.trip_stop_rating_format, stop.getRating()));
+            } else {
+                stopHolder.rating.setText(R.string.trip_stop_rating_none);
+            }
                 stopHolder.expandIcon.setImageResource(expanded ? R.drawable.ic_expand_less : R.drawable.ic_expand_more);
                 stopHolder.expandIcon.setContentDescription(stopHolder.itemView.getContext().getString(
                     expanded ? R.string.collapse_less : R.string.expand_more));

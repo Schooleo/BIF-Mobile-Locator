@@ -66,14 +66,6 @@ public class FavoriteAdapter extends RecyclerView.Adapter<FavoriteAdapter.Favori
             holder.tvRating.setVisibility(android.view.View.GONE);
         }
 
-        // Description
-        if (item.description != null && !item.description.trim().isEmpty()) {
-            holder.tvDescription.setText(item.description);
-            holder.tvDescription.setVisibility(android.view.View.VISIBLE);
-        } else {
-            holder.tvDescription.setVisibility(android.view.View.GONE);
-        }
-
         // Notes
         if (item.notes != null && !item.notes.trim().isEmpty()) {
             holder.tvNotes.setText("Notes: " + item.notes);
@@ -96,7 +88,6 @@ public class FavoriteAdapter extends RecyclerView.Adapter<FavoriteAdapter.Favori
         final TextView tvName;
         final TextView tvAddress;
         final TextView tvRating;
-        final TextView tvDescription;
         final TextView tvNotes;
         final ImageButton btnRemove;
 
@@ -106,7 +97,6 @@ public class FavoriteAdapter extends RecyclerView.Adapter<FavoriteAdapter.Favori
             tvName = itemView.findViewById(R.id.tv_item_name);
             tvAddress = itemView.findViewById(R.id.tv_item_address);
             tvRating = itemView.findViewById(R.id.tv_item_rating);
-            tvDescription = itemView.findViewById(R.id.tv_item_description);
             tvNotes = itemView.findViewById(R.id.tv_item_notes);
             btnRemove = itemView.findViewById(R.id.btn_remove);
         }

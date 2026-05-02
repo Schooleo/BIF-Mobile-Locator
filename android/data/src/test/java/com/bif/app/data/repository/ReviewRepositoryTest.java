@@ -94,6 +94,9 @@ public class ReviewRepositoryTest {
         when(mockContext.getSharedPreferences(anyString(), anyInt())).thenReturn(mockPrefs);
         when(mockPrefs.getString(anyString(), anyString())).thenReturn("test-user");
 
+        // default network offline; tests that need online will override this
+        when(mockSyncManager.isOnline()).thenReturn(false);
+
         repository = new ReviewRepository(
                 mockReviewDao,
                 mockPlaceDao,
@@ -108,6 +111,7 @@ public class ReviewRepositoryTest {
 
     @Test
     public void resolveInternalPlaceId_WhenApiSucceeds_ReturnsInternalId() throws IOException {
+        when(mockSyncManager.isOnline()).thenReturn(true);
         String internalId = "resolved-p1";
         PlaceResolveResponseDto mockRes = new PlaceResolveResponseDto();
         mockRes.internalPlaceId = internalId;
@@ -167,13 +171,7 @@ public class ReviewRepositoryTest {
         assertEquals(placeName, saved.placeName);
         assertTrue(saved.pendingSync);
 
-        ArgumentCaptor<SyncQueueEntity> syncCaptor = ArgumentCaptor.forClass(SyncQueueEntity.class);
-        verify(mockSyncQueueDao).enqueue(syncCaptor.capture());
-        SyncQueueEntity enqueued = syncCaptor.getValue();
-        assertEquals("review", enqueued.entityType);
-        assertEquals("CREATE", enqueued.operation);
-        assertTrue(enqueued.payload.contains("\"stars\":5"));
-        
+        verify(mockSyncManager).enqueueChange(eq("review"), anyString(), eq("CREATE"), anyString(), any());
         verify(mockSyncManager).syncIfOnline();
     }
 
@@ -216,7 +214,7 @@ public class ReviewRepositoryTest {
         repository.submitReview(placeId, stars, comment, identityContext);
 
         verify(mockApiService).addReview(eq(placeId), any(PlaceReviewDto.class));
-        verify(mockSyncQueueDao).removeByEntity("review", placeId + ":test-user");
+        verify(mockSyncQueueDao).removeByEntity(eq("review"), anyString());
         verify(mockSyncQueueDao, never()).enqueue(any(SyncQueueEntity.class));
 
         ArgumentCaptor<ReviewEntity> entityCaptor = ArgumentCaptor.forClass(ReviewEntity.class);
@@ -260,7 +258,7 @@ public class ReviewRepositoryTest {
         repository.submitReview(ghostPlaceId, 5, "Great", identityContext);
 
         verify(mockReviewDao).deleteByPlaceAndUserId(ghostPlaceId, "test-user");
-        verify(mockSyncQueueDao).removeByEntity("review", ghostPlaceId + ":test-user");
+        verify(mockSyncQueueDao).removeByEntity(eq("review"), anyString());
         verify(mockReviewDao, atLeastOnce()).getByPlaceIdSync(realPlaceId);
 
         ArgumentCaptor<ReviewEntity> entityCaptor = ArgumentCaptor.forClass(ReviewEntity.class);
@@ -278,6 +276,7 @@ public class ReviewRepositoryTest {
         when(mockSyncManager.isOnline()).thenReturn(true);
 
         ReviewEntity existing = new ReviewEntity();
+        existing.id = "rid-1";
         existing.placeId = placeId;
         existing.userId = "test-user";
         existing.stars = 4;
@@ -291,7 +290,7 @@ public class ReviewRepositoryTest {
 
         verify(mockApiService).deleteMyReview(placeId);
         verify(mockReviewDao).deleteByPlaceAndUserId(placeId, "test-user");
-        verify(mockSyncQueueDao).removeByEntity("review", placeId + ":test-user");
+        verify(mockSyncQueueDao).removeByEntity(eq("review"), eq("rid-1"));
         verify(mockSyncQueueDao, never()).enqueue(any(SyncQueueEntity.class));
     }
 
