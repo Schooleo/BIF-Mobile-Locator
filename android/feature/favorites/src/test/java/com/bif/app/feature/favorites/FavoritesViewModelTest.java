@@ -48,6 +48,7 @@ public class FavoritesViewModelTest {
         searchFavoritesLiveData = new MutableLiveData<>(Collections.emptyList());
         when(favoriteRepository.getAllFavorites()).thenReturn(allFavoritesLiveData);
         when(favoriteRepository.searchFavorites(anyString())).thenReturn(searchFavoritesLiveData);
+        when(favoriteRepository.isOnline()).thenReturn(true);
 
         viewModel = new FavoritesViewModel(favoriteRepository);
         // Activating MediatorLiveData triggers the initial switchMap → getAllFavorites
@@ -251,6 +252,33 @@ public class FavoritesViewModelTest {
 
         assertEquals(Boolean.FALSE, viewModel.isSyncing.getValue());
         assertEquals(IFavoriteRepository.ERROR_REFRESH_FAILED, viewModel.syncMessage.getValue());
+    }
+
+    @Test
+    public void refreshFavoritesIfStale_afterOfflineResult_doesNotRetryImmediately() {
+        when(favoriteRepository.isOnline()).thenReturn(true);
+        doAnswer(invocation -> {
+            IFavoriteRepository.SyncCallback callback = invocation.getArgument(0);
+            callback.onOffline();
+            return null;
+        }).when(favoriteRepository).refreshFavorites(any(IFavoriteRepository.SyncCallback.class));
+
+        viewModel.refreshFavorites();
+        viewModel.refreshFavoritesIfStale();
+
+        verify(favoriteRepository, org.mockito.Mockito.times(1))
+                .refreshFavorites(any(IFavoriteRepository.SyncCallback.class));
+    }
+
+    @Test
+    public void refreshFavorites_whenOffline_skipsRepositoryAndStaysSilent() {
+        when(favoriteRepository.isOnline()).thenReturn(false);
+
+        viewModel.refreshFavorites();
+
+        verify(favoriteRepository, never()).refreshFavorites(any(IFavoriteRepository.SyncCallback.class));
+        assertEquals(Boolean.FALSE, viewModel.isSyncing.getValue());
+        assertEquals("", viewModel.syncMessage.getValue());
     }
 
     // ─── helpers ───────────────────────────────────────────────────────────────

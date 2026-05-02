@@ -10,6 +10,7 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModel;
 
+import com.bif.app.core.utils.InputLimits;
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.sync.core.NetworkMonitor;
 import com.bif.app.domain.model.AiPlaceSuggestion;
@@ -396,7 +397,7 @@ public class ChatViewModel extends ViewModel {
         tripRepository.saveDraftTrip(
                 targetTripId,
                 trim(groupId),
-                snapshot.title,
+                normalizeTripTitle(snapshot.title),
                 snapshot.description,
                 startAt,
                 endAt,
@@ -650,7 +651,11 @@ public class ChatViewModel extends ViewModel {
         sb.append("\"stopCount\":").append(stopCount).append(",");
         sb.append("\"isSaved\":false,");
         sb.append("\"totalDistance\":0.0,");
-        sb.append("\"title\":").append(jsonString(draft.getTitle() != null ? draft.getTitle() : "AI Draft Trip")).append(",");
+        String payloadTitle = normalizeTripTitle(draft.getTitle());
+        if (payloadTitle.isEmpty()) {
+            payloadTitle = "AI Draft Trip";
+        }
+        sb.append("\"title\":").append(jsonString(payloadTitle)).append(",");
         String summary = draft.getSummary() != null ? draft.getSummary() : "";
         sb.append("\"summary\":").append(jsonString(summary)).append(",");
         sb.append("\"description\":").append(jsonString(summary)).append(",");
@@ -804,7 +809,7 @@ public class ChatViewModel extends ViewModel {
             JSONObject json = new JSONObject(payload);
             String draftTripId = trim(json.optString("tripId", fallbackDraftTripId));
             String currentTripId = trim(json.optString("currentTripId", ""));
-            String title = trim(json.optString("title", "AI Draft Trip"));
+            String title = normalizeTripTitle(json.optString("title", "AI Draft Trip"));
             if (title.isEmpty()) {
                 title = "AI Draft Trip";
             }
@@ -839,7 +844,10 @@ public class ChatViewModel extends ViewModel {
                 trim(fallbackDraftTripId)
         );
         String currentTripId = extractQuotedValue(payload, "currentTripId");
-        String title = firstNonEmpty(extractQuotedValue(payload, "title"), "AI Draft Trip");
+        String title = normalizeTripTitle(firstNonEmpty(extractQuotedValue(payload, "title"), "AI Draft Trip"));
+        if (title.isEmpty()) {
+            title = "AI Draft Trip";
+        }
         String description = firstNonEmpty(
                 extractQuotedValue(payload, "summary"),
                 extractQuotedValue(payload, "description")
@@ -1170,6 +1178,10 @@ public class ChatViewModel extends ViewModel {
 
     private String trim(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private String normalizeTripTitle(String value) {
+        return InputLimits.trimAndLimit(value, InputLimits.TRIP_TITLE_MAX_LENGTH);
     }
 
     private static class DraftTripCardSnapshot {

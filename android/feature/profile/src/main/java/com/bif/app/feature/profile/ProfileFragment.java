@@ -9,6 +9,7 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
@@ -16,11 +17,10 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import androidx.annotation.NonNull;
-import com.bif.app.core.utils.AppSnackbar;
-import androidx.annotation.Nullable;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.SwitchCompat;
@@ -32,6 +32,7 @@ import androidx.navigation.Navigation;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.bif.app.core.auth.AuthSessionManager;
+import com.bif.app.core.utils.AppSnackbar;
 import com.bif.app.core.utils.DialogUtils;
 import com.bif.app.core.utils.UriUtils;
 import com.bumptech.glide.Glide;
@@ -40,10 +41,11 @@ import com.bumptech.glide.load.engine.GlideException;
 import com.bumptech.glide.request.RequestListener;
 import com.bumptech.glide.request.target.Target;
 import com.google.android.material.button.MaterialButton;
-
-import javax.inject.Inject;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.io.File;
+
+import javax.inject.Inject;
 
 import dagger.hilt.android.AndroidEntryPoint;
 
@@ -105,7 +107,13 @@ public class ProfileFragment extends Fragment {
             if (messageId == null || !isAdded()) {
                 return;
             }
-            AppSnackbar.show(requireContext(), messageId);
+            hideKeyboard(view);
+            view.post(() -> {
+                if (!isAdded()) {
+                    return;
+                }
+                AppSnackbar.show(requireContext(), messageId);
+            });
             viewModel.consumeMessage();
         });
 
@@ -205,16 +213,16 @@ public class ProfileFragment extends Fragment {
 
         // Change Password
         View menuChangePassword = view.findViewById(R.id.menuChangePassword);
-        android.widget.ImageView ivChangePasswordIcon =
-            menuChangePassword.findViewById(com.bif.app.core.R.id.ivIcon);
+        android.widget.ImageView ivChangePasswordIcon
+                = menuChangePassword.findViewById(com.bif.app.core.R.id.ivIcon);
         ivChangePasswordIcon.setImageResource(com.bif.app.core.R.drawable.ic_lock);
         ivChangePasswordIcon.setImageTintList(ColorStateList.valueOf(0xFFFF6B6B));
         ((android.widget.TextView) menuChangePassword.findViewById(com.bif.app.core.R.id.tvTitle))
-            .setText(R.string.profile_change_password);
+                .setText(R.string.profile_change_password);
         menuChangePassword.setOnClickListener(v -> navController.navigate(UriUtils.buildUri("/profile/change-password")));
     }
 
-        private void showPersonalInfoDialog() {
+    private void showPersonalInfoDialog() {
         if (!isAdded()) {
             return;
         }
@@ -225,24 +233,30 @@ public class ProfileFragment extends Fragment {
         }
 
         View dialogView = LayoutInflater.from(requireContext())
-            .inflate(R.layout.dialog_personal_information, null, false);
+                .inflate(R.layout.dialog_personal_information, null, false);
 
         TextView tvAuthStatusValue = dialogView.findViewById(R.id.tvAuthStatusValue);
         TextView tvUsernameValue = dialogView.findViewById(R.id.tvUsernameValue);
         TextView tvEmailValue = dialogView.findViewById(R.id.tvEmailValue);
 
         tvAuthStatusValue.setText(state.isLoggedIn
-            ? R.string.logged_in_status
-            : R.string.guest_status);
+                ? R.string.logged_in_status
+                : R.string.guest_status);
         tvUsernameValue.setText(state.usernameForDisplay);
         tvEmailValue.setText(state.emailForDisplay);
 
-        new AlertDialog.Builder(requireContext())
-            .setTitle(R.string.personal_information)
-            .setView(dialogView)
-            .setPositiveButton(android.R.string.ok, null)
-            .show();
+        AlertDialog dialog = new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.personal_information)
+                .setView(dialogView)
+                .setPositiveButton(android.R.string.ok, null)
+                .create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(R.drawable.bg_dialog_surface);
         }
+
+        dialog.show();
+    }
 
     private void setupDarkModeToggle(View view) {
         View menuDarkMode = view.findViewById(R.id.menuDarkMode);
@@ -274,28 +288,24 @@ public class ProfileFragment extends Fragment {
     }
 
     private void setupLogout(View view) {
-        view.findViewById(R.id.btnLogout).setOnClickListener(v -> {
-            DialogUtils.showConfirmDialog(requireContext(),
-                    "Logout",
-                    "Are you sure you want to logout?",
-                    "Logout",
-                    "Cancel",
-                    () -> {
-                        authSessionManager.logout(remoteSuccess -> {
-                            if (!isAdded()) {
-                                return;
-                            }
+        view.findViewById(R.id.btnLogout).setOnClickListener(v -> DialogUtils.showConfirmDialog(requireContext(),
+                "Logout",
+                "Are you sure you want to logout?",
+                "Logout",
+                "Cancel",
+                () -> authSessionManager.logout(remoteSuccess -> {
+                    if (!isAdded()) {
+                        return;
+                    }
 
-                            requireActivity().runOnUiThread(() -> {
-                                if (!isAdded()) {
-                                    return;
-                                }
-                                AppSnackbar.show(requireContext(), R.string.logout_success);
-                                navController.navigate(UriUtils.buildUri(UriUtils.PathTo.LOGIN));
-                            });
-                        });
+                    requireActivity().runOnUiThread(() -> {
+                        if (!isAdded()) {
+                            return;
+                        }
+                        AppSnackbar.show(requireContext(), R.string.logout_success);
+                        navController.navigate(UriUtils.buildUri(UriUtils.PathTo.LOGIN));
                     });
-        });
+                })));
     }
 
     private void bindAvatar(ImageView ivAvatarImage, TextView tvAvatar, String avatarUriString) {
@@ -323,12 +333,12 @@ public class ProfileFragment extends Fragment {
             Glide.with(this)
                     .load(imageSource)
                     .error(com.bif.app.core.R.drawable.bg_logo_placeholder)
-                    .listener(new RequestListener<Drawable>() {
+                    .listener(new RequestListener<>() {
                         @Override
                         public boolean onLoadFailed(@Nullable GlideException e,
-                                Object model,
-                                Target<Drawable> target,
-                                boolean isFirstResource) {
+                                                    Object model,
+                                                    Target<Drawable> target,
+                                                    boolean isFirstResource) {
                             if (isRemote) {
                                 String unavailableText = ivAvatarImage.getContext()
                                         .getString(R.string.image_unavailable_offline);
@@ -347,10 +357,10 @@ public class ProfileFragment extends Fragment {
 
                         @Override
                         public boolean onResourceReady(Drawable resource,
-                                Object model,
-                                Target<Drawable> target,
-                                DataSource dataSource,
-                                boolean isFirstResource) {
+                                                       Object model,
+                                                       Target<Drawable> target,
+                                                       DataSource dataSource,
+                                                       boolean isFirstResource) {
                             return false;
                         }
                     })
@@ -378,17 +388,17 @@ public class ProfileFragment extends Fragment {
 
         if (!currentUsername.equals(getString(R.string.not_available))) {
             etUsername.setText(currentUsername);
-            etUsername.setSelection(currentUsername.length());
+            etUsername.setSelection(etUsername.getText().length());
         }
 
-        // Khởi tạo Dialog với giao diện xịn từ nhánh dev
         AlertDialog dialog = new AlertDialog.Builder(requireContext())
                 .setView(dialogView)
                 .create();
 
-        dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(R.drawable.bg_dialog_surface);
+        }
 
-        // Nút Save với logic gọi Backend API từ nhánh của bạn
         btnSave.setOnClickListener(v -> {
             String updatedUsername = etUsername.getText().toString().trim();
             if (updatedUsername.isEmpty()) {
@@ -396,9 +406,9 @@ public class ProfileFragment extends Fragment {
                 return;
             }
 
-            // Logic quan trọng của bạn: Đẩy lên Backend thông qua ViewModel
-            viewModel.updateProfile(updatedUsername);
+            hideKeyboard(etUsername);
             dialog.dismiss();
+            viewModel.updateProfile(updatedUsername);
         });
 
         btnCancel.setOnClickListener(v -> dialog.dismiss());
@@ -429,6 +439,16 @@ public class ProfileFragment extends Fragment {
         }
     }
 
+    private void hideKeyboard(@Nullable View anchor) {
+        if (!isAdded() || anchor == null) {
+            return;
+        }
+        InputMethodManager imm = requireContext().getSystemService(InputMethodManager.class);
+        if (imm != null && anchor.getWindowToken() != null) {
+            imm.hideSoftInputFromWindow(anchor.getWindowToken(), 0);
+        }
+    }
+
     private void applyLoggedInButtonStyle(MaterialButton button) {
         ViewGroup.LayoutParams baseParams = button.getLayoutParams();
         if (baseParams instanceof LinearLayout.LayoutParams) {
@@ -447,8 +467,7 @@ public class ProfileFragment extends Fragment {
         if (baseParams instanceof LinearLayout.LayoutParams) {
             LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) baseParams;
             params.width = ViewGroup.LayoutParams.MATCH_PARENT;
-            int height = (int) (52 * requireContext().getResources().getDisplayMetrics().density);
-            params.height = height;
+            params.height = (int) (52 * requireContext().getResources().getDisplayMetrics().density);
             params.gravity = Gravity.CENTER_HORIZONTAL;
             int horizontalMargin = (int) (24 * requireContext().getResources().getDisplayMetrics().density);
             params.leftMargin = horizontalMargin;

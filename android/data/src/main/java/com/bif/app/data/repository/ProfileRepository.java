@@ -4,6 +4,7 @@ import android.content.Context;
 
 import androidx.annotation.NonNull;
 
+import com.bif.app.core.utils.InputLimits;
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.mapper.ProfileMapper;
 import com.bif.app.data.source.local.database.AppDatabase;
@@ -171,7 +172,7 @@ public class ProfileRepository implements IProfileRepository {
 
     @Override
     public void updateProfile(String updatedUsername, ProfileCallback callback) {
-        String normalizedName = sanitize(updatedUsername);
+        String normalizedName = sanitizeUsername(updatedUsername);
         if (normalizedName.isEmpty()) {
             if (callback != null) {
                 callback.onFailure();
@@ -338,6 +339,10 @@ public class ProfileRepository implements IProfileRepository {
         return value.trim();
     }
 
+    private String sanitizeUsername(String value) {
+        return InputLimits.trimAndLimit(value, InputLimits.USERNAME_MAX_LENGTH);
+    }
+
     private String safe(String value) {
         if (value == null) {
             return "";
@@ -345,4 +350,3 @@ public class ProfileRepository implements IProfileRepository {
         return value.trim();
     }
 }
-

@@ -10,9 +10,8 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 
+import com.bif.app.core.utils.InputLimits;
 import com.bif.app.domain.repository.IProfileRepository;
-
-import javax.inject.Inject;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -20,6 +19,8 @@ import java.io.InputStream;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import javax.inject.Inject;
 
 import dagger.hilt.android.lifecycle.HiltViewModel;
 import dagger.hilt.android.qualifiers.ApplicationContext;
@@ -145,7 +146,6 @@ public class ProfileViewModel extends ViewModel {
         if (showLoading) {
             isRefreshing.setValue(true);
         }
-
         profileRepository.syncProfileMetadata(new IProfileRepository.ProfileCallback() {
             @Override
             public void onSuccess() {
@@ -156,13 +156,19 @@ public class ProfileViewModel extends ViewModel {
             @Override
             public void onFailure() {
                 isRefreshing.postValue(false);
-                messageResId.postValue(R.string.profile_sync_failed);
+                if (showLoading) {
+                    messageResId.postValue(R.string.profile_sync_failed);
+                }
             }
         });
     }
 
     public void updateProfile(@NonNull String updatedUsername) {
-        profileRepository.updateProfile(updatedUsername,
+        String normalizedUsername = InputLimits.trimAndLimit(
+                updatedUsername,
+                InputLimits.USERNAME_MAX_LENGTH
+        );
+        profileRepository.updateProfile(normalizedUsername,
                 new IProfileRepository.ProfileCallback() {
                     @Override
                     public void onSuccess() {

@@ -178,6 +178,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/social_spacing_xs"
+            android:ellipsize="end"
+            android:maxLines="2"
             android:textColor="?attr/colorTextPrimary"
             android:textSize="18sp"
             android:textStyle="bold" />

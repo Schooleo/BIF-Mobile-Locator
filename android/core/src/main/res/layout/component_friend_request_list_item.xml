@@ -29,16 +29,20 @@
 
         <TextView
             android:id="@+id/tv_request_label"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
             android:textColor="?attr/colorTextSecondary"
             android:textSize="14sp" />
 
         <TextView
             android:id="@+id/tv_request_name"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:maxLines="1"
             android:textColor="?attr/colorTextPrimary"
             android:textSize="16sp"
             android:textStyle="bold" />

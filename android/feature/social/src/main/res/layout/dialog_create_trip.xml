@@ -47,6 +47,7 @@
         android:background="@drawable/bg_search_input"
         android:backgroundTint="?attr/colorListItemBackground"
         android:hint="@string/trip_title_hint"
+        android:maxLength="50"
         android:maxLines="1"
         android:padding="@dimen/social_spacing_md"
         android:textColor="?attr/colorTextPrimary"

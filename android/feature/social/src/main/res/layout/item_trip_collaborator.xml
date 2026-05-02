@@ -30,16 +30,20 @@
 
         <TextView
             android:id="@+id/tv_trip_member_name"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
             android:textColor="?attr/colorTextPrimary"
             android:textSize="20sp"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/tv_trip_member_role"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
             android:textColor="?attr/colorTextSecondary"
             android:textSize="14sp" />
     </LinearLayout>

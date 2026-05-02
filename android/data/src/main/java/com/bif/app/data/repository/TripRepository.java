@@ -11,6 +11,7 @@ import com.bif.app.core.network.dto.chat.ChatMessageDto;
 import com.bif.app.core.network.dto.sync.SyncResponseDto;
 import com.bif.app.core.network.dto.trip.TripPlanDto;
 import com.bif.app.core.network.dto.trip.TripStopDto;
+import com.bif.app.core.utils.InputLimits;
 import com.bif.app.core.utils.UserPreferences;
 import com.bif.app.data.source.local.dao.FriendDao;
 import com.bif.app.data.source.local.dao.TripDao;
@@ -107,7 +108,7 @@ public class TripRepository implements ITripRepository {
                 TripPlanEntity entity = new TripPlanEntity();
                 entity.id = UUID.randomUUID().toString();
                 entity.groupId = entity.id;
-                entity.title = title;
+                entity.title = normalizeTripTitle(title);
                 entity.description = description;
                 entity.coverUploadStatus = UploadStatus.SYNCED;
                 entity.startAt = startAt;
@@ -184,7 +185,7 @@ public class TripRepository implements ITripRepository {
                     return;
                 }
 
-                entity.title = title;
+                entity.title = normalizeTripTitle(title);
                 entity.description = description;
                 entity.startAt = startAt;
                 entity.endAt = endAt;
@@ -276,7 +277,7 @@ public class TripRepository implements ITripRepository {
 
                 String safeGroupId = normalize(groupId);
                 entity.groupId = safeGroupId.isEmpty() ? safeTripId : safeGroupId;
-                entity.title = title;
+                entity.title = normalizeTripTitle(title);
                 entity.description = description;
                 entity.startAt = startAt;
                 entity.endAt = endAt;
@@ -1025,6 +1026,10 @@ public class TripRepository implements ITripRepository {
 
     private String normalize(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private String normalizeTripTitle(String value) {
+        return InputLimits.trimAndLimit(value, InputLimits.TRIP_TITLE_MAX_LENGTH);
     }
 
     private void enqueueTripPlanChange(String tripId, String operation) {

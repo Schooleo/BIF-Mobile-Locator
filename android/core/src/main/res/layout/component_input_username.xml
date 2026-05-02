@@ -13,5 +13,6 @@
     android:paddingEnd="16dp"
     android:inputType="textPersonName"
     android:importantForAutofill="no"
+    android:maxLength="15"
     android:maxLines="1"
     tools:theme="@style/Theme.BIFLocator" />

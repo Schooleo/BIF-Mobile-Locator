@@ -329,6 +329,11 @@ public class FavoriteRepository implements IFavoriteRepository {
         });
     }
 
+    @Override
+    public boolean isOnline() {
+        return syncManager != null && syncManager.isOnline();
+    }
+
     private SyncQueueEntity createSyncEntry(String ownerUserId,
                                             String entityType,
                                             String entityId,

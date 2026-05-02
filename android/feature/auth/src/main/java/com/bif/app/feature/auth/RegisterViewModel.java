@@ -6,6 +6,7 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 
+import com.bif.app.core.utils.InputLimits;
 import com.bif.app.data.repository.AuthRepository;
 
 import javax.inject.Inject;
@@ -105,7 +106,7 @@ public class RegisterViewModel extends ViewModel {
     }
 
     public void onUsernameChanged(String value) {
-        username = value == null ? "" : value.trim();
+        username = InputLimits.trimAndLimit(value, InputLimits.USERNAME_MAX_LENGTH);
         updateState();
     }
 
@@ -149,7 +150,7 @@ public class RegisterViewModel extends ViewModel {
 
     public void register(String email, String username, String password) {
         this.email = email == null ? "" : email.trim();
-        this.username = username == null ? "" : username.trim();
+        this.username = InputLimits.trimAndLimit(username, InputLimits.USERNAME_MAX_LENGTH);
         this.password = password == null ? "" : password;
         registerState.setValue(new UiState.Loading());
 

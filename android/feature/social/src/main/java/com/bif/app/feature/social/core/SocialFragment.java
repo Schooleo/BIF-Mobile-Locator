@@ -236,11 +236,17 @@ public class SocialFragment extends Fragment {
                     case "__MSG_TRIP_DELETE_SUCCESS__":
                         textRes = R.string.trip_delete_success;
                         break;
+                    case "__MSG_TRIP_LEAVE_SUCCESS__":
+                        textRes = R.string.trip_leave_success;
+                        break;
                     case "__MSG_TRIP_UPDATE_FAILED__":
                         textRes = R.string.trip_update_failed;
                         break;
                     case "__MSG_TRIP_DELETE_FAILED__":
                         textRes = R.string.trip_delete_failed;
+                        break;
+                    case "__MSG_TRIP_LEAVE_FAILED__":
+                        textRes = R.string.trip_leave_failed;
                         break;
                     case SocialViewModel.AI_DRAFT_SAVE_SUCCESS_MESSAGE:
                         textRes = R.string.trip_ai_saved_success;
@@ -807,21 +813,39 @@ public class SocialFragment extends Fragment {
         if (!isAdded()) {
             return;
         }
+        InputMethodManager imm = (InputMethodManager)
+                requireContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+        if (imm != null) {
+            hideKeyboardFromView(imm, etAiRequest);
+            hideKeyboardFromView(imm, etAiErrorRequest);
+        }
+
         if (etAiRequest != null) {
             etAiRequest.clearFocus();
         }
         if (etAiErrorRequest != null) {
             etAiErrorRequest.clearFocus();
         }
+        if (aiTripDrafterDialog != null
+                && aiTripDrafterDialog.getWindow() != null
+                && aiTripDrafterDialog.getWindow().getDecorView() != null) {
+            aiTripDrafterDialog.getWindow().getDecorView().clearFocus();
+        }
+
         View root = aiTripDrafterDialog != null ? aiTripDrafterDialog.getCurrentFocus() : null;
         if (root == null && getView() != null) {
             root = getView();
         }
-        InputMethodManager imm = (InputMethodManager)
-                requireContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
         if (imm != null && root != null && root.getWindowToken() != null) {
             imm.hideSoftInputFromWindow(root.getWindowToken(), 0);
         }
+    }
+
+    private void hideKeyboardFromView(@Nullable InputMethodManager imm, @Nullable View view) {
+        if (imm == null || view == null || view.getWindowToken() == null) {
+            return;
+        }
+        imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
     }
 
     private String resolveAiDraftErrorMessage(SocialViewModel.AiTripDrafterUiState.Error errorState) {
@@ -920,6 +944,7 @@ public class SocialFragment extends Fragment {
                     final long[] endMillis = {0L};
 
                     tvStartDate.setOnClickListener(v -> {
+                        hideKeyboardForTripDialog(etTitle, etDescription, v);
                         MaterialDatePicker<Long> picker = MaterialDatePicker.Builder.datePicker()
                                 .setTitleText(R.string.start_date)
                                 .build();
@@ -931,6 +956,7 @@ public class SocialFragment extends Fragment {
                     });
 
                     tvEndDate.setOnClickListener(v -> {
+                        hideKeyboardForTripDialog(etTitle, etDescription, v);
                         MaterialDatePicker<Long> picker = MaterialDatePicker.Builder.datePicker()
                                 .setTitleText(R.string.end_date)
                                 .build();
@@ -978,6 +1004,10 @@ public class SocialFragment extends Fragment {
                 com.bif.app.core.R.style.Widget_BIFLocator_PopupMenu
         );
         popupMenu.getMenuInflater().inflate(R.menu.menu_trip_options, popupMenu.getMenu());
+        MenuItem destructiveAction = popupMenu.getMenu().findItem(R.id.action_delete_trip);
+        if (destructiveAction != null) {
+            destructiveAction.setTitle(isCurrentUserTripOwner(trip) ? R.string.delete : R.string.trip_leave_action);
+        }
         popupMenu.setOnMenuItemClickListener(item -> onTripOptionSelected(item, trip));
         popupMenu.show();
     }
@@ -988,7 +1018,11 @@ public class SocialFragment extends Fragment {
             return true;
         }
         if (item.getItemId() == R.id.action_delete_trip) {
-            showDeleteTripDialog(trip);
+            if (isCurrentUserTripOwner(trip)) {
+                showDeleteTripDialog(trip);
+            } else {
+                showLeaveTripDialog(trip);
+            }
             return true;
         }
         return false;
@@ -1022,6 +1056,7 @@ public class SocialFragment extends Fragment {
                     btnCreate.setText(R.string.save);
 
                     tvStartDate.setOnClickListener(v -> {
+                        hideKeyboardForTripDialog(etTitle, etDescription, v);
                         MaterialDatePicker<Long> picker = MaterialDatePicker.Builder.datePicker()
                                 .setTitleText(R.string.start_date)
                                 .build();
@@ -1033,6 +1068,7 @@ public class SocialFragment extends Fragment {
                     });
 
                     tvEndDate.setOnClickListener(v -> {
+                        hideKeyboardForTripDialog(etTitle, etDescription, v);
                         MaterialDatePicker<Long> picker = MaterialDatePicker.Builder.datePicker()
                                 .setTitleText(R.string.end_date)
                                 .build();
@@ -1067,6 +1103,23 @@ public class SocialFragment extends Fragment {
         );
     }
 
+    private void hideKeyboardForTripDialog(EditText etTitle, EditText etDescription, View anchor) {
+        if (etTitle != null) {
+            etTitle.clearFocus();
+        }
+        if (etDescription != null) {
+            etDescription.clearFocus();
+        }
+        if (!isAdded()) {
+            return;
+        }
+        InputMethodManager imm = (InputMethodManager)
+                requireContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+        if (imm != null && anchor != null && anchor.getWindowToken() != null) {
+            imm.hideSoftInputFromWindow(anchor.getWindowToken(), 0);
+        }
+    }
+
     private void showDeleteTripDialog(TripPlan trip) {
         if (trip == null) {
             return;
@@ -1091,6 +1144,29 @@ public class SocialFragment extends Fragment {
         );
     }
 
+    private void showLeaveTripDialog(TripPlan trip) {
+        if (trip == null) {
+            return;
+        }
+
+        String tripTitle = trip.getTitle() == null || trip.getTitle().trim().isEmpty()
+                ? getString(R.string.trip_title_hint)
+                : trip.getTitle().trim();
+        if (isCurrentUserTripOwner(trip) || !isCurrentUserTripMember(trip)) {
+            AppSnackbar.show(requireContext(), R.string.trip_leave_failed);
+            return;
+        }
+
+        DialogUtils.showConfirmDialog(
+                requireContext(),
+                getString(R.string.trip_leave_action),
+                getString(R.string.trip_leave_confirm, tripTitle),
+                getString(R.string.trip_leave_action),
+                getString(R.string.cancel),
+                () -> viewModel.leaveTrip(trip.getId())
+        );
+    }
+
     private boolean isCurrentUserTripOwner(TripPlan trip) {
         if (trip == null || trip.getParticipantIds() == null || trip.getParticipantIds().isEmpty()) {
             return false;
@@ -1101,11 +1177,34 @@ public class SocialFragment extends Fragment {
             return false;
         }
 
+        String currentUserId = resolveCurrentUserIdForTrip();
+        return currentUserId != null && ownerId.trim().equals(currentUserId.trim());
+    }
+
+    private boolean isCurrentUserTripMember(TripPlan trip) {
+        if (trip == null || trip.getParticipantIds() == null || trip.getParticipantIds().isEmpty()) {
+            return false;
+        }
+        String currentUserId = resolveCurrentUserIdForTrip();
+        if (currentUserId == null || currentUserId.trim().isEmpty()) {
+            return false;
+        }
+        String normalizedUserId = currentUserId.trim();
+        for (String participantId : trip.getParticipantIds()) {
+            if (participantId != null && normalizedUserId.equals(participantId.trim())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Nullable
+    private String resolveCurrentUserIdForTrip() {
         String currentUserId = UserPreferences.getId(requireContext());
         if (currentUserId == null || currentUserId.trim().isEmpty()) {
             currentUserId = UserPreferences.getUsername(requireContext());
         }
-        return currentUserId != null && ownerId.trim().equals(currentUserId.trim());
+        return currentUserId;
     }
 
     private String formatDate(long millis) {

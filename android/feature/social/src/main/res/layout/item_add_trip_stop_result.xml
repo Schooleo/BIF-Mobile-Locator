@@ -12,6 +12,8 @@
         android:id="@+id/tv_place_name"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="2"
         android:textColor="?attr/colorTextPrimary"
         android:textSize="16sp"
         android:textStyle="bold" />

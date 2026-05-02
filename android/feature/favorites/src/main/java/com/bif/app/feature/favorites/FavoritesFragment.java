@@ -90,9 +90,11 @@ public class FavoritesFragment extends Fragment
             if (message != null && !message.trim().isEmpty()) {
                 if (IFavoriteRepository.ERROR_REFRESH_FAILED.equals(message)) {
                     AppSnackbar.show(requireContext(), R.string.favorite_refresh_failed);
+                    viewModel.consumeSyncMessage();
                     return;
                 }
                 AppSnackbar.show(requireContext(), message);
+                viewModel.consumeSyncMessage();
             }
         });
 
