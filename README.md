@@ -1,309 +1,314 @@
 # Bring In Friends
 
-![Android CI](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/android-ci.yml/badge.svg)
-![Android CD](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/android-cd.yml/badge.svg)
-![Server CI](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/server-ci.yml/badge.svg)
-![Server CD](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/server-cd.yml/badge.svg)
+![Android CI](https://github.com/Schooleo/BIF-Mobile-App/actions/workflows/android-ci.yml/badge.svg)
+![Android CD](https://github.com/Schooleo/BIF-Mobile-App/actions/workflows/android-cd.yml/badge.svg)
+![Server CI](https://github.com/Schooleo/BIF-Mobile-App/actions/workflows/server-ci.yml/badge.svg)
+![Server CD](https://github.com/Schooleo/BIF-Mobile-App/actions/workflows/server-cd.yml/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Server-green.svg)](https://developer.android.com)
 [![Language](https://img.shields.io/badge/Language-Java-orange.svg)](https://www.java.com)
 [![API](https://img.shields.io/badge/API-29%2B-brightgreen.svg?style=flat)](https://android-arsenal.com/api?level=29)
 
-**Bring In Friends** is an offline-first location social platform composed of:
+**Bring In Friends** is an offline-first social mapping platform built as:
 
-- A modular native Android app for map, favorites, social, profile, and auth experiences.
-- A Spring Boot backend for sync, user/group/trip/chat/favorite/place APIs via REST and GraphQL.
+- a modular native Android app under `android/`
+- a Spring Boot backend under `server/`
+- a local infrastructure stack for MongoDB, OSRM, Typesense, Ollama, and optional debug tooling
 
-The project is built in Java end-to-end and is organized for scalability, testing, and CI/CD automation.
+The current codebase centers on location sharing, favorites, social collaboration, trip planning, sync, and AI-assisted place/trip suggestions.
 
-## Core Features
+## Current Feature Set
 
-- **Offline-first sync workflow** with server-side change metadata and synchronization endpoints.
-- **Interactive mapping and place discovery** with map markers, place details, and location support.
-- **Favorites management** with add/remove actions and list/detail UI flows.
-- **Social features** including friend/group management and trip planning scaffolding.
-- **Auth and profile management** with local credential handling and profile editing UI.
-- **Dual API surface** on backend: REST for straightforward CRUD and GraphQL for nested sync-friendly payloads.
-- **Comprehensive validation pipeline**: security scanning, linting, testing, checkstyle, and coverage gates.
+### Android app
+
+- **Auth flows**: register with email OTP, login, refresh, forgot-password OTP, and change password.
+- **Map experience**: MapLibre-based map UI, place search, place detail/review flows, route rendering, and city map bundle download.
+- **Favorites**: synced favorites with notes, ratings, and detail views.
+- **Social**: friend requests, group management, shared chat, and friend-specific location/trip views.
+- **Trips**: collaborative trip creation, itinerary stop management, stop reordering, collaborator management, and trip cover image support.
+- **Offline-first data**: Room persistence, sync queue handling, WorkManager-backed uploads/cleanup, and conflict-aware sync integration.
+- **Profile management**: editable display profile and avatar metadata with remote media upload support.
+
+### Server
+
+- **REST + GraphQL APIs** for auth, users, groups, places, favorites, trips, chat, sync, reviews, routing, and AI.
+- **WebSocket chat endpoints** for realtime group messaging and acknowledgements.
+- **Place search stack** with configurable Mongo or Typesense providers.
+- **Route computation** through OSRM-backed route endpoints.
+- **Media upload signing** for Cloudinary-based avatar and trip media flows.
+- **Sync services** for favorites, trips, profiles, groups, reviews, chat, and friendship changes.
 
 ## AI Features
 
-The server includes an AI-assisted place suggestion and trip drafting flow under `server/src/main/java/com/bif/server/features/ai/`.
+The current AI implementation lives under `server/src/main/java/com/bif/server/features/ai/` and is consumed by Android GraphQL clients in `android/core`.
 
-### Current AI capabilities
+### Implemented capabilities
 
-- **Structured place-query extraction** from natural language into `keywords`, `category`, and `vibe`
-- **Grounded place suggestions** that only return server-known `Place` entities
-- **Preview trip drafting** that only uses validated candidate `placeId` values from the grounded place pool
-- **Typed GraphQL wrapper responses** with warnings and explicit failure codes
+- **Natural-language place suggestion** with extracted keywords, category/vibe hints, and grounded server-known `Place` results.
+- **AI trip drafting** that returns a typed draft plus validated candidate places.
+- **Location-aware place suggestions** through optional `latitude`, `longitude`, and `cityBias` GraphQL inputs.
+- **Failure-aware responses** that return `warnings` and `failureCode` instead of silent null-style failures.
 
-### AI hardening in place
+### Current GraphQL AI contract
 
-- **Schema-constrained generation** at the Ollama client and agent layer
-- **Post-generation validation** for stop count, duration bounds, total duration, unique `placeId` usage, and candidate membership
-- **AI request guardrails** for unauthorized and rate-limited requests
-- **Defensive transport handling** for malformed, empty, or error-bearing upstream Ollama payloads
-
-### Current AI GraphQL contract
-
-- `suggestPlacesFromQuery(query: String!): AiPlaceSuggestionResult!`
+- `suggestPlacesFromQuery(query: String!, latitude: Float, longitude: Float, cityBias: String): AiPlaceSuggestionResult!`
 - `draftTripFromQuery(query: String!): AiTripDraftResult!`
 
-Clients should always inspect `failureCode` and `warnings` before trusting the payload body.
+### AI hardening in code
+
+- schema-constrained Ollama JSON generation
+- request auth/rate-limit guards
+- post-generation validation for stop counts, durations, uniqueness, and candidate-place membership
+- defensive parsing and upstream failure handling
 
 ## Technology Stack
 
-### Android Application
+### Android
 
 - **Language**: Java
-- **Build**: Gradle (multi-module + version catalogs)
-- **Architecture**: Modular Clean Architecture
-  - `android/app`
-  - `android/core`
-  - `android/data`
-  - `android/domain`
-  - `android/feature/*`
-- **DI**: Dagger Hilt
+- **App package**: `com.bif.app`
+- **Build**: Gradle multi-module project with version catalogs
+- **Modules**: `app`, `core`, `data`, `domain`, `brouter`, `feature:*`
+- **Architecture**: modular clean-ish separation with repositories, Room entities/DAO, feature fragments, and shared core/network layers
+- **UI**: Android Fragments + Material Components + Navigation
+- **Dependency injection**: Hilt
 - **Persistence**: Room
-- **Networking**: Retrofit + Apollo GraphQL
-- **UI**: Android Fragments + Material components + Edge-to-Edge layout
-- **SDK**: Min API 29, Target API 36
+- **Networking**: Retrofit + Apollo Java GraphQL + WebSocket/STOMP support
+- **Maps/Routing**: MapLibre, OSRM integration, embedded BRouter assets/cache support
+- **Background work**: WorkManager + AndroidX Startup
+- **SDK**: minSdk 29, target/compileSdk 36
 
-### Spring Boot Server
+### Server
 
-- **Framework**: Spring Boot 4.x
-- **Language**: Java (toolchain JDK 21)
-- **Build**: Gradle wrapper `9.3.1`
-- **Data Store**: MongoDB
-- **APIs**:
-  - Spring Web (REST)
-  - Spring GraphQL
-- **Containerization**: Docker + GitHub Container Registry (GHCR)
-- **Quality/Security**: Checkstyle, JaCoCo (70% gate), Gitleaks, Snyk
+- **Framework**: Spring Boot 4.0.6
+- **Language / toolchain**: Java with JDK 21 toolchain
+- **Build**: Gradle + JaCoCo + Checkstyle
+- **Database**: MongoDB
+- **API surfaces**: Spring MVC REST, Spring GraphQL, Spring WebSocket
+- **Search**: Mongo search or optional Typesense
+- **Routing**: OSRM
+- **Media**: Cloudinary signed uploads
+- **Email**: Brevo-backed OTP email delivery
+- **Optional AI runtime**: Ollama
 
 ## Project Structure
 
 ```text
 BIF-Mobile-App/
-├── .github/workflows/       # CI/CD and security automation
+├── .github/workflows/           # CI/CD and security workflows
 ├── android/
-│   ├── app/                 # App shell, navigation, DI bootstrap
-│   ├── core/                # Shared utils, network, common UI resources
-│   ├── data/                # Repositories, Room DB/DAO, data sources, mappers
-│   ├── domain/              # Domain models and repository interfaces
-│   ├── feature/
-│   │   ├── auth/
-│   │   ├── favorites/
-│   │   ├── map/
-│   │   ├── profile/
-│   │   └── social/
-│   └── config/checkstyle/
-├── init-scripts/             # Local map/routing/bootstrap helpers
-├── map-data/                 # Generated map, routing, and place seed artifacts
+│   ├── app/                     # app shell, navigation, DI bootstrap
+│   ├── brouter/                 # bundled/offline routing support assets
+│   ├── core/                    # networking, auth/session, shared UI/resources
+│   ├── data/                    # repositories, Room DB, sync, workers, routing engines
+│   ├── domain/                  # domain models and repository contracts
+│   └── feature/
+│       ├── auth/
+│       ├── favorites/
+│       ├── map/
+│       ├── profile/
+│       └── social/
+├── init-scripts/                # map/bootstrap/cache generation scripts
+├── map-data/                    # OSM/Overture/OSRM/BRouter artifacts
 ├── server/
-│   ├── src/main/java/com/bif/server/
-│   │   ├── common/           # Shared config/models (sync metadata, mongo config)
-│   │   └── features/
-│   │       ├── ai/
-│   │       ├── auth/
-│   │       ├── chat/
-│   │       ├── favorite/
-│   │       ├── friendship/
-│   │       ├── group/
-│   │       ├── map/
-│   │       ├── place/
-│   │       ├── route/
-│   │       ├── search/
-│   │       ├── sync/
-│   │       ├── trip/
-│   │       └── user/
-│   ├── src/main/resources/
-│   │   ├── application.properties
-│   │   └── graphql/
-│   ├── src/test/             # Service and controller unit tests
-│   ├── gradle/wrapper/       # Server Gradle wrapper config
-│   ├── build.gradle
-│   └── Dockerfile
-├── Makefile                  # Local infrastructure shortcuts
+│   ├── src/main/java/com/bif/server/common/
+│   ├── src/main/java/com/bif/server/features/
+│   │   ├── ai/
+│   │   ├── auth/
+│   │   ├── chat/
+│   │   ├── favorite/
+│   │   ├── friendship/
+│   │   ├── group/
+│   │   ├── map/
+│   │   ├── media/
+│   │   ├── place/
+│   │   ├── route/
+│   │   ├── search/
+│   │   ├── sync/
+│   │   ├── trip/
+│   │   └── user/
+│   └── src/test/                # controller/service/unit/integration coverage
+├── docker-compose*.yml          # local, debug, and image-based stacks
+├── Makefile                     # local infra shortcuts
+├── PRIVACY_POLICY.md
 ├── TESTING_GUIDE.md
 └── README.md
 ```
 
-## CI/CD Pipeline
+## Local Setup
 
-This project uses split CI and CD workflows with security as a prerequisite.
-
-### Android Workflows
-
-- **CI**: `.github/workflows/android-ci.yml`
-  - Trigger: push/PR on `dev` for Android-related paths.
-  - Flow: `security -> lint + unit_test + checkstyle -> build debug artifact`.
-- **CD**: `.github/workflows/android-cd.yml`
-  - Trigger: manual `workflow_dispatch` with `version_number`.
-  - Flow: `security -> build release bundle -> publish to Play Store`.
-
-### Server Workflows
-
-- **CI**: `.github/workflows/server-ci.yml`
-  - Trigger: push/PR on `dev` and `main` for Server-related paths.
-  - Flow: `security -> checkstyle -> tests + jacoco verification`.
-- **CD**: `.github/workflows/server-cd.yml`
-  - Trigger: manual `workflow_dispatch` with `version_number`.
-  - Flow: `security -> package bootJar -> build/push container image + upload artifact`.
-
-### Reusable Security Workflow
-
-- **Workflow**: `.github/workflows/security.yml`
-- Runs **Gitleaks** first, then **Snyk**.
-- Scans are path-scoped (`android` or `server`) to avoid cross-project false failures.
-
-## Setup & Installation
-
-1. **Clone the repository**:
-
-    ```bash
-    git clone https://github.com/Schooleo/bif-mobile-app.git
-    ```
-
-2. **Android app setup**:
-    - Launch Android Studio.
-    - Open the `android` folder.
-    - Configure local secrets and keys (`google-services.json`, maps/places API keys).
-    - Build and run from Android Studio or CLI.
-
-    ```bash
-    cd android
-    ./gradlew assembleDebug
-    ```
-
-3. **Server setup**:
-    - Ensure Docker is available for local MongoDB compose setup.
-    - Run the Spring Boot server from the `server` folder.
-
-    ```bash
-    cd server
-    ./gradlew bootRun
-    ```
-
-4. **Run local infrastructure stack (recommended)**:
-
-- Use root `Makefile` helpers for a consistent local workflow.
-
-  ```bash
-  make env
-  make network-create
-  make up
-  ```
-
-- Optional profiles can be enabled from the same command:
-
-  ```bash
-  make up PROFILES="typesense ollama tailscale"
-  ```
-
-- Debug tooling profiles are available via:
-
-  ```bash
-  make up-debug PROFILES="db ai logs"
-  ```
-
-- Useful lifecycle shortcuts:
-
-  ```bash
-  make down          # stop and remove core services only
-  make down-all      # stop and remove all containers
-  make restart       # restart all non-debug containers
-  make restart-debug # restart all debug containers
-  ```
-
-1. **Initialize routing/place map data (OSRM + Overture)**:
-
-  ```bash
-  make init-maps
-  ```
-
-- This generates/updates data in `map-data/`:
-  - Overture places GeoJSON (`places.geojson`)
-  - OSM routing source (`merged.osm.pbf`)
-  - OSRM graph artifacts (`merged.osrm*`)
-
-- City-level extraction is also available:
-
-  ```bash
-  make init-city-map LAT=10.7769 LON=106.7009 RADIUS_KM=20
-  ```
-
-1. **Build BRouter offline cache for Android (optional)**:
-
-  ```bash
-  make init-brouter-cache
-  ```
-
-1. **Run server image compose (registry-based)**:
-
-  ```bash
-  docker compose -f docker-compose.image.yml pull
-  docker compose -f docker-compose.image.yml up -d
-  ```
-
-1. **Run tests locally**:
-
-    ```bash
-    cd android
-    ./gradlew test
-
-    cd ../server
-    ./gradlew test jacocoTestReport jacocoTestCoverageVerification
-    ```
-
-## AI Local Verification
-
-Use the AI smoke path only when local AI/search infrastructure is intentionally running.
-
-### Recommended setup
+### 1. Clone the repo
 
 ```bash
-make up PROFILES="ollama typesense"
+git clone https://github.com/Schooleo/BIF-Mobile-App.git
+cd BIF-Mobile-App
 ```
 
-### Optional smoke verification
+### 2. Prepare local configuration
+
+Root environment:
+
+```bash
+cp .env.example .env
+```
+
+Android local properties:
+
+```bash
+cp android/local.properties.example android/local.properties
+```
+
+Then update values you actually need:
+
+- `.env`: Mongo, Typesense, Ollama, Brevo, Cloudinary, Tailscale, and feature flags
+- `android/local.properties`: Android SDK path, `LOCAL_API_IP`, optional MapLibre style override, optional `CLOUDINARY_CLOUD_NAME`
+- `android/app/google-services.json`: required for local/CI Firebase-backed Android builds
+
+### 3. Start the local backend stack
+
+Core services:
+
+```bash
+make up
+```
+
+Enable optional profiles as needed:
+
+```bash
+make up PROFILES="osrm typesense ollama tailscale"
+```
+
+Debug-only tools:
+
+```bash
+make up-debug PROFILES="db ai logs"
+```
+
+Useful lifecycle commands:
+
+```bash
+make down
+make down-all
+make restart
+make restart-debug
+```
+
+### 4. Run the server locally without Docker (optional)
+
+```bash
+cd server
+./gradlew bootRun
+```
+
+### 5. Build the Android app
+
+```bash
+cd android
+./gradlew assembleDebug
+```
+
+## Map, Routing, and Search Data
+
+Initialize shared place/routing data:
+
+```bash
+make init-map
+```
+
+Generate a city-scoped bundle around a coordinate:
+
+```bash
+make init-city-map LAT=10.7769 LON=106.7009 RADIUS_KM=20
+```
+
+Build the Android BRouter cache archive:
+
+```bash
+make init-brouter-cache
+```
+
+## Testing and Verification
+
+### Android
+
+```bash
+cd android
+./gradlew test
+./gradlew lint
+./gradlew :app:checkstyleMain :app:checkstyleTest
+```
+
+Instrumented tests:
+
+```bash
+./gradlew connectedAndroidTest
+```
+
+### Server
+
+```bash
+cd server
+./gradlew clean test checkstyleMain checkstyleTest jacocoTestReport jacocoTestCoverageVerification
+```
+
+### Optional live AI smoke path
+
+Start the required services first:
+
+```bash
+make up PROFILES="typesense ollama"
+```
+
+Then run:
 
 ```bash
 make ai-smoke
 ```
 
-### Notes
+See `TESTING_GUIDE.md` for the fuller testing workflow.
 
-- The AI smoke path is **opt-in** and is not part of the default server unit-test flow.
-- Default smoke credentials come from seeded dev bootstrap data or a freshly registered user during manual testing.
-- Smaller local models can be used for device-constrained development, but final integration should still be validated separately against the production-target model before release.
+## CI/CD
+
+### Android workflows
+
+- **CI**: `.github/workflows/android-ci.yml`
+  - runs security checks, lint, unit tests, app checkstyle, and debug APK build
+- **CD**: `.github/workflows/android-cd.yml`
+  - builds release AABs, uploads artifacts, distributes to Firebase App Distribution, and can publish to Play Store
+
+### Server workflows
+
+- **CI**: `.github/workflows/server-ci.yml`
+  - runs security checks, checkstyle, tests, JaCoCo reporting, coverage verification, and bootJar build
+- **CD**: `.github/workflows/server-cd.yml`
+  - builds the server JAR, pushes GHCR container images, and uploads a versioned release artifact
+
+### Shared security workflow
+
+- **Workflow**: `.github/workflows/security.yml`
+- runs **Gitleaks** before **Snyk**
+- supports path-scoped Android or server scans
 
 ## Credits & Attribution
 
-Bring In Friends is built on top of open-source libraries and open geospatial datasets.
+Bring In Friends uses open-source software and open geospatial data, including:
 
-### Open-source projects
+- Spring Boot, Spring GraphQL, Spring Security, Spring WebSocket
+- MongoDB
+- AndroidX, Material Components, Navigation, Hilt, Room, WorkManager
+- Retrofit, Apollo Java, OkHttp
+- MapLibre Android SDK
+- OSRM
+- BRouter
+- Typesense
+- Ollama
+- Firebase Analytics
+- OpenStreetMap / Geofabrik extracts
+- Overture Maps Foundation place data
 
-- **Spring Boot**, **Spring GraphQL**, **Spring Security** for backend APIs and auth.
-- **MongoDB** for persistence.
-- **AndroidX**, **Material Components**, **Room**, **WorkManager**, **Navigation**, **Hilt** for Android architecture and UI.
-- **Retrofit** and **Apollo Java** for REST/GraphQL client networking.
-- **MapLibre Android SDK** for map rendering.
-- **OSRM** (`osrm/osrm-backend`) for route graph preprocessing and routing service.
-- **BRouter** for Android offline routing cache generation.
-- **Typesense** for optional full-text place search.
-- **Ollama** for optional local AI profile features.
-- **Firebase Analytics** for app usage analytics.
+Please preserve upstream attribution and license obligations when redistributing builds, data, or derived artifacts.
 
-### Data sources and map data usage
-
-- **OpenStreetMap** data is used as routing source material (downloaded via Geofabrik extracts).
-- **Geofabrik** provides the country/regional `.osm.pbf` files used in setup scripts.
-- **Overture Maps Foundation** place data is used for local place seed/export (`places.geojson`).
-
-Please comply with upstream attribution and license terms when redistributing builds, datasets, or derived artifacts.
-
-### Contributors
+## Contributors
 
 <table>
   <tr>

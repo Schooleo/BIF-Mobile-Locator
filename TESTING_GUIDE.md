@@ -1,280 +1,235 @@
 # Testing Guide
 
-This guide explains how to write, run, and automate tests for the Bring In Friends project across Android and Server modules.
+This guide reflects the current Bring In Friends test surfaces across the Android app, backend server, and optional live AI stack.
 
-## 1. Types of Tests
+## 1. Test Surfaces in This Repo
 
-In Android, there are two main categories of tests:
+### Android local unit tests (`src/test/java`)
 
-### A. Local Unit Tests (`src/test`)
+Use these for repository logic, mappers, sync handlers, utilities, ViewModels, and routing helpers.
 
-- **Where**: `android/**/src/test/java/`
-- **What**: Pure Java tests that run on your development machine's JVM (not on an Android device).
-- **Speed**: Very Fast.
-- **Use Case**: Testing business logic, calculations, and utility classes that don't depend on Android APIs (e.g., `Context`, `View`).
-- **Example**: `PlaceRepositoryTest.java`
+Current examples in the repo include:
 
-### B. Instrumented Tests (`src/androidTest`)
+- `android/core/src/test/.../DistanceUtilsTest.java`
+- `android/data/src/test/.../EmbeddedBRouterEngineTest.java`
+- `android/data/src/test/.../SyncManagerTest.java`
+- `android/feature/map/src/test/.../MapViewModelTest.java`
+- `android/feature/social/src/test/.../TripDetailViewModelTest.java`
 
-- **Where**: `android/**/src/androidTest/java/`
-- **What**: Tests that run on a hardware device or emulator.
-- **Speed**: Slow.
-- **Use Case**: Testing UI interactions (clicking buttons), accessing database/file system, or checking how the app behaves on a real OS.
-- **Example**: `MapViewModelInstrumentedTest.java`
+### Android instrumented tests (`src/androidTest/java`)
 
----
+Use these for Room/database integration, fragment/UI behavior, and Android framework-dependent flows.
 
-## 2. Anatomy of a Unit Test
+Current examples in the repo include:
 
-We use **JUnit 4** as our testing framework.
+- `android/data/src/androidTest/.../MapRepositoryInstrumentedTest.java`
+- `android/data/src/androidTest/.../FavoriteDaoInstrumentedTest.java`
+- `android/feature/favorites/src/androidTest/.../FavoritesFragmentInstrumentedTest.java`
+- `android/feature/map/src/androidTest/.../MapViewModelInstrumentedTest.java`
 
-### Key Annotations
+### Server tests (`server/src/test/java`)
 
-- `@Test`: Marks a method as a test case.
-- `@Before`: Runs before _each_ test (used for setup, e.g., initializing objects).
-- `@After`: Runs after _each_ test (used for teardown, e.g., closing streams).
-- `@BeforeClass`: Runs once before _all_ tests in the class (must be static).
-- `@AfterClass`: Runs once after _all_ tests in the class (must be static).
+The server test suite covers controllers, services, validators, search providers, sync handlers, and AI orchestration.
 
-### Commons Assertions
+Current examples in the repo include:
 
-JUnit provides various methods to assert expected results.
+- `server/src/test/.../features/auth/services/AuthServiceTest.java`
+- `server/src/test/.../features/place/services/PlaceServiceTest.java`
+- `server/src/test/.../features/search/services/TypesensePlaceSearchProviderTest.java`
+- `server/src/test/.../features/sync/services/SyncServiceTest.java`
+- `server/src/test/.../features/ai/services/AiOrchestratorServiceTest.java`
 
-| Assertion                             | Description                                                               | Example                                  |
-| :------------------------------------ | :------------------------------------------------------------------------ | :--------------------------------------- |
-| `assertEquals(expected, actual)`      | Checks if two values are equal. For doubles, provide a delta (tolerance). | `assertEquals(4, 2+2);`                  |
-| `assertNotEquals(unexpected, actual)` | Checks if values are NOT equal.                                           | `assertNotEquals(0, result);`            |
-| `assertTrue(condition)`               | Checks if a condition is true.                                            | `assertTrue(list.isEmpty());`            |
-| `assertFalse(condition)`              | Checks if a condition is false.                                           | `assertFalse(list.contains("invalid"));` |
-| `assertNotNull(object)`               | Checks that an object is not null.                                        | `assertNotNull(resultObj);`              |
-| `assertNull(object)`                  | Checks that an object IS null.                                            | `assertNull(error);`                     |
-| `assertSame(expected, actual)`        | Checks if two references point to the **same object** in memory.          | `assertSame(obj1, obj1);`                |
+### Optional live AI smoke test
 
-### Testing Exceptions
+This is an end-to-end verification path for the running server + Ollama + search provider setup.
 
-To verify that code throws an expected exception (e.g., invalid input):
+- Test class: `server/src/test/java/com/bif/server/features/ai/integration/AiLiveSmokeTest.java`
+- Helper command: `make ai-smoke`
 
-```java
-@Test(expected = IllegalArgumentException.class)
-public void testInvalidInput_throwsException() {
-    // This code is expected to throw IllegalArgumentException
-    DistanceUtils.calculateDistance(-1000, 0, 0, 0);
-}
-```
+## 2. Common Commands
 
-### Example Test Class
+### Android
 
-```java
-@Test
-public void searchPlaces_validQuery_returnsPlaceList() {
-    // 1. Arrange (Setup inputs)
-    String query = "HCMUS";
-    FakePlaceRepository repository = new FakePlaceRepository();
+Run all Android JVM tests:
 
-    // 2. Act (Run the code)
-    LiveData<List<Place>> results = repository.searchPlaces(query);
-
-    // 3. Assert (Verify output)
-    assertNotNull("Results should not be null", results);
-}
-```
-
----
-
-## 3. Running Tests
-
-### In Android Studio
-
-1. **Right-click** on a file (e.g., `DistanceUtilsTest`) or directory (`src/test`).
-2. Select **Run 'DistanceUtilsTest'**.
-3. View results in the **Run** window at the bottom.
-
-### Via Command Line
-
-- Run all unit tests:
-
-  ```bash
-  cd android
-  ./gradlew test
-  ```
-
-- Run specific test:
-
-  ```bash
-  cd android
-  ./gradlew :feature:map:testDebugUnitTest --tests "com.bif.app.feature.map.PlaceRepositoryTest"
-  ```
-
-### Viewing Test Reports
-
-After running tests via command line, a detailed HTML report is generated. You can open it immediately with the command:
-
-**Windows (PowerShell/CMD):**
-
-```powershell
-start android/app/build/reports/tests/testDebugUnitTest/index.html
-```
-
-**Or run the combination:**
-
-```powershell
+```bash
 cd android
 ./gradlew test
-start app/build/reports/tests/testDebugUnitTest/index.html
 ```
 
-### Server Tests
+Run Android lint:
 
-- Run server unit tests and coverage verification:
+```bash
+./gradlew lint
+```
 
-  ```bash
-  cd server
-  ./gradlew test jacocoTestReport jacocoTestCoverageVerification
-  ```
+Run app checkstyle:
 
-- Open JaCoCo HTML report (Windows):
+```bash
+./gradlew :app:checkstyleMain :app:checkstyleTest
+```
 
-  ```powershell
-  start server/build/reports/jacoco/test/html/index.html
-  ```
+Run all connected/instrumented tests:
 
-### Live AI Smoke Verification
+```bash
+./gradlew connectedAndroidTest
+```
 
-Use this only when Docker services are running and you want end-to-end proof for the Ollama + Typesense AI flow.
+Run a single Android test class:
 
-This smoke path is optional and is not part of the default server unit-test flow.
+```bash
+./gradlew :feature:map:testDebugUnitTest --tests "com.bif.app.feature.map.MapViewModelTest"
+```
 
-Prerequisites:
+Run a single instrumented test class:
 
-- In `.env`, set:
-  - `PLACE_SEARCH_PROVIDER=typesense`
-  - `TYPESENSE_ENABLED=true`
-  - `TYPESENSE_BOOTSTRAP_REINDEX_ON_STARTUP=true`
-- Start services:
+```bash
+./gradlew :feature:favorites:connectedDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=com.bif.app.feature.favorites.FavoritesFragmentInstrumentedTest
+```
 
-  ```bash
-  make up PROFILES="ollama typesense"
-  ```
+### Server
 
-- Wait for the server, Ollama, and Typesense to become healthy.
+Run the full server verification path used locally most often:
 
-Run the smoke path:
+```bash
+cd server
+./gradlew clean test checkstyleMain checkstyleTest jacocoTestReport jacocoTestCoverageVerification
+```
+
+Run only one server test class:
+
+```bash
+./gradlew test --tests "com.bif.server.features.ai.services.AiOrchestratorServiceTest"
+```
+
+Build the server JAR after tests:
+
+```bash
+./gradlew clean bootJar
+```
+
+## 3. Optional Live AI Smoke Workflow
+
+Use this only when you intentionally want runtime proof for the AI integration.
+
+### Prerequisites
+
+1. Copy and edit `.env` if needed.
+2. Ensure the server can reach Ollama.
+3. Start the required services:
+
+```bash
+make up PROFILES="ollama typesense"
+```
+
+4. Common environment values for this path:
+
+- `PLACE_SEARCH_PROVIDER=typesense`
+- `TYPESENSE_ENABLED=true`
+- `TYPESENSE_BOOTSTRAP_REINDEX_ON_STARTUP=true`
+- `AI_LIVE_SMOKE_ENABLED=true` is set by `make ai-smoke`
+
+### Run the smoke path
 
 ```bash
 make ai-smoke
 ```
 
-The smoke test registers a fresh temporary user through `/api/auth/register`, then uses the returned bearer token for authenticated AI GraphQL calls.
+### What it proves
 
-Optional overrides:
+- unauthorized AI access is rejected
+- authenticated `suggestPlacesFromQuery` works end-to-end
+- authenticated `draftTripFromQuery` works end-to-end
+- the running server can talk to the configured AI/search stack
 
-- `AI_LIVE_SMOKE_BASE_URL`
-- `AI_LIVE_SMOKE_PASSWORD`
+## 4. Reports and Outputs
 
-What the smoke path proves:
+### Android reports
 
-- unauthorized AI GraphQL access fails with `UNAUTHORIZED`
-- authenticated `suggestPlacesFromQuery` succeeds
-- authenticated `draftTripFromQuery` succeeds
+Typical Gradle HTML reports live under module-specific build folders, for example:
 
----
+- `android/app/build/reports/lint-results-debug.html`
+- `android/app/build/reports/tests/`
+- `android/feature/map/build/reports/tests/`
 
-## 4. CI/CD Integration
+### Server reports
 
-Our GitHub Actions workflows automatically protect the codebase.
+- JaCoCo HTML: `server/build/reports/jacoco/test/html/index.html`
+- JUnit XML: `server/build/test-results/test/`
+- Checkstyle: `server/build/reports/checkstyle/`
 
-- **Android CI**: `.github/workflows/android-ci.yml`
-  - Runs security, lint, unit tests, checkstyle, and debug build artifact.
-- **Server CI**: `.github/workflows/server-ci.yml`
-  - Runs security, checkstyle, tests, and JaCoCo verification.
-- **Effect**:
-  - Every time you push code or open a Pull Request, GitHub runs all unit tests.
-  - If **any** test fails, the build turns **red**, and deployment is blocked.
-  - This ensures no broken logic is ever deployed to testers.
+## 5. CI/CD Coverage
 
----
+### Android CI
 
-## 5. Naming Standards
+Workflow: `.github/workflows/android-ci.yml`
 
-To make tests readable and easy to debug, we use a structured **3-part naming convention** for test methods. This tells you exactly _what_ failed and _why_ without opening the code.
+Current pipeline:
 
-**Format**: `UnitOfWork_StateUnderTest_ExpectedBehavior`
+1. shared security workflow
+2. lint
+3. unit tests
+4. app checkstyle
+5. debug APK build
 
-### Part 1: Unit of Work
+### Server CI
 
-- **What**: The specific method, class, or feature being tested.
-- **Example**: `calculateDistance`, `login`, `isValidEmail`
+Workflow: `.github/workflows/server-ci.yml`
 
-### Part 2: State Under Test
+Current pipeline:
 
-- **What**: The specific condition, input, or scenario you are setting up.
-- **Context**: "With invalid password", "When network is down", "With generic inputs".
-- **Example**: `samePoint`, `invalidPassword`, `nullInput`
+1. shared security workflow
+2. checkstyle
+3. tests + JaCoCo coverage verification
+4. bootJar build
 
-### Part 3: Expected Behavior
+### Shared security workflow
 
-- **What**: The result you expect from the Unit of Work.
-- **Result**: What does the method return? What state changes? Does it throw an exception?
-- **Example**: `returnsZero`, `showsErrorMessage`, `throwsException`
+Workflow: `.github/workflows/security.yml`
 
-### Examples
+Current checks:
 
-| Bad Name    | Good Name                                  | Why?                                  |
-| :---------- | :----------------------------------------- | :------------------------------------ |
-| `test1`     | `searchPlaces_validQuery_returnsPlaceList` | Explicitly states logic.              |
-| `testLogin` | `login_invalidCredentials_showsToast`      | Specifies the scenario and UI result. |
-| `emailTest` | `validateEmail_missingAtSign_returnsFalse` | Describes the edge case being tested. |
+- Gitleaks
+- Snyk
 
----
+## 6. Test Naming and Scope Guidance
 
-## 6. Best Practices
+Use descriptive names in the format:
 
-1. **One Concept per Test**: Each test method should verify one specific behavior.
-2. **Descriptive Names**: `calculateDistance_samePoint_returnsZero` is better than `test1`.
-3. **Fast Feedback**: Run local unit tests frequently while coding.
-4. **Mock Dependencies**: When your code relies on Android classes (like `Context`), use a mocking framework like **Mockito** instead of relying on real device states.
+`unitOfWork_stateUnderTest_expectedBehavior`
 
----
+Examples from this codebase style:
 
-## 7. Mocking with Mockito
+- `calculateDistance_samePoint_returnsZero`
+- `draftTripFromQuery_invalidQuery_returnsFailure`
+- `updateMyProfile_invalidAvatarUrl_throwsException`
 
-**Mockito** is a framework that lets you create "fake" versions of dependencies. This is crucial when testing classes that depend on Android APIs (like `Context`, `SharedPreferences`, or `LocationManager`) which don't exist in a pure local JVM environment.
+Keep tests focused:
 
-### Core Concepts
+- one behavior per test when practical
+- prefer local unit tests first
+- use instrumented tests only when Android runtime behavior matters
+- use live smoke tests only for integration proof, not day-to-day development
 
-- **Mock**: A fake object that tracks interactions but does nothing by default.
-- **Stub (`when`)**: Telling the mock what to return when a method is called.
-- **Verify**: Checking if a method was called on the mock.
+## 7. Recommended Local Verification Before Merging
 
-### Example Scenario
+### Android-only changes
 
-Imagine a `MapViewModel` class that depends on an `IPlaceRepository`.
-
-```java
-import static org.mockito.Mockito.*;
-
-public class MapViewModelTest {
-
-    @Test
-    public void searchPlaces_callsRepository() {
-        // 1. Create a Mock of the dependency
-        IPlaceRepository mockPlaceRepo = mock(IPlaceRepository.class);
-        IMapRepository mockMapRepo = mock(IMapRepository.class);
-
-        // 2. Stub behavior: Return a specific value when method is called
-        when(mockPlaceRepo.searchPlaces(anyString())).thenReturn(new MutableLiveData<>());
-
-        // 3. Create the class under test, injecting the mocks
-        MapViewModel viewModel = new MapViewModel(mockMapRepo, mockPlaceRepo);
-        viewModel.onSearchQueryChanged("Coffee Shop");
-
-        // 4. Verify that the ViewModel actually requested the search via the mock
-        verify(mockPlaceRepo).searchPlaces("Coffee Shop");
-    }
-}
+```bash
+cd android
+./gradlew test lint :app:checkstyleMain :app:checkstyleTest
 ```
 
-### Tips
+Add `connectedAndroidTest` when the change touches Android framework behavior, Room, or fragment/UI flows.
 
-- Use `mockito-inline` (already included) to mock `final` classes and static methods if absolutely necessary.
-- Mock external dependencies (Database, Network), not your own data objects (Data classes).
+### Server-only changes
+
+```bash
+cd server
+./gradlew clean test checkstyleMain checkstyleTest jacocoTestReport jacocoTestCoverageVerification
+```
+
+### Cross-stack changes
+
+Run both suites above. Add `make ai-smoke` when the change affects AI contracts or the live AI integration path.
