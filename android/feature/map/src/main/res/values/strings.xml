@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="viewing_map">You are currently viewing the map!</string>
+    <string name="map_preview">Map Preview</string>
+    <string name="my_location">My Location</string>
+    <string name="default_place_name">Awesome Place</string>
+    <string name="default_address">123 Example Street</string>
+    <string name="default_rating">No ratings yet</string>
+    <string name="rating_summary">Rating Summary</string>
+    <string name="rating_total_count">0 reviews</string>
+    <string name="filter_all">All</string>
+    <string name="filter_5_star">5&#x2605;</string>
+    <string name="filter_4_star">4&#x2605;</string>
+    <string name="filter_3_star">3&#x2605;</string>
+    <string name="filter_2_star">2&#x2605;</string>
+    <string name="filter_1_star">1&#x2605;</string>
+    <string name="btn_place_details">View Details</string>
+    <string name="place_description">Place description</string>
+    <string name="favorites">Favorites</string>
+    <string name="about_header">About</string>
+    <string name="photos_header">Photos</string>
+    <string name="share_place">Share Place</string>
+    <string name="navigate_to_place">Route to Place</string>
+    <string name="trip_actions">Trip Actions</string>
+    <string name="trip_action_share_to_group">Send to chat</string>
+    <string name="trip_action_add_to_trip">Add to trip</string>
+    <string name="trip_action_cancel">Cancel</string>
+    <string name="trip_stop_time_choice_title">Add stop time</string>
+    <string name="trip_stop_time_choice_message">Choose how to add this stop to %1$s.</string>
+    <string name="trip_stop_set_time">Set time</string>
+    <string name="trip_stop_skip_time">Skip</string>
+    <string name="trip_stop_time_out_of_range">Selected date/time must be within this trip range.</string>
+    <string name="select_trip_to_add_place">Add to trip</string>
+    <string name="no_trip_available">No trip available.</string>
+    <string name="trip_title_fallback">Untitled Trip</string>
+    <string name="trip_stop_added_to_selected_trip">Added to %1$s.</string>
+    <string name="trip_stop_add_failed">Unable to add this place to trip.</string>
+    <string name="directions">Directions</string>
+    <string name="route_sheet_title">Route</string>
+    <string name="route_eta_label">Estimated time</string>
+    <string name="route_distance_label">Distance</string>
+    <string name="cancel_route">Cancel route</string>
+    <string name="follow_route">Follow route</string>
+    <string name="following_route">Following route</string>
+    <string name="stop_route">Stop</string>
+    <string name="distance_left_label">Distance left</string>
+    <string name="time_left_label">Time left</string>
+    <string name="route_location_required">Current location unavailable for route estimate.</string>
+    <string name="follow_route_location_required">Location permission is required to follow a route.</string>
+    <string name="route_active_place_sheet_blocked">Cancel the current route to open place details.</string>
+    <string name="no_group_available">No group available to share.</string>
+    <string name="select_group_to_share">Share to group</string>
+    <string name="maps_app_not_found">No map application found.</string>
+    <string name="route_estimating">Estimating route...</string>
+    <string name="no_map_data_downloaded">No map data downloaded</string>
+    <string name="route_not_supported_outside_vietnam">Not supported outside of Vietnam</string>
+    <string name="download_map">Download</string>
+    <string name="download_map_title">Download Offline Map</string>
+    <string name="download_map_message">Download map data for this city so routing can work offline?</string>
+    <string name="download_map_confirm">Download</string>
+    <string name="download_map_success">Offline map data downloaded</string>
+    <string name="download_map_failed">Could not download offline map data</string>
+    <string name="download_map_location_required">Current location unavailable for map download.</string>
+    <string name="download_map_in_progress">Downloading...</string>
+    <string name="your_review">Your review</string>
+    <string name="example_rating">Great place to visit!</string>
+    <string name="days_ago">2 days ago</string>
+    <string name="rate_this_place">Rate this place</string>
+    <string name="review_optional_hint">Your rating is saved locally and synced when online.</string>
+    <string name="review_comment_hint">Share your experience (optional)</string>
+    <string name="add_review_title">Add Review</string>
+    <string name="edit_review_title">Edit Review</string>
+    <string name="submit_review">Submit</string>
+    <string name="provide_rating_error">Please provide a rating</string>
+    <string name="search_results_in_area">Showing results in %1$s</string>
+    <string name="trip_completed_title">Trip Completed!</string>
+    <string name="trip_completed_subtitle">You have arrived at your destination</string>
+    <string name="trip_completed_close">Close trip summary</string>
+    <string name="trip_completed_destination">Destination</string>
+    <string name="trip_completed_travel_time">Travel Time</string>
+    <string name="trip_completed_distance">Distance</string>
+    <string name="trip_completed_timeline">Trip Timeline</string>
+    <string name="trip_completed_started">Started</string>
+    <string name="trip_completed_arrived">Arrived</string>
+    <string name="trip_completed_view_destination_details">View Destination Details</string>
+    <string name="trip_completed_unknown_destination">Destination</string>
+    <string name="trip_completed_unknown_address">Address unavailable</string>
+    <string name="trip_completed_duration_format">%1$d min %2$d sec</string>
+    <string name="trip_completed_unknown_duration">--</string>
+    <string name="trip_completed_unknown_distance">--</string>
+    <string name="trip_completed_unknown_time">--:--</string>
+    <string name="trip_previous_place">Previous place</string>
+    <string name="trip_next_place">Next place</string>
+    <string name="trip_route_back_to_trip">Back to trip</string>
+    <string name="trip_stop_close_detail">Close trip stop detail</string>
+    <string name="trip_stop_time_format">%1$s · %2$s</string>
+    <string name="trip_stop_time_day_pattern">EEE, MMM dd</string>
+    <string name="trip_stop_time_clock_pattern">HH:mm</string>
+    <string-array name="search_area_patterns">
+        <item>phan thiet|Phan Thiet</item>
+        <item>da lat|Da Lat</item>
+        <item>dalat|Da Lat</item>
+        <item>ha noi|Ha Noi</item>
+        <item>hanoi|Ha Noi</item>
+        <item>ho chi minh|TPHCM</item>
+        <item>saigon|TPHCM</item>
+        <item>sai gon|TPHCM</item>
+        <item>tphcm|TPHCM</item>
+    </string-array>
+</resources>

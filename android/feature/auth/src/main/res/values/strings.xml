@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sign_up">Sign up</string>
+    <string name="sign_in">Sign in</string>
+    <string name="register">Register</string>
+    <string name="forgot_password">Forgot password?</string>
+    <string name="forgot_password_title">Forgot Password</string>
+    <string name="forgot_password_subtitle">Enter your email to receive a verification code</string>
+    <string name="send_otp">Send OTP</string>
+    <string name="back_to_login">Back to Login</string>
+    <string name="email_required">Email is required</string>
+    <string name="invalid_email_format">Please enter a valid email</string>
+    <string name="request_otp_failed">Request OTP failed</string>
+    <string name="otp_screen_title">OTP Verification</string>
+    <string name="otp_sent_to">An OTP was sent to %1$s</string>
+    <string name="otp_subtitle">We\'ve sent a 6-digit code to</string>
+    <string name="otp_hint">000000</string>
+    <string name="verify_code">Verify Code</string>
+    <string name="resend_otp">Resend Code</string>
+    <string name="resend_otp_countdown">Resend Code (%1$ds)</string>
+    <string name="otp_resent">OTP has been resent</string>
+    <string name="otp_invalid">Invalid or expired OTP</string>
+    <string name="otp_verification_failed">OTP verification failed</string>
+    <string name="already_have_account">Already have an account?</string>
+    <string name="email">Email</string>
+    <string name="password">Password</string>
+    <string name="registration_successful">Registration successful</string>
+    <string name="email_already_used">Email already used</string>
+    <string name="invalid_registration_data">Invalid registration data</string>
+    <string name="registration_failed">Registration failed</string>
+    <string name="network_error_try_again">Network error. Please try again.</string>
+    <string name="login_successful">Login successful!</string>
+    <string name="invalid_login_data">Invalid login data</string>
+    <string name="login_failed">Login failed</string>
+    <string name="reset_password_title">Create New Password</string>
+    <string name="reset_password_subtitle">Enter your new password</string>
+    <string name="new_password_hint">New Password</string>
+    <string name="confirm_password_hint">Confirm Password</string>
+    <string name="reset_password_button">Reset Password</string>
+    <string name="password_too_short">Password must be at least 8 characters</string>
+    <string name="passwords_do_not_match">Passwords do not match</string>
+    <string name="password_reset_success">Password reset successfully!</string>
+    <string name="password_reset_failed">Password reset failed</string>
+</resources>

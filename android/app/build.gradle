@@ -1,0 +1,183 @@
+plugins {
+    alias(libs.plugins.android.application)
+    id 'checkstyle'
+    id 'com.google.gms.google-services'
+    id 'com.google.dagger.hilt.android'
+
+    alias(libs.plugins.androidx.navigation.safeargs)
+}
+
+checkstyle {
+    toolVersion = '11.0.0'
+    configFile = rootProject.file('config/checkstyle/checkstyle.xml')
+}
+
+android {
+    namespace 'com.bif.app'
+    compileSdk 36
+
+    def localProperties = new Properties()
+    def localPropertiesFile = rootProject.file('local.properties')
+    if (localPropertiesFile.exists()) {
+        localProperties.load(new FileInputStream(localPropertiesFile))
+    }
+    def localApiIp = localProperties.getProperty('LOCAL_API_IP', '"10.0.2.2"')
+    def cloudinaryCloudName = localProperties.getProperty('CLOUDINARY_CLOUD_NAME', '""')
+
+    defaultConfig {
+        def buildNumber = project.hasProperty('BUILD_NUMBER') ? project.getProperty('BUILD_NUMBER').toInteger() : 1
+
+        applicationId "com.bif.app"
+        minSdk 29
+        targetSdk 36
+        versionCode buildNumber
+        versionName "1.0.${buildNumber}"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        multiDexEnabled true
+        ndk {
+            debugSymbolLevel 'FULL'
+        }
+
+        buildConfigField "String", "GRAPHQL_URL", "\"http://${localApiIp.replaceAll('"', '')}:8080/graphql\""
+        buildConfigField "String", "REST_BASE_URL", "\"http://${localApiIp.replaceAll('"', '')}:8080/api/\""
+        buildConfigField "String", "CLOUDINARY_CLOUD_NAME", "\"${cloudinaryCloudName.replaceAll('"', '')}\""
+    }
+
+    signingConfigs {
+        debug {
+            def keystoreFile = file("debug.keystore")
+            if (keystoreFile.exists()) {
+                storeFile keystoreFile
+                storePassword "android"
+                keyAlias "androiddebugkey"
+                keyPassword "android"
+            }
+        }
+        release {
+            storeFile = file("keystore.jks")
+            storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+            keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+            keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+        }
+    }
+
+    android.buildFeatures.buildConfig = true
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    packaging {
+        resources {
+            excludes += [
+                    'META-INF/LICENSE.md',
+                    'META-INF/LICENSE-notice.md',
+                    'META-INF/NOTICE.md',
+                    'META-INF/NOTICE-notice.md'
+            ]
+        }
+    }
+
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
+}
+
+dependencies {
+    // Main Modules
+    implementation project(":domain")
+    implementation project(":data")
+    implementation project(":core")
+
+    // Feature Modules
+    implementation project(":feature:map")
+    implementation project(":feature:auth")
+    implementation project(":feature:social")
+    implementation project(":feature:favorites")
+    implementation project(":feature:profile")
+
+    implementation libs.appcompat
+    implementation libs.apollo.java.client
+    implementation libs.retrofit.core
+    implementation libs.retrofit.gson
+    implementation libs.okhttp.logging
+    implementation libs.cloudinary.android
+    implementation libs.glide
+    implementation libs.timber
+    implementation libs.material
+    implementation libs.activity
+    implementation libs.constraintlayout
+    implementation libs.navigation.fragment.ktx
+    implementation libs.navigation.ui.ktx
+    implementation libs.navigation.runtime
+    testImplementation libs.junit
+    testImplementation libs.mockito.core
+    testImplementation libs.core.testing
+    testImplementation libs.mockito.inline
+    androidTestImplementation libs.ext.junit
+    androidTestImplementation libs.espresso.core
+
+    // Hilt
+    implementation libs.hilt.work
+    implementation libs.hilt.android
+    annotationProcessor libs.hilt.compiler
+
+    // For instrumentation tests
+    androidTestImplementation libs.hilt.android.testing
+    androidTestImplementation libs.core.testing
+    androidTestAnnotationProcessor libs.hilt.compiler
+
+    // For local unit tests
+    testImplementation libs.hilt.android.testing
+    testAnnotationProcessor libs.hilt.compiler
+    debugImplementation libs.fragment.testing
+
+    // Import the Firebase BoM
+    implementation platform(libs.firebase.bom)
+
+    // TODO: Add the dependencies for Firebase products
+    // When using the BoM, don't specify versions in Firebase dependencies
+    implementation libs.firebase.analytics
+
+    // Add the dependencies for any other desired Firebase products
+    // https://firebase.google.com/docs/android/setup#available-libraries
+
+    // Room
+    implementation libs.room.runtime
+    annotationProcessor libs.room.compiler
+
+    // WorkManager / Startup
+    implementation libs.work.runtime
+    implementation libs.startup.runtime
+    annotationProcessor libs.glide.compiler
+
+}
+
+tasks.register('checkstyleMain', Checkstyle) {
+    description = 'Runs Checkstyle on main Java sources.'
+    group = 'verification'
+    source = fileTree('src/main/java')
+    include '**/*.java'
+    classpath = files()
+}
+
+tasks.register('checkstyleTest', Checkstyle) {
+    description = 'Runs Checkstyle on test Java sources.'
+    group = 'verification'
+    source = files('src/test/java', 'src/androidTest/java')
+    include '**/*.java'
+    classpath = files()
+}

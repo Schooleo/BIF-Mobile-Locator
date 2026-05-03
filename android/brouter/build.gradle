@@ -1,0 +1,24 @@
+plugins {
+    id 'java-library'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+sourceSets {
+    main {
+        java.srcDirs = [
+                '../vendor/brouter/brouter-codec/src/main/java',
+                '../vendor/brouter/brouter-core/src/main/java',
+                '../vendor/brouter/brouter-expressions/src/main/java',
+                '../vendor/brouter/brouter-mapaccess/src/main/java',
+                '../vendor/brouter/brouter-util/src/main/java'
+        ]
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

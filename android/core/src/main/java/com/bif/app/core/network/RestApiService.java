@@ -1,0 +1,257 @@
+package com.bif.app.core.network;
+
+import com.bif.app.core.network.dto.auth.AuthResponse;
+import com.bif.app.core.network.dto.auth.AuthStateResponse;
+import com.bif.app.core.network.dto.auth.ChangePasswordRequest;
+import com.bif.app.core.network.dto.auth.ChangePasswordResponse;
+import com.bif.app.core.network.dto.auth.ForgotPasswordRequestOtpResponse;
+import com.bif.app.core.network.dto.auth.RequestOtpRequest;
+import com.bif.app.core.network.dto.auth.ResetPasswordRequest;
+import com.bif.app.core.network.dto.auth.ResetPasswordResponse;
+import com.bif.app.core.network.dto.auth.VerifyOtpRequest;
+import com.bif.app.core.network.dto.auth.VerifyOtpResponse;
+import com.bif.app.core.network.dto.auth.LoginRequest;
+import com.bif.app.core.network.dto.auth.RefreshTokenRequest;
+import com.bif.app.core.network.dto.auth.RegisterRequest;
+import com.bif.app.core.network.dto.auth.RegisterOtpRequest;
+import com.bif.app.core.network.dto.auth.RegisterOtpResponse;
+import com.bif.app.core.network.dto.auth.RegisterVerifyOtpRequest;
+import com.bif.app.core.network.dto.auth.RegisterVerifyOtpResponse;
+import com.bif.app.core.network.dto.favorite.FavoriteResponseDto;
+import com.bif.app.core.network.dto.friendship.CreateFriendRequestDto;
+import com.bif.app.core.network.dto.friendship.FriendshipApiModel;
+import com.bif.app.core.network.dto.media.UploadSignatureResponseDto;
+import com.bif.app.core.network.dto.profile.ProfileMetadataResponse;
+import com.bif.app.core.network.dto.profile.UpdateMyProfileRequest;
+import com.bif.app.core.network.dto.group.AddMemberRequestDto;
+import com.bif.app.core.network.dto.group.CreateGroupRequestDto;
+import com.bif.app.core.network.dto.group.GroupApiModel;
+import com.bif.app.core.network.dto.user.UserApiModel;
+import com.bif.app.core.network.dto.group.UpdateGroupRequestDto;
+import com.bif.app.core.network.dto.group.UpdateMemberRoleRequestDto;
+import com.bif.app.core.network.dto.chat.ChatMessageDto;
+import com.bif.app.core.network.dto.trip.TripPlanDto;
+import com.bif.app.core.network.dto.trip.TripStopDto;
+import com.bif.app.core.network.dto.place.PlaceDto;
+import com.bif.app.core.network.dto.place.PlaceSearchRequestDTO;
+import com.bif.app.core.network.dto.place.PlaceReviewDto;
+import com.bif.app.core.network.dto.place.PlaceResolveRequestDto;
+import com.bif.app.core.network.dto.place.PlaceResolveResponseDto;
+import com.bif.app.core.network.dto.route.RouteRequestDto;
+import com.bif.app.core.network.dto.route.RouteResponseDto;
+import com.bif.app.core.network.dto.sync.SyncRequestDto;
+import com.bif.app.core.network.dto.sync.SyncResponseDto;
+
+import okhttp3.MultipartBody;
+import okhttp3.ResponseBody;
+import java.util.List;
+import retrofit2.Call;
+import retrofit2.http.Body;
+import retrofit2.http.DELETE;
+import retrofit2.http.GET;
+import retrofit2.http.Multipart;
+import retrofit2.http.PATCH;
+import retrofit2.http.POST;
+import retrofit2.http.PUT;
+import retrofit2.http.Part;
+import retrofit2.http.Path;
+import retrofit2.http.Query;
+import retrofit2.http.Streaming;
+
+public interface RestApiService {
+
+    @POST("auth/register")
+    Call<AuthResponse> register(@Body RegisterRequest request);
+
+        @POST("auth/register/request-otp")
+        Call<RegisterOtpResponse> requestRegisterOtp(@Body RegisterOtpRequest request);
+
+        @POST("auth/register/verify-otp")
+        Call<RegisterVerifyOtpResponse> verifyRegisterOtp(@Body RegisterVerifyOtpRequest request);
+
+    @POST("auth/login")
+    Call<AuthResponse> login(@Body LoginRequest request);
+
+    @POST("auth/refresh")
+    Call<AuthResponse> refresh(@Body RefreshTokenRequest request);
+
+    @POST("auth/logout")
+    Call<Void> logout(@Body RefreshTokenRequest request);
+
+        @POST("auth/change-password")
+        Call<ChangePasswordResponse> changePassword(@Body ChangePasswordRequest request);
+
+    @GET("auth/me")
+    Call<AuthStateResponse> getAuthState();
+
+        @POST("auth/forgot-password/request-otp")
+        Call<ForgotPasswordRequestOtpResponse> requestForgotPasswordOtp(@Body RequestOtpRequest request);
+
+        @POST("auth/forgot-password/verify-otp")
+        Call<VerifyOtpResponse> verifyForgotPasswordOtp(@Body VerifyOtpRequest request);
+
+        @POST("auth/forgot-password/reset")
+        Call<ResetPasswordResponse> resetForgotPassword(@Body ResetPasswordRequest request);
+
+    @GET("favorites/me")
+    Call<List<FavoriteResponseDto>> getMyFavorites();
+
+    @GET("users/me/profile-metadata")
+    Call<ProfileMetadataResponse> getMyProfileMetadata();
+
+    @PATCH("users/me/profile")
+    Call<ProfileMetadataResponse> updateMyProfile(@Body UpdateMyProfileRequest request);
+
+    @GET("v1/media/upload-signature")
+    Call<UploadSignatureResponseDto> getUploadSignature(
+            @Query("type") String type,
+            @Query("referenceId") String referenceId);
+
+    // Example: A multipart POST request for uploading a profile picture
+    @Multipart
+    @POST("users/avatar")
+    Call<Void> uploadAvatar(@Part MultipartBody.Part image);
+
+    @GET("users")
+    Call<List<UserApiModel>> getUsers();
+
+    @GET("friends")
+    Call<List<UserApiModel>> getFriends();
+
+    @DELETE("friends/{id}")
+    Call<Void> unfriend(@Path("id") String id);
+
+    @GET("friends/requests/incoming")
+    Call<List<FriendshipApiModel>> getIncomingFriendRequests();
+
+    @GET("friends/requests/outgoing")
+    Call<List<FriendshipApiModel>> getOutgoingFriendRequests();
+
+    @POST("friends/requests")
+    Call<FriendshipApiModel> sendFriendRequest(@Body CreateFriendRequestDto request);
+
+    @POST("friends/{id}/accept")
+    Call<FriendshipApiModel> acceptFriendRequest(@Path("id") String id);
+
+    @POST("friends/{id}/reject")
+    Call<FriendshipApiModel> rejectFriendRequest(@Path("id") String id);
+
+    @GET("groups/user/{userId}")
+    Call<List<GroupApiModel>> getGroupsByUser(@Path("userId") String userId);
+
+    @GET("groups/{groupId}")
+    Call<GroupApiModel> getGroupById(@Path("groupId") String groupId);
+
+    @POST("groups")
+    Call<GroupApiModel> createGroup(@Body CreateGroupRequestDto request);
+
+    @PUT("groups/{groupId}")
+    Call<GroupApiModel> updateGroup(
+            @Path("groupId") String groupId,
+            @Query("actorId") String actorId,
+            @Body UpdateGroupRequestDto request);
+
+    @PATCH("groups/{groupId}")
+    Call<GroupApiModel> patchGroup(
+            @Path("groupId") String groupId,
+            @Query("actorId") String actorId,
+            @Body UpdateGroupRequestDto request);
+
+    @DELETE("groups/{groupId}")
+    Call<Void> deleteGroup(
+            @Path("groupId") String groupId,
+            @Query("actorId") String actorId);
+
+    @DELETE("groups/{groupId}/members/{memberId}")
+    Call<GroupApiModel> removeMember(
+            @Path("groupId") String groupId,
+            @Path("memberId") String memberId,
+            @Query("actorId") String actorId);
+
+    @POST("groups/{groupId}/members")
+    Call<GroupApiModel> addMember(
+            @Path("groupId") String groupId,
+            @Query("actorId") String actorId,
+            @Body AddMemberRequestDto request);
+
+    @PATCH("groups/{groupId}/members/{memberId}/role")
+    Call<GroupApiModel> updateMemberRole(
+            @Path("groupId") String groupId,
+            @Path("memberId") String memberId,
+            @Query("actorId") String actorId,
+            @Body UpdateMemberRoleRequestDto request);
+
+    // @GET("config/features")
+    // Call<FeatureConfig> getFeatureConfig();
+    // Places
+        @POST("places/search")
+        Call<List<PlaceDto>> searchServerPlaces(@Body PlaceSearchRequestDTO request);
+
+    @POST("places")
+    Call<PlaceDto> upsertPlace(@Body PlaceDto place);
+
+    @POST("places/from-search")
+    Call<PlaceDto> saveFromSearch(@Body PlaceDto place);
+
+    @DELETE("places/{id}")
+    Call<Void> deletePlace(@Path("id") String id);
+
+    @POST("places/resolve")
+    Call<PlaceResolveResponseDto> resolvePlace(@Body PlaceResolveRequestDto request);
+
+        @GET("places/{id}")
+        Call<PlaceDto> getPlaceById(@Path("id") String placeId);
+
+    @GET("places/{id}/reviews")
+    Call<List<PlaceReviewDto>> getPlaceReviews(@Path("id") String placeId);
+
+    @POST("places/{id}/reviews")
+    Call<PlaceReviewDto> addReview(@Path("id") String placeId,
+            @Body PlaceReviewDto review);
+
+    @PUT("places/{id}/reviews/me")
+    Call<PlaceReviewDto> updateMyReview(@Path("id") String placeId,
+            @Body PlaceReviewDto review);
+
+    @DELETE("places/{id}/reviews/me")
+    Call<Void> deleteMyReview(@Path("id") String placeId);
+
+    @GET("chat/group/{groupId}")
+    Call<List<ChatMessageDto>> getChatMessages(@Path("groupId") String groupId);
+
+    @POST("chat")
+    Call<ChatMessageDto> postChatMessage(@Body ChatMessageDto message);
+
+    @PATCH("chat/{id}/confirm")
+    Call<ChatMessageDto> confirmMessage(@Path("id") String id);
+
+    @GET("trips/group/{groupId}")
+    Call<List<TripPlanDto>> getTripsByGroup(@Path("groupId") String groupId);
+
+        @GET("trips")
+        Call<List<TripPlanDto>> getTrips();
+
+    @POST("trips/{tripId}/stops")
+    Call<TripPlanDto> addTripStop(@Path("tripId") String tripId,
+            @Body TripStopDto stop);
+
+    @DELETE("trips/{tripId}/stops/{stopId}")
+    Call<TripPlanDto> removeTripStop(@Path("tripId") String tripId,
+            @Path("stopId") String stopId);
+
+    @PUT("trips/{tripId}/stops/reorder")
+    Call<TripPlanDto> rearrangeTripStops(@Path("tripId") String tripId,
+            @Body List<TripStopDto> stops);
+
+    @POST("routes")
+    Call<RouteResponseDto> routeTrip(@Body RouteRequestDto request);
+
+    @Streaming
+    @GET("maps/city")
+    Call<ResponseBody> downloadCityMap(
+            @Query("lat") double latitude,
+            @Query("lon") double longitude);
+
+    @POST("sync")
+    Call<SyncResponseDto> sync(@Body SyncRequestDto request);
+}

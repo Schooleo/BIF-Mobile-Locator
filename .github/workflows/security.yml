@@ -1,0 +1,65 @@
+name: Security Checks
+
+permissions:
+  contents: read
+  security-events: write
+
+on:
+  workflow_call:
+    inputs:
+      scan_path:
+        description: "Path to scan (android or server)"
+        required: true
+        type: string
+    secrets:
+      SNYK_TOKEN:
+        required: true
+
+jobs:
+  gitleaks:
+    name: Gitleaks Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run Gitleaks
+        uses: zricethezav/gitleaks-action@v2
+        with:
+          args: detect --source=${{ inputs.scan_path }} --verbose --redact
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  snyk:
+    name: Snyk Scan
+    needs: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ${{ inputs.scan_path }}/gradlew
+
+      - name: Set up Snyk
+        uses: snyk/actions/setup@master
+
+      - name: Run Snyk Test
+        id: snyk_test
+        working-directory: ${{ inputs.scan_path }}
+        run: |
+          set +e
+          snyk test --all-sub-projects --detection-depth=5 --json-file-output=snyk-results.json --sarif-file-output=snyk.sarif
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Upload result to GitHub Code Scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ inputs.scan_path }}/snyk.sarif

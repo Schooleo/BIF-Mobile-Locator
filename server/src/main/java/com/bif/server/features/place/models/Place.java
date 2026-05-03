@@ -1,0 +1,43 @@
+package com.bif.server.features.place.models;
+
+import com.bif.server.common.models.Location;
+import com.bif.server.common.models.SyncDocument;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+
+import java.util.List;
+
+@Data
+@EqualsAndHashCode(callSuper = true)
+@Document(collection = "places")
+public class Place extends SyncDocument {
+    @Id
+    private String id;
+    private String name;
+    private String address;
+    private String country;
+    private String region;
+    private String locality;
+    private String city;
+    private String district;
+    private double rating;
+    private Location location;
+    private List<String> tags;
+    private String categoryMain;
+    private List<String> categoryAlternates;
+    private String nameNormalized;
+    private String addressNormalized;
+    private String placeSource;
+    private String persistedByAction;
+    private String persistedByUserId;
+    private int reviewCount;
+    private String photoUrl;
+
+    @org.springframework.data.mongodb.core.index.Indexed
+    private boolean isOrphaned = false;
+
+    @org.springframework.data.mongodb.core.index.Indexed(expireAfterSeconds = 86400) // TTL Index: Auto delete after 24 hours
+    private java.time.Instant orphanedAt;
+}

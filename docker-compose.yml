@@ -1,0 +1,174 @@
+services:
+  tailscale:
+    image: tailscale/tailscale:stable
+    container_name: tailscale-router
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    profiles:
+      - tailscale
+    depends_on:
+      - bif-server
+    network_mode: "service:bif-server"
+    env_file:
+      - .env
+    environment:
+      TS_HOSTNAME: ${TS_HOSTNAME:-bif-server}
+      TS_AUTHKEY: ${TS_AUTHKEY}
+      TS_STATE_DIR: ${TS_STATE_DIR:-/var/lib/tailscale}
+      TS_USERSPACE: ${TS_USERSPACE:-true}
+    volumes:
+      - ./tailscale-state:${TS_STATE_DIR:-/var/lib/tailscale}
+    mem_limit: ${TAILSCALE_MEM_LIMIT:-128m}
+    restart: on-failure
+
+  bif-server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: bif-server-dev
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./map-data:/map-data
+    env_file:
+      - .env
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
+      SPRING_MONGODB_URI: "${SPRING_MONGODB_URI:-mongodb://admin:pass@mongodb:27017/bif_db?authSource=admin}"
+      PLACE_SEARCH_PROVIDER: ${PLACE_SEARCH_PROVIDER:-mongo}
+      JAVA_TOOL_OPTIONS: "${BIF_SERVER_JAVA_TOOL_OPTIONS:--XX:InitialRAMPercentage=25.0 -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -XX:+UseStringDeduplication -XX:+ExitOnOutOfMemoryError}"
+      TYPESENSE_ENABLED: ${TYPESENSE_ENABLED:-false}
+      TYPESENSE_PROTOCOL: ${TYPESENSE_PROTOCOL:-http}
+      TYPESENSE_HOST: ${TYPESENSE_HOST:-typesense}
+      TYPESENSE_PORT: ${TYPESENSE_PORT:-8108}
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-dev-typesense-key}
+      TYPESENSE_BOOTSTRAP_REINDEX_ON_STARTUP: ${TYPESENSE_BOOTSTRAP_REINDEX_ON_STARTUP:-false}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OSRM_BASE_URL: ${OSRM_BASE_URL:-http://osrm:5000}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    mem_limit: ${BIF_SERVER_MEM_LIMIT:-1024m}
+    restart: on-failure
+
+  mongodb:
+    image: mongo:latest
+    container_name: bif-mongodb
+    env_file:
+      - .env
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-pass}
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "--eval",
+          "db.adminCommand('ping').ok",
+          "mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-pass}@localhost:27017/admin",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 6
+    mem_limit: ${MONGODB_MEM_LIMIT:-768m}
+    restart: on-failure
+
+  osrm:
+    image: osrm/osrm-backend:latest
+    container_name: bif-osrm
+    profiles:
+      - osrm
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./map-data:/data
+    env_file:
+      - .env
+    command: "osrm-routed --algorithm mld /data/merged.osrm"
+    mem_limit: ${OSRM_MEM_LIMIT:-2048m}
+    restart: on-failure
+
+  typesense:
+    image: typesense/typesense:30.1
+    container_name: bif-typesense
+    profiles:
+      - typesense
+    ports:
+      - "8108:8108"
+    command: >
+      --data-dir /data
+      --api-key=${TYPESENSE_API_KEY:-dev-typesense-key}
+      --enable-cors
+    volumes:
+      - typesense_data:/data
+    env_file:
+      - .env
+    mem_limit: ${TYPESENSE_MEM_LIMIT:-1024m}
+    restart: on-failure
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: bif-ollama
+    profiles:
+      - ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    env_file:
+      - .env
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: ${OLLAMA_MEM_LIMIT:-8192m}
+    restart: on-failure
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: bif-ollama-init
+    profiles:
+      - ollama
+    depends_on:
+      ollama:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      OLLAMA_HOST: ${OLLAMA_BASE_URL:-http://ollama:11434}
+    entrypoint: /bin/sh
+    command: -c "ollama pull ${OLLAMA_MODEL:-llama3.1}"
+    mem_limit: ${OLLAMA_INIT_MEM_LIMIT:-256m}
+
+volumes:
+  mongo_data:
+  osrm_data:
+  typesense_data:
+  ollama_data:
+
+networks:
+  default:
+    name: shared-dev-network
+    external: true

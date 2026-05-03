@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="edit_profile">Edit Profile</string>
+    <string name="app_settings">APP SETTINGS</string>
+    <string name="dark_mode">Dark Mode</string>
+    <string name="account">ACCOUNT</string>
+    <string name="personal_information">Personal Information</string>
+    <string name="privacy_security">Privacy &amp; Security</string>
+    <string name="log_out">Log Out</string>
+    <string name="bxa_user">BXA User</string>
+    <string name="user_email">user@example.com</string>
+    <string name="logout_success">Logout Successful</string>
+    <string name="profile_metadata">Profile Metadata</string>
+    <string name="auth_status_label">Authentication Status</string>
+    <string name="username_label">Username</string>
+    <string name="email_label">Email</string>
+    <string name="logged_in_status">Signed In</string>
+    <string name="guest_status">Guest</string>
+    <string name="guest_profile_title">Guest User</string>
+    <string name="guest_profile_subtitle">Sign in to view your saved account details.</string>
+    <string name="log_in">Log In</string>
+    <string name="not_available">Not available</string>
+    <string name="signed_in_badge">Authenticated Account</string>
+    <string name="edit_profile_dialog_title">Edit Profile</string>
+    <string name="edit_profile_hint">Enter your username</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="username_required">Username cannot be empty</string>
+    <string name="profile_updated">Profile updated successfully</string>
+    <string name="avatar_updated">Avatar updated successfully</string>
+    <string name="profile_sync_failed">Could not sync profile. Showing cached data.</string>
+    <string name="profile_update_failed">Could not update profile.</string>
+    <string name="image_unavailable_offline">Image unavailable offline. Tap to retry when online.</string>
+    <string name="profile_change_password">Change Password</string>
+    <string name="profile_change_password_subtitle">Enter your current password and choose a new password</string>
+    <string name="profile_current_password_hint">Enter current password</string>
+    <string name="profile_new_password_hint">Enter new password</string>
+    <string name="profile_confirm_new_password_hint">Re-enter new password</string>
+    <string name="profile_current_password_required">Current password is required</string>
+    <string name="profile_password_too_short">Password must be at least 8 characters</string>
+    <string name="profile_passwords_do_not_match">Passwords do not match</string>
+</resources>

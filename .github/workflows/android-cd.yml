@@ -1,0 +1,106 @@
+name: Android Publish
+
+permissions:
+  contents: read
+  security-events: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_number:
+        description: "Android build/version number (integer)"
+        required: true
+        type: string
+
+jobs:
+  security:
+    uses: ./.github/workflows/security.yml
+    with:
+      scan_path: android
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+  build_release:
+    name: Build Release App Bundle
+    needs: security
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./android
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+          cache: gradle
+
+      - name: Create google-services.json
+        run: echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > ./app/google-services.json
+
+      - name: Decode Keystore
+        run: echo "${{ secrets.SIGNING_KEYSTORE_BASE64 }}" | base64 -d > ./keystore.jks
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Create local.properties
+        run: |
+          echo "MAPS_API_KEY=${{ secrets.MAPS_API_KEY }}" > ./local.properties
+          echo "PLACES_API_KEY=${{ secrets.PLACES_API_KEY }}" >> ./local.properties
+
+      - name: Build Release Bundle
+        run: ./gradlew bundleRelease -PBUILD_NUMBER=${{ inputs.version_number }}
+        env:
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BIF-App-Release
+          path: android/app/build/outputs/bundle/release/app-release.aab
+
+  firebase_distribute:
+    name: Distribute to Firebase App Distribution
+    needs: build_release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: BIF-App-Release
+
+      - name: Upload to Firebase App Distribution
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: ${{ secrets.FIREBASE_APP_ID }}
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_CREDENTIALS }}
+          groups: bif_test_distribution
+          file: Bring-In-Friends.apk
+
+  publish_play_store:
+    name: Publish to Play Store
+    needs: build_release
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: BIF-App-Release
+
+      - name: Create Service Account File
+        run: echo '${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}' > ./play_service_account.json
+
+      - name: Upload to Google Play
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJson: play_service_account.json
+          packageName: com.bif.locator
+          releaseFiles: app-release.aab
+          track: internal
+          status: draft

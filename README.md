@@ -1,58 +1,325 @@
-# BIF Mobile Locator
+# Bring In Friends
 
-![Android CI](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/android-dev.yml/badge.svg)
-![Android Publish](https://github.com/Schooleo/bif-mobile-locator/actions/workflows/android-publish.yml/badge.svg)
+![Android CI](https://github.com/Schooleo/BIF-Mobile-App/actions/workflows/android-ci.yml/badge.svg)
+![Android CD](https://github.com/Schooleo/BIF-Mobile-App/actions/workflows/android-cd.yml/badge.svg)
+![Server CI](https://github.com/Schooleo/BIF-Mobile-App/actions/workflows/server-ci.yml/badge.svg)
+![Server CD](https://github.com/Schooleo/BIF-Mobile-App/actions/workflows/server-cd.yml/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Platform](https://img.shields.io/badge/Platform-Android-green.svg)](https://developer.android.com)
+[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Server-green.svg)](https://developer.android.com)
 [![Language](https://img.shields.io/badge/Language-Java-orange.svg)](https://www.java.com)
 [![API](https://img.shields.io/badge/API-29%2B-brightgreen.svg?style=flat)](https://android-arsenal.com/api?level=29)
 
-**BIF Mobile Locator** is a native Android application designed to provide robust location-based services. Built entirely in Java, this project demonstrates modern Android development practices including Edge-to-Edge UI.
+**Bring In Friends** is an offline-first social mapping platform built as:
 
-## Key Features
+- a modular native Android app under `android/`
+- a Spring Boot backend under `server/`
+- a local infrastructure stack for MongoDB, OSRM, Typesense, Ollama, and optional debug tooling
 
-- **Native Android Development**: Built using the official Android SDK for optimal performance and integration.
-- **Pure Java Implementation**: 100% Java codebase, leveraging established patterns and libraries.
-- **Modern UI**: Implements "Edge-to-Edge" display support for an immersive user experience.
-- **Counter Example**: Includes a starter counter implementation to demonstrate state management.
+The current codebase centers on location sharing, favorites, social collaboration, trip planning, sync, and AI-assisted place/trip suggestions.
 
-## Technical Stack
+## Current Feature Set
 
-- **Language**: Java 11
-- **Minimum SDK**: API 29 (Android 10)
-- **Target SDK**: API 36 (Android 16)
-- **Build System**: Gradle with Version Catalogs.
-- **Namespace**: `com.bif.locator`
+### Android app
 
-## CI/CD Pipeline
+- **Auth flows**: register with email OTP, login, refresh, forgot-password OTP, and change password.
+- **Map experience**: MapLibre-based map UI, place search, place detail/review flows, route rendering, and city map bundle download.
+- **Favorites**: synced favorites with notes, ratings, and detail views.
+- **Social**: friend requests, group management, shared chat, and friend-specific location/trip views.
+- **Trips**: collaborative trip creation, itinerary stop management, stop reordering, collaborator management, and trip cover image support.
+- **Offline-first data**: Room persistence, sync queue handling, WorkManager-backed uploads/cleanup, and conflict-aware sync integration.
+- **Profile management**: editable display profile and avatar metadata with remote media upload support.
 
-This project uses [GitHub Actions](.github/workflows/android.yml) for Continuous Integration.
+### Server
 
-- **Platform**: GitHub Actions
-- **Triggers**:
-  - Push to `main` and `dev` branches.
-  - Pull Requests to `main` and `dev` branches.
-- **Workflow Steps**:
-  1.  **Setup**: Configures JDK 17.
-  2.  **Lint**: Runs static code analysis (`./gradlew lint`).
-  3.  **Test**: Executes local unit tests (`./gradlew test`).
-  4.  **Build**: Assembles the debug APK (`./gradlew assembleDebug`).
-- **Artifacts**: A debug APK (`BIF-Locator.apk`) is uploaded and distributed via Firebase.
+- **REST + GraphQL APIs** for auth, users, groups, places, favorites, trips, chat, sync, reviews, routing, and AI.
+- **WebSocket chat endpoints** for realtime group messaging and acknowledgements.
+- **Place search stack** with configurable Mongo or Typesense providers.
+- **Route computation** through OSRM-backed route endpoints.
+- **Media upload signing** for Cloudinary-based avatar and trip media flows.
+- **Sync services** for favorites, trips, profiles, groups, reviews, chat, and friendship changes.
 
-## Setup & Installation
+## AI Features
 
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/Schooleo/bif-mobile-locator.git
-    ```
-2.  **Open in Android Studio**:
-    - Launch Android Studio.
-    - Select "Open" and navigate to the cloned directory.
-3.  **Build the project**:
-    - Android Studio will automatically sync with Gradle.
-    - Click the "Run" button (Green Arrow) to deploy to an emulator or physical device.
+The current AI implementation lives under `server/src/main/java/com/bif/server/features/ai/` and is consumed by Android GraphQL clients in `android/core`.
 
-### Contributors
+### Implemented capabilities
+
+- **Natural-language place suggestion** with extracted keywords, category/vibe hints, and grounded server-known `Place` results.
+- **AI trip drafting** that returns a typed draft plus validated candidate places.
+- **Location-aware place suggestions** through optional `latitude`, `longitude`, and `cityBias` GraphQL inputs.
+- **Failure-aware responses** that return `warnings` and `failureCode` instead of silent null-style failures.
+
+### Current GraphQL AI contract
+
+- `suggestPlacesFromQuery(query: String!, latitude: Float, longitude: Float, cityBias: String): AiPlaceSuggestionResult!`
+- `draftTripFromQuery(query: String!): AiTripDraftResult!`
+
+### AI hardening in code
+
+- schema-constrained Ollama JSON generation
+- request auth/rate-limit guards
+- post-generation validation for stop counts, durations, uniqueness, and candidate-place membership
+- defensive parsing and upstream failure handling
+
+## Demonstration Videos
+
+### Basic Modules
+[![Basic Modules](thumbnails/BasicModules-Thumbnail.png)](https://youtu.be/CuH_xy-xbf8)
+
+### Trip Module
+[![Trip Module](thumbnails/TripModule-Thumbnail.png)](https://youtu.be/NkiVaBpUQFY)
+
+### AI Features
+[![AI Features](thumbnails/AIFeatures-Thumbnail.png)](https://youtu.be/R8aX6LuwcV8)
+
+## Technology Stack
+
+### Android
+
+- **Language**: Java
+- **App package**: `com.bif.app`
+- **Build**: Gradle multi-module project with version catalogs
+- **Modules**: `app`, `core`, `data`, `domain`, `brouter`, `feature:*`
+- **Architecture**: modular clean-ish separation with repositories, Room entities/DAO, feature fragments, and shared core/network layers
+- **UI**: Android Fragments + Material Components + Navigation
+- **Dependency injection**: Hilt
+- **Persistence**: Room
+- **Networking**: Retrofit + Apollo Java GraphQL + WebSocket/STOMP support
+- **Maps/Routing**: MapLibre, OSRM integration, embedded BRouter assets/cache support
+- **Background work**: WorkManager + AndroidX Startup
+- **SDK**: minSdk 29, target/compileSdk 36
+
+### Server
+
+- **Framework**: Spring Boot 4.0.6
+- **Language / toolchain**: Java with JDK 21 toolchain
+- **Build**: Gradle + JaCoCo + Checkstyle
+- **Database**: MongoDB
+- **API surfaces**: Spring MVC REST, Spring GraphQL, Spring WebSocket
+- **Search**: Mongo search or optional Typesense
+- **Routing**: OSRM
+- **Media**: Cloudinary signed uploads
+- **Email**: Brevo-backed OTP email delivery
+- **Optional AI runtime**: Ollama
+
+## Project Structure
+
+```text
+BIF-Mobile-App/
+├── .github/workflows/           # CI/CD and security workflows
+├── android/
+│   ├── app/                     # app shell, navigation, DI bootstrap
+│   ├── brouter/                 # bundled/offline routing support assets
+│   ├── core/                    # networking, auth/session, shared UI/resources
+│   ├── data/                    # repositories, Room DB, sync, workers, routing engines
+│   ├── domain/                  # domain models and repository contracts
+│   └── feature/
+│       ├── auth/
+│       ├── favorites/
+│       ├── map/
+│       ├── profile/
+│       └── social/
+├── init-scripts/                # map/bootstrap/cache generation scripts
+├── map-data/                    # OSM/Overture/OSRM/BRouter artifacts
+├── server/
+│   ├── src/main/java/com/bif/server/common/
+│   ├── src/main/java/com/bif/server/features/
+│   │   ├── ai/
+│   │   ├── auth/
+│   │   ├── chat/
+│   │   ├── favorite/
+│   │   ├── friendship/
+│   │   ├── group/
+│   │   ├── map/
+│   │   ├── media/
+│   │   ├── place/
+│   │   ├── route/
+│   │   ├── search/
+│   │   ├── sync/
+│   │   ├── trip/
+│   │   └── user/
+│   └── src/test/                # controller/service/unit/integration coverage
+├── docker-compose*.yml          # local, debug, and image-based stacks
+├── Makefile                     # local infra shortcuts
+├── PRIVACY_POLICY.md
+├── TESTING_GUIDE.md
+└── README.md
+```
+
+## Local Setup
+
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/Schooleo/BIF-Mobile-App.git
+cd BIF-Mobile-App
+```
+
+### 2. Prepare local configuration
+
+Root environment:
+
+```bash
+cp .env.example .env
+```
+
+Android local properties:
+
+```bash
+cp android/local.properties.example android/local.properties
+```
+
+Then update values you actually need:
+
+- `.env`: Mongo, Typesense, Ollama, Brevo, Cloudinary, Tailscale, and feature flags
+- `android/local.properties`: Android SDK path, `LOCAL_API_IP`, optional MapLibre style override, optional `CLOUDINARY_CLOUD_NAME`
+- `android/app/google-services.json`: required for local/CI Firebase-backed Android builds
+
+### 3. Start the local backend stack
+
+Core services:
+
+```bash
+make up
+```
+
+Enable optional profiles as needed:
+
+```bash
+make up PROFILES="osrm typesense ollama tailscale"
+```
+
+Debug-only tools:
+
+```bash
+make up-debug PROFILES="db ai logs"
+```
+
+Useful lifecycle commands:
+
+```bash
+make down
+make down-all
+make restart
+make restart-debug
+```
+
+### 4. Run the server locally without Docker (optional)
+
+```bash
+cd server
+./gradlew bootRun
+```
+
+### 5. Build the Android app
+
+```bash
+cd android
+./gradlew assembleDebug
+```
+
+## Map, Routing, and Search Data
+
+Initialize shared place/routing data:
+
+```bash
+make init-map
+```
+
+Generate a city-scoped bundle around a coordinate:
+
+```bash
+make init-city-map LAT=10.7769 LON=106.7009 RADIUS_KM=20
+```
+
+Build the Android BRouter cache archive:
+
+```bash
+make init-brouter-cache
+```
+
+## Testing and Verification
+
+### Android
+
+```bash
+cd android
+./gradlew test
+./gradlew lint
+./gradlew :app:checkstyleMain :app:checkstyleTest
+```
+
+Instrumented tests:
+
+```bash
+./gradlew connectedAndroidTest
+```
+
+### Server
+
+```bash
+cd server
+./gradlew clean test checkstyleMain checkstyleTest jacocoTestReport jacocoTestCoverageVerification
+```
+
+### Optional live AI smoke path
+
+Start the required services first:
+
+```bash
+make up PROFILES="typesense ollama"
+```
+
+Then run:
+
+```bash
+make ai-smoke
+```
+
+See `TESTING_GUIDE.md` for the fuller testing workflow.
+
+## CI/CD
+
+### Android workflows
+
+- **CI**: `.github/workflows/android-ci.yml`
+  - runs security checks, lint, unit tests, app checkstyle, and debug APK build
+- **CD**: `.github/workflows/android-cd.yml`
+  - builds release AABs, uploads artifacts, distributes to Firebase App Distribution, and can publish to Play Store
+
+### Server workflows
+
+- **CI**: `.github/workflows/server-ci.yml`
+  - runs security checks, checkstyle, tests, JaCoCo reporting, coverage verification, and bootJar build
+- **CD**: `.github/workflows/server-cd.yml`
+  - builds the server JAR, pushes GHCR container images, and uploads a versioned release artifact
+
+### Shared security workflow
+
+- **Workflow**: `.github/workflows/security.yml`
+- runs **Gitleaks** before **Snyk**
+- supports path-scoped Android or server scans
+
+## Credits & Attribution
+
+Bring In Friends uses open-source software and open geospatial data, including:
+
+- Spring Boot, Spring GraphQL, Spring Security, Spring WebSocket
+- MongoDB
+- AndroidX, Material Components, Navigation, Hilt, Room, WorkManager
+- Retrofit, Apollo Java, OkHttp
+- MapLibre Android SDK
+- OSRM
+- BRouter
+- Typesense
+- Ollama
+- Firebase Analytics
+- OpenStreetMap / Geofabrik extracts
+- Overture Maps Foundation place data
+
+Please preserve upstream attribution and license obligations when redistributing builds, data, or derived artifacts.
+
+## Contributors
 
 <table>
   <tr>

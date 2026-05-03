@@ -1,0 +1,73 @@
+plugins {
+    alias(libs.plugins.android.library)
+    id 'dagger.hilt.android.plugin'
+}
+
+android {
+    namespace 'com.bif.app.feature.social'
+    compileSdk {
+        version = release(36)
+    }
+
+    defaultConfig {
+        minSdk 29
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles "consumer-rules.pro"
+
+        def localProperties = new Properties()
+        def localPropertiesFile = rootProject.file('local.properties')
+        if (localPropertiesFile.exists()) {
+            localPropertiesFile.withReader('UTF-8') { reader ->
+                localProperties.load(reader)
+            }
+        }
+
+        buildConfigField "String", "MAPLIBRE_STYLE_URL", "\"${localProperties.getProperty('MAPLIBRE_STYLE_URL', "https://demotiles.maplibre.org/style.json")}\""
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+
+dependencies {
+    implementation libs.appcompat
+    implementation libs.material
+    implementation libs.navigation.runtime
+    implementation libs.viewpager2
+    implementation libs.swiperefreshlayout
+    testImplementation libs.junit
+    testImplementation libs.core.testing
+    testImplementation libs.mockito.core
+    testImplementation 'org.json:json:20240303'
+    androidTestImplementation libs.ext.junit
+    androidTestImplementation libs.espresso.core
+
+    // Hilt
+    implementation libs.hilt.android
+    annotationProcessor libs.hilt.compiler
+
+    // Module
+    implementation project(':domain')
+    implementation project(':core')
+    implementation project(':data')
+
+    // Lifecycle ViewModel + LiveData (for ChatViewModel)
+    implementation libs.lifecycle.livedata.core
+    implementation libs.lifecycle.viewmodel
+    implementation libs.hilt.navigation.fragment
+    implementation libs.maplibre.android.sdk
+    implementation libs.glide
+}

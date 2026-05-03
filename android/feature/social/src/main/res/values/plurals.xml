@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="trip_travelers_count">
+        <item quantity="one">%1$d traveler</item>
+        <item quantity="other">%1$d travelers</item>
+    </plurals>
+</resources>

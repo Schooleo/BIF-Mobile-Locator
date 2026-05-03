@@ -1,0 +1,57 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+plugins {
+    alias(libs.plugins.android.application) apply false
+
+    id 'com.google.gms.google-services' version '4.4.4' apply false
+
+    id 'com.google.dagger.hilt.android' version '2.59.2' apply false
+
+    alias(libs.plugins.androidx.navigation.safeargs) apply false
+    alias(libs.plugins.android.library) apply false
+}
+
+subprojects {
+    configurations.configureEach {
+        exclude group: 'org.codehaus.plexus', module: 'plexus-utils'
+        resolutionStrategy {
+            force 'com.google.protobuf:protobuf-java-util:3.25.5'
+            force 'com.google.protobuf:protobuf-java:3.25.5'
+
+            force 'com.squareup.okhttp:okhttp:2.7.4'
+            eachDependency { details ->
+                if (details.requested.group == 'com.squareup.okio'
+                        && details.requested.name == 'okio'
+                        && details.requested.version != null
+                        && details.requested.version.startsWith('1.')) {
+                    details.useVersion '1.17.6'
+                    details.because('Patch vulnerable legacy okio 1.x chain from okhttp 2.x')
+                }
+            }
+
+            force 'io.netty:netty-codec-http2:4.1.132.Final'
+            force 'io.netty:netty-codec-http:4.1.132.Final'
+            force 'io.netty:netty-handler:4.1.132.Final'
+            force 'io.netty:netty-common:4.1.132.Final'
+
+            eachDependency { details ->
+                if (details.requested.group == 'com.google.guava'
+                        && details.requested.name == 'guava') {
+                    String v = details.requested.version ?: ''
+                    String suffix = v.contains('android') ? '-android' : '-jre'
+                    details.useVersion "32.0.0${suffix}"
+                    details.because('Patch CVE: insecure temp-file permissions in Guava < 32')
+                }
+            }
+
+            force 'org.apache.commons:commons-lang3:3.18.0'
+            force 'org.apache.httpcomponents:httpclient:4.5.14'
+            force 'org.apache.httpcomponents:httpmime:4.5.14'
+            force 'org.java-websocket:Java-WebSocket:1.5.7'
+
+            force 'org.jetbrains.kotlin:kotlin-stdlib:2.2.21'
+
+            force 'org.bouncycastle:bcprov-jdk18on:1.84'
+            force 'org.bouncycastle:bcpkix-jdk18on:1.84'
+        }
+    }
+}

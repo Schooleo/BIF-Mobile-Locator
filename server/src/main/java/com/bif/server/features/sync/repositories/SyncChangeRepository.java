@@ -1,0 +1,20 @@
+package com.bif.server.features.sync.repositories;
+
+import com.bif.server.features.sync.models.SyncChangeEntry;
+import org.springframework.data.mongodb.repository.MongoRepository;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface SyncChangeRepository extends MongoRepository<SyncChangeEntry, String> {
+    List<SyncChangeEntry> findByServerVersionGreaterThanOrderByServerVersionAsc(
+            long version);
+
+    List<SyncChangeEntry> findByUserIdAndServerVersionGreaterThanOrderByServerVersionAsc(
+            String userId, long version);
+
+    Optional<SyncChangeEntry> findByClientChangeId(String clientChangeId);
+
+        Optional<SyncChangeEntry> findTopByUserIdAndEntityTypeAndEntityIdOrderByServerVersionDesc(
+                        String userId, String entityType, String entityId);
+}

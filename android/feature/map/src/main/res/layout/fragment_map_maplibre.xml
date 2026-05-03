@@ -1,0 +1,389 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/maplibre_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <FrameLayout
+        android:id="@+id/maplibre_map_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" >
+
+        <LinearLayout
+            android:id="@+id/layout_follow_route_bar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_marginStart="12dp"
+            android:layout_marginBottom="56dp"
+            android:background="@drawable/bg_follow_route_bar"
+            android:elevation="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="28dp"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_stop_follow_route"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minHeight="36dp"
+                android:text="@string/stop_route"
+                android:textAllCaps="false" />
+
+            <!--        <View-->
+            <!--            android:layout_width="1dp"-->
+            <!--            android:layout_height="30dp"-->
+            <!--            android:layout_marginStart="10dp"-->
+            <!--            android:layout_marginEnd="10dp"-->
+            <!--            android:background="?android:attr/textColorHint" />-->
+
+            <LinearLayout
+                android:id="@+id/badge_distance_left"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="12dp"
+                android:paddingTop="8dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="8dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/distance_left_label"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:id="@+id/tv_follow_distance_left"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    tools:text="1.2 km" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="30dp"
+                android:layout_marginStart="6dp"
+                android:layout_marginEnd="6dp"
+                android:background="?android:attr/textColorHint" />
+
+            <LinearLayout
+                android:id="@+id/badge_time_left"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="12dp"
+                android:paddingTop="8dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="8dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/time_left_label"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:id="@+id/tv_follow_time_left"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    tools:text="8 min" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/search_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:orientation="vertical"
+        android:elevation="4dp"
+        android:layout_gravity="top">
+
+        <androidx.appcompat.widget.SearchView
+            android:id="@+id/map_search"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_searchbar"
+            android:imeOptions="actionSearch"
+            app:queryHint="Search for places..."
+            app:queryBackground="@null"
+            app:iconifiedByDefault="false"
+            app:searchIcon="@drawable/ic_search" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rv_search_history"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_search_history"
+            android:visibility="gone"
+            android:paddingTop="4dp"
+            android:paddingBottom="8dp"
+            android:clipToPadding="false"
+            android:nestedScrollingEnabled="false"
+            tools:visibility="visible"
+            tools:itemCount="3"
+            tools:listitem="@layout/item_search_history" />
+
+            <com.google.android.material.progressindicator.LinearProgressIndicator
+                android:id="@+id/progress_search_places"
+                android:layout_width="match_parent"
+                android:layout_height="4dp"
+                android:indeterminate="true"
+                android:visibility="gone"
+                app:indicatorColor="?attr/colorPrimary"
+                app:trackColor="@color/download_progress_track"
+                tools:visibility="visible" />
+    </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/btn_my_location"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="100dp"
+        android:background="@drawable/bg_my_location"
+        android:contentDescription="@string/my_location"
+        android:elevation="6dp"
+        android:src="@android:drawable/ic_menu_mylocation"
+        app:tint="?attr/colorPrimary" />
+
+    <ImageButton
+        android:id="@+id/btn_map_compass"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="168dp"
+        android:background="@drawable/bg_my_location"
+        android:contentDescription="@string/directions"
+        android:elevation="6dp"
+        android:src="@drawable/ic_north"
+        android:visibility="gone"
+        app:tint="?attr/colorPrimary"
+        tools:visibility="visible" />
+
+    <FrameLayout
+        android:id="@+id/layout_download_city_map"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_gravity="bottom|start"
+        android:layout_marginStart="16dp"
+        android:layout_marginBottom="100dp"
+        android:visibility="gone">
+
+        <com.google.android.material.progressindicator.CircularProgressIndicator
+            android:id="@+id/progress_download_city_map"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:indeterminate="false"
+            android:max="100"
+            android:progress="0"
+            android:elevation="2dp"
+            android:visibility="gone"
+            app:indicatorSize="56dp"
+            app:indicatorColor="?attr/colorPrimary"
+            app:trackThickness="4dp"
+            app:trackColor="@color/download_progress_track"
+            tools:progress="45"
+            tools:visibility="visible" />
+
+        <ImageButton
+            android:id="@+id/btn_download_city_map"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_gravity="center"
+            android:background="@drawable/bg_my_location"
+            android:contentDescription="@string/download_map"
+            android:padding="14dp"
+            android:src="@android:drawable/stat_sys_download"
+            app:tint="?attr/colorPrimary" />
+    </FrameLayout>
+
+    <ImageButton
+        android:id="@+id/btn_trip_route_back"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:background="@drawable/bg_trip_stop_nav_button"
+        android:contentDescription="@string/trip_route_back_to_trip"
+        android:elevation="9dp"
+        android:padding="10dp"
+        android:src="@drawable/ic_back"
+        android:visibility="gone"
+        app:tint="?attr/colorOnSurface"
+        tools:visibility="visible" />
+
+    <FrameLayout
+        android:id="@+id/bottom_sheet_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior"
+        app:behavior_hideable="true"
+        app:behavior_peekHeight="0dp">
+
+        <include
+            layout="@layout/dialog_place_detail"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <include
+            layout="@layout/dialog_route_detail"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/layout_trip_stop_detail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginBottom="24dp"
+        android:background="@drawable/bg_follow_route_bar"
+        android:elevation="10dp"
+        android:orientation="vertical"
+        android:paddingHorizontal="14dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="14dp"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tv_trip_stop_order_badge"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:background="@drawable/bg_trip_stop_nav_button"
+                android:gravity="center"
+                android:textColor="@color/primary_green"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                tools:text="2" />
+
+            <TextView
+                android:id="@+id/tv_trip_stop_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="10dp"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:textColor="?attr/colorTextPrimary"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                tools:text="Notre Dame Cathedral" />
+
+            <ImageButton
+                android:id="@+id/btn_trip_stop_close"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/trip_stop_close_detail"
+                android:src="@drawable/ic_close"
+                app:tint="?attr/colorTextSecondary" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tv_trip_stop_address"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textColor="?attr/colorTextSecondary"
+            android:textSize="13sp"
+            tools:text="District 1, Ho Chi Minh City" />
+
+        <TextView
+            android:id="@+id/tv_trip_stop_note"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:ellipsize="end"
+            android:maxLines="3"
+            android:textColor="?attr/colorTextPrimary"
+            android:textSize="13sp"
+            tools:text="Buy tickets before arrival." />
+
+        <TextView
+            android:id="@+id/tv_trip_stop_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:drawablePadding="6dp"
+            android:textColor="?attr/colorTextSecondary"
+            android:textSize="12sp"
+            tools:text="Fri, Apr 25 · 09:30" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/layout_trip_stop_nav_arrows"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginTop="80dp"
+        android:layout_marginBottom="200dp"
+        android:clickable="false"
+        android:focusable="false"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <ImageButton
+            android:id="@+id/btn_trip_stop_prev"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_gravity="start|center_vertical"
+            android:background="@drawable/bg_trip_stop_nav_button"
+            android:contentDescription="@string/trip_previous_place"
+            android:elevation="8dp"
+            android:padding="10dp"
+            android:src="@drawable/ic_back"
+            app:tint="@color/primary_green" />
+
+        <ImageButton
+            android:id="@+id/btn_trip_stop_next"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_gravity="end|center_vertical"
+            android:background="@drawable/bg_trip_stop_nav_button"
+            android:contentDescription="@string/trip_next_place"
+            android:elevation="8dp"
+            android:padding="10dp"
+            android:rotation="180"
+            android:src="@drawable/ic_back"
+            app:tint="@color/primary_green" />
+    </FrameLayout>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

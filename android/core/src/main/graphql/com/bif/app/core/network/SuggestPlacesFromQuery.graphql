@@ -1,0 +1,31 @@
+mutation SuggestPlacesFromQuery(
+  $query: String!
+  $latitude: Float
+  $longitude: Float
+  $cityBias: String
+) {
+  suggestPlacesFromQuery(
+    query: $query
+    latitude: $latitude
+    longitude: $longitude
+    cityBias: $cityBias
+  ) {
+    extractedKeywords
+    category
+    vibe
+    searchQueries
+    locationHint
+    warnings
+    failureCode
+    places {
+      id
+      name
+      address
+      rating
+      location {
+        latitude
+        longitude
+      }
+    }
+  }
+}

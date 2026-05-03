@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Custom Border -->
+    <item>
+        <shape>
+            <solid android:color="@color/light_mode_box" />
+            <corners
+                android:topLeftRadius="36dp"
+                android:topRightRadius="36dp"
+                android:bottomLeftRadius="0dp"
+                android:bottomRightRadius="0dp" />
+        </shape>
+    </item>
+
+    <item
+        android:top="2dp"
+        android:left="1dp"
+        android:right="1dp"
+        android:bottom="0dp">
+        <shape>
+            <solid android:color="@color/white" />
+            <corners
+                android:topLeftRadius="36dp"
+                android:topRightRadius="36dp"
+                android:bottomLeftRadius="0dp"
+                android:bottomRightRadius="0dp" />
+        </shape>
+    </item>
+</layer-list>

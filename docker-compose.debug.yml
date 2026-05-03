@@ -1,0 +1,52 @@
+services:
+  mongo-express:
+    image: mongo-express:latest
+    container_name: mongo-express
+    profiles:
+      - db
+    ports:
+      - "8081:8081"
+    env_file:
+      - .env
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${ME_CONFIG_MONGODB_ADMINUSERNAME:-admin}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${ME_CONFIG_MONGODB_ADMINPASSWORD:-pass}
+      ME_CONFIG_MONGODB_URL: ${ME_CONFIG_MONGODB_URL:-mongodb://admin:pass@mongodb:27017/}
+    mem_limit: ${MONGO_EXPRESS_MEM_LIMIT:-256m}
+    restart: on-failure
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    env_file:
+      - .env
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+    profiles:
+      - ai
+    ports:
+      - "3000:8080"
+    volumes:
+      - open-webui_data:/app/backend/data
+    mem_limit: ${OPEN_WEBUI_MEM_LIMIT:-1024m}
+    restart: on-failure
+
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle-logs
+    profiles:
+      - logs
+    ports:
+      - "8888:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    mem_limit: ${DOZZLE_MEM_LIMIT:-128m}
+    restart: on-failure
+
+volumes:
+  open-webui_data:
+
+networks:
+  default:
+    name: shared-dev-network
+    external: true

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Semantic color attributes for auth screen theming -->
+    <attr name="colorScreenBackground" format="color" />
+    <attr name="colorSurfaceBox" format="color" />
+    <attr name="colorInputText" format="color" />
+    <attr name="colorHintText" format="color" />
+    <attr name="colorAuthLink" format="color" />
+    
+    <!-- Semantic color attributes for social screen theming -->
+    <attr name="colorListItemBackground" format="color" />
+    <attr name="colorTextPrimary" format="color" />
+    <attr name="colorTextSecondary" format="color" />
+</resources>

@@ -1,0 +1,40 @@
+mutation DraftTripFromQuery($query: String!) {
+  draftTripFromQuery(query: $query) {
+    warnings
+    failureCode
+    searchQueries
+    candidatePlaces {
+      id
+      name
+      address
+      rating
+      location {
+        latitude
+        longitude
+      }
+    }
+    draft {
+      title
+      summary
+      stops {
+        placeId
+        durationMinutes
+        startTime
+        endTime
+        duration
+        note
+        plannedDateTime
+        place {
+          id
+          name
+          address
+          rating
+          location {
+            latitude
+            longitude
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,370 @@
+type Query {
+  users: [User!]!
+  user(id: ID!): User
+  myAuthState(userId: ID): AuthState!
+  myProfileMetadata(userId: ID!): ProfileMetadata
+  groups: [Group!]!
+  group(id: ID!): Group
+  places: [Place!]!
+  place(id: ID!): Place
+  searchPlaces(query: String!): [Place!]!
+  placesByTag(tag: String!): [Place!]!
+  placesByUser(userId: ID!): [Place!]!
+  favorites: [Favorite!]!
+  favorite(id: ID!): Favorite
+  favoritesByUser(userId: ID!): [Favorite!]!
+  myFavorites(userId: ID): [Favorite!]!
+  chatMessages: [ChatMessage!]!
+  chatMessage(id: ID!): ChatMessage
+  chatMessagesByGroup(groupId: ID!): [ChatMessage!]!
+  tripPlans: [TripPlan!]!
+  tripPlan(id: ID!): TripPlan
+  tripPlansByGroup(groupId: ID!): [TripPlan!]!
+  syncPreview(lastPulledVersion: Int): SyncResponse!
+}
+
+type Mutation {
+  upsertUser(input: UserInput!): User!
+  deleteUser(id: ID!): Boolean!
+  updateMyProfile(userId: ID!, input: UpdateMyProfileInput!): User
+  upsertGroup(input: GroupInput!): Group!
+  deleteGroup(id: ID!): Boolean!
+  upsertPlace(input: PlaceInput!): Place!
+  saveFromSearch(input: PlaceInput!): Place!
+  deletePlace(id: ID!): Boolean!
+  addPlaceReview(placeId: ID!, input: PlaceReviewInput!): Place!
+  upsertFavorite(input: FavoriteInput!): Favorite!
+  deleteFavorite(id: ID!): Boolean!
+  upsertMyFavorite(userId: ID, input: FavoriteInput!): Favorite!
+  deleteMyFavorite(userId: ID, id: ID!): DeleteMyFavoriteResult!
+  upsertChatMessage(input: ChatMessageInput!): ChatMessage!
+  deleteChatMessage(id: ID!): Boolean!
+  upsertTripPlan(input: TripPlanInput!): TripPlan!
+  addTripStop(tripId: ID!, input: TripStopInput!): TripPlan
+  removeTripStop(tripId: ID!, stopId: ID!): TripPlan
+  rearrangeTripStops(tripId: ID!, stops: [RearrangeStopInput!]!): TripPlan
+  deleteTripPlan(id: ID!): Boolean!
+  suggestPlacesFromQuery(
+    query: String!
+    latitude: Float
+    longitude: Float
+    cityBias: String
+  ): AiPlaceSuggestionResult!
+  draftTripFromQuery(query: String!): AiTripDraftResult!
+  sync(input: SyncRequestInput!): SyncResponse!
+}
+
+type User {
+  id: ID
+  name: String
+  email: String
+  avatarLetter: String
+  avatarColor: Int
+  isOnline: Boolean
+}
+
+type Group {
+  id: ID
+  name: String
+  avatarLetter: String
+  avatarColor: Int
+  memberCount: Int
+  memberIds: [ID!]
+  ownerId: ID
+}
+
+type Place {
+  id: ID
+  name: String
+  address: String
+  rating: Float
+  location: Location
+  tags: [String!]
+  placeSource: String
+  persistedByAction: String
+  persistedByUserId: ID
+  reviewCount: Int
+  reviews: [PlaceReview!]
+}
+
+type PlaceReview {
+  userId: ID
+  userName: String
+  rating: Int
+  comment: String
+  createdAt: String
+}
+
+type Favorite {
+  id: ID
+  name: String
+  location: Location
+  address: String
+  description: String
+  notes: String
+  rating: Int
+  imagePath: String
+  userId: ID
+}
+
+type ChatMessage {
+  id: ID
+  groupId: ID
+  senderUserId: ID
+  content: String
+  sentAt: String
+  clientMessageId: String
+  type: String
+  sharedLocation: Location
+  sharedAddress: String
+  confirmed: Boolean
+}
+
+type TripPlan {
+  id: ID
+  groupId: ID
+  title: String
+  description: String
+  startAt: String
+  endAt: String
+  stops: [TripStop!]
+  participantIds: [ID!]
+}
+
+type TripStop {
+  id: ID
+  placeId: ID
+  title: String
+  note: String
+  location: Location
+  arrivalTime: String
+  departureTime: String
+  orderIndex: Int
+}
+
+type AiPlaceSuggestionResult {
+  places: [Place!]!
+  extractedKeywords: [String!]!
+  category: String
+  vibe: String
+  searchQueries: [String!]!
+  locationHint: String
+  warnings: [String!]!
+  failureCode: AiFailureCode
+}
+
+type AiTripDraftResult {
+  draft: AiTripDraft
+  candidatePlaces: [Place!]!
+  searchQueries: [String!]!
+  warnings: [String!]!
+  failureCode: AiFailureCode
+}
+
+type AiTripDraft {
+  title: String
+  summary: String
+  stops: [AiTripDraftStop!]!
+}
+
+type AiTripDraftStop {
+  placeId: ID!
+  place: Place!
+  durationMinutes: Int!
+  startTime: String
+  endTime: String
+  duration: Int
+  note: String
+  plannedDateTime: String
+}
+
+enum AiFailureCode {
+  UNAUTHORIZED
+  RATE_LIMITED
+  INVALID_QUERY
+  NO_RESULTS
+  NO_CANDIDATE_PLACES
+  AI_PARSE_FAILURE
+  AI_VALIDATION_FAILURE
+  AI_UPSTREAM_FAILURE
+  AI_FAILURE
+}
+
+type Location {
+  latitude: Float
+  longitude: Float
+}
+
+type SyncResponse {
+  currentServerVersion: Int!
+  pulledChanges: [SyncChange!]!
+  conflicts: [SyncConflict!]
+  pushResults: [SyncPushResult!]
+}
+
+type SyncChange {
+  entityType: String
+  entityId: String
+  serverVersion: Int
+  operation: String
+  clientChangeId: String
+  timestamp: String
+  payload: String
+}
+
+type SyncConflict {
+  entityType: String
+  entityId: String
+  clientChangeId: String
+  clientVersion: Int
+  serverVersion: Int
+  resolution: String
+}
+
+type SyncPushResult {
+  clientChangeId: String
+  status: String
+  reasonCode: String
+}
+
+enum DeleteMyFavoriteResult {
+  DELETED
+  FORBIDDEN
+  NOT_FOUND
+}
+
+input UserInput {
+  id: ID
+  name: String
+  email: String
+  avatarLetter: String
+  avatarColor: Int
+  isOnline: Boolean
+}
+
+input GroupInput {
+  id: ID
+  name: String
+  avatarLetter: String
+  avatarColor: Int
+  memberCount: Int
+  memberIds: [ID!]
+  ownerId: ID
+}
+
+input PlaceInput {
+  id: ID
+  name: String
+  address: String
+  rating: Float
+  location: LocationInput
+  tags: [String!]
+  placeSource: String
+  persistedByAction: String
+  persistedByUserId: ID
+}
+
+input PlaceReviewInput {
+  userId: ID
+  userName: String
+  rating: Int
+  comment: String
+}
+
+input FavoriteInput {
+  id: ID
+  name: String
+  location: LocationInput
+  address: String
+  description: String
+  notes: String
+  rating: Int
+  imagePath: String
+  userId: ID
+}
+
+input ChatMessageInput {
+  id: ID
+  groupId: ID
+  senderUserId: ID
+  content: String
+  sentAt: String
+  clientMessageId: String
+  type: String
+  sharedLocation: LocationInput
+  sharedAddress: String
+  confirmed: Boolean
+}
+
+input TripPlanInput {
+  id: ID
+  groupId: ID
+  title: String
+  description: String
+  startAt: String
+  endAt: String
+  stops: [TripStopInput!]
+  participantIds: [ID!]
+}
+
+input TripStopInput {
+  id: ID
+  placeId: ID
+  title: String
+  note: String
+  location: LocationInput
+  arrivalTime: String
+  departureTime: String
+  orderIndex: Int
+}
+
+input RearrangeStopInput {
+  id: ID!
+  orderIndex: Int!
+}
+
+input LocationInput {
+  latitude: Float
+  longitude: Float
+}
+
+type AuthState {
+  authenticated: Boolean!
+  userId: ID
+  hasProfile: Boolean!
+}
+
+type ProfileMetadata {
+  userId: ID
+  displayName: String
+  email: String
+  avatarLetter: String
+  avatarColor: Int
+  online: Boolean
+  serverVersion: Int
+  updatedAt: String
+  profileCompletionPercent: Int!
+}
+
+input UpdateMyProfileInput {
+  name: String
+  avatarLetter: String
+  avatarColor: Int
+}
+
+input SyncRequestInput {
+  userId: ID
+  deviceId: ID
+  lastPulledVersion: Int!
+  pushedChanges: [SyncChangeInput!]
+}
+
+input SyncChangeInput {
+  entityType: String
+  entityId: String
+  serverVersion: Int
+  operation: String
+  clientChangeId: String
+  timestamp: String
+  payload: String
+}

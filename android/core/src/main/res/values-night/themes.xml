@@ -1,0 +1,33 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Theme.BIFLocator" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Background -->
+        <item name="colorScreenBackground">@color/dark_mode_background_primary</item>
+
+        <!-- Main brand color -->
+        <item name="colorPrimary">@color/primary_green</item>
+
+        <!-- Text on background -->
+        <item name="colorOnBackground">@color/white</item>
+
+        <!-- Surface (card / box UI) -->
+        <item name="colorSurface">@color/dark_mode_box</item>
+        <item name="colorOnSurface">@color/white</item>
+        <item name="colorSurfaceBox">@color/dark_mode_box</item>
+
+        <!-- Text on surface -->
+        <item name="colorInputText">@color/white</item>
+
+        <!-- Semantic color aliases -->
+        <item name="colorHintText">@color/primary_grey</item>
+        <item name="colorAuthLink">@color/primary_green</item>
+        
+        <!-- Social screen colors -->
+        <item name="colorListItemBackground">@color/item_background</item>
+        <item name="colorTextPrimary">@color/white</item>
+        <item name="colorTextSecondary">@color/text_secondary</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.BIFLocator.MaterialAlertDialog</item>
+        <item name="popupMenuStyle">@style/Widget.BIFLocator.PopupMenu</item>
+
+    </style>
+</resources>

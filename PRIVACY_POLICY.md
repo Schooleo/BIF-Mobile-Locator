@@ -1,58 +1,159 @@
-# Privacy Policy for BIF Mobile Locator
+# Privacy Policy for Bring In Friends
 
-**Last updated:** January 21, 2026
+**Last updated:** May 3, 2026
 
-This Privacy Policy describes how the BIF Mobile Locator team ("we", "us", or "our") collects, uses, and discloses your information when you use our mobile application (the "Service").
+This Privacy Policy describes how the Bring In Friends team ("we", "us", or "our") collects, uses, stores, and discloses information when you use the Bring In Friends mobile application and related backend services (the "Service").
 
 By using the Service, you agree to the collection and use of information in accordance with this policy.
 
 ## 1. Information We Collect
 
-### A. Location Data
+### A. Account and profile data
 
-Our application is designed to provide location-based services. We may request access to your device's location (GPS and network-based).
+When you register for or use an account, we may collect and store:
 
-- **How we use it**: To calculate distances and provide positioning features within the app.
-- **Storage**: Location data is processed locally on your device and is not transmitted to our servers unless explicitly stated for a specific feature.
+- name or display name
+- email address
+- avatar metadata such as avatar letter, avatar color, and avatar image URL
+- authentication-related records required to operate login, refresh, logout, password change, email OTP verification, and password reset flows
 
-### B. Usage Data & Analytics
+### B. Social, trip, and content data
 
-We use third-party services to monitor and analyze the use of our Service.
+To provide the app's core features, we may collect and store data that you create or share, including:
 
-- **Firebase Analytics (Google)**: We use Firebase to understand how users interact with our app (e.g., screens visited, session duration). This service collects:
-  - Device identifiers (e.g., Android Advertising ID).
-  - IP address (anonymized).
-  - Operating system version.
-  - Crash reports (via Firebase Crashlytics if enabled).
+- friend relationships and friend requests
+- groups and group membership data
+- chat messages and chat acknowledgements
+- favorites, notes, ratings, and reviews
+- trip plans, trip stops, collaborators, and trip cover image URLs
+- sync metadata required to reconcile offline and online changes
 
-For more information, please visit [Google Privacy & Terms](https://policies.google.com/privacy).
+### C. Location and map-related data
 
-## 2. Permissions
+The app may request access to your device's location while you are actively using the app.
 
-To function correctly, the app may request the following permissions:
+We may process or transmit coordinates that you choose to use for features such as:
 
-- `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION`: To provide location features.
-- `INTERNET`: To connect to analytic services and map providers.
+- showing your current location on the map
+- route calculation
+- place resolution or place search refinement
+- city map bundle download
+- optional AI place suggestion biasing
+- explicit location sharing inside supported social/chat features
 
-## 3. Data Retention
+We do **not** request background location access in the current Android app.
 
-We do not store your personal data on our servers. All functional data (like location history) remains on your device or is transient (erased after the session). Analytics data is retained by Google according to their policies.
+### D. Media upload data
 
-## 4. Security
+If you upload profile or trip-related media, the Service may process:
 
-We value your trust in providing us your information and strive to use commercially acceptable means of protecting it. However, remember that no method of transmission over the internet or method of electronic storage is 100% secure and reliable.
+- avatar images
+- trip cover images
+- other supported image URLs or file metadata tied to app entities
 
-## 5. Children's Privacy
+### E. Usage and diagnostics data
 
-Our Service does not address anyone under the age of 13. We do not knowingly collect personally identifiable information from children under 13.
+The Android app includes Firebase Analytics, which may collect aggregate app-usage and device metadata such as:
 
-## 6. Changes to This Privacy Policy
+- app version
+- device model
+- operating system information
+- screen/session interaction events processed by Google
 
-We may update our Privacy Policy from time to time. Thus, you are advised to review this page periodically for any changes. We will notify you of any changes by posting the new Privacy Policy on this page.
+For more information, please review [Google Privacy & Terms](https://policies.google.com/privacy).
 
-## 7. Contact Us
+## 2. How We Use Information
 
-If you have any questions or suggestions about our Privacy Policy, do not hesitate to contact us at:
+We use collected information to:
+
+- authenticate users and secure accounts
+- deliver map, social, favorites, chat, trip, review, and sync features
+- send registration and password-reset OTP emails
+- upload and resolve media references
+- calculate routes and improve place-related workflows
+- support optional AI-assisted place suggestions and trip drafting
+- monitor reliability, diagnose issues, and improve the Service
+
+## 3. Permissions
+
+The current Android app may request these permissions:
+
+- `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` for foreground map and location features
+- `ACCESS_NETWORK_STATE` to adapt to connectivity conditions
+- `INTERNET` to communicate with backend, sync, media, analytics, and map-related services
+
+## 4. Storage and Processing
+
+Depending on deployment and enabled features, data may be processed or stored through:
+
+- **local on-device storage** including app preferences and Room-based offline data
+- **MongoDB** for backend persistence
+- **Typesense** for optional place-search indexing and queries
+- **Cloudinary** for signed media upload flows when configured
+- **Brevo** for OTP email delivery when configured
+- **OSRM** for route computation
+- **Ollama** for optional self-hosted AI features
+- **Nominatim/OpenStreetMap-related services** for enabled geocoding or map data flows
+- **Firebase Analytics (Google)** for analytics telemetry
+
+Some of these services are self-hosted by the project operator, while others are third-party services governed by their own terms and privacy policies.
+
+## 5. Data Retention
+
+We retain data for as long as reasonably necessary to operate the Service, including:
+
+- account/profile records
+- favorites and reviews
+- social graph and chat records
+- trip planning records
+- sync/change metadata
+- media references
+
+Analytics data is retained according to the policies of the analytics provider. Operators of a deployed instance may apply different retention periods based on their infrastructure and legal obligations.
+
+## 6. Data Sharing and Disclosure
+
+We do not sell personal information.
+
+We may disclose or transmit data only as needed to:
+
+- operate the Service and its configured processors
+- fulfill user-requested features such as routing, media upload, AI assistance, sync, or email OTP delivery
+- comply with applicable law, legal process, or enforceable governmental request
+- protect the rights, safety, and security of users, operators, or the Service
+
+## 7. Security
+
+We use commercially reasonable measures to protect your information, including authenticated APIs, token-based auth flows, and controlled service integrations. However, no method of transmission over the internet or method of electronic storage is completely secure.
+
+## 8. Children's Privacy
+
+Our Service is not directed to children under the age of 13, and we do not knowingly collect personal information from children under 13.
+
+## 9. Changes to This Privacy Policy
+
+We may update this Privacy Policy from time to time. When we do, we will post the updated version in the repository or application materials and revise the "Last updated" date.
+
+## 10. Open-source and Data Credits
+
+This project uses open-source software and open geospatial data, including:
+
+- OpenStreetMap / Geofabrik extracts
+- Overture Maps place datasets
+- MapLibre
+- OSRM
+- BRouter
+- Spring Boot
+- MongoDB
+- Typesense
+- Ollama
+
+Applicable attribution and license terms from those projects and datasets remain in effect.
+
+## 11. Contact Us
+
+If you have questions or suggestions about this Privacy Policy, contact:
 
 **Email**: schooleoinbox@gmail.com
-**GitHub**: [https://github.com/Schooleo/bif-mobile-locator](https://github.com/Schooleo/bif-mobile-locator)
+
+**GitHub**: [https://github.com/Schooleo/BIF-Mobile-App](https://github.com/Schooleo/BIF-Mobile-App)

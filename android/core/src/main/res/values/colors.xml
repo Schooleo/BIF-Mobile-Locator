@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="dark_red">#762020</color>
+    <color name="light_gray">#E0E0E0</color>
+    <color name="dark_blue">#070C62</color>
+    <color name="red">#D30404</color>
+
+    <!-- Brand Colors -->
+    <color name="primary_green">#2ECC71</color>
+    <color name="primary_blue">#2B7FFF</color>
+    <color name="primary_grey">#9E9E9E</color>
+    <color name="secondary_green">#51CF66</color>
+
+    <!-- General UI -->
+    <color name="link_text_color">#145A32</color>
+    <color name="yellow_primary">#F0B100</color>
+
+    <!-- Light mode -->
+    <color name="light_mode_box">#D9D9D9</color>
+    <color name="auth_link_color">#1DB954</color>
+
+    <!--Dark mode-->
+    <color name="dark_mode_background_primary">#0F172B</color>
+    <color name="dark_mode_background_secondary">#1D293D</color>
+    <color name="dark_mode_box">#314158</color>
+
+    <!-- Social Screen -->
+    <color name="avatar_red">#FF6B6B</color>
+    <color name="avatar_blue">#4DABF7</color>
+    <color name="avatar_yellow">#FFD43B</color>
+    <color name="avatar_purple">#CC5DE8</color>
+    <color name="avatar_orange">#FD7E14</color>
+    <color name="avatar_teal">#12B886</color>
+    <color name="avatar_indigo">#4C6EF5</color>
+    <color name="avatar_pink">#E64980</color>
+    <color name="avatar_cyan">#15AABF</color>
+    <color name="item_background">#F5F5F5</color>
+    <color name="text_secondary">#757575</color>
+
+</resources>
