@@ -61,6 +61,17 @@ The current AI implementation lives under `server/src/main/java/com/bif/server/f
 - post-generation validation for stop counts, durations, uniqueness, and candidate-place membership
 - defensive parsing and upstream failure handling
 
+## Demonstration Videos
+
+### Basic Modules
+[![Basic Modules](thumbnails/BasicModules-Thumbnail.png)](https://youtu.be/CuH_xy-xbf8)
+
+### Trip Module
+[![Trip Module](thumbnails/TripModule-Thumbnail.png)](https://youtu.be/NkiVaBpUQFY)
+
+### AI Features
+[![AI Features](thumbnails/AIFeatures-Thumbnail.png)](https://youtu.be/R8aX6LuwcV8)
+
 ## Technology Stack
 
 ### Android
